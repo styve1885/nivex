@@ -1,10 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { cormorant, jost } from "@/lib/fonts";
+import { siteOrigin } from "@/lib/google";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://nivex.vercel.app"),
+  // Même source que le plan de site et le robots.txt. `siteOrigin()` ignore une
+  // variable vide — `??` ne le faisait pas, et une valeur vide posée dans
+  // l'hébergeur faisait échouer la compilation sur `new URL("")`.
+  metadataBase: new URL(siteOrigin()),
   title: "NIVEX — Repassage à domicile de prestige",
   description:
     "Un artisan du repassage se déplace chez vous, avec son matériel professionnel. Longueuil, Rive-Sud et Montérégie. Première heure offerte.",
