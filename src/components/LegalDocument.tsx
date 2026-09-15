@@ -24,7 +24,9 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   return {
     email: contactEmail(s),
     phone: PHONE,
-    site: siteOrigin().replace(/^https?:\/\//, ""),
+    // Le nom du site, tel qu'on le prononce : sans le protocole, et sans le
+    // « www. » que l'hébergeur garde dans l'origine canonique.
+    site: siteOrigin().replace(/^https?:\/\//, "").replace(/^www\./, ""),
     zone: locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr,
     rate: formatMoney(s.hourlyRate, s.currency, locale),
     min: minutesToText(s.minMinutes, locale),
