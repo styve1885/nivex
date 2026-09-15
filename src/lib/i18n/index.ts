@@ -20,4 +20,4 @@ export function otherLocale(l: Locale): Locale {
   return l === "fr" ? "en" : "fr";
 }
 
-export type { Dict };
+export type { Dict, LegalDoc, LegalSection } from "./fr";

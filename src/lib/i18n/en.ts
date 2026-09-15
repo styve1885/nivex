@@ -1,4 +1,244 @@
-import type { Dict } from "./fr";
+import type { Dict, LegalDoc } from "./fr";
+
+const privacy: LegalDoc = {
+  eyebrow: "Privacy",
+  title: "What we know about you.",
+  lede:
+    "NIVEX collects enough to reach you and enough to find you. Nothing else. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
+  sections: [
+    {
+      title: "Who answers for your information",
+      body: [
+        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec. He is the person in charge of the protection of personal information within the meaning of Quebec law, and the only person with access to what this site collects.",
+        "For a question, an access request or a complaint, write to {email} or call {phone}.",
+      ],
+    },
+    {
+      title: "What we collect",
+      body: [
+        "Only what you hand us yourself, at the moment you hand it over. This site follows no one around and buys data from no one.",
+      ],
+      list: [
+        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
+        "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
+        "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
+      ],
+    },
+    {
+      title: "What it is for",
+      body: [
+        "Every piece of information answers to a reason. When the reason goes, the information goes with it.",
+      ],
+      list: [
+        "Your address is how we come to you, and how we check that you are inside the service area.",
+        "Your email and phone number are how we confirm, warn you of a delay, and answer you.",
+        "The services you chose are how we book the right length of time and pack the right equipment.",
+        "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
+        "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
+      ],
+    },
+    {
+      title: "What we do not do",
+      body: [],
+      list: [
+        "We sell, rent and trade nothing, to no one, at no price.",
+        "We run no targeted advertising, and this site hosts no advertising tracker.",
+        "We build no profile of you and make no automated decision about you.",
+        "We collect no banking information: payment happens on site, never on the site.",
+      ],
+    },
+    {
+      title: "Who else has access",
+      body: [
+        "Three providers, each for one precise task, and none of them may use any of it for their own ends.",
+      ],
+      list: [
+        "Vercel — hosts the site and serves it to your browser.",
+        "Neon — the database where bookings and messages live.",
+        "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
+      ],
+    },
+    {
+      title: "Outside Quebec",
+      body: [
+        "The site, the database and the Google services are hosted in the United States. Your information therefore leaves Quebec to be kept there, and is subject to the law of the host country — which may, in certain cases, allow its authorities to reach it.",
+        "We chose providers contractually bound to protection comparable to what is required here, and we entrust them with nothing beyond what is necessary. By booking or writing to us through the site, you consent to this communication outside Quebec. If that troubles you, call us and we will arrange the appointment by voice.",
+      ],
+    },
+    {
+      title: "How long we keep it",
+      body: [],
+      list: [
+        "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way.",
+        "A message from the contact form: two years, or until you ask us to delete it.",
+        "The technical log: twelve months.",
+      ],
+    },
+    {
+      title: "How it is protected",
+      body: [],
+      list: [
+        "The site is served over HTTPS only: what you write is encrypted in transit.",
+        "The token that links the site to the artisan's Google account is encrypted with AES-256-GCM before it reaches the database.",
+        "The artisan's area requires a Google sign-in, and the very first sign-in also requires a setup code.",
+        "The “Manage my booking” link carries a random token belonging to your appointment alone. It opens that one, and nothing else.",
+      ],
+    },
+    {
+      title: "Cookies",
+      body: [
+        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all.",
+        "Two cookies exist, and they concern the artisan only: the one that keeps his session open in his own area, and a temporary one that protects his Google sign-in against fraud. Both expire on their own.",
+        "Typefaces are served from our own domain: displaying this page calls no third-party server.",
+      ],
+    },
+    {
+      title: "Your rights",
+      body: [
+        "Quebec law grants you several, and we honour them free of charge, within thirty days.",
+      ],
+      list: [
+        "Know what information we hold about you, and obtain a copy of it.",
+        "Have corrected anything inaccurate, incomplete or equivocal.",
+        "Withdraw your consent, and ask that what is no longer necessary be deleted.",
+        "Receive the information you gave us in a structured, commonly used technological format.",
+        "File a complaint with the Commission d'accès à l'information du Québec (cai.gouv.qc.ca) if our answer does not satisfy you.",
+      ],
+    },
+    {
+      title: "If there is an incident",
+      body: [
+        "Should a confidentiality incident present a risk of serious injury, we would notify the people concerned and the Commission d'accès à l'information without delay, and the incident would be entered in the register the law requires.",
+      ],
+    },
+    {
+      title: "If this page changes",
+      body: [
+        "The date at the top governs. A substantive change will be pointed out to you at your next booking, rather than slipped in quietly.",
+      ],
+    },
+  ],
+};
+
+const terms: LegalDoc = {
+  eyebrow: "Terms",
+  title: "What we hold ourselves to.",
+  lede:
+    "Booking a NIVEX session means accepting what follows. It is short, it is written in plain language, and it binds us as much as it binds you.",
+  sections: [
+    {
+      title: "Who welcomes you",
+      body: [
+        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec. These terms govern the use of {site}, online booking, and the sessions that follow from it.",
+        "By booking, you confirm that you are at least eighteen years old and entitled to have the pieces you present to us treated.",
+      ],
+    },
+    {
+      title: "The service",
+      body: [
+        "An artisan comes to your home with his professional equipment: active table, steam generator, pressing cloths and hangers. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
+        "Your clothes do not leave your home, unless a pickup has been agreed beforehand.",
+      ],
+    },
+    {
+      title: "Where we go",
+      body: [
+        "{zone}.",
+        "The postal code you enter while booking tells you at once whether you are inside the area. Outside it, booking remains possible: we call you back to confirm, or to tell you plainly that we cannot make the trip.",
+      ],
+    },
+    {
+      title: "Booking",
+      body: [],
+      list: [
+        "The slots on display are the ones genuinely free in the artisan's calendar. What you see exists.",
+        "A session lasts {min} at the least.",
+        "A booking is made at least {lead} ahead, and up to {horizon} out.",
+        "Confirmation goes out by email within the minute, with the invitation for your calendar and a personal link for managing the appointment.",
+      ],
+    },
+    {
+      title: "The price",
+      body: [
+        "Pricing is by time spent, at {rate} an hour, for a minimum of {min}. Applicable taxes, if any, are added to that amount.",
+        "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
+        "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
+      ],
+    },
+    {
+      title: "The first hour, on us",
+      body: [
+        "On a first booking, the first hour of ironing is offered and deducted from the estimate automatically. Once per email address. It cannot be exchanged for money, and it does not stack with any other offer.",
+      ],
+    },
+    {
+      title: "Payment",
+      body: [
+        "At the end of the session, on site: cash, Interac e-transfer or card. No prepayment is asked for when booking, and the site collects no banking information.",
+      ],
+    },
+    {
+      title: "Cancelling or moving",
+      body: [
+        "Freely, up to twenty-four hours before the appointment, from the personal link you received by email. Nothing to pay, nothing to justify.",
+        "Past that, call us at {phone}: we will do our best.",
+        "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
+      ],
+    },
+    {
+      title: "What we need at your place",
+      body: [],
+      list: [
+        "About two square metres of clear floor and one free electrical outlet.",
+        "Agreed access: building code, parking, elevator, and the household animal mentioned in advance.",
+        "The pieces gathered, clean and dry. We iron; we do not wash.",
+        "An adult present when the artisan arrives and when he leaves.",
+      ],
+    },
+    {
+      title: "Delicate pieces",
+      body: [
+        "Every fibre is identified before treatment, and care labels govern. Silk, lace, cashmere and pleats are worked with contactless steam or under a pressing cloth.",
+        "In case of doubt, we consult you before touching the piece. We may decline to treat one whose label forbids ironing, whose condition makes damage likely, or which calls for a treatment we do not practise. That refusal is said on the spot, and the piece is not billed to you.",
+      ],
+    },
+    {
+      title: "If something is damaged",
+      body: [
+        "We take care of what you entrust to us, and we answer for damage caused by our fault. Report any damage without delay — ideally before we leave, and at the latest within forty-eight hours — and keep the piece as it is: we must be able to see it.",
+        "We cannot answer for a pre-existing flaw, for a piece whose care label is missing or misleading, or for damage resulting from a treatment you asked for against our advice.",
+        "Nothing in these terms sets aside the rights the Consumer Protection Act grants you.",
+      ],
+    },
+    {
+      title: "The site",
+      body: [
+        "The words, images and design of this site belong to NIVEX. Reading them and sharing them, gladly; passing them off as your own, no.",
+        "We work to keep the site available and accurate, without being able to guarantee it at every instant. An outage never cancels an appointment already confirmed.",
+        "False bookings, bulk messaging and automated harvesting are not permitted.",
+      ],
+    },
+    {
+      title: "Your information",
+      body: [
+        "What we collect, why, and how long we keep it: all of it is set out in the privacy policy.",
+      ],
+    },
+    {
+      title: "Governing law",
+      body: [
+        "These terms are governed by the laws of Quebec and the laws of Canada applicable therein, and the courts of Quebec have jurisdiction.",
+        "Before it comes to that, call us at {phone}. Most disagreements settle in one conversation.",
+      ],
+    },
+    {
+      title: "If these terms change",
+      body: [
+        "The date at the top governs. The terms in force when you book are the ones that apply to that booking.",
+      ],
+    },
+  ],
+};
 
 export const en: Dict = {
   code: "en",
@@ -297,6 +537,7 @@ export const en: Dict = {
     zone: "Service area",
     hours: "Hours",
     legal: "Privacy",
+    terms: "Terms of use",
     admin: "Craftsman login",
     craft: "Made with care on the South Shore",
   },
@@ -347,6 +588,13 @@ export const en: Dict = {
         "Sending isn't working right now. Call +1 450 943 1217 — we pick up.",
       generic: "Sending failed. Try again, or call us directly.",
     },
+  },
+  legal: {
+    updatedLabel: "Last updated",
+    summary: "Contents",
+    readAlso: "Read also",
+    privacy,
+    terms,
   },
   days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
   daysShort: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],

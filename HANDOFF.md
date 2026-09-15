@@ -16,7 +16,7 @@ Il décrit ce qui tourne, ce qui manque, et comment finir.
 
 Le site est **complet et en ligne** : page d'accueil bilingue FR/EN, tunnel de
 réservation en quatre étapes, formulaire de contact, espace artisan sur
-`/admin`. `npm test` passe (26 cas du moteur de créneaux, 25 paires de
+`/admin`. `npm test` passe (26 cas du moteur de créneaux, 27 paires de
 contraste WCAG AA).
 
 **L'entreprise** : NIVEX, repassage à domicile de prestige, Longueuil et la
@@ -129,7 +129,7 @@ données ni compte Google. Le garde-fou refuse d'activer ce mode si
 `VERCEL_ENV` vaut `production` — aucun risque de le laisser traîner.
 
 ```bash
-npm test        # 26 cas du moteur de créneaux + 25 paires de contraste
+npm test        # 26 cas du moteur de créneaux + 27 paires de contraste
 npm run typecheck
 npm run build
 ```

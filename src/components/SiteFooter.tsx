@@ -67,12 +67,16 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
           </div>
         </div>
 
-        <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-linen-200/10 pt-8 text-[11px] text-linen-300/45 sm:flex-row">
+        <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-linen-200/10 pt-8 text-[11px] text-linen-300/45 sm:flex-row">
           <p>© {year} NIVEX. {t.footer.rights}.</p>
-          <p className="flex items-center gap-2">
+          <p className="hidden items-center gap-2 lg:flex">
             <span className="text-gold-400/70">◆</span> {t.footer.craft}
           </p>
-          <Link href="/admin" className="transition-colors hover:text-gold-300">{t.footer.admin}</Link>
+          <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <Link href={`${home}/confidentialite`} className="transition-colors hover:text-gold-300">{t.footer.legal}</Link>
+            <Link href={`${home}/conditions`} className="transition-colors hover:text-gold-300">{t.footer.terms}</Link>
+            <Link href="/admin" className="transition-colors hover:text-gold-300">{t.footer.admin}</Link>
+          </nav>
         </div>
       </div>
     </footer>

@@ -1,3 +1,256 @@
+/** Un document légal : des sections de prose, chacune pouvant se clore sur une liste. */
+export type LegalSection = { title: string; body: string[]; list?: string[] };
+export type LegalDoc = { eyebrow: string; title: string; lede: string; sections: LegalSection[] };
+
+/*
+ * Politique de confidentialité et conditions d'utilisation.
+ *
+ * Les accolades sont des substitutions, remplies à l'affichage par
+ * `LegalDocument` à partir des réglages en vigueur : {email}, {phone},
+ * {site}, {zone}, {rate}, {min}, {lead}, {horizon}. Écrire un taux
+ * ou un délai en toutes lettres ici, c'est écrire un texte qui mentira le jour
+ * où Styve le changera depuis son espace.
+ */
+const privacy: LegalDoc = {
+  eyebrow: "Vie privée",
+  title: "Ce que nous savons de vous.",
+  lede:
+    "NIVEX recueille de quoi vous joindre et de quoi vous trouver. Rien d'autre. Aucune de ces informations ne se revend, ne se loue, ni ne se troque. Voici le détail, sans détour.",
+  sections: [
+    {
+      title: "Qui répond de vos renseignements",
+      body: [
+        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec. Il est la personne responsable de la protection des renseignements personnels au sens de la loi québécoise, et la seule à avoir accès à ce que ce site recueille.",
+        "Pour une question, une demande d'accès ou une plainte, écrivez à {email} ou appelez le {phone}.",
+      ],
+    },
+    {
+      title: "Ce que nous recueillons",
+      body: [
+        "Uniquement ce que vous nous donnez vous-même, au moment où vous le donnez. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
+      ],
+      list: [
+        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
+        "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
+        "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
+      ],
+    },
+    {
+      title: "À quoi cela sert",
+      body: [
+        "À chaque renseignement correspond une raison d'être. Si la raison disparaît, le renseignement aussi.",
+      ],
+      list: [
+        "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre.",
+        "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
+        "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
+        "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
+      ],
+    },
+    {
+      title: "Ce que nous ne faisons pas",
+      body: [],
+      list: [
+        "Nous ne vendons, ne louons et n'échangeons aucun renseignement, à personne, à aucun prix.",
+        "Nous ne faisons aucune publicité ciblée, et ce site n'héberge aucun pisteur publicitaire.",
+        "Nous ne dressons aucun profil et ne prenons aucune décision automatisée à votre sujet.",
+        "Nous ne recueillons aucune donnée bancaire : le paiement se fait sur place, jamais sur le site.",
+      ],
+    },
+    {
+      title: "Qui d'autre y a accès",
+      body: [
+        "Trois fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
+      ],
+      list: [
+        "Vercel — héberge le site et le sert à votre navigateur.",
+        "Neon — la base de données où vivent les rendez-vous et les messages.",
+        "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
+      ],
+    },
+    {
+      title: "Hors du Québec",
+      body: [
+        "Le site, la base de données et les services Google sont hébergés aux États-Unis. Vos renseignements sortent donc du Québec pour y être conservés, et ils y sont soumis au droit du pays d'accueil — lequel peut, dans certains cas, permettre à ses autorités d'y accéder.",
+        "Nous avons retenu des fournisseurs tenus contractuellement à des mesures de protection comparables à celles exigées ici, et nous ne leur confions que ce qui est nécessaire. En réservant ou en nous écrivant par le site, vous consentez à cette communication hors Québec. Si elle vous gêne, appelez-nous : nous conviendrons du rendez-vous de vive voix.",
+      ],
+    },
+    {
+      title: "Combien de temps nous les gardons",
+      body: [],
+      list: [
+        "Un rendez-vous et ce qui l'accompagne : trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre.",
+        "Un message du formulaire de contact : deux ans, ou jusqu'à ce que vous en demandiez la suppression.",
+        "Le journal technique : douze mois.",
+      ],
+    },
+    {
+      title: "Comment c'est protégé",
+      body: [],
+      list: [
+        "Le site n'est servi qu'en HTTPS : ce que vous écrivez est chiffré en transit.",
+        "Le jeton qui relie le site au compte Google de l'artisan est chiffré en AES-256-GCM avant d'entrer en base.",
+        "L'espace artisan exige une authentification Google, et la toute première connexion exige en plus un code d'installation.",
+        "Le lien « Gérer ma réservation » contient un jeton aléatoire propre à votre rendez-vous. Il ne donne accès qu'à celui-là, et à rien d'autre.",
+      ],
+    },
+    {
+      title: "Témoins de connexion",
+      body: [
+        "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun.",
+        "Deux témoins existent, et ils ne concernent que l'artisan : celui qui maintient sa session ouverte dans son espace, et un témoin temporaire qui protège sa connexion Google contre la fraude. Tous deux expirent d'eux-mêmes.",
+        "Les polices de caractères sont servies depuis notre propre domaine : afficher cette page n'appelle aucun serveur tiers.",
+      ],
+    },
+    {
+      title: "Vos droits",
+      body: [
+        "La loi québécoise vous en reconnaît plusieurs, et nous les honorons sans frais, dans les trente jours.",
+      ],
+      list: [
+        "Savoir quels renseignements nous détenons à votre sujet, et en obtenir copie.",
+        "Faire corriger ce qui est inexact, incomplet ou équivoque.",
+        "Retirer votre consentement, et demander la suppression de ce qui n'est plus nécessaire.",
+        "Recevoir dans un format technologique structuré et couramment utilisé les renseignements que vous nous avez fournis.",
+        "Porter plainte auprès de la Commission d'accès à l'information du Québec (cai.gouv.qc.ca) si notre réponse ne vous satisfait pas.",
+      ],
+    },
+    {
+      title: "En cas d'incident",
+      body: [
+        "Si un incident de confidentialité présentait un risque de préjudice sérieux, nous en aviserions sans délai les personnes concernées ainsi que la Commission d'accès à l'information, et l'incident serait consigné au registre prévu par la loi.",
+      ],
+    },
+    {
+      title: "Si cette page change",
+      body: [
+        "La date inscrite en haut fait foi. Un changement de fond vous sera signalé à votre prochaine réservation, plutôt que glissé en silence.",
+      ],
+    },
+  ],
+};
+
+const terms: LegalDoc = {
+  eyebrow: "Conditions",
+  title: "Ce sur quoi nous nous engageons.",
+  lede:
+    "Réserver une séance NIVEX, c'est accepter ce qui suit. C'est court, c'est écrit en français clair, et cela vaut autant pour nous que pour vous.",
+  sections: [
+    {
+      title: "Qui vous accueille",
+      body: [
+        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec. Ces conditions régissent l'usage du site {site}, la réservation en ligne et les séances qui en découlent.",
+        "En réservant, vous confirmez avoir au moins dix-huit ans et être en droit de faire traiter les pièces que vous nous présentez.",
+      ],
+    },
+    {
+      title: "Le service",
+      body: [
+        "Un artisan se déplace chez vous avec son matériel professionnel : table active, générateur de vapeur, pattemouilles et cintres. Il repasse sur place les pièces que vous lui présentez, puis les remet sur cintres ou pliées.",
+        "Vos vêtements ne quittent pas votre domicile, sauf si une collecte a été convenue à l'avance.",
+      ],
+    },
+    {
+      title: "Où nous allons",
+      body: [
+        "{zone}.",
+        "Le code postal saisi pendant la réservation vous dit immédiatement si vous êtes dans la zone. Hors zone, la réservation reste possible : nous vous rappelons pour confirmer, ou pour vous dire franchement que nous ne pouvons pas nous y rendre.",
+      ],
+    },
+    {
+      title: "Réserver",
+      body: [],
+      list: [
+        "Les créneaux affichés sont ceux réellement libres dans l'agenda de l'artisan. Ce que vous voyez existe.",
+        "Une séance dure au minimum {min}.",
+        "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
+        "La confirmation part par courriel dans la minute, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous.",
+      ],
+    },
+    {
+      title: "Le prix",
+      body: [
+        "La tarification est au temps passé, au taux de {rate} l'heure, pour une durée minimale de {min}. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "L'estimation affichée pendant la réservation est indicative : elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
+        "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
+      ],
+    },
+    {
+      title: "La première heure offerte",
+      body: [
+        "Pour une première réservation, la première heure de repassage est offerte et déduite automatiquement de l'estimation. Une seule fois par adresse courriel. Elle ne s'échange pas contre de l'argent et ne se cumule avec aucune autre offre.",
+      ],
+    },
+    {
+      title: "Le paiement",
+      body: [
+        "À la fin de la séance, sur place : comptant, virement Interac ou carte. Aucun prépaiement n'est demandé au moment de réserver, et le site ne recueille aucune donnée bancaire.",
+      ],
+    },
+    {
+      title: "Annuler ou déplacer",
+      body: [
+        "Librement, jusqu'à vingt-quatre heures avant le rendez-vous, depuis le lien personnel reçu par courriel. Rien à payer, rien à justifier.",
+        "Passé ce délai, appelez-nous au {phone} : nous ferons au mieux.",
+        "S'il nous faut annuler de notre côté — maladie, panne de matériel, route impraticable —, vous êtes prévenu dès que nous le savons et vous ne devez rien.",
+      ],
+    },
+    {
+      title: "Ce dont nous avons besoin chez vous",
+      body: [],
+      list: [
+        "Environ deux mètres carrés dégagés et une prise électrique libre.",
+        "Un accès convenu : code d'immeuble, stationnement, ascenseur, et l'animal de la maison signalé d'avance.",
+        "Les pièces rassemblées, propres et sèches. Nous repassons, nous ne lavons pas.",
+        "Une personne majeure présente à l'arrivée et au départ de l'artisan.",
+      ],
+    },
+    {
+      title: "Les pièces délicates",
+      body: [
+        "Chaque fibre est identifiée avant traitement, et les étiquettes d'entretien font foi. Soie, dentelle, cachemire et plissés sont travaillés à la vapeur sans contact ou sous pattemouille.",
+        "En cas de doute, nous vous consultons avant de toucher la pièce. Nous pouvons refuser d'en traiter une dont l'étiquette interdit le repassage, dont l'état laisse craindre un dommage, ou qui exige un traitement que nous ne pratiquons pas. Ce refus est dit sur place, et cette pièce ne vous est pas facturée.",
+      ],
+    },
+    {
+      title: "Si quelque chose est abîmé",
+      body: [
+        "Nous prenons soin de ce que vous nous confiez, et nous répondons des dommages causés par notre faute. Signalez-nous tout dommage sans tarder — idéalement avant notre départ, au plus tard dans les quarante-huit heures — et conservez la pièce en l'état : nous devons pouvoir la voir.",
+        "Nous ne pouvons pas répondre d'un défaut préexistant, d'une pièce dont l'étiquette d'entretien manque ou induit en erreur, ni d'un dommage résultant d'un traitement que vous avez demandé malgré notre avis contraire.",
+        "Rien dans ces conditions n'écarte les droits que la Loi sur la protection du consommateur vous accorde.",
+      ],
+    },
+    {
+      title: "Le site",
+      body: [
+        "Les textes, les images et le dessin de ce site appartiennent à NIVEX. Les consulter et les partager, volontiers ; les reprendre à votre compte, non.",
+        "Nous faisons en sorte que le site reste disponible et exact, sans pouvoir le garantir à chaque instant. Une interruption du site n'annule jamais un rendez-vous déjà confirmé.",
+        "Les fausses réservations, l'envoi massif de messages et la collecte automatisée ne sont pas permis.",
+      ],
+    },
+    {
+      title: "Vos renseignements",
+      body: [
+        "Ce que nous recueillons, pourquoi, et combien de temps nous le gardons : tout est détaillé dans la politique de confidentialité.",
+      ],
+    },
+    {
+      title: "Le droit applicable",
+      body: [
+        "Ces conditions sont régies par les lois du Québec et par les lois du Canada qui s'y appliquent, et les tribunaux du Québec sont compétents.",
+        "Avant d'en arriver là, appelez-nous au {phone}. La plupart des différends se règlent en une conversation.",
+      ],
+    },
+    {
+      title: "Si ces conditions changent",
+      body: [
+        "La date inscrite en haut fait foi. Les conditions en vigueur au moment de votre réservation sont celles qui s'appliquent à cette réservation-là.",
+      ],
+    },
+  ],
+};
+
 export const fr = {
   code: "fr",
   htmlLang: "fr-CA",
@@ -295,6 +548,7 @@ export const fr = {
     zone: "Zone desservie",
     hours: "Horaire",
     legal: "Confidentialité",
+    terms: "Conditions d'utilisation",
     admin: "Espace artisan",
     craft: "Fait avec soin sur la Rive-Sud",
   },
@@ -345,6 +599,13 @@ export const fr = {
         "L'envoi ne fonctionne pas pour l'instant. Appelez-nous au +1 450 943 1217 — nous décrochons.",
       generic: "L'envoi a échoué. Réessayez, ou appelez-nous directement.",
     },
+  },
+  legal: {
+    updatedLabel: "Dernière mise à jour",
+    summary: "Sommaire",
+    readAlso: "À lire aussi",
+    privacy,
+    terms,
   },
   days: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"],
   daysShort: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],

@@ -48,6 +48,8 @@ pairs = [
     ("protocole : surtitre (gold-400 / ink-900)",   GOLD_400, INK_900,  4.5),
     ("surtitre or sur lin-200 (gold-600 / linen-200)", GOLD_600, LINEN_200, 4.5),
     ("corps sur lin-200 (ink-500 / linen-200)",     INK_500,  LINEN_200, 4.5),
+    ("pages légales : corps (ink-600 / linen-100)", INK_600,  LINEN_100, 4.5),
+    ("pages légales : sommaire (ink-600 / linen-200)", INK_600, LINEN_200, 4.5),
     # Éléments graphiques : seuil non textuel de 3:1
     ("icônes (gold-500 / linen-50)",                GOLD_500, LINEN_50,  3.0),
     ("icônes (gold-500 / linen-100)",               GOLD_500, LINEN_100, 3.0),

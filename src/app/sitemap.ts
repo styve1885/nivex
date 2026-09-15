@@ -4,14 +4,19 @@ import { siteOrigin } from "@/lib/google";
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = siteOrigin();
   const now = new Date();
-  const pages = ["", "/reserver"];
+  const pages = [
+    { path: "", changeFrequency: "weekly" as const, priority: 1 },
+    { path: "/reserver", changeFrequency: "monthly" as const, priority: 0.8 },
+    { path: "/confidentialite", changeFrequency: "yearly" as const, priority: 0.3 },
+    { path: "/conditions", changeFrequency: "yearly" as const, priority: 0.3 },
+  ];
 
   return ["fr", "en"].flatMap((locale) =>
-    pages.map((p) => ({
+    pages.map(({ path: p, changeFrequency, priority }) => ({
       url: `${base}/${locale}${p}`,
       lastModified: now,
-      changeFrequency: (p === "" ? "weekly" : "monthly") as "weekly" | "monthly",
-      priority: p === "" ? 1 : 0.8,
+      changeFrequency,
+      priority,
       alternates: {
         languages: {
           "fr-CA": `${base}/fr${p}`,
