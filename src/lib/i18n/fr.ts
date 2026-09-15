@@ -1,3 +1,5 @@
+import { CANCEL_WINDOW_HOURS } from "../brand";
+
 /** Un document légal : des sections de prose, chacune pouvant se clore sur une liste. */
 export type LegalSection = { title: string; body: string[]; list?: string[] };
 export type LegalDoc = { eyebrow: string; title: string; lede: string; sections: LegalSection[] };
@@ -191,7 +193,7 @@ const terms: LegalDoc = {
     {
       title: "Annuler ou déplacer",
       body: [
-        "Librement, jusqu'à vingt-quatre heures avant le rendez-vous, depuis le lien personnel reçu par courriel. Rien à payer, rien à justifier.",
+        "Librement, jusqu'à {cancel} avant le rendez-vous, depuis le lien personnel reçu par courriel. Rien à payer, rien à justifier.",
         "Passé ce délai, appelez-nous au {phone} : nous ferons au mieux.",
         "S'il nous faut annuler de notre côté — maladie, panne de matériel, route impraticable —, vous êtes prévenu dès que nous le savons et vous ne devez rien.",
       ],
@@ -442,7 +444,7 @@ export const fr = {
       },
       {
         q: "Puis-je annuler ou déplacer mon rendez-vous ?",
-        a: "Oui, librement jusqu'à 24 heures avant. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler.",
+        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler.`,
       },
     ],
   },
@@ -538,7 +540,7 @@ export const fr = {
     cancel: "Annuler la réservation",
     cancelConfirm: "Annuler définitivement ce rendez-vous ?",
     cancelled: "Votre réservation a été annulée. Votre artisan en a été informé.",
-    tooLate: "Ce rendez-vous a lieu dans moins de 24 h. Appelez-nous au +1 450 943 1217.",
+    tooLate: `Ce rendez-vous a lieu dans moins de ${CANCEL_WINDOW_HOURS} h. Appelez-nous au +1 450 943 1217.`,
     notFound: "Réservation introuvable. Vérifiez le lien reçu par courriel.",
     rebook: "Prendre un nouveau rendez-vous",
   },

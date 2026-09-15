@@ -6,7 +6,7 @@ import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availabi
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { contactEmail, PHONE } from "./brand";
+import { contactEmail, CANCEL_WINDOW_HOURS, PHONE } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
 
@@ -301,9 +301,10 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
   await logEvent("booking_cancelled", { ref: b.ref, by });
 }
 
-/** Le client peut-il encore annuler lui-même ? (24 h de préavis) */
+/** Le client peut-il encore annuler lui-même ? */
 export function canSelfCancel(b: Booking): boolean {
-  return b.status === "confirmed" && b.startsAt.getTime() - Date.now() > 24 * 3600_000;
+  return b.status === "confirmed"
+    && b.startsAt.getTime() - Date.now() > CANCEL_WINDOW_HOURS * 3600_000;
 }
 
 export { formatDateTime, inServiceArea };

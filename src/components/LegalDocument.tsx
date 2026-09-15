@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Dict, LegalDoc } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
-import { contactEmail, contactEmailHref, PHONE, PHONE_HREF } from "@/lib/brand";
+import { CANCEL_WINDOW_HOURS, contactEmail, contactEmailHref, PHONE, PHONE_HREF } from "@/lib/brand";
 import { siteOrigin } from "@/lib/google";
 import { minutesToText, formatMoney } from "@/lib/time";
 
@@ -29,6 +29,7 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
     rate: formatMoney(s.hourlyRate, s.currency, locale),
     min: minutesToText(s.minMinutes, locale),
     lead: `${s.leadHours} ${hours}`,
+    cancel: `${CANCEL_WINDOW_HOURS} ${hours}`,
     horizon: `${s.horizonDays} ${days}`,
   };
 }

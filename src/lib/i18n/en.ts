@@ -1,4 +1,5 @@
 import type { Dict, LegalDoc } from "./fr";
+import { CANCEL_WINDOW_HOURS } from "../brand";
 
 const privacy: LegalDoc = {
   eyebrow: "Privacy",
@@ -180,7 +181,7 @@ const terms: LegalDoc = {
     {
       title: "Cancelling or moving",
       body: [
-        "Freely, up to twenty-four hours before the appointment, from the personal link you received by email. Nothing to pay, nothing to justify.",
+        "Freely, up to {cancel} before the appointment, from the personal link you received by email. Nothing to pay, nothing to justify.",
         "Past that, call us at {phone}: we will do our best.",
         "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
       ],
@@ -431,7 +432,7 @@ export const en: Dict = {
       },
       {
         q: "Can I cancel or reschedule?",
-        a: "Yes, freely up to 24 hours before. Your confirmation email holds a personal link that lets you manage everything without calling us.",
+        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us.`,
       },
     ],
   },
@@ -527,7 +528,7 @@ export const en: Dict = {
     cancel: "Cancel this booking",
     cancelConfirm: "Permanently cancel this appointment?",
     cancelled: "Your booking has been cancelled. Your craftsman has been notified.",
-    tooLate: "This appointment is less than 24 h away. Please call +1 450 943 1217.",
+    tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call +1 450 943 1217.`,
     notFound: "Booking not found. Check the link from your email.",
     rebook: "Book a new appointment",
   },

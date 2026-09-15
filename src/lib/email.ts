@@ -1,4 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
+import { CANCEL_WINDOW_HOURS } from "./brand";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -91,7 +92,7 @@ const T = {
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
-    cancelNote: "Vous pouvez annuler ou déplacer librement jusqu'à 24 h avant le rendez-vous.",
+    cancelNote: `Vous pouvez annuler ou déplacer librement jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous.`,
     // Annulation
     cancelSubject: (ref: string) => `Séance NIVEX annulée · ${ref}`,
     cancelIntro: "Votre séance a bien été annulée. Aucun montant ne vous sera facturé.",
@@ -119,7 +120,7 @@ const T = {
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
-    cancelNote: "You may cancel or reschedule freely up to 24 h before the appointment.",
+    cancelNote: `You may cancel or reschedule freely up to ${CANCEL_WINDOW_HOURS} h before the appointment.`,
     cancelSubject: (ref: string) => `NIVEX session cancelled · ${ref}`,
     cancelIntro: "Your session has been cancelled. Nothing will be charged.",
     cancelCta: "Book a new appointment",
