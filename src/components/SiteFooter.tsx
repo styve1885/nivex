@@ -73,6 +73,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
             <span className="text-gold-400/70">◆</span> {t.footer.craft}
           </p>
           <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <Link href={`${home}/tarifs`} className="transition-colors hover:text-gold-300">{t.nav.pricing}</Link>
             <Link href={`${home}/confidentialite`} className="transition-colors hover:text-gold-300">{t.footer.legal}</Link>
             <Link href={`${home}/conditions`} className="transition-colors hover:text-gold-300">{t.footer.terms}</Link>
             <Link href="/admin" className="transition-colors hover:text-gold-300">{t.footer.admin}</Link>

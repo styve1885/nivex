@@ -256,6 +256,7 @@ export const en: Dict = {
     services: "Services",
     how: "How it works",
     faq: "Questions",
+    pricing: "Pricing",
     book: "Book",
     contact: "Contact",
   },
@@ -397,6 +398,7 @@ export const en: Dict = {
     perHour: "/ hour",
     minimum: "Minimum duration",
     note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
+    seeAll: "See the full price list",
   },
   testimonials: {
     eyebrow: "Word of mouth",
@@ -596,6 +598,102 @@ export const en: Dict = {
     readAlso: "Read also",
     privacy,
     terms,
+  },
+  tarifs: {
+    eyebrow: "Pricing",
+    title: "What an hour at your place amounts to.",
+    lede:
+      "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
+    perHourNote: "minimum {min} per visit · travel included",
+    cadence: {
+      title: "What we handle in one hour",
+      lede:
+        "These figures aren't a sales promise: they are the ones our booking engine uses to work out how long your session will take. What you read here is what the form will calculate.",
+      colType: "Type of piece",
+      colQty: "In 1 h",
+      note: "A mixed basket runs at about 7 to 8 pieces an hour. That average is what sets the ranges quoted on each package.",
+    },
+    versus: {
+      title: "This is not household ironing.",
+      lede: "Five differences, and they show on the garment.",
+      elsewhere: "Elsewhere",
+      here: "At NIVEX",
+      rows: [
+        {
+          title: "The volume",
+          them: "Whatever can be done in the time paid for. You find out how far it got at the end.",
+          us: "A number of pieces stated before we start. If we fall short through our own doing, the missing time isn't billed.",
+        },
+        {
+          title: "The equipment",
+          them: "Your iron, your board, your power. The result depends on what you happen to own.",
+          us: "Active board, steam generator, pressing cloths and wooden hangers brought along. You provide an outlet and two square metres.",
+        },
+        {
+          title: "The order of work",
+          them: "Piece after piece, in basket order. What's finished creases again under the next one.",
+          us: "A seven-step protocol per shirt, and an order of passage that keeps finished pieces from creasing.",
+        },
+        {
+          title: "Delicate pieces",
+          them: "One setting for everything. Silk, pleats and cashmere sometimes come away marked.",
+          us: "Fibre tested every time, care label followed, contactless steam. In case of doubt we ask you before touching the piece.",
+        },
+        {
+          title: "What you're left with",
+          them: "A pile on the bed, and a verbal arrangement.",
+          us: "An orderly wardrobe, an invoice, a link to manage your appointment, and our written liability for damage.",
+        },
+      ],
+    },
+    blocks: {
+      title: "Hourly blocks",
+      lede: "You book hours; we fill them.",
+      minimum:
+        "Minimum {min} per visit. Add-ons and single pieces attach to a block already booked — on their own they don't warrant a trip.",
+    },
+    bundles: {
+      title: "Set packages",
+      lede: "A typical basket, already costed, at the same hourly rate.",
+    },
+    addons: {
+      title: "Add-ons to your session",
+      lede: "Alongside a block already booked, with no second trip.",
+    },
+    units: {
+      title: "Single pieces",
+      lede: "For one piece added to a session already booked.",
+      linen: "Bedding & household linen",
+      garments: "Clothes & outfits",
+      note: "These prices are fixed and don't follow the hourly rate: they apply to an isolated piece. Beyond a few pieces, an hourly block costs less.",
+    },
+    plans: {
+      title: "Monthly plans",
+      lede: "A regular service, and an hourly rate that comes down.",
+      perMonth: "/ month",
+      full: "At the standard rate",
+      save: "You save",
+      perks: [
+        "First call on the time slots you want.",
+        "Flexible rescheduling when you travel or take holidays.",
+        "Light starch on collars and cuffs, included at no extra cost.",
+        "Rate guaranteed twelve months from sign-up.",
+      ],
+    },
+    terms: {
+      title: "What holds for every session",
+      items: [
+        { dt: "Volume honoured", dd: "The number of pieces stated on each package is a commitment. If we fall short through our own doing, the missing time isn't billed." },
+        { dt: "Estimate and final amount", dd: "The estimate is indicative. The final amount follows the time actually spent and is confirmed to you on site, before we begin." },
+        { dt: "Payment", dd: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking." },
+        { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
+      ],
+    },
+    firstFreeLabel: "First session",
+    cta: {
+      title: "Put your session together.",
+      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and offers you the slots that are genuinely free.",
+    },
   },
   days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
   daysShort: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],

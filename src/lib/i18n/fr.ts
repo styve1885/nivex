@@ -268,6 +268,7 @@ export const fr = {
     services: "Prestations",
     how: "Déroulement",
     faq: "Questions",
+    pricing: "Tarifs",
     book: "Réserver",
     contact: "Contact",
   },
@@ -409,6 +410,7 @@ export const fr = {
     perHour: "/ heure",
     minimum: "Durée minimale",
     note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
+    seeAll: "Voir la grille complète",
   },
   testimonials: {
     eyebrow: "Ce qu'on en dit",
@@ -608,6 +610,102 @@ export const fr = {
     readAlso: "À lire aussi",
     privacy,
     terms,
+  },
+  tarifs: {
+    eyebrow: "Tarification",
+    title: "Ce qu'une heure chez vous représente.",
+    lede:
+      "Nous ne vendons pas « du repassage » : nous vendons une cadence mesurée, la même d'une séance à l'autre. Voici ce qu'elle vaut, ce qu'elle traite, et ce qui la sépare d'un coup de main.",
+    perHourNote: "minimum {min} par déplacement · déplacement inclus",
+    cadence: {
+      title: "Ce que nous traitons en une heure",
+      lede:
+        "Ces chiffres ne sont pas une promesse commerciale : ce sont ceux que notre moteur de réservation utilise pour calculer la durée de votre séance. Ce que vous lisez ici est ce que le formulaire calculera.",
+      colType: "Type de pièce",
+      colQty: "En 1 h",
+      note: "Un panier mixte tourne autour de 7 à 8 pièces à l'heure. C'est cette moyenne qui donne les fourchettes annoncées sur chaque forfait.",
+    },
+    versus: {
+      title: "Ce n'est pas du repassage de ménage.",
+      lede: "Cinq différences, et elles se voient sur le vêtement.",
+      elsewhere: "Ailleurs",
+      here: "Chez NIVEX",
+      rows: [
+        {
+          title: "Le volume",
+          them: "On repasse « ce qu'on peut » dans le temps payé. Vous découvrez le résultat à la fin.",
+          us: "Un nombre de pièces annoncé avant de commencer. S'il n'est pas atteint de notre fait, le temps manquant ne vous est pas facturé.",
+        },
+        {
+          title: "Le matériel",
+          them: "Votre fer, votre planche, votre électricité. Le résultat dépend de ce que vous possédez.",
+          us: "Table active, générateur de vapeur, pattemouilles et cintres de bois apportés. Vous fournissez une prise et deux mètres carrés.",
+        },
+        {
+          title: "L'ordre de travail",
+          them: "Pièce après pièce, dans l'ordre du panier. Ce qui est fini se refroisse sous la suivante.",
+          us: "Un protocole en sept temps par chemise, et un ordre de passage qui empêche le refroissage.",
+        },
+        {
+          title: "Les pièces fragiles",
+          them: "Même réglage pour tout. Une soie, un plissé ou un cachemire y laissent parfois une marque.",
+          us: "Test de fibre systématique, étiquette d'entretien respectée, vapeur sans contact. En cas de doute, nous vous consultons avant de toucher la pièce.",
+        },
+        {
+          title: "Ce qui vous reste",
+          them: "Une pile sur le lit, et un arrangement verbal.",
+          us: "Une penderie en ordre, une facture, un lien pour gérer votre rendez-vous, et notre responsabilité écrite en cas de dommage.",
+        },
+      ],
+    },
+    blocks: {
+      title: "Blocs horaires",
+      lede: "Vous réservez des heures, nous les remplissons.",
+      minimum:
+        "Minimum {min} par déplacement. Les ajouts et les pièces à l'unité se greffent à un bloc déjà réservé — seuls, ils ne justifient pas un déplacement.",
+    },
+    bundles: {
+      title: "Forfaits composés",
+      lede: "Un panier type, déjà chiffré, au même tarif horaire.",
+    },
+    addons: {
+      title: "Ajouts à votre séance",
+      lede: "En complément d'un bloc déjà réservé, sans second déplacement.",
+    },
+    units: {
+      title: "Pièces à l'unité",
+      lede: "Pour une pièce ajoutée ponctuellement à une séance réservée.",
+      linen: "Literie & linge de maison",
+      garments: "Vêtements & tenues",
+      note: "Ces prix sont fixes et ne suivent pas le tarif horaire : ils valent pour une pièce isolée. Au-delà de quelques pièces, un bloc horaire revient moins cher.",
+    },
+    plans: {
+      title: "Abonnements mensuels",
+      lede: "Un service régulier, et un tarif horaire qui baisse.",
+      perMonth: "/ mois",
+      full: "Au tarif normal",
+      save: "Vous économisez",
+      perks: [
+        "Priorité absolue sur vos plages horaires.",
+        "Report flexible en cas de déplacement ou de vacances.",
+        "Amidon léger sur cols et poignets, inclus sans supplément.",
+        "Tarif garanti douze mois à compter de la souscription.",
+      ],
+    },
+    terms: {
+      title: "Ce qui vaut pour toutes les séances",
+      items: [
+        { dt: "Volume tenu", dd: "Le nombre de pièces annoncé sur chaque forfait est un engagement. S'il n'est pas atteint de notre fait, le temps manquant ne vous est pas facturé." },
+        { dt: "Estimation et montant final", dd: "L'estimation est indicative. Le montant final suit le temps réellement passé et vous est confirmé sur place, avant de commencer." },
+        { dt: "Paiement", dd: "Sur place, à la fin de la séance : comptant, virement Interac ou carte. Aucun prépaiement à la réservation." },
+        { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre : le matériel professionnel arrive avec l'artisan." },
+      ],
+    },
+    firstFreeLabel: "Première séance",
+    cta: {
+      title: "Composez votre séance.",
+      body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et vous propose les créneaux réellement libres.",
+    },
   },
   days: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"],
   daysShort: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],

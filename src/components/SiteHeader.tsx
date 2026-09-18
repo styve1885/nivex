@@ -31,6 +31,7 @@ export function SiteHeader({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
     { href: `${home}#prestations`, label: t.nav.services },
     { href: `${home}#deroulement`, label: t.nav.how },
     { href: `${home}#questions`, label: t.nav.faq },
+    { href: `${home}/tarifs`, label: t.nav.pricing },
     { href: `${home}#contact`, label: t.nav.contact },
   ];
 
@@ -59,10 +60,10 @@ export function SiteHeader({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-9 lg:flex" aria-label={t.nav.home}>
+          <nav className="hidden items-center gap-5 lg:flex xl:gap-8" aria-label={t.nav.home}>
             {links.map((l) => (
               <Link key={l.href} href={l.href}
-                className="group relative text-[11px] uppercase tracking-[0.2em] text-ink-600 transition-colors hover:text-ink-900">
+                className="group relative whitespace-nowrap text-[11px] uppercase tracking-[0.2em] text-ink-600 transition-colors hover:text-ink-900">
                 {l.label}
                 <span className="absolute -bottom-1.5 left-0 h-px w-0 bg-gold-500 transition-all duration-500 group-hover:w-full"
                   style={{ transitionTimingFunction: "var(--ease-silk)" }} />

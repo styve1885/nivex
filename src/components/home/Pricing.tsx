@@ -45,6 +45,13 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
                 {t.cta.button}<ArrowIcon />
               </Link>
 
+              <p className="mt-6">
+                <Link href={`/${locale}/tarifs`}
+                  className="text-[11px] uppercase tracking-[0.2em] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+                  {t.pricing.seeAll} →
+                </Link>
+              </p>
+
               <p className="mx-auto mt-8 max-w-sm text-[0.78rem] font-light leading-relaxed text-ink-400">
                 {t.pricing.note}
               </p>
