@@ -56,7 +56,7 @@ async function bootstrap() {
       calendar_id     text        NOT NULL DEFAULT 'primary',
       timezone        text        NOT NULL DEFAULT 'America/Toronto',
       business_name   text        NOT NULL DEFAULT 'NIVEX',
-      hourly_rate     integer     NOT NULL DEFAULT 4500,
+      hourly_rate     integer     NOT NULL DEFAULT 5000,   -- suit DEFAULT_HOURLY_RATE (settings.ts)
       currency        text        NOT NULL DEFAULT 'CAD',
       min_minutes     integer     NOT NULL DEFAULT 120,
       buffer_minutes  integer     NOT NULL DEFAULT 30,

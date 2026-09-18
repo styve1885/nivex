@@ -37,6 +37,18 @@ export type Settings = {
   connectedAt: string | null;
 };
 
+/**
+ * Taux horaire par défaut, en cents.
+ *
+ * Le taux réel vit en base et se règle depuis /admin ; celui-ci ne sert que
+ * lorsque la base est absente ou muette. Les deux doivent dire la même chose :
+ * sinon, une base injoignable fait afficher au site — et à ses conditions
+ * d'utilisation — un tarif que l'entreprise ne pratique plus.
+ *
+ * La valeur par défaut de la colonne `hourly_rate`, dans db.ts, suit celle-ci.
+ */
+export const DEFAULT_HOURLY_RATE = 5000;
+
 export const DEFAULT_HOURS: DayHours[] = [
   { day: 0, enabled: false, open: "07:00", close: "22:00" }, // dimanche — fermé par défaut
   { day: 1, enabled: true,  open: "07:00", close: "22:00" },
@@ -75,7 +87,7 @@ export const DEFAULT_AREA: ServiceArea = {
 export const FALLBACK_SETTINGS: Settings = {
   ownerEmail: null, ownerName: null, ownerPicture: null, connected: false,
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
-  hourlyRate: 4500, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
+  hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 45, slotStep: 30, firstHourFree: true, paused: false,
   hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, services: DEFAULT_SERVICES,
   connectedAt: null,
@@ -93,7 +105,7 @@ function hydrate(row: Row | undefined): Settings {
     calendarId: (row.calendar_id as string) || "primary",
     timezone: (row.timezone as string) || "America/Toronto",
     businessName: (row.business_name as string) || "NIVEX",
-    hourlyRate: Number(row.hourly_rate ?? 4500),
+    hourlyRate: Number(row.hourly_rate ?? DEFAULT_HOURLY_RATE),
     currency: (row.currency as string) || "CAD",
     minMinutes: Number(row.min_minutes ?? 120),
     bufferMinutes: Number(row.buffer_minutes ?? 30),
