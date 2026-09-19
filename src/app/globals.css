@@ -39,6 +39,13 @@
 }
 
 :root {
+  /* Le site est clair, et refuse qu'on en décide autrement. Sans cette
+     ligne, le « thème sombre automatique » de Chrome inverse les fonds sur
+     un téléphone en mode sombre, laisse les images intactes, et les cerne
+     d'un cadre clair. « only light » est le refus explicite ; « light » seul
+     ne suffit pas à l'écarter. */
+  color-scheme: only light;
+
   --page: var(--color-linen-100);
   --page-alt: var(--color-linen-50);
   --text: var(--color-ink-800);

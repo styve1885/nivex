@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Reveal } from "../Reveal";
-import { Mark } from "../Logo";
 import { ArrowIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
 
@@ -14,8 +13,7 @@ export function ClosingCta({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
       </div>
 
       <Reveal className="relative mx-auto max-w-2xl px-8 text-center">
-        <Mark className="mx-auto h-14 w-auto" />
-        <h2 className="mt-8 font-display text-4xl font-light leading-tight text-ink-800 sm:text-[3.2rem]">
+        <h2 className="font-display text-4xl font-light leading-tight text-ink-800 sm:text-[3.2rem]">
           {t.cta.title}
         </h2>
         <p className="mx-auto mt-6 max-w-md text-[0.97rem] font-light leading-[1.95] text-ink-500">{t.cta.body}</p>
