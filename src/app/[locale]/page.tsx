@@ -6,6 +6,7 @@ import { Hero } from "@/components/home/Hero";
 import { Marquee } from "@/components/home/Marquee";
 import { Story } from "@/components/home/Story";
 import { Services } from "@/components/home/Services";
+import { Gallery } from "@/components/home/Gallery";
 import { Protocol } from "@/components/home/Protocol";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { Pricing } from "@/components/home/Pricing";
@@ -62,6 +63,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <Marquee t={t} />
       <Story t={t} />
       <Services t={t} />
+      <Gallery t={t} />
       <Protocol t={t} />
       <HowItWorks t={t} />
       <Pricing t={t} locale={locale} settings={settings} />

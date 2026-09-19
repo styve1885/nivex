@@ -695,6 +695,39 @@ export const en: Dict = {
       body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and offers you the slots that are genuinely free.",
     },
   },
+  gallery: {
+    eyebrow: "The pieces",
+    title: "What passes through our hands.",
+    lede:
+      "A wool suit is not handled like a cotton overshirt, nor a pleated skirt like a dinner jacket. Here is the kind of piece we receive, and the care each one calls for.",
+    photos: {
+      gilet: {
+        name: "Waistcoats & suits",
+        detail: "Checked wool, notched lapels. Shoulders reshaped, contactless steam, never any shine.",
+        alt: "Checked wool suit waistcoat hanging on a wooden hanger",
+      },
+      veston: {
+        name: "Tailored blazers",
+        detail: "The lapel is creased at its edge, never flattened. Black wool must take on no sheen.",
+        alt: "Black tailored blazer shown on a mannequin",
+      },
+      chemises: {
+        name: "Shirts & overshirts",
+        detail: "Collar, yoke, cuffs, sleeves, body — in that order, so nothing creases again.",
+        alt: "Two beige cotton overshirts hanging side by side",
+      },
+      ceremonie: {
+        name: "Ceremony wear",
+        detail: "Satin piping worked around, never over; trouser crease set under a pressing cloth.",
+        alt: "Midnight blue dinner jacket with satin piping, on a hanger",
+      },
+      uniformes: {
+        name: "School uniforms",
+        detail: "Pleated skirts are taken pleat by pleat. Returned on hangers numbered per child.",
+        alt: "Blue school uniforms hanging on a rail",
+      },
+    },
+  },
   days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
   daysShort: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
   months: ["January","February","March","April","May","June","July","August","September","October","November","December"],

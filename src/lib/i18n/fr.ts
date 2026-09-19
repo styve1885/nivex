@@ -707,6 +707,39 @@ export const fr = {
       body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et vous propose les créneaux réellement libres.",
     },
   },
+  gallery: {
+    eyebrow: "Les pièces",
+    title: "Ce qui passe entre nos mains.",
+    lede:
+      "Un complet de laine ne se traite pas comme une surchemise de coton, ni une jupe plissée comme un smoking. Voici le genre de pièces que nous recevons, et le soin que chacune réclame.",
+    photos: {
+      gilet: {
+        name: "Gilets & complets",
+        detail: "Laine à carreaux, revers à cran. Épaules remises en forme, vapeur sans contact, aucun lustrage.",
+        alt: "Gilet de complet en laine à carreaux, suspendu à un cintre de bois",
+      },
+      veston: {
+        name: "Vestons de tailleur",
+        detail: "Le revers se marque au bord, jamais à plat. Une laine noire ne doit prendre aucune brillance.",
+        alt: "Veston de tailleur noir présenté sur un mannequin",
+      },
+      chemises: {
+        name: "Chemises & surchemises",
+        detail: "Col, empiècement, poignets, manches, corps — dans cet ordre, pour que rien ne se refroisse.",
+        alt: "Deux surchemises de coton beige suspendues côte à côte",
+      },
+      ceremonie: {
+        name: "Tenues de cérémonie",
+        detail: "Passepoil satiné contourné au fer, pli du pantalon repris sous pattemouille.",
+        alt: "Smoking bleu nuit à passepoil satiné, sur cintre",
+      },
+      uniformes: {
+        name: "Uniformes scolaires",
+        detail: "Les jupes plissées se reprennent pli par pli. Rendus sur cintres numérotés par enfant.",
+        alt: "Uniformes scolaires bleus suspendus à une tringle",
+      },
+    },
+  },
   days: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"],
   daysShort: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
   months: ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"],
