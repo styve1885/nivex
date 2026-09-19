@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Reveal } from "../Reveal";
-import { HangerMark } from "../Logo";
+import { Mark } from "../Logo";
 import { ArrowIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
 
@@ -14,7 +14,7 @@ export function ClosingCta({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
       </div>
 
       <Reveal className="relative mx-auto max-w-2xl px-8 text-center">
-        <HangerMark className="mx-auto h-14 w-auto text-gold-500" />
+        <Mark className="mx-auto h-14 w-auto" />
         <h2 className="mt-8 font-display text-4xl font-light leading-tight text-ink-800 sm:text-[3.2rem]">
           {t.cta.title}
         </h2>

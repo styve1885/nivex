@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
-import { HangerMark } from "../Logo";
+import { Mark } from "../Logo";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
@@ -236,7 +236,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   if (!config.bookable) {
     return (
       <div className="mx-auto max-w-xl px-7 py-24 text-center sm:px-10">
-        <HangerMark className="mx-auto h-14 w-auto text-gold-500" />
+        <Mark className="mx-auto h-14 w-auto" />
         <h1 className="mt-8 font-display text-3xl font-light text-ink-800">{t.booking.title}</h1>
         <p className="mx-auto mt-6 text-[0.95rem] font-light leading-[1.9] text-ink-500">
           {t.booking.errors.notConnected}

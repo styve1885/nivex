@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Crest, Wordmark } from "./Logo";
+import { Mark, Wordmark } from "./Logo";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { contactEmail, contactEmailHref } from "@/lib/brand";
@@ -26,7 +26,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
       <div className="relative mx-auto max-w-7xl px-6 py-20 sm:px-10">
         <div className="grid gap-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <Crest className="h-16 w-16 text-gold-400" />
+            <Mark className="h-14 w-auto" />
             <Wordmark as="div" className="mt-5 text-2xl text-linen-100" />
             <p className="mt-3 text-[10px] uppercase tracking-[0.28em] text-gold-400">{t.footer.tagline}</p>
             <p className="mt-6 max-w-xs font-display text-lg italic leading-relaxed text-linen-300/80">

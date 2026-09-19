@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { HangerMark, Wordmark } from "./Logo";
+import { Mark, Wordmark } from "./Logo";
 import type { Dict } from "@/lib/i18n";
 
 export function SiteHeader({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
@@ -51,7 +51,7 @@ export function SiteHeader({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 sm:px-8">
           <Link href={home} className="group flex items-center gap-3" aria-label="NIVEX">
-            <HangerMark className={`text-gold-500 transition-all duration-700 ${scrolled ? "h-7" : "h-9"} w-auto`} withSteam={false} />
+            <Mark className={`transition-all duration-700 ${scrolled ? "h-8" : "h-11"} w-auto`} />
             <span className="flex flex-col">
               <Wordmark className={`text-ink-800 transition-all duration-700 ${scrolled ? "text-lg" : "text-xl"}`} />
               <span className="mt-0.5 hidden text-[8.5px] uppercase tracking-[0.3em] text-ink-400 sm:block">

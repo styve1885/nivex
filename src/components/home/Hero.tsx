@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HangerMark } from "../Logo";
+import { Lockup } from "../Logo";
 import { ArrowIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
 
@@ -30,7 +30,7 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
         <p className="eyebrow animate-fade" style={{ animationDelay: "80ms" }}>{t.hero.eyebrow}</p>
 
         <div className="mt-9 flex justify-center animate-rise" style={{ animationDelay: "160ms" }}>
-          <HangerMark className="h-20 w-auto text-gold-500 sm:h-24" title="NIVEX" />
+          <Lockup className="h-28 w-auto sm:h-36" priority />
         </div>
 
         <h1 className="mt-8 font-display text-[2.65rem] font-light leading-[1.06] tracking-tight text-ink-800 sm:text-6xl lg:text-[4.6rem]">

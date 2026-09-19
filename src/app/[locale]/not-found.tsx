@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { HangerMark } from "@/components/Logo";
+import { Mark } from "@/components/Logo";
 
 export default function NotFound() {
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center px-8 py-32 text-center">
-      <HangerMark className="h-14 w-auto text-gold-400" withSteam={false} />
+      <Mark className="h-14 w-auto" />
       <p className="mt-8 font-display text-6xl font-light text-gold-500">404</p>
       <h1 className="mt-4 font-display text-3xl font-light text-ink-800">
         Cette page a pris le pli.

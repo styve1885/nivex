@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Crest, Wordmark } from "../Logo";
+import { Mark, Wordmark } from "../Logo";
 import { BookingsPanel } from "./BookingsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
@@ -41,7 +41,7 @@ export function Dashboard({
     <div className="mx-auto max-w-5xl px-6 py-10 sm:px-10 sm:py-14">
       <header className="flex flex-wrap items-center justify-between gap-6 border-b border-gold-300/40 pb-8">
         <div className="flex items-center gap-4">
-          <Crest className="h-12 w-12 text-gold-500" />
+          <Mark className="h-10 w-auto" />
           <div>
             <Wordmark as="div" className="text-xl text-ink-800" />
             <p className="text-[9px] uppercase tracking-[0.26em] text-gold-600">Espace artisan</p>

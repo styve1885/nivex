@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Crest, Wordmark } from "@/components/Logo";
+import { Mark, Wordmark } from "@/components/Logo";
 import { GoogleIcon } from "@/components/Icons";
 import { getSettings } from "@/lib/settings";
 import { getSession } from "@/lib/session";
@@ -40,7 +40,7 @@ export default async function LoginPage({
     <div className="flex min-h-screen items-center justify-center px-6 py-16">
       <div className="w-full max-w-md">
         <div className="text-center">
-          <Crest className="mx-auto h-16 w-16 text-gold-500" />
+          <Mark className="mx-auto h-14 w-auto" />
           <Wordmark as="div" className="mt-5 text-2xl text-ink-800" />
           <p className="mt-2 text-[10px] uppercase tracking-[0.28em] text-gold-600">Espace artisan</p>
         </div>

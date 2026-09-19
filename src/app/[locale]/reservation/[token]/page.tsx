@@ -5,7 +5,7 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { canSelfCancel, findByManageToken } from "@/lib/bookings";
 import { formatDateTime, formatMoney, minutesToText } from "@/lib/time";
-import { HangerMark } from "@/components/Logo";
+import { Mark } from "@/components/Logo";
 import { CancelButton } from "@/components/booking/CancelButton";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export default async function ManagePage({
   if (!b) {
     return (
       <div className="mx-auto max-w-lg px-7 py-40 text-center">
-        <HangerMark className="mx-auto h-12 w-auto text-gold-400" />
+        <Mark className="mx-auto h-12 w-auto" />
         <h1 className="mt-8 font-display text-3xl font-light text-ink-800">{t.manage.notFound}</h1>
         <Link href={`/${locale}/reserver`} className="btn mt-9">{t.manage.rebook}</Link>
       </div>
@@ -44,7 +44,7 @@ export default async function ManagePage({
     <div className="bg-linen-100 pt-24">
       <div className="mx-auto max-w-2xl px-7 py-16 sm:px-10 sm:py-20">
         <header className="text-center">
-          <HangerMark className="mx-auto h-12 w-auto text-gold-500" withSteam={!cancelled} />
+          <Mark className="mx-auto h-12 w-auto" />
           <h1 className="mt-7 font-display text-4xl font-light text-ink-800">{t.manage.title}</h1>
           <p className={`mt-4 inline-block border px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] ${
             cancelled ? "border-ink-300 text-ink-400" : "border-gold-400 text-gold-700"
