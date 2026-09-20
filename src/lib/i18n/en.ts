@@ -10,7 +10,7 @@ const privacy: LegalDoc = {
     {
       title: "Who answers for your information",
       body: [
-        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec. He is the person in charge of the protection of personal information within the meaning of Quebec law, and the only person with access to what this site collects.",
+        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec, registered with the Quebec enterprise registrar under number {neq}. Styve is the person in charge of the protection of personal information within the meaning of Quebec law, and the only person with access to what this site collects.",
         "For a question, an access request or a complaint, write to {email} or call {phone}.",
       ],
     },
@@ -130,7 +130,7 @@ const terms: LegalDoc = {
     {
       title: "Who welcomes you",
       body: [
-        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec. These terms govern the use of {site}, online booking, and the sessions that follow from it.",
+        "NIVEX is an at-home ironing service operated by Styve, in Longueuil, Quebec, registered with the Quebec enterprise registrar under number {neq}. These terms govern the use of {site}, online booking, and the sessions that follow from it.",
         "By booking, you confirm that you are at least eighteen years old and entitled to have the pieces you present to us treated.",
       ],
     },

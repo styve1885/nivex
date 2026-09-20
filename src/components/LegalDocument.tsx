@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Dict, LegalDoc } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
-import { CANCEL_WINDOW_HOURS, contactEmail, contactEmailHref, PHONE, PHONE_HREF } from "@/lib/brand";
+import { CANCEL_WINDOW_HOURS, contactEmail, contactEmailHref, NEQ, PHONE, PHONE_HREF } from "@/lib/brand";
 import { siteOrigin } from "@/lib/google";
 import { minutesToText, formatMoney } from "@/lib/time";
 
@@ -24,6 +24,7 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   return {
     email: contactEmail(s),
     phone: PHONE,
+    neq: NEQ,
     // Le nom du site, tel qu'on le prononce : sans le protocole, et sans le
     // « www. » que l'hébergeur garde dans l'origine canonique.
     site: siteOrigin().replace(/^https?:\/\//, "").replace(/^www\./, ""),

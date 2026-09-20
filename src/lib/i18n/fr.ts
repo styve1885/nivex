@@ -22,7 +22,7 @@ const privacy: LegalDoc = {
     {
       title: "Qui répond de vos renseignements",
       body: [
-        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec. Il est la personne responsable de la protection des renseignements personnels au sens de la loi québécoise, et la seule à avoir accès à ce que ce site recueille.",
+        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec, immatriculé au registre des entreprises du Québec sous le numéro {neq}. C'est aussi la personne responsable de la protection des renseignements personnels au sens de la loi québécoise, et la seule à avoir accès à ce que ce site recueille.",
         "Pour une question, une demande d'accès ou une plainte, écrivez à {email} ou appelez le {phone}.",
       ],
     },
@@ -142,7 +142,7 @@ const terms: LegalDoc = {
     {
       title: "Qui vous accueille",
       body: [
-        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec. Ces conditions régissent l'usage du site {site}, la réservation en ligne et les séances qui en découlent.",
+        "NIVEX est un service de repassage à domicile exploité par Styve, à Longueuil, au Québec, immatriculé au registre des entreprises du Québec sous le numéro {neq}. Ces conditions régissent l'usage du site {site}, la réservation en ligne et les séances qui en découlent.",
         "En réservant, vous confirmez avoir au moins dix-huit ans et être en droit de faire traiter les pièces que vous nous présentez.",
       ],
     },

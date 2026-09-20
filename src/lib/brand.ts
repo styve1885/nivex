@@ -19,6 +19,9 @@ export const FALLBACK_EMAIL = "styve1885@gmail.com";
  * d'utilisation la lisent tous ici. La changer les change tous ensemble.
  */
 export const CANCEL_WINDOW_HOURS = 2;
+/** Numéro d'entreprise du Québec, au registraire des entreprises. */
+export const NEQ = "2282362666";
+
 export const PHONE = "+1 450 943 1217";
 export const PHONE_HREF = "tel:+14509431217";
 
