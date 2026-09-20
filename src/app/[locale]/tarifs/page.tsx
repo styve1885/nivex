@@ -110,13 +110,19 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           </h1>
           <p className="mt-7 max-w-2xl text-[1.02rem] font-light leading-[1.9] text-ink-600">{t.tarifs.lede}</p>
 
-          <div className="mt-12 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-            <span className="font-display text-5xl font-light text-ink-800 sm:text-6xl">{rate}</span>
-            <span className="text-sm text-ink-400">{t.pricing.perHour}</span>
-          </div>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
-            {t.tarifs.perHourNote.replace("{min}", min)}
+          <p className="mt-12 font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
+            {t.tarifs.headline.replace("{price}", rate)}
           </p>
+          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
+            {t.tarifs.visitNote.replace("{min}", min)}
+          </p>
+
+          {s.firstHourFree && (
+            <p className="mt-8 max-w-2xl border-l-2 border-gold-500 pl-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
+              <span className="mr-2 text-[10px] uppercase tracking-[0.2em] text-gold-700">{t.pricing.firstFree}</span>
+              {t.pricing.firstFreeConditions}
+            </p>
+          )}
         </div>
       </section>
 

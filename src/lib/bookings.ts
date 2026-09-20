@@ -6,7 +6,7 @@ import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availabi
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { contactEmail, CANCEL_WINDOW_HOURS, PHONE } from "./brand";
+import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
 
@@ -93,7 +93,10 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   if (!slotIsFree(input.startsAt, durationMinutes, busy, settings)) throw new BookingError("invalid_slot");
 
   await ensureSchema();
-  const firstHourFree = settings.firstHourFree && (await isFirstBooking(input.email));
+  const firstHourFree =
+    settings.firstHourFree
+    && durationMinutes >= FIRST_FREE_MIN_MINUTES
+    && (await isFirstBooking(input.email));
   const cents = estimateCents(durationMinutes, settings, firstHourFree);
 
   const labelled = items.map((i) => {

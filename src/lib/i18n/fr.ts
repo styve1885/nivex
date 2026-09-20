@@ -173,7 +173,7 @@ const terms: LegalDoc = {
     {
       title: "Le prix",
       body: [
-        "La tarification est au temps passé, au taux de {rate} l'heure, pour une durée minimale de {min}. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "Une séance d'une heure est facturée {rate}, une séance de deux heures {rate2}, et ainsi de suite, pour une durée minimale de {min}. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
         "L'estimation affichée pendant la réservation est indicative : elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
         "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
       ],
@@ -290,7 +290,7 @@ export const fr = {
       "Un artisan se déplace chez vous, avec sa presse et sa vapeur de haute précision. Vous ne déplacez rien, vous ne pliez rien. Vous ouvrez votre penderie, et tout y est droit.",
     ctaPrimary: "Réserver une séance",
     ctaSecondary: "Découvrir l'histoire",
-    offer: "Votre première heure de repassage offerte, sur réservation.",
+    offer: "Votre première heure de repassage offerte.",
     scroll: "Faites défiler",
   },
   marquee: [
@@ -402,15 +402,36 @@ export const fr = {
   },
   pricing: {
     eyebrow: "Tarification",
-    title: "Au temps passé. Rien de caché.",
-    lede: "Pas de barème à la pièce, pas de suppléments surprises. Vous réservez des heures, nous les remplissons.",
-    firstFree: "Première heure offerte",
-    firstFreeBody:
-      "Pour toute première réservation, la première heure de repassage vous est offerte. Elle est déduite automatiquement de votre estimation.",
-    perHour: "/ heure",
-    minimum: "Durée minimale",
-    note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
+    title: "Au résultat, pas à la minute.",
+    lede:
+      "Vous choisissez les pièces à traiter, nous venons avec tout le matériel. Le montant est confirmé sur place avant de commencer.",
+    offers: [
+      {
+        name: "Séance découverte",
+        duration: "une heure",
+        volume: "8 à 12 chemises, ou 6 à 8 pièces mixtes",
+        note: "Pour une première visite ou un complément le même jour.",
+      },
+      {
+        name: "Séance semaine",
+        duration: "deux heures",
+        volume: "14 à 18 pièces — la garde-robe complète de votre semaine",
+        note: "Format standard.",
+      },
+      {
+        name: "Abonnement mensuel",
+        duration: "",
+        volume: "Visites régulières, créneaux prioritaires",
+        note: "Tarif garanti douze mois.",
+      },
+    ],
+    planFrom: "à partir de {price} par mois",
+    button: "Composer ma séance",
     seeAll: "Voir la grille complète",
+    firstFree: "Première heure offerte",
+    firstFreeConditions:
+      "Sur toute première réservation de deux heures ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.",
+    note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
   },
   testimonials: {
     eyebrow: "Ce qu'on en dit",
@@ -613,10 +634,11 @@ export const fr = {
   },
   tarifs: {
     eyebrow: "Tarification",
-    title: "Ce qu'une heure chez vous représente.",
+    title: "Ce qu'une séance chez vous représente.",
     lede:
       "Nous ne vendons pas « du repassage » : nous vendons une cadence mesurée, la même d'une séance à l'autre. Voici ce qu'elle vaut, ce qu'elle traite, et ce qui la sépare d'un coup de main.",
-    perHourNote: "minimum {min} par déplacement · déplacement inclus",
+    headline: "La séance d'une heure — {price}",
+    visitNote: "minimum {min} par déplacement · déplacement inclus",
     cadence: {
       title: "Ce que nous traitons en une heure",
       lede:
@@ -659,31 +681,31 @@ export const fr = {
       ],
     },
     blocks: {
-      title: "Blocs horaires",
-      lede: "Vous réservez des heures, nous les remplissons.",
+      title: "Les séances",
+      lede: "Une durée, un volume, un montant. Rien à calculer.",
       minimum:
-        "Minimum {min} par déplacement. Les ajouts et les pièces à l'unité se greffent à un bloc déjà réservé — seuls, ils ne justifient pas un déplacement.",
+        "Minimum {min} par déplacement. Les ajouts et les pièces à l'unité se greffent à une séance déjà réservée — seuls, ils ne justifient pas un déplacement.",
     },
     bundles: {
       title: "Forfaits composés",
-      lede: "Un panier type, déjà chiffré, au même tarif horaire.",
+      lede: "Un panier type, déjà chiffré.",
     },
     addons: {
       title: "Ajouts à votre séance",
-      lede: "En complément d'un bloc déjà réservé, sans second déplacement.",
+      lede: "En complément d'une séance déjà réservée, sans second déplacement.",
     },
     units: {
       title: "Pièces à l'unité",
       lede: "Pour une pièce ajoutée ponctuellement à une séance réservée.",
       linen: "Literie & linge de maison",
       garments: "Vêtements & tenues",
-      note: "Ces prix sont fixes et ne suivent pas le tarif horaire : ils valent pour une pièce isolée. Au-delà de quelques pièces, un bloc horaire revient moins cher.",
+      note: "Ces prix valent pour une pièce isolée, ajoutée à une séance déjà réservée. Au-delà de quelques pièces, une séance revient moins cher.",
     },
     plans: {
       title: "Abonnements mensuels",
-      lede: "Un service régulier, et un tarif horaire qui baisse.",
+      lede: "Un service régulier, et un montant qui baisse à mesure que les séances s'ajoutent.",
       perMonth: "/ mois",
-      full: "Au tarif normal",
+      full: "Séances à l'unité",
       save: "Vous économisez",
       perks: [
         "Priorité absolue sur vos plages horaires.",

@@ -30,6 +30,7 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
     site: siteOrigin().replace(/^https?:\/\//, "").replace(/^www\./, ""),
     zone: locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr,
     rate: formatMoney(s.hourlyRate, s.currency, locale),
+    rate2: formatMoney(s.hourlyRate * 2, s.currency, locale),
     min: minutesToText(s.minMinutes, locale),
     lead: `${s.leadHours} ${hours}`,
     cancel: `${CANCEL_WINDOW_HOURS} ${hours}`,

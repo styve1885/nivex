@@ -17,6 +17,9 @@ export function ClosingCta({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
           {t.cta.title}
         </h2>
         <p className="mx-auto mt-6 max-w-md text-[0.97rem] font-light leading-[1.95] text-ink-500">{t.cta.body}</p>
+        <p className="mx-auto mt-4 max-w-md text-[0.8rem] font-light leading-[1.75] text-ink-500">
+          {t.pricing.firstFreeConditions}
+        </p>
 
         <div className="mt-10 flex flex-col items-center gap-5">
           <Link href={`/${locale}/reserver`} className="btn w-full sm:w-auto">

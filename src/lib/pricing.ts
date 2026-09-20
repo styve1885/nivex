@@ -189,6 +189,11 @@ export function planCents(p: Plan, s: Settings): number {
   return Math.round((full * (1 - p.discount)) / 500) * 500;
 }
 
+/** Le plus bas montant mensuel de la gamme — le « à partir de » annoncé. */
+export function cheapestPlanCents(s: Settings): number {
+  return Math.min(...PLANS.map((p) => planCents(p, s)));
+}
+
 /** Montant du même volume, sans abonnement. */
 export function planFullCents(p: Plan, s: Settings): number {
   return Math.round((p.visits * p.minutesPerVisit / 60) * s.hourlyRate);

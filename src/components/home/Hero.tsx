@@ -63,6 +63,9 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
           <p className="text-[11px] uppercase leading-relaxed tracking-[0.16em] text-gold-700">
             {t.hero.offer}
           </p>
+          <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-500">
+            {t.pricing.firstFreeConditions}
+          </p>
         </div>
       </div>
 

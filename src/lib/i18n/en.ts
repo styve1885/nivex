@@ -161,7 +161,7 @@ const terms: LegalDoc = {
     {
       title: "The price",
       body: [
-        "Pricing is by time spent, at {rate} an hour, for a minimum of {min}. Applicable taxes, if any, are added to that amount.",
+        "A one-hour session is billed {rate}, a two-hour session {rate2}, and so on, for a minimum of {min}. Applicable taxes, if any, are added to that amount.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
@@ -278,7 +278,7 @@ export const en: Dict = {
       "A craftsman comes to you, press and high-precision steam in hand. You carry nothing, you fold nothing. You open your closet, and everything hangs straight.",
     ctaPrimary: "Book a session",
     ctaSecondary: "Read the story",
-    offer: "Your first hour of ironing is on the house, with any booking.",
+    offer: "Your first hour of ironing is on the house.",
     scroll: "Scroll",
   },
   marquee: [
@@ -390,15 +390,36 @@ export const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "By the hour. Nothing hidden.",
-    lede: "No per-piece price list, no surprise add-ons. You book hours, we fill them.",
-    firstFree: "First hour free",
-    firstFreeBody:
-      "On your first booking, the first hour of ironing is on us. It's deducted from your estimate automatically.",
-    perHour: "/ hour",
-    minimum: "Minimum duration",
-    note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
+    title: "For the result, not the minute.",
+    lede:
+      "You choose the pieces to be handled; we arrive with all the equipment. The amount is confirmed on site before we begin.",
+    offers: [
+      {
+        name: "Discovery session",
+        duration: "one hour",
+        volume: "8 to 12 shirts, or 6 to 8 mixed pieces",
+        note: "For a first visit, or a top-up the same day.",
+      },
+      {
+        name: "Weekly session",
+        duration: "two hours",
+        volume: "14 to 18 pieces — your whole week's wardrobe",
+        note: "The standard format.",
+      },
+      {
+        name: "Monthly plan",
+        duration: "",
+        volume: "Regular visits, first call on time slots",
+        note: "Rate guaranteed twelve months.",
+      },
+    ],
+    planFrom: "from {price} a month",
+    button: "Put my session together",
     seeAll: "See the full price list",
+    firstFree: "First hour free",
+    firstFreeConditions:
+      "On any first booking of two hours or more. One use per customer. Not applicable to monthly plans or single pieces.",
+    note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
   },
   testimonials: {
     eyebrow: "Word of mouth",
@@ -601,10 +622,11 @@ export const en: Dict = {
   },
   tarifs: {
     eyebrow: "Pricing",
-    title: "What an hour at your place amounts to.",
+    title: "What a session at your place amounts to.",
     lede:
       "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
-    perHourNote: "minimum {min} per visit · travel included",
+    headline: "The one-hour session — {price}",
+    visitNote: "minimum {min} per visit · travel included",
     cadence: {
       title: "What we handle in one hour",
       lede:
@@ -647,31 +669,31 @@ export const en: Dict = {
       ],
     },
     blocks: {
-      title: "Hourly blocks",
-      lede: "You book hours; we fill them.",
+      title: "The sessions",
+      lede: "A length, a volume, an amount. Nothing to work out.",
       minimum:
-        "Minimum {min} per visit. Add-ons and single pieces attach to a block already booked — on their own they don't warrant a trip.",
+        "Minimum {min} per visit. Add-ons and single pieces attach to a session already booked — on their own they don't warrant a trip.",
     },
     bundles: {
       title: "Set packages",
-      lede: "A typical basket, already costed, at the same hourly rate.",
+      lede: "A typical basket, already costed.",
     },
     addons: {
       title: "Add-ons to your session",
-      lede: "Alongside a block already booked, with no second trip.",
+      lede: "Alongside a session already booked, with no second trip.",
     },
     units: {
       title: "Single pieces",
       lede: "For one piece added to a session already booked.",
       linen: "Bedding & household linen",
       garments: "Clothes & outfits",
-      note: "These prices are fixed and don't follow the hourly rate: they apply to an isolated piece. Beyond a few pieces, an hourly block costs less.",
+      note: "These prices apply to a single piece added to a session already booked. Beyond a few pieces, a session costs less.",
     },
     plans: {
       title: "Monthly plans",
-      lede: "A regular service, and an hourly rate that comes down.",
+      lede: "A regular service, and an amount that comes down as the sessions add up.",
       perMonth: "/ month",
-      full: "At the standard rate",
+      full: "Single sessions",
       save: "You save",
       perks: [
         "First call on the time slots you want.",

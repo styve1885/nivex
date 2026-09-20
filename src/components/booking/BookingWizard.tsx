@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { Mark } from "../Logo";
+import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
@@ -72,10 +73,14 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     return Math.max(config.minMinutes, Math.ceil(raw / config.slotStep) * config.slotStep);
   }, [chosen, config.minMinutes, config.slotStep]);
 
+  /* L'offre ne joue qu'à partir de deux heures : le serveur applique la même
+     règle, et les deux montants doivent concorder. */
+  const firstFree = config.firstHourFree && duration >= FIRST_FREE_MIN_MINUTES;
+
   const estimate = useMemo(() => {
-    const billable = config.firstHourFree ? Math.max(0, duration - 60) : duration;
+    const billable = firstFree ? Math.max(0, duration - 60) : duration;
     return Math.round((billable / 60) * config.hourlyRate);
-  }, [duration, config.firstHourFree, config.hourlyRate]);
+  }, [duration, firstFree, config.hourlyRate]);
 
   const money = useCallback(
     (cents: number) =>
@@ -321,7 +326,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
 
             <EstimateBar
               t={t} visible={duration > 0} durationText={durationText}
-              money={money(estimate)} firstFree={config.firstHourFree}
+              money={money(estimate)} firstFree={firstFree}
             />
             {duration === 0 && <p className="mt-6 text-center text-[0.85rem] text-ink-400">{t.booking.step1.empty}</p>}
           </section>
@@ -480,7 +485,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               <Row label={t.booking.step4.who} value={`${name} · ${phone} · ${email}`} />
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
               <Row label={t.booking.step4.total} value={money(estimate)}
-                hint={config.firstHourFree ? t.booking.step1.firstFreeApplied : undefined} />
+                hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
             </dl>
 
             <label className="mt-8 flex cursor-pointer items-start gap-3">

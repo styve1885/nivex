@@ -19,6 +19,16 @@ export const FALLBACK_EMAIL = "styve1885@gmail.com";
  * d'utilisation la lisent tous ici. La changer les change tous ensemble.
  */
 export const CANCEL_WINDOW_HOURS = 2;
+
+/**
+ * Durée minimale, en minutes, pour que la première heure soit offerte.
+ *
+ * Sans ce plancher, une première séance d'une heure reviendrait à zéro
+ * dollar : le moteur retranche soixante minutes de la durée facturable, et
+ * il ne resterait rien. La condition est annoncée au client partout où
+ * l'offre est mentionnée ; c'est ici qu'elle est appliquée.
+ */
+export const FIRST_FREE_MIN_MINUTES = 120;
 /** Numéro d'entreprise du Québec, au registraire des entreprises. */
 export const NEQ = "2282362666";
 
