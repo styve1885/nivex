@@ -762,6 +762,13 @@ export const fr = {
       },
     },
   },
+  photos: {
+    portrait: "Styve, fondateur de NIVEX, en tablier, fer professionnel à la main",
+    poste:
+      "Le poste de travail NIVEX : centrale vapeur, fer, jeannette et cintres de bois, installés chez le client",
+    travail: "Finition à la vapeur d'une chemise blanche sur cintre de bois",
+    portraitAlt: "Styve, artisan du repassage, Longueuil",
+  },
   days: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"],
   daysShort: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
   months: ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"],

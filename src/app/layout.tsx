@@ -25,7 +25,6 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export const viewport: Viewport = {

@@ -1,4 +1,5 @@
 import { Reveal } from "../Reveal";
+import { Photo } from "../Photo";
 import type { Dict } from "@/lib/i18n";
 
 export function Story({ t }: { t: Dict }) {
@@ -33,13 +34,20 @@ export function Story({ t }: { t: Dict }) {
           ))}
         </div>
 
-        <Reveal delay={120} className="mt-24 text-center">
-          <div className="rule-diamond mx-auto mb-10 max-w-[10rem]" aria-hidden="true"><span className="text-[10px]">◆</span></div>
-          <blockquote className="mx-auto max-w-2xl font-display text-2xl font-light italic leading-relaxed text-ink-700 sm:text-[1.9rem]">
-            “{t.story.quote}”
-          </blockquote>
-          <p className="mt-8 font-display text-3xl text-gold-600" style={{ fontStyle: "italic" }}>{t.story.signature}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.26em] text-ink-400">{t.story.signatureRole}</p>
+        <Reveal delay={120} className="mt-24 grid items-center gap-12 sm:grid-cols-[minmax(0,21rem)_1fr] sm:gap-14">
+          <Photo
+            src="/artisan/nivex-portrait-principal.jpg"
+            alt={t.photos.portrait}
+            sizes="(min-width: 640px) 21rem, 88vw"
+          />
+          <div className="text-center sm:text-left">
+            <div className="rule-diamond mb-10 max-w-[10rem] mx-auto sm:mx-0" aria-hidden="true"><span className="text-[10px]">◆</span></div>
+            <blockquote className="font-display text-2xl font-light italic leading-relaxed text-ink-700 sm:text-[1.9rem]">
+              “{t.story.quote}”
+            </blockquote>
+            <p className="mt-8 font-display text-3xl text-gold-600" style={{ fontStyle: "italic" }}>{t.story.signature}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.26em] text-ink-400">{t.story.signatureRole}</p>
+          </div>
         </Reveal>
       </div>
     </section>

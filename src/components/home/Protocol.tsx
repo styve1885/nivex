@@ -1,4 +1,5 @@
 import { Reveal } from "../Reveal";
+import { Photo } from "../Photo";
 import type { Dict } from "@/lib/i18n";
 
 /** Section « métier » : la séquence de repassage d'une chemise, dans l'ordre. */
@@ -21,7 +22,8 @@ export function Protocol({ t }: { t: Dict }) {
           <p className="mt-6 text-[0.95rem] font-light leading-[1.95] text-linen-300/70">{t.protocol.lede}</p>
         </Reveal>
 
-        <ol className="mt-20 space-y-0">
+        <div className="mt-20 grid gap-14 lg:grid-cols-[1fr_17rem] lg:items-start lg:gap-14">
+        <ol className="space-y-0">
           {t.protocol.steps.map((s, i) => (
             <Reveal key={s.n} as="li" delay={i * 60}
               className="group grid grid-cols-[3.5rem_1fr] items-baseline gap-5 border-t border-linen-200/10 py-7 transition-colors duration-500 hover:border-gold-400/40 sm:grid-cols-[5rem_11rem_1fr] sm:gap-8">
@@ -35,6 +37,16 @@ export function Protocol({ t }: { t: Dict }) {
             </Reveal>
           ))}
         </ol>
+
+        <Reveal delay={240} className="mx-auto w-full max-w-sm lg:sticky lg:top-28 lg:max-w-none">
+          <Photo
+            src="/artisan/nivex-au-travail.jpg"
+            alt={t.photos.travail}
+            frameClassName="!border-gold-400/35"
+            sizes="(min-width: 1024px) 17rem, 88vw"
+          />
+        </Reveal>
+        </div>
       </div>
     </section>
   );

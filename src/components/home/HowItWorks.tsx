@@ -1,4 +1,5 @@
 import { Reveal } from "../Reveal";
+import { Photo } from "../Photo";
 import type { Dict } from "@/lib/i18n";
 
 export function HowItWorks({ t }: { t: Dict }) {
@@ -26,6 +27,14 @@ export function HowItWorks({ t }: { t: Dict }) {
             </Reveal>
           ))}
         </div>
+
+        <Reveal delay={200} className="mx-auto mt-20 max-w-md">
+          <Photo
+            src="/artisan/nivex-poste-de-travail.jpg"
+            alt={t.photos.poste}
+            sizes="(min-width: 640px) 28rem, 88vw"
+          />
+        </Reveal>
       </div>
     </section>
   );

@@ -24,6 +24,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       description: t.meta.description,
       locale: locale === "en" ? "en_CA" : "fr_CA",
       url: `/${locale}`,
+      // Déclarée ici, et pas seulement à la racine : ce bloc-ci remplace
+      // celui du dessus, et l'image du fichier-convention s'y perdrait.
+      images: [{ url: "/opengraph-image.jpg", width: 1200, height: 630, alt: t.meta.ogAlt }],
     },
   };
 }

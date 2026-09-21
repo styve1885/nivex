@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Reveal } from "../Reveal";
+import { Photo } from "../Photo";
 import { CheckIcon, ArrowIcon } from "../Icons";
 import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
@@ -144,8 +145,13 @@ export function Contact({ t, locale, businessEmail }: { t: Dict; locale: "fr" | 
           </Reveal>
 
           {/* ————— Coordonnées directes ————— */}
-          <Reveal delay={120}>
-            <div className="flex h-full flex-col justify-center border border-gold-300/40 bg-linen-100 p-9">
+          <Reveal delay={120} className="flex flex-col gap-8">
+            <Photo
+              src="/artisan/nivex-portrait-alt.jpg"
+              alt={t.photos.portraitAlt}
+              sizes="(min-width: 1024px) 22rem, 88vw"
+            />
+            <div className="flex flex-1 flex-col justify-center border border-gold-300/40 bg-linen-100 p-9">
               <p className="eyebrow">{t.contact.orCall}</p>
 
               <dl className="mt-8 space-y-7">

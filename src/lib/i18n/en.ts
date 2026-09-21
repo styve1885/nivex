@@ -750,6 +750,13 @@ export const en: Dict = {
       },
     },
   },
+  photos: {
+    portrait: "Styve, founder of NIVEX, in his apron, professional iron in hand",
+    poste:
+      "The NIVEX workstation: steam generator, iron, sleeve board and wooden hangers, set up at the client's home",
+    travail: "Steam finishing a white shirt on a wooden hanger",
+    portraitAlt: "Styve, ironing craftsman, Longueuil",
+  },
   days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
   daysShort: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
   months: ["January","February","March","April","May","June","July","August","September","October","November","December"],
