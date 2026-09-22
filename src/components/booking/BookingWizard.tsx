@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { Stepper } from "./Stepper";
-import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal } from "./Stepper.helpers";
+import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 
 /* ============================ Types ============================ */
@@ -20,17 +20,15 @@ export type WizardConfig = {
   minMinutes: number;
   slotStep: number;
   firstHourFree: boolean;
+  timezone: string;
   areaPrefixes: string[];
 };
 
-/* Le tunnel ne lit aucun agenda : il transmet un souhait, et c'est l'appel
-   de l'artisan qui fixe l'heure. Ces clés sont celles que le serveur
-   attend ; les libellés viennent du dictionnaire. */
-const DAY_KEYS = ["weekday", "saturday", "sunday", "any"] as const;
-const MOMENT_KEYS = ["morning", "afternoon", "evening"] as const;
-
-type DayKey = (typeof DAY_KEYS)[number];
-type MomentKey = (typeof MOMENT_KEYS)[number];
+/* L'horaire de la maison : les jours ouverts et les heures praticables,
+   tels que le serveur les calcule à partir des réglages. Aucun agenda
+   n'est lu — c'est l'appel de l'artisan qui fixe le rendez-vous. */
+type DaySlots = { date: string; weekday: number; open: boolean; slots: { time: string; iso: string }[] };
+type Schedule = { timezone: string; duration: number; today: string; days: DaySlots[] };
 
 /* ============================ Composant ============================ */
 
@@ -47,10 +45,12 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [postal, setPostal] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const [day, setDay] = useState<DayKey | "">("");
-  const [moment, setMoment] = useState<MomentKey | "">("");
-  const [altDay, setAltDay] = useState<DayKey | "">("");
-  const [altMoment, setAltMoment] = useState<MomentKey | "">("");
+  const [sched, setSched] = useState<Schedule | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [slot, setSlot] = useState<string | null>(null);
+  const [altSlot, setAltSlot] = useState<string | null>(null);
+  const [wantAlt, setWantAlt] = useState(false);
   const [comment, setComment] = useState("");
 
   const [consent, setConsent] = useState(false);
@@ -97,6 +97,34 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     return h && m ? `${h} h ${m}` : h ? `${h} heure${h > 1 ? "s" : ""}` : `${m} min`;
   }, [duration, config.locale]);
 
+  /* — L'horaire de la maison, pour la durée retenue — */
+  const loadSchedule = useCallback(async (from?: string) => {
+    if (duration <= 0) return;
+    setLoadingSlots(true);
+    try {
+      const items = chosen.map((x) => `${x.key}:${x.qty}`).join(",");
+      const p = new URLSearchParams({ items, days: "14" });
+      if (from) p.set("from", from);
+      const res = await fetch(`/api/schedule?${p}`, { cache: "no-store" });
+      const data: Schedule = await res.json();
+      setSched(data);
+      setRangeStart(data.days[0]?.date ?? null);
+    } catch {
+      setSched(null);
+    } finally {
+      setLoadingSlots(false);
+    }
+  }, [chosen, duration]);
+
+  /* Changer le panier change la durée, donc les heures praticables : les
+     choix déjà faits ne tiennent plus. On les retire là où le panier
+     change, plutôt que d'y revenir par un effet. */
+  const setQuantity = useCallback((key: string, n: number) => {
+    setQty((q) => ({ ...q, [key]: Math.max(0, Math.min(200, n)) }));
+    setSlot(null);
+    setAltSlot(null);
+  }, []);
+
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step, done]);
@@ -117,17 +145,24 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const canContinue =
     step === 0 ? duration > 0
       : step === 1 ? step2Valid
-        : step === 2 ? Boolean(day && moment)
+        : step === 2 ? Boolean(slot)
           : consent;
 
-  /* Le deuxième choix est tout ou rien : un jour sans moment ne dit rien. */
-  const altComplete = Boolean(altDay && altMoment);
-  const slotText = (d: DayKey | "", m: MomentKey | "") =>
-    d && m ? `${t.booking.step3.days[d]} · ${t.booking.step3.moments[m]}` : "—";
+  /** Une heure retenue, écrite en toutes lettres. */
+  const slotText = useCallback(
+    (iso: string | null) =>
+      iso
+        ? new Intl.DateTimeFormat(config.locale === "en" ? "en-CA" : "fr-CA", {
+            timeZone: config.timezone, weekday: "long", day: "numeric", month: "long",
+            hour: "2-digit", minute: "2-digit", hour12: config.locale === "en",
+          }).format(new Date(iso))
+        : "—",
+    [config.locale, config.timezone],
+  );
 
   /* — Envoi de la demande — */
   async function submit() {
-    if (!day || !moment || submitting) return;
+    if (!slot || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -140,19 +175,27 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
           name: name.trim(), email: email.trim().toLowerCase() || undefined, phone: phone.trim(),
           address: address.trim(), city: city.trim(), postalCode: postal.trim().toUpperCase(),
           notes: notes.trim() || undefined,
-          day, moment,
-          altDay: altComplete ? altDay : undefined,
-          altMoment: altComplete ? altMoment : undefined,
+          startsAt: slot,
+          altStartsAt: wantAlt && altSlot ? altSlot : undefined,
           comment: comment.trim() || undefined,
           consent: true, hp,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        setError(data.error === "unavailable" ? t.booking.errors.unavailable : t.booking.errors.generic);
+        if (data.error === "invalid_slot") {
+          // L'heure a vieilli pendant le remplissage : on revient la choisir.
+          setError(t.booking.errors.stale);
+          setSlot(null);
+          setAltSlot(null);
+          await loadSchedule(rangeStart ?? undefined);
+          setStep(2);
+        } else {
+          setError(data.error === "unavailable" ? t.booking.errors.unavailable : t.booking.errors.generic);
+        }
         return;
       }
-      setDone({ ref: data.ref, slot: data.slot ?? slotText(day, moment) });
+      setDone({ ref: data.ref, slot: data.slot ?? slotText(slot) });
     } catch {
       setError(t.booking.errors.generic);
     } finally {
@@ -232,7 +275,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                     </div>
                     <div className="flex items-center gap-1">
                       <button type="button" aria-label="−"
-                        onClick={() => setQty((q) => ({ ...q, [s.key]: Math.max(0, (q[s.key] ?? 0) - 1) }))}
+                        onClick={() => setQuantity(s.key, n - 1)}
                         disabled={n === 0}
                         className="flex h-9 w-9 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900 disabled:opacity-30">
                         −
@@ -240,11 +283,11 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                       <input
                         type="number" min={0} max={200} value={n}
                         aria-label={`${s.label} — ${t.booking.step1.qty}`}
-                        onChange={(e) => setQty((q) => ({ ...q, [s.key]: Math.max(0, Math.min(200, Number(e.target.value) || 0)) }))}
+                        onChange={(e) => setQuantity(s.key, Number(e.target.value) || 0)}
                         className="h-9 w-12 border-y border-gold-300/60 bg-linen-50 text-center text-sm tabular-nums text-ink-800 [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button type="button" aria-label="+"
-                        onClick={() => setQty((q) => ({ ...q, [s.key]: Math.min(200, (q[s.key] ?? 0) + 1) }))}
+                        onClick={() => setQuantity(s.key, n + 1)}
                         className="flex h-9 w-9 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900">
                         +
                       </button>
@@ -314,54 +357,62 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s3" className="font-display text-2xl font-normal text-ink-800">{t.booking.step3.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light leading-relaxed text-ink-500">{t.booking.step3.hint}</p>
 
-            <Choice
-              legend={t.booking.step3.day}
-              options={DAY_KEYS.map((k) => ({ key: k, label: t.booking.step3.days[k] }))}
-              value={day}
-              onPick={(k) => setDay(k as DayKey)}
-              className="mt-9"
-            />
+            {loadingSlots && (
+              <p className="mt-12 text-center text-[0.9rem] text-ink-400" role="status">{t.booking.step3.loading}</p>
+            )}
 
-            <Choice
-              legend={t.booking.step3.moment}
-              options={MOMENT_KEYS.map((k) => ({ key: k, label: t.booking.step3.moments[k] }))}
-              value={moment}
-              onPick={(k) => setMoment(k as MomentKey)}
-              className="mt-8"
-            />
-
-            <div className="mt-10 border-t border-gold-300/40 pt-8">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-gold-600">{t.booking.step3.second}</p>
-              <p className="mt-2 text-[0.85rem] font-light leading-relaxed text-ink-400">{t.booking.step3.secondHint}</p>
-
-              <Choice
-                legend={t.booking.step3.day}
-                options={[
-                  ...DAY_KEYS.map((k) => ({ key: k as string, label: t.booking.step3.days[k] })),
-                  { key: "", label: t.booking.step3.none },
-                ]}
-                value={altDay}
-                onPick={(k) => { setAltDay(k as DayKey | ""); if (!k) setAltMoment(""); }}
-                className="mt-6"
-              />
-
-              {altDay && (
-                <Choice
-                  legend={t.booking.step3.moment}
-                  options={MOMENT_KEYS.map((k) => ({ key: k as string, label: t.booking.step3.moments[k] }))}
-                  value={altMoment}
-                  onPick={(k) => setAltMoment(k as MomentKey)}
-                  className="mt-7"
+            {!loadingSlots && sched && (
+              <>
+                <SlotPicker
+                  t={t} days={sched.days} today={sched.today}
+                  value={slot} onPick={setSlot}
+                  onShift={(d) => { setRangeStart(d); loadSchedule(d); }}
+                  className="mt-8"
                 />
-              )}
-            </div>
 
-            <div className="mt-10 border-t border-gold-300/40 pt-8">
-              <label className="label" htmlFor="comment">{t.booking.step3.comment}</label>
-              <textarea id="comment" rows={3} value={comment} maxLength={1000}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder={t.booking.step3.commentPlaceholder} className="field resize-none" />
-            </div>
+                <p className="mt-7 text-center text-[0.78rem] text-ink-400">{t.booking.step3.timezone}</p>
+
+                <div className="mt-9 border-t border-gold-300/40 pt-8">
+                  {!wantAlt ? (
+                    <button type="button" onClick={() => setWantAlt(true)}
+                      className="text-[11px] uppercase tracking-[0.18em] text-gold-700 transition-colors hover:text-ink-900">
+                      + {t.booking.step3.addSecond}
+                    </button>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-baseline justify-between gap-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gold-600">{t.booking.step3.second}</p>
+                        <button type="button"
+                          onClick={() => { setWantAlt(false); setAltSlot(null); }}
+                          className="text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-ink-700">
+                          {t.booking.step3.dropSecond}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[0.85rem] font-light leading-relaxed text-ink-400">{t.booking.step3.secondHint}</p>
+
+                      <SlotPicker
+                        t={t} days={sched.days} today={sched.today}
+                        value={altSlot} onPick={setAltSlot}
+                        onShift={(d) => { setRangeStart(d); loadSchedule(d); }}
+                        exclude={slot}
+                        className="mt-6"
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-9 border-t border-gold-300/40 pt-8">
+                  <label className="label" htmlFor="comment">{t.booking.step3.comment}</label>
+                  <textarea id="comment" rows={3} value={comment} maxLength={1000}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder={t.booking.step3.commentPlaceholder} className="field resize-none" />
+                </div>
+
+                <p className="mt-9 border-t border-gold-300/40 pt-5 text-center text-[0.8rem] text-ink-400">
+                  {t.booking.step1.duration} : {durationText}
+                </p>
+              </>
+            )}
           </section>
         )}
 
@@ -371,8 +422,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s4" className="font-display text-2xl font-normal text-ink-800">{t.booking.step4.title}</h2>
 
             <dl className="mt-8 divide-y divide-gold-300/40 border-y border-gold-300/40">
-              <Row label={t.booking.step3.wanted} value={slotText(day, moment)}
-                hint={altComplete ? `${t.booking.step3.second} — ${slotText(altDay, altMoment)}` : undefined} />
+              <Row label={t.booking.step3.wanted} value={slotText(slot)}
+                hint={wantAlt && altSlot ? `${t.booking.step3.second} — ${slotText(altSlot)}` : undefined} />
               <Row label={t.booking.step4.where} value={`${address}, ${city} ${postal}`} />
               <Row label={t.booking.step4.what} value={chosen.map((s) => `${s.label} × ${s.qty}`).join(" · ")} />
               <Row label={t.booking.step1.duration} value={durationText} />
@@ -408,7 +459,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <button type="button" disabled={!canContinue}
               onClick={() => {
                 if (step === 1) setTouched({ name: true, email: true, phone: true, address: true, city: true, postal: true });
-                if (canContinue) setStep((s) => s + 1);
+                if (!canContinue) return;
+                if (step === 1) loadSchedule(rangeStart ?? undefined);
+                setStep((s) => s + 1);
               }}
               className="btn">
               {t.booking.next}<ArrowIcon />
@@ -452,36 +505,131 @@ function EstimateBar({ t, visible, durationText, money, firstFree }: {
 }
 
 /**
- * Un choix parmi quelques-uns, en boutons plutôt qu'en liste déroulante :
- * tout est visible d'un coup, et la cible reste large au pouce.
+ * Le choix d'une heure, dans l'horaire de la maison.
+ *
+ * La bande de jours défile par quinzaines ; les heures du jour retenu
+ * sont rangées en matin, après-midi et soirée. Un jour fermé reste
+ * visible mais éteint : voir que le dimanche ne se travaille pas vaut
+ * mieux que de le chercher.
  */
-function Choice({ legend, options, value, onPick, className = "" }: {
-  legend: string;
-  options: { key: string; label: string }[];
-  value: string;
-  onPick: (key: string) => void;
+function SlotPicker({ t, days, today, value, onPick, onShift, exclude, className = "" }: {
+  t: Dict;
+  days: DaySlots[];
+  today: string;
+  value: string | null;
+  onPick: (iso: string) => void;
+  onShift: (fromKey: string) => void;
+  exclude?: string | null;
   className?: string;
 }) {
+  /* Le jour montré suit celui de l'heure retenue, sinon le premier ouvert. */
+  const initial = useMemo(() => {
+    const held = value ? days.find((d) => d.slots.some((x) => x.iso === value)) : null;
+    return held?.date ?? days.find((d) => d.slots.length > 0)?.date ?? null;
+  }, [days, value]);
+
+  /* Le jour ouvert par la personne l'emporte tant qu'il existe encore dans
+     la quinzaine affichée ; sinon on retombe sur celui que l'horaire
+     désigne. Aucun effet n'est nécessaire pour ça. */
+  const [picked, setPicked] = useState<string | null>(null);
+  const openDay = days.some((d) => d.date === picked && d.slots.length > 0) ? picked : initial;
+
+  const active = days.find((d) => d.date === openDay);
+  const grouped = active ? groupSlots(active.slots) : { morning: [], afternoon: [], evening: [] };
+
+  const label = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    return { wd: t.daysShort[wd], d: String(d), m: t.months[m - 1].slice(0, 3) };
+  };
+
   return (
-    <fieldset className={className}>
-      <legend className="label">{legend}</legend>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {options.map((o) => {
-          const active = o.key === value;
-          return (
-            <button key={o.key || "none"} type="button" onClick={() => onPick(o.key)} aria-pressed={active}
-              className={`border px-4 py-2.5 text-[0.88rem] transition-all duration-300 ${
-                active
-                  ? "border-gold-500 bg-ink-800 text-linen-100"
-                  : "border-gold-300/60 text-ink-700 hover:border-gold-500 hover:bg-linen-100"
-              }`}>
-              {o.label}
-            </button>
-          );
-        })}
+    <div className={className}>
+      <div className="flex items-center gap-2">
+        <button type="button" aria-label="←"
+          onClick={() => onShift(shiftKey(days[0]?.date ?? "", -14))}
+          disabled={days[0]?.date === today}
+          className="h-9 w-9 flex-none border border-gold-300/60 text-ink-500 transition-colors hover:border-gold-500 disabled:opacity-25">
+          ‹
+        </button>
+
+        <ul className="flex flex-1 gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
+          {days.map((d) => {
+            const has = d.slots.length > 0;
+            const on = d.date === openDay;
+            const l = label(d.date);
+            return (
+              <li key={d.date}>
+                <button type="button" disabled={!has} onClick={() => setPicked(d.date)} aria-pressed={on}
+                  className={`flex h-[4.4rem] w-[3.4rem] flex-col items-center justify-center gap-0.5 border transition-all duration-300 ${
+                    on ? "border-gold-500 bg-ink-800 text-linen-100"
+                      : has ? "border-gold-300/60 text-ink-700 hover:border-gold-500"
+                            : "border-linen-300 text-ink-400/40"
+                  }`}>
+                  <span className="text-[9px] uppercase tracking-wider">{l.wd}</span>
+                  <span className="font-display text-xl leading-none">{l.d}</span>
+                  <span className="text-[9px] uppercase">{l.m}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        <button type="button" aria-label="→"
+          onClick={() => onShift(shiftKey(days[0]?.date ?? "", 14))}
+          className="h-9 w-9 flex-none border border-gold-300/60 text-ink-500 transition-colors hover:border-gold-500">
+          ›
+        </button>
       </div>
-    </fieldset>
+
+      {active && active.slots.length === 0 && (
+        <p className="mt-10 text-center text-[0.9rem] text-ink-400">{t.booking.step3.noSlots}</p>
+      )}
+
+      {active && active.slots.length > 0 && (
+        <div className="mt-8 space-y-7">
+          {([["morning", t.booking.step3.morning], ["afternoon", t.booking.step3.afternoon], ["evening", t.booking.step3.evening]] as const)
+            .filter(([k]) => grouped[k].length > 0)
+            .map(([k, heading]) => (
+              <div key={k}>
+                <h3 className="text-[10px] uppercase tracking-[0.22em] text-gold-600">{heading}</h3>
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {grouped[k].map((x) => {
+                    const taken = exclude === x.iso;
+                    return (
+                      <li key={x.iso}>
+                        <button type="button" disabled={taken} onClick={() => onPick(x.iso)}
+                          aria-pressed={value === x.iso}
+                          className={`min-w-[4.6rem] border px-4 py-2.5 text-sm tabular-nums transition-all duration-300 ${
+                            value === x.iso
+                              ? "border-gold-500 bg-ink-800 text-linen-100"
+                              : taken
+                                ? "border-linen-300 text-ink-400/40"
+                                : "border-gold-300/60 text-ink-700 hover:border-gold-500 hover:bg-linen-100"
+                          }`}>
+                          {x.time}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+/** Décale une clé « AAAA-MM-JJ » de n jours, sans jamais remonter avant hier. */
+function shiftKey(key: string, days: number): string {
+  if (!key) return key;
+  const [y, m, d] = key.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + days));
+  const now = new Date();
+  const floor = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1);
+  if (t.getTime() < floor) return key;
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
 }
 
 function Field({ label, value, onChange, error, onBlur, type = "text", placeholder, autoComplete }: {

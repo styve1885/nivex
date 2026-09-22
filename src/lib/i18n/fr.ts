@@ -386,7 +386,7 @@ export const fr = {
       {
         n: "1",
         title: "Planifiez",
-        body: "Indiquez en ligne le moment qui vous arrange. Votre artisan vous rappelle dans les heures qui suivent pour fixer l'heure exacte.",
+        body: "Choisissez en ligne l'heure qui vous arrange, dans l'horaire de la maison. Votre artisan vous rappelle dans les heures qui suivent pour la confirmer.",
       },
       {
         n: "2",
@@ -473,13 +473,13 @@ export const fr = {
   },
   cta: {
     title: "Votre première heure est offerte.",
-    body: "Dites-nous quel moment vous arrange. Nous vous rappelons pour confirmer le rendez-vous, de vive voix.",
+    body: "Choisissez l'heure qui vous arrange. Nous vous rappelons pour confirmer le rendez-vous, de vive voix.",
     button: "Réserver maintenant",
     or: "ou appelez le",
   },
   booking: {
     title: "Réserver une séance",
-    lede: "Quatre étapes, deux minutes. Vous indiquez vos préférences, votre artisan vous rappelle pour fixer l'heure.",
+    lede: "Quatre étapes, deux minutes. Vous choisissez l'heure qui vous arrange, votre artisan vous rappelle pour la confirmer.",
     steps: ["Prestations", "Adresse", "Créneau", "Confirmation"],
     step1: {
       title: "Que devons-nous traiter ?",
@@ -510,25 +510,19 @@ export const fr = {
     },
     step3: {
       title: "Quand vous conviendrait-il ?",
-      hint: "Indiquez vos préférences, je vous confirme par téléphone dans les heures qui suivent.",
-      day: "Jour souhaité",
-      moment: "Moment de la journée",
+      hint: "Ces heures sont celles où la maison travaille. Choisissez celle qui vous arrange : je vous confirme par téléphone dans les heures qui suivent.",
+      loading: "Lecture de l'horaire…",
+      noSlots: "La maison ne travaille pas ce jour-là. Essayez une autre date.",
+      morning: "Matin",
+      afternoon: "Après-midi",
+      evening: "Soirée",
+      timezone: "Fuseau : heure de l'Est (Montréal).",
       second: "Deuxième choix (facultatif)",
       secondHint: "Si le premier ne fonctionne pas de notre côté, c'est celui-ci que nous essaierons.",
-      none: "Pas de deuxième choix",
-      days: {
-        weekday: "Soir de semaine",
-        saturday: "Samedi",
-        sunday: "Dimanche",
-        any: "Indifférent",
-      },
-      moments: {
-        morning: "Matin",
-        afternoon: "Après-midi",
-        evening: "Soirée",
-      },
+      addSecond: "Proposer un deuxième créneau",
+      dropSecond: "Retirer le deuxième choix",
       comment: "Commentaire libre (facultatif)",
-      commentPlaceholder: "Une date précise en tête, une contrainte d'horaire, une heure à éviter…",
+      commentPlaceholder: "Une contrainte d'horaire, une heure à éviter, un accès particulier…",
       wanted: "Créneau souhaité",
     },
     step4: {
@@ -554,6 +548,7 @@ export const fr = {
       home: "Retour à l'accueil",
     },
     errors: {
+      stale: "Cette heure n'est plus proposée. Choisissez-en une autre.",
       unavailable:
         "Votre demande n'a pas pu partir. Appelez-nous au +1 450 943 1217, nous vous trouvons une place tout de suite.",
       generic: "Une erreur est survenue. Réessayez, ou appelez-nous directement.",
@@ -737,7 +732,7 @@ export const fr = {
     firstFreeLabel: "Première séance",
     cta: {
       title: "Composez votre séance.",
-      body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et transmet le moment qui vous arrange.",
+      body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et transmet l'heure que vous choisissez.",
     },
   },
   gallery: {

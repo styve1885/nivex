@@ -374,7 +374,7 @@ export const en: Dict = {
       {
         n: "1",
         title: "Schedule",
-        body: "Tell us online which moment suits you. Your craftsman calls you back within hours to set the exact time.",
+        body: "Pick the hour that suits you online, within the hours the house works. Your craftsman calls you back within hours to confirm it.",
       },
       {
         n: "2",
@@ -461,13 +461,13 @@ export const en: Dict = {
   },
   cta: {
     title: "Your first hour is on us.",
-    body: "Tell us which moment suits you. We call you back to confirm the appointment, voice to voice.",
+    body: "Pick the hour that suits you. We call you back to confirm the appointment, voice to voice.",
     button: "Book now",
     or: "or call",
   },
   booking: {
     title: "Book a session",
-    lede: "Four steps, two minutes. You tell us when suits you, your craftsman calls back to set the time.",
+    lede: "Four steps, two minutes. You pick the hour that suits you, your craftsman calls back to confirm it.",
     steps: ["Services", "Address", "Time slot", "Confirm"],
     step1: {
       title: "What are we handling?",
@@ -498,25 +498,19 @@ export const en: Dict = {
     },
     step3: {
       title: "When would suit you?",
-      hint: "Tell us what you'd prefer — I'll confirm by phone within a few hours.",
-      day: "Preferred day",
-      moment: "Time of day",
+      hint: "These are the hours the house works. Pick the one that suits you — I'll confirm by phone within a few hours.",
+      loading: "Reading the schedule…",
+      noSlots: "The house doesn't work that day. Try another date.",
+      morning: "Morning",
+      afternoon: "Afternoon",
+      evening: "Evening",
+      timezone: "Timezone: Eastern (Montreal).",
       second: "Second choice (optional)",
       secondHint: "If the first doesn't work on our end, this is the one we'll try.",
-      none: "No second choice",
-      days: {
-        weekday: "Weekday evening",
-        saturday: "Saturday",
-        sunday: "Sunday",
-        any: "No preference",
-      },
-      moments: {
-        morning: "Morning",
-        afternoon: "Afternoon",
-        evening: "Evening",
-      },
+      addSecond: "Suggest a second slot",
+      dropSecond: "Remove the second choice",
       comment: "Anything to add? (optional)",
-      commentPlaceholder: "A specific date in mind, a scheduling constraint, an hour to avoid…",
+      commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
       wanted: "Preferred slot",
     },
     step4: {
@@ -542,6 +536,7 @@ export const en: Dict = {
       home: "Back to home",
     },
     errors: {
+      stale: "That time is no longer offered. Please pick another.",
       unavailable:
         "Your request couldn't be sent. Call us at +1 450 943 1217 and we'll find you a slot right away.",
       generic: "Something went wrong. Try again, or call us directly.",
@@ -725,7 +720,7 @@ export const en: Dict = {
     firstFreeLabel: "First session",
     cta: {
       title: "Put your session together.",
-      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and passes on the moment that suits you.",
+      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and passes on the hour you pick.",
     },
   },
   gallery: {

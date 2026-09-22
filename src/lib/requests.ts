@@ -2,7 +2,8 @@ import { z } from "zod";
 import { ensureSchema, sql, logEvent, isDbConfigured } from "./db";
 import { bookingRef } from "./crypto";
 import { getSettings } from "./settings";
-import { estimateCents, estimateMinutes } from "./availability";
+import { estimateCents, estimateMinutes, slotIsFree } from "./availability";
+import { formatDateTime } from "./time";
 import { ownerAccessToken, sendGmail, siteOrigin } from "./google";
 import { slotRequestNotification, slotRequestAcknowledgement, type SlotRequestEmailData } from "./email";
 import { FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX } from "./brand";
@@ -15,15 +16,13 @@ import { FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX } from "./brand";
  * aucune plage n'est bloquée — ce module n'a donc besoin ni de Google ni
  * d'une base branchée pour rendre service, et fait au mieux avec ce qui
  * est disponible.
+ *
+ * Les heures demandées sont en revanche vérifiées : elles doivent tomber
+ * dans l'horaire de la maison, passé le délai de prévenance. Une heure
+ * venue du navigateur ne vaut rien tant qu'elle n'a pas été recalculée ici.
  */
 
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
-
-export const DAY_KEYS = ["weekday", "saturday", "sunday", "any"] as const;
-export const MOMENT_KEYS = ["morning", "afternoon", "evening"] as const;
-
-export type DayKey = (typeof DAY_KEYS)[number];
-export type MomentKey = (typeof MOMENT_KEYS)[number];
 
 export const SlotRequestInput = z.object({
   locale: z.enum(["fr", "en"]).default("fr"),
@@ -35,10 +34,8 @@ export const SlotRequestInput = z.object({
   city: z.string().trim().min(2).max(100),
   postalCode: z.string().trim().regex(POSTAL).max(10),
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
-  day: z.enum(DAY_KEYS),
-  moment: z.enum(MOMENT_KEYS),
-  altDay: z.enum(DAY_KEYS).optional().or(z.literal("")),
-  altMoment: z.enum(MOMENT_KEYS).optional().or(z.literal("")),
+  startsAt: z.string().datetime({ offset: true }),
+  altStartsAt: z.string().datetime({ offset: true }).optional().or(z.literal("")),
   comment: z.string().trim().max(1000).optional().or(z.literal("")),
   consent: z.literal(true),
   hp: z.string().max(0).optional(),          // pot de miel anti-robot
@@ -47,7 +44,7 @@ export const SlotRequestInput = z.object({
 export type SlotRequestInputType = z.infer<typeof SlotRequestInput>;
 
 export class SlotRequestError extends Error {
-  constructor(public code: "rate_limited" | "unavailable" | "unknown_service") {
+  constructor(public code: "rate_limited" | "unavailable" | "unknown_service" | "invalid_slot") {
     super(code);
     this.name = "SlotRequestError";
   }
@@ -55,21 +52,9 @@ export class SlotRequestError extends Error {
 
 /* ============================ Mise en mots ============================ */
 
-const LABELS = {
-  fr: {
-    day: { weekday: "Soir de semaine", saturday: "Samedi", sunday: "Dimanche", any: "Indifférent" },
-    moment: { morning: "Matin", afternoon: "Après-midi", evening: "Soirée" },
-  },
-  en: {
-    day: { weekday: "Weekday evening", saturday: "Saturday", sunday: "Sunday", any: "No preference" },
-    moment: { morning: "Morning", afternoon: "Afternoon", evening: "Evening" },
-  },
-} as const;
-
-/** « Samedi · Après-midi ». L'artisan lit toujours le français. */
-export function slotLabel(day: DayKey, moment: MomentKey, locale: "fr" | "en" = "fr"): string {
-  const l = LABELS[locale];
-  return `${l.day[day]} · ${l.moment[moment]}`;
+/** « samedi 26 septembre 2026, 14:00 ». L'artisan lit toujours le français. */
+export function slotLabel(startISO: string, timezone: string, locale: "fr" | "en" = "fr"): string {
+  return formatDateTime(new Date(startISO), timezone, locale);
 }
 
 /* ============================ Envoi ============================ */
@@ -100,10 +85,17 @@ export async function submitSlotRequest(
     return { label: input.locale === "en" ? svc.en : svc.fr, qty: i.qty };
   });
 
+  /* L'heure demandée doit tenir dans l'horaire de la maison. On la
+     recalcule ici : ce qui vient du navigateur ne fait jamais foi. */
+  if (!slotIsFree(input.startsAt, durationMinutes, [], settings)) throw new SlotRequestError("invalid_slot");
+  const alt = input.altStartsAt && slotIsFree(input.altStartsAt, durationMinutes, [], settings)
+    ? input.altStartsAt
+    : null;
+
   const ref = bookingRef();
   const email = input.email?.trim() || null;
-  const first = slotLabel(input.day, input.moment);
-  const second = input.altDay && input.altMoment ? slotLabel(input.altDay, input.altMoment) : null;
+  const first = slotLabel(input.startsAt, settings.timezone);
+  const second = alt ? slotLabel(alt, settings.timezone) : null;
 
   const data: SlotRequestEmailData = {
     ref,
@@ -193,7 +185,7 @@ export async function submitSlotRequest(
   // Ni trace ni courriel : la demande n'existe nulle part, on ne ment pas.
   if (!stored && !sent) throw new SlotRequestError("unavailable");
 
-  await logEvent("slot_request_received", { ref, stored, sent, day: input.day, moment: input.moment });
+  await logEvent("slot_request_received", { ref, stored, sent, startsAt: input.startsAt });
   return { ref, stored, sent };
 }
 

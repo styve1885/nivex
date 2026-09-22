@@ -39,6 +39,7 @@ export default async function BookPage({ params }: { params: Promise<{ locale: s
     minMinutes: s.minMinutes,
     slotStep: s.slotStep,
     firstHourFree: s.firstHourFree,
+    timezone: s.timezone,
     areaPrefixes: s.serviceArea.prefixes.map((p) => p.toUpperCase()),
   };
 

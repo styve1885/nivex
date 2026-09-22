@@ -9,9 +9,15 @@
  */
 import assert from "node:assert/strict";
 
-const { slotLabel, SlotRequestInput, DAY_KEYS, MOMENT_KEYS } = await import("../src/lib/requests.ts");
+const { slotLabel, SlotRequestInput } = await import("../src/lib/requests.ts");
 const { slotRequestNotification, slotRequestAcknowledgement } = await import("../src/lib/email.ts");
 const { REQUEST_INBOX, PHONE } = await import("../src/lib/brand.ts");
+const { slotIsFree } = await import("../src/lib/availability.ts");
+const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+const { fromWall } = await import("../src/lib/time.ts");
+
+const TZ = "America/Toronto";
+const schedule = { ...FALLBACK_SETTINGS, timezone: TZ };
 
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
@@ -34,8 +40,7 @@ const base = {
   address: "88 rue Saint-Charles Ouest, app. 3",
   city: "Longueuil",
   postalCode: "J4H 1C6",
-  day: "saturday",
-  moment: "afternoon",
+  startsAt: "2026-10-03T18:00:00.000Z",
   consent: true,
 };
 
@@ -52,23 +57,46 @@ test("le téléphone et l'adresse, eux, sont exigés", () => {
   assert.equal(SlotRequestInput.safeParse({ ...base, postalCode: "ABC" }).success, false);
 });
 
-test("le créneau souhaité fait partie des choix offerts", () => {
-  assert.equal(SlotRequestInput.safeParse({ ...base, day: "mardi" }).success, false);
-  assert.equal(SlotRequestInput.safeParse({ ...base, moment: "nuit" }).success, false);
-  for (const d of DAY_KEYS) for (const m of MOMENT_KEYS) {
-    assert.equal(SlotRequestInput.safeParse({ ...base, day: d, moment: m }).success, true);
-  }
+test("l'heure demandée doit être une vraie heure", () => {
+  assert.equal(SlotRequestInput.safeParse({ ...base, startsAt: "samedi après-midi" }).success, false);
+  assert.equal(SlotRequestInput.safeParse({ ...base, startsAt: "2026-10-03" }).success, false);
+  assert.equal(SlotRequestInput.safeParse({ ...base, startsAt: "" }).success, false);
 });
 
 test("le deuxième choix est facultatif", () => {
-  assert.equal(SlotRequestInput.safeParse({ ...base, altDay: "weekday", altMoment: "evening" }).success, true);
-  assert.equal(SlotRequestInput.safeParse({ ...base, altDay: "", altMoment: "" }).success, true);
+  assert.equal(SlotRequestInput.safeParse({ ...base, altStartsAt: "2026-10-05T23:00:00.000Z" }).success, true);
+  assert.equal(SlotRequestInput.safeParse({ ...base, altStartsAt: "" }).success, true);
+  assert.equal(SlotRequestInput.safeParse({ ...base, altStartsAt: "un soir" }).success, false);
 });
 
-test("le créneau se dit dans la langue de la personne", () => {
-  assert.equal(slotLabel("saturday", "afternoon", "fr"), "Samedi · Après-midi");
-  assert.equal(slotLabel("saturday", "afternoon", "en"), "Saturday · Afternoon");
-  assert.equal(slotLabel("weekday", "evening"), "Soir de semaine · Soirée");
+test("le créneau se dit en jour et en heure, dans la langue de la personne", () => {
+  const iso = "2026-10-03T18:00:00.000Z";   // samedi 3 octobre, 14 h à Montréal
+  assert.equal(slotLabel(iso, TZ, "fr"), "samedi 3 octobre 2026 à 14 h 00");
+  assert.match(slotLabel(iso, TZ, "en"), /^Saturday, October 3, 2026 at 02:00 [ap]\.?m\.?$/i);
+  assert.match(slotLabel(iso, TZ), /samedi 3 octobre/);
+});
+
+/* ————— L'heure doit tomber dans l'horaire de la maison ————— */
+
+test("une heure hors de l'horaire est refusée, une heure dedans acceptée", () => {
+  const far = (days, hour) => {
+    const d = new Date(Date.now() + days * 86400_000);
+    return fromWall({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour, minute: 0 }, TZ);
+  };
+  // L'horaire de démonstration ouvre du lundi au samedi, 7 h – 22 h.
+  const open = { ...schedule, hours: schedule.hours.map((h) => ({ ...h, enabled: h.day !== 0 })) };
+  const monday = (() => {
+    let i = 2;
+    while (new Date(Date.now() + i * 86400_000).getUTCDay() !== 1) i++;
+    return i;
+  })();
+  assert.equal(slotIsFree(far(monday, 9).toISOString(), 120, [], open), true, "9 h un lundi : dans l'horaire");
+  assert.equal(slotIsFree(far(monday, 5).toISOString(), 120, [], open), false, "5 h : avant l'ouverture");
+  assert.equal(slotIsFree(far(monday, 21).toISOString(), 120, [], open), false, "21 h + 2 h : dépasse la fermeture");
+});
+
+test("une heure trop proche est refusée, le délai de prévenance tient", () => {
+  assert.equal(slotIsFree(new Date(Date.now() + 3600_000).toISOString(), 120, [], schedule), false);
 });
 
 /* ————— Le courriel de l'artisan ————— */
@@ -87,8 +115,8 @@ const data = {
   estimateCents: 5000,
   currency: "CAD",
   firstHourFree: true,
-  first: "Samedi · Après-midi",
-  second: "Soir de semaine · Soirée",
+  first: "samedi 3 octobre 2026 à 14 h 00",
+  second: "mercredi 7 octobre 2026 à 19 h 00",
   comment: "Sonnette en panne, appelez en arrivant.",
   notes: "Une chemise en lin, fragile.",
   siteUrl: "https://nivexrepassage.ca",
@@ -99,7 +127,7 @@ const data = {
 test("rien de ce que la personne a saisi ne se perd", () => {
   const mail = slotRequestNotification(data);
   for (const bit of [
-    "Samedi · Après-midi", "Soir de semaine · Soirée", "Claire Beaulieu", "450 943-1217",
+    "samedi 3 octobre 2026 à 14 h 00", "mercredi 7 octobre 2026 à 19 h 00", "Claire Beaulieu", "450 943-1217",
     "88 rue Saint-Charles Ouest, app. 3", "Longueuil", "J4H 1C6", "Chemises", "Costumes & vestes",
     "Sonnette en panne", "Une chemise en lin", "NVX-ABC123",
   ]) {
@@ -110,7 +138,7 @@ test("rien de ce que la personne a saisi ne se perd", () => {
 
 test("l'objet dit de quoi il s'agit et quand", () => {
   const mail = slotRequestNotification(data);
-  assert.match(mail.subject, /^Demande de créneau — Claire Beaulieu · Samedi · Après-midi$/);
+  assert.match(mail.subject, /^Demande de créneau — Claire Beaulieu · samedi 3 octobre 2026 à 14 h 00$/);
 });
 
 test("le courriel dit franchement que rien n'est réservé", () => {
