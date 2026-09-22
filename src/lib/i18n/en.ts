@@ -20,9 +20,9 @@ const privacy: LegalDoc = {
         "Only what you hand us yourself, at the moment you hand it over. This site follows no one around and buys data from no one.",
       ],
       list: [
-        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
+        "Slot request — your name, your phone number, the address of the session (street, city, postal code), your email if you give one, the services and quantities you chose, the moment you would prefer, and the notes you write yourself.",
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
-        "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
+        "Technical log — the nature and time of the site's operations: a request received, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
       ],
     },
     {
@@ -32,8 +32,8 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, and answer you.",
-        "The services you chose are how we book the right length of time and pack the right equipment.",
+        "Your phone number is how we call you back to confirm and how we warn you of a delay. Your email, if you give one, is how we answer you and acknowledge your request.",
+        "The services you chose are how we plan the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
       ],
@@ -56,7 +56,7 @@ const privacy: LegalDoc = {
       list: [
         "Vercel — hosts the site and serves it to your browser.",
         "Neon — the database where bookings and messages live.",
-        "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
+        "Google — Gmail, through which your request reaches your artisan and from which the acknowledgement is sent, and your artisan's calendar, where the appointment is written down once it has been confirmed with you by phone.",
       ],
     },
     {
@@ -152,10 +152,10 @@ const terms: LegalDoc = {
       title: "Booking",
       body: [],
       list: [
-        "The slots on display are the ones genuinely free in the artisan's calendar. What you see exists.",
+        "The site's form sends a slot request: it binds neither party until the appointment has been confirmed voice to voice.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email within the minute, with the invitation for your calendar and a personal link for managing the appointment.",
+        "Your request is transmitted as soon as you send it; the appointment is confirmed by phone, at {phone}. That call is what sets the time.",
       ],
     },
     {
@@ -181,7 +181,7 @@ const terms: LegalDoc = {
     {
       title: "Cancelling or moving",
       body: [
-        "Freely, up to {cancel} before the appointment, from the personal link you received by email. Nothing to pay, nothing to justify.",
+        "Freely, up to {cancel} before the appointment, by phone at {phone} or by email at {email}. Nothing to pay, nothing to justify.",
         "Past that, call us at {phone}: we will do our best.",
         "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
       ],
@@ -374,7 +374,7 @@ export const en: Dict = {
       {
         n: "1",
         title: "Schedule",
-        body: "Pick your slot online. The availability you see is real — it comes straight out of your craftsman's calendar.",
+        body: "Tell us online which moment suits you. Your craftsman calls you back within hours to set the exact time.",
       },
       {
         n: "2",
@@ -455,19 +455,19 @@ export const en: Dict = {
       },
       {
         q: "Can I cancel or reschedule?",
-        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us.`,
+        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. A call or an email is enough — nothing to pay, nothing to justify.`,
       },
     ],
   },
   cta: {
     title: "Your first hour is on us.",
-    body: "Pick a slot. Confirmation lands within the minute, and the invitation goes straight into your calendar.",
+    body: "Tell us which moment suits you. We call you back to confirm the appointment, voice to voice.",
     button: "Book now",
     or: "or call",
   },
   booking: {
     title: "Book a session",
-    lede: "Four steps, two minutes. The slots you see are the ones genuinely open in your craftsman's calendar.",
+    lede: "Four steps, two minutes. You tell us when suits you, your craftsman calls back to set the time.",
     steps: ["Services", "Address", "Time slot", "Confirm"],
     step1: {
       title: "What are we handling?",
@@ -486,26 +486,38 @@ export const en: Dict = {
     step2: {
       title: "Where do we meet you?",
       name: "Full name",
-      email: "Email",
+      email: "Email (optional)",
       phone: "Phone",
       address: "Address",
       addressPlaceholder: "123 Main Street, apt. 4",
       city: "City",
       postal: "Postal code",
       postalPlaceholder: "J4K 1A1",
-      outOfZone: "This address looks outside our zone. Book anyway — we'll confirm by phone.",
+      outOfZone: "This address looks outside our zone. Send your request anyway — we'll get back to you by phone.",
       inZone: "Good news, you're inside the service area.",
     },
     step3: {
-      title: "When suits you?",
-      hint: "Greyed-out times are already taken. Timezone: Eastern (Montreal).",
-      loading: "Reading the calendar…",
-      noSlots: "Nothing open that day. Try another date.",
-      morning: "Morning",
-      afternoon: "Afternoon",
-      evening: "Evening",
-      selected: "Slot selected",
-      nextAvailable: "Next opening",
+      title: "When would suit you?",
+      hint: "Tell us what you'd prefer — I'll confirm by phone within a few hours.",
+      day: "Preferred day",
+      moment: "Time of day",
+      second: "Second choice (optional)",
+      secondHint: "If the first doesn't work on our end, this is the one we'll try.",
+      none: "No second choice",
+      days: {
+        weekday: "Weekday evening",
+        saturday: "Saturday",
+        sunday: "Sunday",
+        any: "No preference",
+      },
+      moments: {
+        morning: "Morning",
+        afternoon: "Afternoon",
+        evening: "Evening",
+      },
+      comment: "Anything to add? (optional)",
+      commentPlaceholder: "A specific date in mind, a scheduling constraint, an hour to avoid…",
+      wanted: "Preferred slot",
     },
     step4: {
       title: "Everything correct?",
@@ -515,24 +527,23 @@ export const en: Dict = {
       who: "Contact",
       total: "Estimate",
       consent:
-        "I understand the estimate is indicative and the final amount will be confirmed on site before the session begins.",
-      submit: "Confirm booking",
-      submitting: "Confirming…",
+        "I understand this is a request: the appointment is only set once confirmed by phone, and the estimate stays indicative until the final amount is confirmed on site.",
+      submit: "Request this slot",
+      submitting: "Sending your request…",
     },
     back: "Back",
     next: "Continue",
     success: {
-      title: "You're booked.",
-      body: "A confirmation email just went out, with the calendar invitation attached. Your craftsman has been notified.",
+      title: "Request received.",
+      body: "I'll call you to confirm.",
+      urgent: "For an immediate answer:",
+      wanted: "Preferred slot",
       ref: "Reference",
-      manage: "Manage my booking",
-      addCalendar: "Add to my calendar",
       home: "Back to home",
     },
     errors: {
-      taken: "That slot was just taken. Please pick another.",
-      notConnected:
-        "Online booking isn't live yet. Call us at +1 450 943 1217 and we'll find you a slot right away.",
+      unavailable:
+        "Your request couldn't be sent. Call us at +1 450 943 1217 and we'll find you a slot right away.",
       generic: "Something went wrong. Try again, or call us directly.",
       required: "This field is required",
       email: "Invalid email",
@@ -714,7 +725,7 @@ export const en: Dict = {
     firstFreeLabel: "First session",
     cta: {
       title: "Put your session together.",
-      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and offers you the slots that are genuinely free.",
+      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and passes on the moment that suits you.",
     },
   },
   gallery: {

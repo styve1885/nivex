@@ -365,3 +365,170 @@ export function contactAcknowledgement(d: ContactEmailData) {
 
   return { subject: a.subject, html: shell(inner, a.intro, d.businessEmail), text };
 }
+
+/* ============================================================
+   Demande de créneau
+   ============================================================ */
+
+export type SlotRequestEmailData = {
+  ref: string;
+  locale: "fr" | "en";
+  clientName: string;
+  clientEmail: string | null;
+  clientPhone: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  items: { label: string; qty: number }[];
+  durationMinutes: number;
+  estimateCents: number;
+  currency: string;
+  firstHourFree: boolean;
+  /** Créneau souhaité, déjà mis en mots (« Soir de semaine · Soirée »). */
+  first: string;
+  /** Deuxième choix, si la personne en a donné un. */
+  second: string | null;
+  comment?: string | null;
+  notes?: string | null;
+  siteUrl: string;
+  businessPhone: string;
+  businessEmail: string;
+};
+
+/**
+ * Ce que reçoit l'artisan : tout ce qu'il faut pour rappeler et fixer
+ * l'heure. Le téléphone passe avant le reste — c'est par là que la
+ * confirmation se fait.
+ */
+export function slotRequestNotification(d: SlotRequestEmailData) {
+  const t = T.fr;
+  const dur = minutesToText(d.durationMinutes, "fr");
+  const money = formatMoney(d.estimateCents, d.currency, "fr");
+  const tel = d.clientPhone.replace(/[^\d+]/g, "");
+  const maps = `https://maps.google.com/?q=${encodeURIComponent(`${d.address}, ${d.city}, QC ${d.postalCode}`)}`;
+
+  const inner = `
+  <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${MUTED};">
+      Nouvelle demande de créneau depuis le site. Rien n'est réservé : il faut rappeler pour confirmer.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row("Souhait", `<strong style="font-size:16px;">${esc(d.first)}</strong>`)}
+      ${d.second ? row("Deuxième choix", esc(d.second)) : ""}
+      ${row(t.client, `<strong>${esc(d.clientName)}</strong>`)}
+      ${row(t.phone, `<a href="tel:${esc(tel)}" style="color:${GOLD};text-decoration:none;font-size:17px;">${esc(d.clientPhone)}</a>`)}
+      ${d.clientEmail
+        ? row(t.email, `<a href="mailto:${esc(d.clientEmail)}" style="color:${GOLD};text-decoration:none;">${esc(d.clientEmail)}</a>`)
+        : row(t.email, `<span style="color:${MUTED};">non fourni</span>`)}
+      ${row(t.where, `<a href="${esc(maps)}" style="color:${GOLD};text-decoration:none;">${esc(`${d.address}, ${d.city} ${d.postalCode}`)}</a>`)}
+      ${row(t.what, itemsHtml(d.items))}
+      ${row(t.duration, esc(dur))}
+      ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
+      ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
+      ${d.comment ? row("Commentaire", esc(d.comment)) : ""}
+      ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  <tr><td style="padding:26px 40px 34px;text-align:center;">
+    ${button(`tel:${tel}`, `Appeler ${d.clientName.split(" ")[0]}`)}
+  </td></tr>`;
+
+  const text = [
+    "Nouvelle demande de créneau depuis le site. Rien n'est réservé : rappelez pour confirmer.", "",
+    `Souhait : ${d.first}`,
+    d.second ? `Deuxième choix : ${d.second}` : "",
+    `${t.client} : ${d.clientName}`,
+    `${t.phone} : ${d.clientPhone}`,
+    `${t.email} : ${d.clientEmail ?? "non fourni"}`,
+    `${t.where} : ${d.address}, ${d.city} ${d.postalCode}`,
+    `${t.what} :`, itemsText(d.items),
+    `${t.duration} : ${dur}`,
+    `${t.estimate} : ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
+    d.notes ? `${t.clientNotes} : ${d.notes}` : "",
+    d.comment ? `Commentaire : ${d.comment}` : "",
+    `${t.ref} : ${d.ref}`,
+  ].filter(Boolean).join("\n");
+
+  return {
+    subject: `Demande de créneau — ${d.clientName} · ${d.first}`,
+    html: shell(inner, `${d.first} — ${d.clientName} — ${d.clientPhone}`, d.businessEmail),
+    text,
+  };
+}
+
+const REQ_ACK = {
+  fr: {
+    subject: (ref: string) => `Votre demande est bien arrivée · ${ref}`,
+    hi: (n: string) => `Bonjour ${n},`,
+    intro:
+      "Votre demande de créneau est arrivée. Rien n'est encore réservé : je vous appelle pour confirmer l'heure, et c'est cet appel qui fixe le rendez-vous.",
+    wish: "Créneau souhaité",
+    second: "Deuxième choix",
+    what: "Prestations",
+    duration: "Durée estimée",
+    estimate: "Estimation",
+    ref: "Référence",
+    urgent: "Pour une réponse immédiate :",
+    foot: "L'estimation est indicative. Le montant final vous est confirmé sur place, avant de commencer.",
+    signoff: "À très bientôt,",
+  },
+  en: {
+    subject: (ref: string) => `Your request has arrived · ${ref}`,
+    hi: (n: string) => `Hello ${n},`,
+    intro:
+      "Your slot request has arrived. Nothing is booked yet: I'll call you to confirm the time, and that call is what sets the appointment.",
+    wish: "Preferred slot",
+    second: "Second choice",
+    what: "Services",
+    duration: "Estimated duration",
+    estimate: "Estimate",
+    ref: "Reference",
+    urgent: "For an immediate answer:",
+    foot: "The estimate is indicative. The final amount is confirmed on site, before we begin.",
+    signoff: "Talk soon,",
+  },
+} as const;
+
+/** Accusé de réception, seulement si la personne a laissé un courriel. */
+export function slotRequestAcknowledgement(d: SlotRequestEmailData) {
+  const a = REQ_ACK[d.locale];
+  const dur = minutesToText(d.durationMinutes, d.locale);
+  const money = formatMoney(d.estimateCents, d.currency, d.locale);
+  const tel = d.businessPhone.replace(/[^\d+]/g, "");
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    <p style="margin:0 0 14px;font-size:16px;">${esc(a.hi(d.clientName.split(" ")[0]))}</p>
+    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(a.intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(a.wish, `<strong style="font-size:16px;">${esc(d.first)}</strong>`)}
+      ${d.second ? row(a.second, esc(d.second)) : ""}
+      ${row(a.what, itemsHtml(d.items))}
+      ${row(a.duration, esc(dur))}
+      ${row(a.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(T[d.locale].free)}</span>` : ""}`)}
+      ${row(a.ref, `<code style="font-family:monospace;letter-spacing:0.06em;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  <tr><td style="padding:28px 40px 34px;text-align:center;">
+    ${button(`tel:${tel}`, d.businessPhone)}
+    <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(a.urgent)}</p>
+    <p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};">${esc(a.foot)}</p>
+    <p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:${MUTED};">
+      ${esc(a.signoff)}<br><span style="font-family:Georgia,serif;letter-spacing:0.12em;color:${GOLD};">NIVEX</span>
+    </p>
+  </td></tr>`;
+
+  const text = [
+    a.hi(d.clientName.split(" ")[0]), "", a.intro, "",
+    `${a.wish} : ${d.first}`,
+    d.second ? `${a.second} : ${d.second}` : "",
+    `${a.what} :`, itemsText(d.items),
+    `${a.duration} : ${dur}`,
+    `${a.estimate} : ${money}`,
+    `${a.ref} : ${d.ref}`, "",
+    `${a.urgent} ${d.businessPhone}`, "",
+    a.foot, "", a.signoff, "NIVEX",
+  ].filter(Boolean).join("\n");
+
+  return { subject: a.subject(d.ref), html: shell(inner, a.intro, d.businessEmail), text };
+}

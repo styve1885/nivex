@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx tests/availability.test.mjs && python3 tests/tools/contrast-check.py",
+    "test": "tsx tests/availability.test.mjs && tsx tests/requests.test.mjs && python3 tests/tools/contrast-check.py",
     "typecheck": "tsc --noEmit",
     "test:a11y": "python3 tests/tools/a11y-check.py http://localhost:3000/fr && python3 tests/tools/a11y-check.py http://localhost:3000/en"
   },

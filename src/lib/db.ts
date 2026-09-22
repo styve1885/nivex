@@ -135,7 +135,7 @@ async function bootstrap() {
       id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       locale     text        NOT NULL DEFAULT 'fr',
       name       text        NOT NULL,
-      email      text        NOT NULL,
+      email      text,
       phone      text,
       subject    text,
       body       text        NOT NULL,
@@ -143,6 +143,11 @@ async function bootstrap() {
       read_at    timestamptz,
       created_at timestamptz NOT NULL DEFAULT now()
     )`;
+
+  /* Le courriel n'est plus obligatoire : une demande de créneau peut
+     n'arriver qu'avec un nom et un numéro de téléphone. Migration en place
+     pour les bases créées avant cette règle. */
+  await q`ALTER TABLE nivex_messages ALTER COLUMN email DROP NOT NULL`;
 
   await q`CREATE INDEX IF NOT EXISTS nivex_messages_created_idx ON nivex_messages (created_at DESC)`;
 

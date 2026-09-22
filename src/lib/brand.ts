@@ -32,6 +32,15 @@ export const FIRST_FREE_MIN_MINUTES = 120;
 /** Numéro d'entreprise du Québec, au registraire des entreprises. */
 export const NEQ = "2282362666";
 
+/**
+ * Boîte de réception des demandes de créneau.
+ *
+ * Distincte du compte Google branché : les confirmations partent du compte
+ * de l'artisan, mais les demandes venues du site atterrissent toutes ici,
+ * même le jour où le compte connecté change.
+ */
+export const REQUEST_INBOX = "nivexrepassage@gmail.com";
+
 export const PHONE = "+1 450 943 1217";
 export const PHONE_HREF = "tel:+14509431217";
 

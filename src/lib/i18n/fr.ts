@@ -32,9 +32,9 @@ const privacy: LegalDoc = {
         "Uniquement ce que vous nous donnez vous-même, au moment où vous le donnez. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
       ],
       list: [
-        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
+        "Demande de créneau — votre nom, votre téléphone, l'adresse de la séance (rue, ville, code postal), votre courriel si vous le donnez, les prestations et quantités choisies, le moment souhaité, et les précisions que vous écrivez vous-même.",
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
-        "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
+        "Journal technique — la nature et l'heure des opérations du site : une demande reçue, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
       ],
     },
     {
@@ -44,8 +44,8 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre.",
-        "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
+        "Votre téléphone sert à vous rappeler pour confirmer le rendez-vous, à prévenir d'un retard. Votre courriel, si vous le donnez, sert à vous répondre et à accuser réception.",
+        "Les prestations choisies servent à prévoir la bonne durée et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
       ],
@@ -68,7 +68,7 @@ const privacy: LegalDoc = {
       list: [
         "Vercel — héberge le site et le sert à votre navigateur.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
-        "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
+        "Google — Gmail, par lequel votre demande arrive jusqu'à votre artisan et par lequel part l'accusé de réception, et l'agenda de votre artisan, où il inscrit le rendez-vous une fois confirmé avec vous au téléphone.",
       ],
     },
     {
@@ -164,10 +164,10 @@ const terms: LegalDoc = {
       title: "Réserver",
       body: [],
       list: [
-        "Les créneaux affichés sont ceux réellement libres dans l'agenda de l'artisan. Ce que vous voyez existe.",
+        "Le formulaire du site transmet une demande de créneau : il n'engage aucune des deux parties tant que le rendez-vous n'a pas été confirmé de vive voix.",
         "Une séance dure au minimum {min}.",
-        "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
-        "La confirmation part par courriel dans la minute, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous.",
+        "Une demande se fait au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
+        "Votre demande est transmise dès l'envoi ; le rendez-vous est confirmé par téléphone, au {phone}. C'est cet appel qui fixe l'heure.",
       ],
     },
     {
@@ -193,7 +193,7 @@ const terms: LegalDoc = {
     {
       title: "Annuler ou déplacer",
       body: [
-        "Librement, jusqu'à {cancel} avant le rendez-vous, depuis le lien personnel reçu par courriel. Rien à payer, rien à justifier.",
+        "Librement, jusqu'à {cancel} avant le rendez-vous, par téléphone au {phone} ou par courriel à {email}. Rien à payer, rien à justifier.",
         "Passé ce délai, appelez-nous au {phone} : nous ferons au mieux.",
         "S'il nous faut annuler de notre côté — maladie, panne de matériel, route impraticable —, vous êtes prévenu dès que nous le savons et vous ne devez rien.",
       ],
@@ -386,7 +386,7 @@ export const fr = {
       {
         n: "1",
         title: "Planifiez",
-        body: "Choisissez votre créneau en ligne. Les disponibilités affichées sont réelles — elles sortent directement de l'agenda de votre artisan.",
+        body: "Indiquez en ligne le moment qui vous arrange. Votre artisan vous rappelle dans les heures qui suivent pour fixer l'heure exacte.",
       },
       {
         n: "2",
@@ -467,19 +467,19 @@ export const fr = {
       },
       {
         q: "Puis-je annuler ou déplacer mon rendez-vous ?",
-        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler.`,
+        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Un appel ou un courriel suffit — rien à payer, rien à justifier.`,
       },
     ],
   },
   cta: {
     title: "Votre première heure est offerte.",
-    body: "Choisissez un créneau. Vous recevez la confirmation dans la minute, et l'invitation atterrit directement dans votre agenda.",
+    body: "Dites-nous quel moment vous arrange. Nous vous rappelons pour confirmer le rendez-vous, de vive voix.",
     button: "Réserver maintenant",
     or: "ou appelez le",
   },
   booking: {
     title: "Réserver une séance",
-    lede: "Quatre étapes, deux minutes. Les créneaux affichés sont ceux réellement libres dans l'agenda de votre artisan.",
+    lede: "Quatre étapes, deux minutes. Vous indiquez vos préférences, votre artisan vous rappelle pour fixer l'heure.",
     steps: ["Prestations", "Adresse", "Créneau", "Confirmation"],
     step1: {
       title: "Que devons-nous traiter ?",
@@ -498,26 +498,38 @@ export const fr = {
     step2: {
       title: "Où vous rejoignons-nous ?",
       name: "Nom complet",
-      email: "Courriel",
+      email: "Courriel (facultatif)",
       phone: "Téléphone",
       address: "Adresse",
       addressPlaceholder: "123 rue Principale, app. 4",
       city: "Ville",
       postal: "Code postal",
       postalPlaceholder: "J4K 1A1",
-      outOfZone: "Cette adresse semble hors de notre zone. Réservez tout de même — nous vous confirmerons par téléphone.",
+      outOfZone: "Cette adresse semble hors de notre zone. Envoyez tout de même votre demande — nous vous répondrons par téléphone.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
     },
     step3: {
-      title: "Quand vous convient-il ?",
-      hint: "Les heures grisées sont déjà prises. Fuseau : heure de l'Est (Montréal).",
-      loading: "Lecture de l'agenda…",
-      noSlots: "Aucune disponibilité ce jour-là. Essayez une autre date.",
-      morning: "Matin",
-      afternoon: "Après-midi",
-      evening: "Soirée",
-      selected: "Créneau retenu",
-      nextAvailable: "Prochaine disponibilité",
+      title: "Quand vous conviendrait-il ?",
+      hint: "Indiquez vos préférences, je vous confirme par téléphone dans les heures qui suivent.",
+      day: "Jour souhaité",
+      moment: "Moment de la journée",
+      second: "Deuxième choix (facultatif)",
+      secondHint: "Si le premier ne fonctionne pas de notre côté, c'est celui-ci que nous essaierons.",
+      none: "Pas de deuxième choix",
+      days: {
+        weekday: "Soir de semaine",
+        saturday: "Samedi",
+        sunday: "Dimanche",
+        any: "Indifférent",
+      },
+      moments: {
+        morning: "Matin",
+        afternoon: "Après-midi",
+        evening: "Soirée",
+      },
+      comment: "Commentaire libre (facultatif)",
+      commentPlaceholder: "Une date précise en tête, une contrainte d'horaire, une heure à éviter…",
+      wanted: "Créneau souhaité",
     },
     step4: {
       title: "Tout est exact ?",
@@ -527,24 +539,23 @@ export const fr = {
       who: "Coordonnées",
       total: "Estimation",
       consent:
-        "Je comprends que l'estimation est indicative et que le montant final sera confirmé sur place avant le début de la séance.",
-      submit: "Confirmer la réservation",
-      submitting: "Confirmation en cours…",
+        "Je comprends qu'il s'agit d'une demande : le rendez-vous n'est fixé qu'une fois confirmé par téléphone, et l'estimation reste indicative jusqu'au montant final confirmé sur place.",
+      submit: "Demander ce créneau",
+      submitting: "Envoi de la demande…",
     },
     back: "Retour",
     next: "Continuer",
     success: {
-      title: "C'est confirmé.",
-      body: "Un courriel de confirmation vient de partir, avec l'invitation pour votre agenda. Votre artisan a été prévenu.",
+      title: "Demande reçue.",
+      body: "Je vous appelle pour confirmer.",
+      urgent: "Pour une réponse immédiate :",
+      wanted: "Créneau souhaité",
       ref: "Référence",
-      manage: "Gérer ma réservation",
-      addCalendar: "Ajouter à mon agenda",
       home: "Retour à l'accueil",
     },
     errors: {
-      taken: "Ce créneau vient d'être pris. Choisissez-en un autre.",
-      notConnected:
-        "Les réservations en ligne ne sont pas encore actives. Appelez-nous au +1 450 943 1217, nous vous trouvons une place tout de suite.",
+      unavailable:
+        "Votre demande n'a pas pu partir. Appelez-nous au +1 450 943 1217, nous vous trouvons une place tout de suite.",
       generic: "Une erreur est survenue. Réessayez, ou appelez-nous directement.",
       required: "Ce champ est requis",
       email: "Courriel invalide",
@@ -726,7 +737,7 @@ export const fr = {
     firstFreeLabel: "Première séance",
     cta: {
       title: "Composez votre séance.",
-      body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et vous propose les créneaux réellement libres.",
+      body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et transmet le moment qui vous arrange.",
     },
   },
   gallery: {

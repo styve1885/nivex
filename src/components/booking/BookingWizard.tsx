@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
-import { Mark } from "../Logo";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { Stepper } from "./Stepper";
-import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
+import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 
 /* ============================ Types ============================ */
@@ -21,16 +20,17 @@ export type WizardConfig = {
   minMinutes: number;
   slotStep: number;
   firstHourFree: boolean;
-  timezone: string;
   areaPrefixes: string[];
-  bookable: boolean;
-  notConnectedReason: string | null;
 };
 
-type DaySlots = { date: string; weekday: number; open: boolean; slots: { time: string; iso: string }[] };
-type AvailabilityResponse =
-  | { available: true; timezone: string; duration: number; today: string; days: DaySlots[]; horizonDays: number }
-  | { available: false; reason: string; timezone: string };
+/* Le tunnel ne lit aucun agenda : il transmet un souhait, et c'est l'appel
+   de l'artisan qui fixe l'heure. Ces clés sont celles que le serveur
+   attend ; les libellés viennent du dictionnaire. */
+const DAY_KEYS = ["weekday", "saturday", "sunday", "any"] as const;
+const MOMENT_KEYS = ["morning", "afternoon", "evening"] as const;
+
+type DayKey = (typeof DAY_KEYS)[number];
+type MomentKey = (typeof MOMENT_KEYS)[number];
 
 /* ============================ Composant ============================ */
 
@@ -47,17 +47,17 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [postal, setPostal] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const [avail, setAvail] = useState<AvailabilityResponse | null>(null);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [rangeStart, setRangeStart] = useState<string | null>(null);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [day, setDay] = useState<DayKey | "">("");
+  const [moment, setMoment] = useState<MomentKey | "">("");
+  const [altDay, setAltDay] = useState<DayKey | "">("");
+  const [altMoment, setAltMoment] = useState<MomentKey | "">("");
+  const [comment, setComment] = useState("");
 
   const [consent, setConsent] = useState(false);
   const [hp, setHp] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ ref: string; manageToken: string; startsAt: string; estimateCents: number; firstHourFree: boolean } | null>(null);
+  const [done, setDone] = useState<{ ref: string; slot: string } | null>(null);
 
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -97,39 +97,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     return h && m ? `${h} h ${m}` : h ? `${h} heure${h > 1 ? "s" : ""}` : `${m} min`;
   }, [duration, config.locale]);
 
-  /* — Chargement des disponibilités — */
-  const loadAvailability = useCallback(async (from?: string) => {
-    if (duration <= 0) return;
-    setLoadingSlots(true);
-    try {
-      const items = chosen.map((s) => `${s.key}:${s.qty}`).join(",");
-      const p = new URLSearchParams({ items, days: "14" });
-      if (from) p.set("from", from);
-      const res = await fetch(`/api/availability?${p}`, { cache: "no-store" });
-      const data: AvailabilityResponse = await res.json();
-      setAvail(data);
-      if (data.available) {
-        setRangeStart(data.days[0]?.date ?? null);
-        const firstOpen = data.days.find((d) => d.slots.length > 0);
-        setSelectedDay((cur) => (cur && data.days.some((d) => d.date === cur && d.slots.length) ? cur : firstOpen?.date ?? null));
-      }
-    } catch {
-      setAvail({ available: false, reason: "network", timezone: config.timezone });
-    } finally {
-      setLoadingSlots(false);
-    }
-  }, [chosen, duration, config.timezone]);
-
-  useEffect(() => {
-    if (step === 2) loadAvailability(rangeStart ?? undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
-
-  /* Changer le panier change la durée : le créneau déjà retenu ne tient plus. */
-  useEffect(() => {
-    setSelectedSlot(null);
-  }, [duration]);
-
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step, done]);
@@ -138,7 +105,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const inZone = postal.length >= 3 && config.areaPrefixes.includes(postal.replace(/\s/g, "").slice(0, 3).toUpperCase());
   const errors = {
     name: name.trim().length < 2 ? t.booking.errors.required : null,
-    email: !EMAIL_RE.test(email.trim()) ? t.booking.errors.email : null,
+    // Le courriel est facultatif : c'est le téléphone qui porte la confirmation.
+    email: email.trim() && !EMAIL_RE.test(email.trim()) ? t.booking.errors.email : null,
     phone: !isPhoneValid(phone) ? t.booking.errors.phone : null,
     address: address.trim().length < 4 ? t.booking.errors.required : null,
     city: city.trim().length < 2 ? t.booking.errors.required : null,
@@ -146,41 +114,45 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   };
   const step2Valid = Object.values(errors).every((e) => e === null);
 
-  const canContinue = step === 0 ? duration > 0 : step === 1 ? step2Valid : step === 2 ? Boolean(selectedSlot) : consent;
+  const canContinue =
+    step === 0 ? duration > 0
+      : step === 1 ? step2Valid
+        : step === 2 ? Boolean(day && moment)
+          : consent;
 
-  /* — Envoi — */
+  /* Le deuxième choix est tout ou rien : un jour sans moment ne dit rien. */
+  const altComplete = Boolean(altDay && altMoment);
+  const slotText = (d: DayKey | "", m: MomentKey | "") =>
+    d && m ? `${t.booking.step3.days[d]} · ${t.booking.step3.moments[m]}` : "—";
+
+  /* — Envoi de la demande — */
   async function submit() {
-    if (!selectedSlot || submitting) return;
+    if (!day || !moment || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/bookings", {
+      const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           locale: config.locale,
           items: chosen.map((s) => ({ key: s.key, qty: s.qty })),
-          name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(),
+          name: name.trim(), email: email.trim().toLowerCase() || undefined, phone: phone.trim(),
           address: address.trim(), city: city.trim(), postalCode: postal.trim().toUpperCase(),
           notes: notes.trim() || undefined,
-          startsAt: selectedSlot, consent: true, hp,
+          day, moment,
+          altDay: altComplete ? altDay : undefined,
+          altMoment: altComplete ? altMoment : undefined,
+          comment: comment.trim() || undefined,
+          consent: true, hp,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (data.error === "slot_taken" || data.error === "invalid_slot") {
-          setError(t.booking.errors.taken);
-          setSelectedSlot(null);
-          await loadAvailability(rangeStart ?? undefined);
-          setStep(2);
-        } else if (data.error === "not_connected" || data.error === "paused") {
-          setError(t.booking.errors.notConnected);
-        } else {
-          setError(t.booking.errors.generic);
-        }
+        setError(data.error === "unavailable" ? t.booking.errors.unavailable : t.booking.errors.generic);
         return;
       }
-      setDone(data);
+      setDone({ ref: data.ref, slot: data.slot ?? slotText(day, moment) });
     } catch {
       setError(t.booking.errors.generic);
     } finally {
@@ -191,11 +163,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   /* ============================ Succès ============================ */
 
   if (done) {
-    const when = new Intl.DateTimeFormat(config.locale === "en" ? "en-CA" : "fr-CA", {
-      timeZone: config.timezone, weekday: "long", day: "numeric", month: "long", year: "numeric",
-      hour: "2-digit", minute: "2-digit", hour12: config.locale === "en",
-    }).format(new Date(done.startsAt));
-
     return (
       <div ref={topRef} className="mx-auto max-w-2xl px-7 py-16 text-center sm:px-10">
         <div className="paper relative p-10 sm:p-14">
@@ -209,23 +176,18 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               {t.booking.success.body}
             </p>
 
-            <p className="mt-9 font-display text-2xl text-ink-800">{when}</p>
-            {done.firstHourFree && (
-              <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-gold-600">
-                {t.booking.step1.firstFreeApplied}
-              </p>
-            )}
-            <p className="mt-2 text-sm text-ink-400">{money(done.estimateCents)}</p>
+            <p className="mt-9 text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.success.wanted}</p>
+            <p className="mt-2 font-display text-2xl text-ink-800">{done.slot}</p>
+
+            <p className="mt-9 text-[0.85rem] font-light text-ink-500">{t.booking.success.urgent}</p>
+            <a href={t.brand.phoneHref} className="btn btn-gold mt-4">{t.brand.phone}</a>
 
             <div className="mx-auto mt-9 inline-flex items-center gap-3 border border-gold-300/60 px-5 py-2.5">
               <span className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.success.ref}</span>
               <code className="font-mono text-sm tracking-wider text-ink-800">{done.ref}</code>
             </div>
 
-            <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link href={`/${config.locale}/reservation/${done.manageToken}`} className="btn w-full sm:w-auto">
-                {t.booking.success.manage}
-              </Link>
+            <div className="mt-10">
               <Link href={`/${config.locale}`} className="btn btn-ghost w-full sm:w-auto">
                 {t.booking.success.home}
               </Link>
@@ -236,32 +198,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     );
   }
 
-  /* ============================ Service indisponible ============================ */
-
-  if (!config.bookable) {
-    return (
-      <div className="mx-auto max-w-xl px-7 py-24 text-center sm:px-10">
-        <Mark className="mx-auto h-14 w-auto" />
-        <h1 className="mt-8 font-display text-3xl font-light text-ink-800">{t.booking.title}</h1>
-        <p className="mx-auto mt-6 text-[0.95rem] font-light leading-[1.9] text-ink-500">
-          {t.booking.errors.notConnected}
-        </p>
-        <a href={t.brand.phoneHref} className="btn mt-9">{t.brand.phone}</a>
-      </div>
-    );
-  }
-
   /* ============================ Tunnel ============================ */
-
-  const days = avail?.available ? avail.days : [];
-  const activeDay = days.find((d) => d.date === selectedDay);
-  const grouped = activeDay ? groupSlots(activeDay.slots) : { morning: [], afternoon: [], evening: [] };
-
-  const dayLabel = (key: string) => {
-    const [y, m, d] = key.split("-").map(Number);
-    const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-    return { wd: t.daysShort[wd], d: String(d), m: t.months[m - 1].slice(0, 3) };
-  };
 
   return (
     <div ref={topRef} className="mx-auto max-w-3xl px-7 py-16 sm:px-10 sm:py-20">
@@ -371,97 +308,60 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
           </section>
         )}
 
-        {/* ————— Étape 3 : créneau ————— */}
+        {/* ————— Étape 3 : demande de créneau ————— */}
         {step === 2 && (
           <section aria-labelledby="s3">
             <h2 id="s3" className="font-display text-2xl font-normal text-ink-800">{t.booking.step3.title}</h2>
-            <p className="mt-2 text-[0.88rem] font-light text-ink-500">{t.booking.step3.hint}</p>
+            <p className="mt-2 text-[0.88rem] font-light leading-relaxed text-ink-500">{t.booking.step3.hint}</p>
 
-            {loadingSlots && (
-              <p className="mt-12 text-center text-[0.9rem] text-ink-400" role="status">{t.booking.step3.loading}</p>
-            )}
+            <Choice
+              legend={t.booking.step3.day}
+              options={DAY_KEYS.map((k) => ({ key: k, label: t.booking.step3.days[k] }))}
+              value={day}
+              onPick={(k) => setDay(k as DayKey)}
+              className="mt-9"
+            />
 
-            {!loadingSlots && avail && !avail.available && (
-              <p className="mt-12 text-center text-[0.9rem] text-ink-500">{t.booking.errors.notConnected}</p>
-            )}
+            <Choice
+              legend={t.booking.step3.moment}
+              options={MOMENT_KEYS.map((k) => ({ key: k, label: t.booking.step3.moments[k] }))}
+              value={moment}
+              onPick={(k) => setMoment(k as MomentKey)}
+              className="mt-8"
+            />
 
-            {!loadingSlots && avail?.available && (
-              <>
-                <div className="mt-8 flex items-center gap-2">
-                  <button type="button" aria-label="←"
-                    onClick={() => { const d = shiftKey(days[0]?.date ?? "", -14); setRangeStart(d); loadAvailability(d); }}
-                    disabled={days[0]?.date === avail.today}
-                    className="h-9 w-9 flex-none border border-gold-300/60 text-ink-500 transition-colors hover:border-gold-500 disabled:opacity-25">
-                    ‹
-                  </button>
+            <div className="mt-10 border-t border-gold-300/40 pt-8">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-gold-600">{t.booking.step3.second}</p>
+              <p className="mt-2 text-[0.85rem] font-light leading-relaxed text-ink-400">{t.booking.step3.secondHint}</p>
 
-                  <ul className="flex flex-1 gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
-                    {days.map((d) => {
-                      const has = d.slots.length > 0;
-                      const active = d.date === selectedDay;
-                      const l = dayLabel(d.date);
-                      return (
-                        <li key={d.date}>
-                          <button type="button" disabled={!has}
-                            onClick={() => { setSelectedDay(d.date); setSelectedSlot(null); }}
-                            aria-pressed={active}
-                            className={`flex h-[4.4rem] w-[3.4rem] flex-col items-center justify-center gap-0.5 border transition-all duration-300 ${
-                              active ? "border-gold-500 bg-ink-800 text-linen-100"
-                                : has ? "border-gold-300/60 text-ink-700 hover:border-gold-500"
-                                      : "border-linen-300 text-ink-400/40"
-                            }`}>
-                            <span className="text-[9px] uppercase tracking-wider">{l.wd}</span>
-                            <span className="font-display text-xl leading-none">{l.d}</span>
-                            <span className="text-[9px] uppercase">{l.m}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+              <Choice
+                legend={t.booking.step3.day}
+                options={[
+                  ...DAY_KEYS.map((k) => ({ key: k as string, label: t.booking.step3.days[k] })),
+                  { key: "", label: t.booking.step3.none },
+                ]}
+                value={altDay}
+                onPick={(k) => { setAltDay(k as DayKey | ""); if (!k) setAltMoment(""); }}
+                className="mt-6"
+              />
 
-                  <button type="button" aria-label="→"
-                    onClick={() => { const d = shiftKey(days[0]?.date ?? "", 14); setRangeStart(d); loadAvailability(d); }}
-                    className="h-9 w-9 flex-none border border-gold-300/60 text-ink-500 transition-colors hover:border-gold-500">
-                    ›
-                  </button>
-                </div>
+              {altDay && (
+                <Choice
+                  legend={t.booking.step3.moment}
+                  options={MOMENT_KEYS.map((k) => ({ key: k as string, label: t.booking.step3.moments[k] }))}
+                  value={altMoment}
+                  onPick={(k) => setAltMoment(k as MomentKey)}
+                  className="mt-7"
+                />
+              )}
+            </div>
 
-                {activeDay && activeDay.slots.length === 0 && (
-                  <p className="mt-12 text-center text-[0.9rem] text-ink-400">{t.booking.step3.noSlots}</p>
-                )}
-
-                {activeDay && activeDay.slots.length > 0 && (
-                  <div className="mt-9 space-y-7">
-                    {([["morning", t.booking.step3.morning], ["afternoon", t.booking.step3.afternoon], ["evening", t.booking.step3.evening]] as const)
-                      .filter(([k]) => grouped[k].length > 0)
-                      .map(([k, label]) => (
-                        <div key={k}>
-                          <h3 className="text-[10px] uppercase tracking-[0.22em] text-gold-600">{label}</h3>
-                          <ul className="mt-3 flex flex-wrap gap-2">
-                            {grouped[k].map((s) => (
-                              <li key={s.iso}>
-                                <button type="button" onClick={() => setSelectedSlot(s.iso)}
-                                  aria-pressed={selectedSlot === s.iso}
-                                  className={`min-w-[4.6rem] border px-4 py-2.5 text-sm tabular-nums transition-all duration-300 ${
-                                    selectedSlot === s.iso
-                                      ? "border-gold-500 bg-ink-800 text-linen-100"
-                                      : "border-gold-300/60 text-ink-700 hover:border-gold-500 hover:bg-linen-100"
-                                  }`}>
-                                  {s.time}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                <p className="mt-9 border-t border-gold-300/40 pt-5 text-center text-[0.8rem] text-ink-400">
-                  {t.booking.step1.duration} : {durationText}
-                </p>
-              </>
-            )}
+            <div className="mt-10 border-t border-gold-300/40 pt-8">
+              <label className="label" htmlFor="comment">{t.booking.step3.comment}</label>
+              <textarea id="comment" rows={3} value={comment} maxLength={1000}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder={t.booking.step3.commentPlaceholder} className="field resize-none" />
+            </div>
           </section>
         )}
 
@@ -471,19 +371,14 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s4" className="font-display text-2xl font-normal text-ink-800">{t.booking.step4.title}</h2>
 
             <dl className="mt-8 divide-y divide-gold-300/40 border-y border-gold-300/40">
-              <Row label={t.booking.step4.when} value={
-                selectedSlot
-                  ? new Intl.DateTimeFormat(config.locale === "en" ? "en-CA" : "fr-CA", {
-                      timeZone: config.timezone, weekday: "long", day: "numeric", month: "long", year: "numeric",
-                      hour: "2-digit", minute: "2-digit", hour12: config.locale === "en",
-                    }).format(new Date(selectedSlot))
-                  : "—"
-              } />
+              <Row label={t.booking.step3.wanted} value={slotText(day, moment)}
+                hint={altComplete ? `${t.booking.step3.second} — ${slotText(altDay, altMoment)}` : undefined} />
               <Row label={t.booking.step4.where} value={`${address}, ${city} ${postal}`} />
               <Row label={t.booking.step4.what} value={chosen.map((s) => `${s.label} × ${s.qty}`).join(" · ")} />
               <Row label={t.booking.step1.duration} value={durationText} />
-              <Row label={t.booking.step4.who} value={`${name} · ${phone} · ${email}`} />
+              <Row label={t.booking.step4.who} value={[name, phone, email.trim()].filter(Boolean).join(" · ")} />
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
+              {comment.trim() && <Row label={t.booking.step3.comment} value={comment.trim()} />}
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
             </dl>
@@ -556,6 +451,39 @@ function EstimateBar({ t, visible, durationText, money, firstFree }: {
   );
 }
 
+/**
+ * Un choix parmi quelques-uns, en boutons plutôt qu'en liste déroulante :
+ * tout est visible d'un coup, et la cible reste large au pouce.
+ */
+function Choice({ legend, options, value, onPick, className = "" }: {
+  legend: string;
+  options: { key: string; label: string }[];
+  value: string;
+  onPick: (key: string) => void;
+  className?: string;
+}) {
+  return (
+    <fieldset className={className}>
+      <legend className="label">{legend}</legend>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {options.map((o) => {
+          const active = o.key === value;
+          return (
+            <button key={o.key || "none"} type="button" onClick={() => onPick(o.key)} aria-pressed={active}
+              className={`border px-4 py-2.5 text-[0.88rem] transition-all duration-300 ${
+                active
+                  ? "border-gold-500 bg-ink-800 text-linen-100"
+                  : "border-gold-300/60 text-ink-700 hover:border-gold-500 hover:bg-linen-100"
+              }`}>
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function Field({ label, value, onChange, error, onBlur, type = "text", placeholder, autoComplete }: {
   label: string; value: string; onChange: (v: string) => void; error?: string | null;
   onBlur?: () => void; type?: string; placeholder?: string; autoComplete?: string;
@@ -584,15 +512,4 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
       </dd>
     </div>
   );
-}
-
-/** Décale une clé « AAAA-MM-JJ » de n jours. */
-function shiftKey(key: string, days: number): string {
-  if (!key) return key;
-  const [y, m, d] = key.split("-").map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d + days));
-  const now = new Date();
-  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1);
-  if (t.getTime() < todayUTC) return key;
-  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
 }

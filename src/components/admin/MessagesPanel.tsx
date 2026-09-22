@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Msg = {
-  id: string; locale: string; name: string; email: string; phone: string | null;
+  id: string; locale: string; name: string; email: string | null; phone: string | null;
   subject: string | null; body: string; emailSent: boolean;
   readAt: string | null; createdAt: string;
 };
@@ -83,9 +83,13 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
                     <p className="whitespace-pre-wrap text-[0.9rem] leading-[1.85] text-ink-700">{m.body}</p>
 
                     <dl className="mt-6 space-y-2 border-t border-gold-300/30 pt-5 text-[0.82rem]">
-                      <Line label="Courriel">
-                        <a href={`mailto:${m.email}`} className="break-all text-gold-700 hover:underline">{m.email}</a>
-                      </Line>
+                      {m.email ? (
+                        <Line label="Courriel">
+                          <a href={`mailto:${m.email}`} className="break-all text-gold-700 hover:underline">{m.email}</a>
+                        </Line>
+                      ) : (
+                        <Line label="Courriel"><span className="text-ink-400">Non fourni — rappelez par téléphone.</span></Line>
+                      )}
                       {m.phone && (
                         <Line label="Téléphone">
                           <a href={`tel:${m.phone.replace(/\D/g, "")}`} className="text-gold-700 hover:underline">{m.phone}</a>
@@ -101,10 +105,16 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
                       )}
                     </dl>
 
-                    <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re : " + (m.subject || "votre message"))}`}
-                      className="btn mt-6 !py-3 !px-6 !text-[10px]">
-                      Répondre
-                    </a>
+                    {m.email ? (
+                      <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re : " + (m.subject || "votre message"))}`}
+                        className="btn mt-6 !py-3 !px-6 !text-[10px]">
+                        Répondre
+                      </a>
+                    ) : m.phone ? (
+                      <a href={`tel:${m.phone.replace(/\D/g, "")}`} className="btn mt-6 !py-3 !px-6 !text-[10px]">
+                        Appeler
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               </div>

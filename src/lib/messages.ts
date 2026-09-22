@@ -17,7 +17,7 @@ export const ContactInput = z.object({
 export type ContactInputType = z.infer<typeof ContactInput>;
 
 export type Message = {
-  id: string; locale: "fr" | "en"; name: string; email: string;
+  id: string; locale: "fr" | "en"; name: string; email: string | null;
   phone: string | null; subject: string | null; body: string;
   emailSent: boolean; readAt: Date | null; createdAt: Date;
 };
@@ -29,7 +29,7 @@ function hydrate(r: Row): Message {
     id: r.id as string,
     locale: (r.locale as "fr" | "en") ?? "fr",
     name: r.name as string,
-    email: r.email as string,
+    email: (r.email as string) ?? null,
     phone: (r.phone as string) ?? null,
     subject: (r.subject as string) ?? null,
     body: r.body as string,
