@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       estimateCents: estimateCents(durationMinutes, settings, settings.firstHourFree),
       currency: settings.currency,
       firstHourFree: settings.firstHourFree,
+      emailSent: false, calendarAdded: false,
     }, { status: 201 });
   }
 
@@ -62,6 +63,10 @@ export async function POST(req: NextRequest) {
       estimateCents: booking.estimateCents,
       currency: booking.currency,
       firstHourFree: booking.firstHourFree,
+      /* Ce qui a réellement eu lieu : l'écran ne promettra pas un courriel
+         qui n'est jamais parti. */
+      emailSent: booking.emailSent,
+      calendarAdded: Boolean(booking.googleEventId),
     }, { status: 201 });
   } catch (e) {
     if (e instanceof BookingError) {

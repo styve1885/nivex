@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, inServiceArea, isBookable, type Settings } from "./settings";
+import { getSettings, inServiceArea, type Settings } from "./settings";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE } from "./brand";
+import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
 
@@ -36,7 +36,8 @@ export type Booking = {
   items: { key: string; label: string; qty: number }[];
   startsAt: Date; endsAt: Date; durationMinutes: number;
   estimateCents: number; currency: string; firstHourFree: boolean;
-  googleEventId: string | null; createdAt: Date; cancelledAt: Date | null;
+  googleEventId: string | null; emailSent: boolean;
+  createdAt: Date; cancelledAt: Date | null;
 };
 
 type Row = Record<string, unknown>;
@@ -53,6 +54,7 @@ function hydrate(r: Row): Booking {
     durationMinutes: Number(r.duration_minutes), estimateCents: Number(r.estimate_cents),
     currency: r.currency as string, firstHourFree: r.first_hour_free === true,
     googleEventId: (r.google_event_id as string) ?? null,
+    emailSent: r.email_sent === true,
     createdAt: new Date(r.created_at as string),
     cancelledAt: r.cancelled_at ? new Date(r.cancelled_at as string) : null,
   };
@@ -69,10 +71,15 @@ export class BookingError extends Error {
 
 export async function createBooking(input: BookingInputType, host?: string | null): Promise<Booking> {
   const settings = await getSettings();
-  if (!isBookable(settings)) throw new BookingError(settings.paused ? "paused" : "not_connected");
 
-  const accessToken = await ownerAccessToken();
-  if (!accessToken) throw new BookingError("not_connected");
+  /* Seule la mise en pause ferme vraiment la porte : c'est une décision de
+     l'artisan. Un compte Google injoignable, lui, ne doit pas empêcher un
+     client de réserver — le rendez-vous s'inscrit en base, qui porte la
+     garantie de non-chevauchement, et l'agenda comme les courriels suivent
+     dès qu'ils le peuvent. Un incident chez Google ne ferme pas la maison. */
+  if (settings.paused) throw new BookingError("paused");
+
+  const accessToken = await ownerAccessToken().catch(() => null);
 
   // On ne fait jamais confiance aux durées ni aux prix venus du navigateur.
   const known = new Set(settings.services.filter((s) => s.enabled).map((s) => s.key));
@@ -85,11 +92,12 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   const start = new Date(input.startsAt);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
 
+  /* Occupations connues : l'agenda quand il répond, la base sinon. */
   const busy = await loadBusy({
     accessToken, settings,
     timeMin: new Date(start.getTime() - 24 * 3600_000),
     timeMax: new Date(end.getTime() + 24 * 3600_000),
-  });
+  }).catch(() => []);
   if (!slotIsFree(input.startsAt, durationMinutes, busy, settings)) throw new BookingError("invalid_slot");
 
   await ensureSchema();
@@ -133,7 +141,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   const origin = siteOrigin(host);
 
   /* — Agenda Google : l'invitation part vers le client — */
-  try {
+  if (accessToken) try {
     const ev = await createEvent(accessToken, {
       calendarId: settings.calendarId,
       summary: `NIVEX — ${booking.clientName}`,
@@ -150,12 +158,17 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   } catch (e) {
     // La réservation existe : on la garde, l'artisan sera prévenu par courriel.
     await logEvent("calendar_insert_failed", { ref, error: String((e as Error).message).slice(0, 500) });
+  } else {
+    await logEvent("calendar_skipped", { ref, reason: "no_access_token" });
   }
 
   /* — Courriels (au mieux : jamais bloquants) — */
-  await sendBookingEmails(booking, settings, origin).catch(() => {});
+  booking.emailSent = await sendBookingEmails(booking, settings, origin).catch(() => false);
 
-  await logEvent("booking_created", { ref, startsAt: booking.startsAt.toISOString(), durationMinutes });
+  await logEvent("booking_created", {
+    ref, startsAt: booking.startsAt.toISOString(), durationMinutes,
+    calendar: Boolean(booking.googleEventId), email: booking.emailSent,
+  });
   return booking;
 }
 
@@ -189,23 +202,34 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
   };
 }
 
-async function sendBookingEmails(b: Booking, s: Settings, origin: string) {
-  const at = await ownerAccessToken();
-  if (!at) return;
+/** Renvoie vrai quand la confirmation du client est effectivement partie. */
+async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promise<boolean> {
+  const at = await ownerAccessToken().catch(() => null);
+  if (!at) {
+    await logEvent("email_skipped", { ref: b.ref, reason: "no_access_token" });
+    return false;
+  }
   const d = emailData(b, s, origin);
   const fromName = s.businessName || "NIVEX";
 
   const client = clientConfirmation(d);
   const owner = ownerNotification(d);
 
-  const results = await Promise.allSettled([
-    sendGmail(at, { to: b.clientEmail, toName: b.clientName, subject: client.subject, html: client.html, text: client.text, fromName, replyTo: s.ownerEmail ?? undefined }),
-    s.ownerEmail ? sendGmail(at, { to: s.ownerEmail, subject: owner.subject, html: owner.html, text: owner.text, fromName, replyTo: b.clientEmail }) : Promise.resolve(null),
+  /* Deux destinataires, deux envois distincts : la boîte de la maison doit
+     recevoir sa fiche de mission même si l'adresse du client rebondit. */
+  const [toClient, toOwner] = await Promise.allSettled([
+    sendGmail(at, { to: b.clientEmail, toName: b.clientName, subject: client.subject, html: client.html, text: client.text, fromName, replyTo: contactEmail(s) }),
+    sendGmail(at, { to: REQUEST_INBOX, subject: owner.subject, html: owner.html, text: owner.text, fromName, replyTo: b.clientEmail }),
   ]);
 
-  const ok = results[0].status === "fulfilled";
-  if (ok) await sql()`UPDATE nivex_bookings SET email_sent = true WHERE id = ${b.id}`;
-  else await logEvent("email_failed", { ref: b.ref, error: String((results[0] as PromiseRejectedResult).reason).slice(0, 400) });
+  if (toOwner.status === "rejected") {
+    await logEvent("owner_email_failed", { ref: b.ref, error: String(toOwner.reason).slice(0, 400) });
+  }
+
+  const ok = toClient.status === "fulfilled";
+  if (ok) await sql()`UPDATE nivex_bookings SET email_sent = true WHERE id = ${b.id}`.catch(() => {});
+  else await logEvent("email_failed", { ref: b.ref, error: String((toClient as PromiseRejectedResult).reason).slice(0, 400) });
+  return ok;
 }
 
 async function isFirstBooking(email: string): Promise<boolean> {

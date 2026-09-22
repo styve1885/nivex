@@ -21,6 +21,8 @@ export function ConnectionPanel({
   const [calSaved, setCalSaved] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<{ ok: boolean; to?: string; at?: string; reason?: string; hint?: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -44,6 +46,20 @@ export function ConnectionPanel({
       if (res.ok) { setCalSaved(true); setTimeout(() => setCalSaved(false), 2600); }
     } finally {
       setSavingCal(false);
+    }
+  }
+
+  /* Un courriel qui n'arrive pas ne se diagnostique qu'en essayant. */
+  async function sendTest() {
+    setTesting(true);
+    setTest(null);
+    try {
+      const res = await fetch("/api/admin/test-email", { method: "POST" });
+      setTest(await res.json());
+    } catch {
+      setTest({ ok: false, reason: "Le site n'a pas répondu. Réessayez." });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -127,6 +143,38 @@ export function ConnectionPanel({
           )}
           {savingCal && <p className="mt-3 text-[0.8rem] text-ink-400">Enregistrement…</p>}
           {calSaved && <p className="mt-3 text-[0.8rem] text-gold-700">Agenda mis à jour.</p>}
+        </section>
+      )}
+
+      {/* — Essai d'envoi — */}
+      {settings.connected && (
+        <section className="border border-gold-300/40 bg-linen-50 p-7">
+          <h3 className="font-display text-xl font-normal text-ink-800">Les courriels partent-ils ?</h3>
+          <p className="mt-1.5 max-w-2xl text-[0.82rem] font-light leading-relaxed text-ink-400">
+            Envoie un message d&apos;essai vers votre boîte, par le même chemin que les confirmations de
+            réservation. S&apos;il n&apos;arrive pas, la raison exacte donnée par Google s&apos;affiche ici.
+          </p>
+
+          <button type="button" onClick={sendTest} disabled={testing} className="btn mt-6 !py-3 !px-6 !text-[10px]">
+            {testing ? "Envoi en cours…" : "Envoyer un courriel de test"}
+          </button>
+
+          {test?.ok && (
+            <p className="mt-5 border border-gold-400/60 bg-linen-100 px-5 py-4 text-[0.85rem] leading-relaxed text-ink-700">
+              Parti vers <strong>{test.to}</strong>, le {test.at}. S&apos;il n&apos;est pas dans la boîte de réception,
+              regardez dans les indésirables — c&apos;est le même envoi que celui des confirmations.
+            </p>
+          )}
+
+          {test && !test.ok && (
+            <div className="mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-5 py-4 text-[0.85rem] leading-relaxed text-[#8E332C]">
+              <p className="font-medium">L&apos;envoi a échoué.</p>
+              {test.hint && <p className="mt-1">{test.hint}</p>}
+              {test.reason && (
+                <p className="mt-3 break-words font-mono text-[0.72rem] leading-relaxed opacity-80">{test.reason}</p>
+              )}
+            </div>
+          )}
         </section>
       )}
 

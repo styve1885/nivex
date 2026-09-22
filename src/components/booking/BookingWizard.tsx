@@ -49,15 +49,13 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [rangeStart, setRangeStart] = useState<string | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
-  const [altSlot, setAltSlot] = useState<string | null>(null);
-  const [wantAlt, setWantAlt] = useState(false);
   const [comment, setComment] = useState("");
 
   const [consent, setConsent] = useState(false);
   const [hp, setHp] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ ref: string; slot: string } | null>(null);
+  const [done, setDone] = useState<{ ref: string; manageToken: string; slot: string; emailSent: boolean } | null>(null);
 
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +120,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const setQuantity = useCallback((key: string, n: number) => {
     setQty((q) => ({ ...q, [key]: Math.max(0, Math.min(200, n)) }));
     setSlot(null);
-    setAltSlot(null);
   }, []);
 
   useEffect(() => {
@@ -160,42 +157,46 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     [config.locale, config.timezone],
   );
 
-  /* — Envoi de la demande — */
+  /* — Envoi : la réservation est prise, pas demandée — */
   async function submit() {
     if (!slot || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/requests", {
+      const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           locale: config.locale,
           items: chosen.map((s) => ({ key: s.key, qty: s.qty })),
-          name: name.trim(), email: email.trim().toLowerCase() || undefined, phone: phone.trim(),
+          name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(),
           address: address.trim(), city: city.trim(), postalCode: postal.trim().toUpperCase(),
-          notes: notes.trim() || undefined,
+          notes: [notes.trim(), comment.trim()].filter(Boolean).join("\n") || undefined,
           startsAt: slot,
-          altStartsAt: wantAlt && altSlot ? altSlot : undefined,
-          comment: comment.trim() || undefined,
           consent: true, hp,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        if (data.error === "invalid_slot") {
-          // L'heure a vieilli pendant le remplissage : on revient la choisir.
-          setError(t.booking.errors.stale);
+        if (data.error === "slot_taken" || data.error === "invalid_slot") {
+          // L'heure est partie pendant le remplissage : on revient la choisir.
+          setError(data.error === "slot_taken" ? t.booking.errors.taken : t.booking.errors.stale);
           setSlot(null);
-          setAltSlot(null);
           await loadSchedule(rangeStart ?? undefined);
           setStep(2);
+        } else if (data.error === "paused") {
+          setError(t.booking.errors.paused);
         } else {
-          setError(data.error === "unavailable" ? t.booking.errors.unavailable : t.booking.errors.generic);
+          setError(data.error === "rate_limited" ? t.booking.errors.tooMany : t.booking.errors.generic);
         }
         return;
       }
-      setDone({ ref: data.ref, slot: data.slot ?? slotText(slot) });
+      setDone({
+        ref: data.ref,
+        manageToken: data.manageToken,
+        slot: slotText(data.startsAt ?? slot),
+        emailSent: data.emailSent === true,
+      });
     } catch {
       setError(t.booking.errors.generic);
     } finally {
@@ -216,21 +217,21 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             </span>
             <h1 className="mt-8 font-display text-4xl font-light text-ink-800">{t.booking.success.title}</h1>
             <p className="mx-auto mt-5 max-w-md text-[0.95rem] font-light leading-[1.9] text-ink-500">
-              {t.booking.success.body}
+              {done.emailSent ? t.booking.success.body : t.booking.success.bodyNoEmail}
             </p>
 
             <p className="mt-9 text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.success.wanted}</p>
             <p className="mt-2 font-display text-2xl text-ink-800">{done.slot}</p>
-
-            <p className="mt-9 text-[0.85rem] font-light text-ink-500">{t.booking.success.urgent}</p>
-            <a href={t.brand.phoneHref} className="btn btn-gold mt-4">{t.brand.phone}</a>
 
             <div className="mx-auto mt-9 inline-flex items-center gap-3 border border-gold-300/60 px-5 py-2.5">
               <span className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.success.ref}</span>
               <code className="font-mono text-sm tracking-wider text-ink-800">{done.ref}</code>
             </div>
 
-            <div className="mt-10">
+            <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+              <Link href={`/${config.locale}/reservation/${done.manageToken}`} className="btn w-full sm:w-auto">
+                {t.booking.success.manage}
+              </Link>
               <Link href={`/${config.locale}`} className="btn btn-ghost w-full sm:w-auto">
                 {t.booking.success.home}
               </Link>
@@ -373,35 +374,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                 <p className="mt-7 text-center text-[0.78rem] text-ink-400">{t.booking.step3.timezone}</p>
 
                 <div className="mt-9 border-t border-gold-300/40 pt-8">
-                  {!wantAlt ? (
-                    <button type="button" onClick={() => setWantAlt(true)}
-                      className="text-[11px] uppercase tracking-[0.18em] text-gold-700 transition-colors hover:text-ink-900">
-                      + {t.booking.step3.addSecond}
-                    </button>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap items-baseline justify-between gap-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-gold-600">{t.booking.step3.second}</p>
-                        <button type="button"
-                          onClick={() => { setWantAlt(false); setAltSlot(null); }}
-                          className="text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-ink-700">
-                          {t.booking.step3.dropSecond}
-                        </button>
-                      </div>
-                      <p className="mt-2 text-[0.85rem] font-light leading-relaxed text-ink-400">{t.booking.step3.secondHint}</p>
-
-                      <SlotPicker
-                        t={t} days={sched.days} today={sched.today}
-                        value={altSlot} onPick={setAltSlot}
-                        onShift={(d) => { setRangeStart(d); loadSchedule(d); }}
-                        exclude={slot}
-                        className="mt-6"
-                      />
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-9 border-t border-gold-300/40 pt-8">
                   <label className="label" htmlFor="comment">{t.booking.step3.comment}</label>
                   <textarea id="comment" rows={3} value={comment} maxLength={1000}
                     onChange={(e) => setComment(e.target.value)}
@@ -422,8 +394,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s4" className="font-display text-2xl font-normal text-ink-800">{t.booking.step4.title}</h2>
 
             <dl className="mt-8 divide-y divide-gold-300/40 border-y border-gold-300/40">
-              <Row label={t.booking.step3.wanted} value={slotText(slot)}
-                hint={wantAlt && altSlot ? `${t.booking.step3.second} — ${slotText(altSlot)}` : undefined} />
+              <Row label={t.booking.step4.when} value={slotText(slot)} />
               <Row label={t.booking.step4.where} value={`${address}, ${city} ${postal}`} />
               <Row label={t.booking.step4.what} value={chosen.map((s) => `${s.label} × ${s.qty}`).join(" · ")} />
               <Row label={t.booking.step1.duration} value={durationText} />

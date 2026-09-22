@@ -104,10 +104,11 @@ export function computeSlots(opts: {
 
 /**
  * Occupations réelles : l'agenda Google du propriétaire + les réservations
- * en base. La base sert de filet si la création d'événement a échoué.
+ * en base. La base sert de filet si la création d'événement a échoué — et
+ * de seule source si l'agenda ne répond pas, ou si rien n'est branché.
  */
 export async function loadBusy(opts: {
-  accessToken: string;
+  accessToken: string | null;
   settings: Settings;
   timeMin: Date;
   timeMax: Date;
@@ -115,8 +116,10 @@ export async function loadBusy(opts: {
   const { accessToken, settings, timeMin, timeMax } = opts;
 
   const [gcal, rows] = await Promise.all([
-    freeBusy(accessToken, settings.calendarId, timeMin.toISOString(), timeMax.toISOString(), settings.timezone)
-      .catch(() => [] as Busy[]),
+    accessToken
+      ? freeBusy(accessToken, settings.calendarId, timeMin.toISOString(), timeMax.toISOString(), settings.timezone)
+          .catch(() => [] as Busy[])
+      : Promise.resolve([] as Busy[]),
     ensureSchema()
       .then(() => sql()`
         SELECT starts_at, ends_at FROM nivex_bookings
