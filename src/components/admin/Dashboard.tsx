@@ -7,7 +7,7 @@ import { BookingsPanel } from "./BookingsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { MessagesPanel } from "./MessagesPanel";
-import type { AdminBooking, AdminStats } from "./types";
+import type { AdminBooking, AdminStats, GoogleLink } from "./types";
 import type { Settings } from "@/lib/settings";
 
 const TABS = [
@@ -20,7 +20,7 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 export function Dashboard({
-  session, settings, upcoming, past, stats, env, flash,
+  session, settings, upcoming, past, stats, env, link, flash,
 }: {
   session: { email: string; name: string | null; picture: string | null };
   settings: Settings;
@@ -28,11 +28,17 @@ export function Dashboard({
   past: AdminBooking[];
   stats: AdminStats;
   env: { database: boolean; google: boolean; origin: string };
+  link: GoogleLink;
   flash: { connected: boolean; missingScopes: string[] };
 }) {
-  const [tab, setTab] = useState<Tab>(settings.connected ? "bookings" : "connection");
+  /* Le lien est rompu quand le compte est bien enregistré mais que Google
+     refuse le jeton : c'est le cas silencieux, celui qu'il faut montrer
+     en premier. */
+  const broken = settings.connected && !link.usable;
+  const [tab, setTab] = useState<Tab>(broken ? "connection" : settings.connected ? "bookings" : "connection");
   const [dismissed, setDismissed] = useState(false);
 
+  const unsent = [...upcoming, ...past].filter((b) => b.status !== "cancelled" && !b.emailSent);
   const firstName = (session.name ?? session.email).split(" ")[0];
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
@@ -71,6 +77,28 @@ export function Dashboard({
             : "Il reste une étape : brancher votre compte Google pour ouvrir les réservations."}
         </p>
       </div>
+
+      {broken && (
+        <div className="mt-8 border border-[#B4453C]/50 bg-[#B4453C]/5 px-6 py-5">
+          <p className="text-[0.92rem] font-medium text-[#8E332C]">Le lien avec Google est rompu.</p>
+          <p className="mt-2 text-[0.85rem] leading-relaxed text-[#8E332C]">
+            Les réservations continuent d&apos;être enregistrées, mais plus aucun courriel ne part et plus rien
+            ne s&apos;inscrit à votre agenda. {REASONS[link.reason ?? ""] ?? REASONS.default}
+          </p>
+          {/* Une navigation pleine page, pas un Link : le détour OAuth doit
+              quitter l'application pour revenir avec un jeton. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/api/auth/google" className="btn mt-5 !py-3 !px-6 !text-[10px]">Reconnecter Google</a>
+          {unsent.length > 0 && (
+            <p className="mt-4 text-[0.82rem] leading-relaxed text-[#8E332C]">
+              {unsent.length === 1
+                ? "Un rendez-vous est resté sans confirmation."
+                : `${unsent.length} rendez-vous sont restés sans confirmation.`}{" "}
+              Une fois reconnecté, l&apos;onglet Rendez-vous vous propose de les renvoyer.
+            </p>
+          )}
+        </div>
+      )}
 
       {flash.connected && !dismissed && (
         <div className="mt-8 flex items-start justify-between gap-5 border border-gold-400/60 bg-linen-50 px-6 py-5">
@@ -113,9 +141,21 @@ export function Dashboard({
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
         {tab === "settings" && <SettingsPanel initial={settings} />}
         {tab === "connection" && (
-          <ConnectionPanel settings={settings} session={session} env={env} missingScopes={flash.missingScopes} />
+          <ConnectionPanel settings={settings} session={session} env={env} link={link} missingScopes={flash.missingScopes} />
         )}
       </div>
     </div>
   );
 }
+
+/* Le mot de Google, traduit en geste à faire. */
+const REASONS: Record<string, string> = {
+  invalid_grant:
+    "Google a révoqué l'autorisation. C'est ce qui arrive quand l'application OAuth est restée en mode « Test » dans la console Google : les jetons y expirent au bout de sept jours. Publiez l'application « En production », puis reconnectez le compte ci-dessous.",
+  unauthorized_client:
+    "L'identifiant client n'a plus le droit de rafraîchir ce jeton. Vérifiez les variables GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET, puis reconnectez le compte.",
+  invalid_client:
+    "L'identifiant ou le secret client ne correspond plus à ceux déclarés chez Google. Corrigez les variables, puis reconnectez le compte.",
+  default:
+    "Reconnectez le compte pour rétablir les envois. L'onglet Connexion propose un courriel de test qui donne le message exact de Google.",
+};

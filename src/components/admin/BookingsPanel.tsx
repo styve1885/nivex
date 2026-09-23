@@ -74,8 +74,29 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState<{ ok: boolean; error: string | null } | null>(null);
   const router = useRouter();
   const cancelled = b.status === "cancelled";
+
+  /* Une réservation prise pendant une rupture du lien avec Google existe,
+     mais personne n'en a été averti. Elle se rattrape. */
+  const silent = !cancelled && (!b.emailSent || !b.inCalendar);
+
+  async function resend() {
+    setResending(true);
+    setResent(null);
+    try {
+      const res = await fetch(`/api/admin/bookings?id=${b.id}`, { method: "POST" });
+      const d = await res.json();
+      setResent({ ok: d.ok === true, error: d.error ?? null });
+      if (d.ok) router.refresh();
+    } catch {
+      setResent({ ok: false, error: "Le site n'a pas répondu. Réessayez." });
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function cancel() {
     setBusy(true);
@@ -103,6 +124,12 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             {when(b.startsAt, tz)} · {duration(b.durationMinutes)}
           </p>
         </div>
+        {silent && (
+          <span title="Ni courriel ni agenda" aria-label="Confirmation non envoyée"
+            className="flex-none border border-[#B4453C]/50 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
+            Muet
+          </span>
+        )}
         <span className="hidden text-[0.85rem] tabular-nums text-ink-600 sm:block">
           {money(b.estimateCents, b.currency)}
         </span>
@@ -123,6 +150,32 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               {b.firstHourFree && <span className="ml-2 text-[10px] uppercase tracking-wider text-gold-600">1re heure offerte</span>}
             </Line>
             <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
+
+            {silent && (
+              <div className="!mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-4">
+                <p className="text-[0.85rem] leading-relaxed text-[#8E332C]">
+                  {!b.emailSent && !b.inCalendar
+                    ? "Ce rendez-vous n'a été ni confirmé par courriel, ni inscrit à votre agenda."
+                    : !b.emailSent
+                      ? "La confirmation par courriel n'est jamais partie."
+                      : "Ce rendez-vous n'est pas inscrit à votre agenda."}
+                </p>
+                <button type="button" onClick={resend} disabled={resending}
+                  className="mt-3 border border-[#B4453C]/50 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-[#8E332C] transition-colors hover:bg-[#B4453C]/10 disabled:opacity-40">
+                  {resending ? "Envoi en cours…" : "Renvoyer la confirmation"}
+                </button>
+                {resent?.ok && (
+                  <p className="mt-3 text-[0.82rem] text-gold-700">
+                    C&apos;est parti. Le client a reçu sa confirmation.
+                  </p>
+                )}
+                {resent && !resent.ok && (
+                  <p className="mt-3 text-[0.82rem] leading-relaxed">
+                    {resent.error ?? "L'envoi a de nouveau échoué."} Reconnectez Google depuis l&apos;onglet Connexion.
+                  </p>
+                )}
+              </div>
+            )}
 
             {canCancel && !cancelled && (
               <div className="pt-2">

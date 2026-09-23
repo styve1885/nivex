@@ -4,15 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleIcon, CheckIcon } from "../Icons";
 import type { Settings } from "@/lib/settings";
+import type { GoogleLink } from "./types";
 
 type Calendar = { id: string; summary: string; primary?: boolean; accessRole: string; backgroundColor?: string };
 
 export function ConnectionPanel({
-  settings, session, env, missingScopes,
+  settings, session, env, link, missingScopes,
 }: {
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
   env: { database: boolean; google: boolean; origin: string };
+  link: GoogleLink;
   missingScopes: string[];
 }) {
   const [calendars, setCalendars] = useState<Calendar[] | null>(null);
@@ -92,10 +94,10 @@ export function ConnectionPanel({
             <p className="text-[0.85rem] text-ink-500">{session.email}</p>
           </div>
           <span className={`flex items-center gap-2 border px-4 py-2 text-[10px] uppercase tracking-[0.16em] ${
-            settings.connected ? "border-gold-400 text-gold-700" : "border-[#B4453C]/50 text-[#8E332C]"
+            link.usable ? "border-gold-400 text-gold-700" : "border-[#B4453C]/50 text-[#8E332C]"
           }`}>
-            {settings.connected && <CheckIcon className="h-3 w-3" />}
-            {settings.connected ? "Connecté" : "Non connecté"}
+            {link.usable && <CheckIcon className="h-3 w-3" />}
+            {link.usable ? "Connecté" : settings.connected ? "Lien rompu" : "Non connecté"}
           </span>
         </div>
 
@@ -185,6 +187,8 @@ export function ConnectionPanel({
           <Check ok={env.google} label="Identifiants Google OAuth" fail="Variables GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET manquantes" />
           <Check ok={env.database} label="Base de données" fail="Variable DATABASE_URL manquante" />
           <Check ok={settings.connected} label="Compte Google branché" fail="Aucun jeton d'accès enregistré" />
+          <Check ok={link.usable} label="Google accepte le jeton"
+            fail={link.reason ? `Google refuse le jeton (${link.reason}) — reconnectez le compte` : "Jeton inutilisable — reconnectez le compte"} />
           <Check ok={!settings.paused} label="Réservations ouvertes" fail="Réservations suspendues (onglet Réglages)" />
         </ul>
         <p className="mt-6 border-t border-gold-300/30 pt-5 text-[0.78rem] leading-relaxed text-ink-400">

@@ -244,6 +244,64 @@ async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promi
   return ok;
 }
 
+/**
+ * Rattrapage d'un rendez-vous resté muet.
+ *
+ * Quand le lien avec Google se rompt, la réservation s'écrit quand même
+ * mais ni l'agenda ni les courriels ne suivent. Une fois le compte
+ * rebranché, ceci répare l'un et l'autre — sans jamais recréer un
+ * événement qui existe déjà.
+ */
+export async function resendBooking(b: Booking, host?: string | null): Promise<{
+  emailSent: boolean; calendarAdded: boolean; error: string | null;
+}> {
+  const settings = await getSettings();
+  const origin = siteOrigin(host);
+
+  let at: string | null = null;
+  try {
+    at = await ownerAccessToken();
+  } catch (e) {
+    return { emailSent: false, calendarAdded: false, error: describeGoogle(e) };
+  }
+  if (!at) return { emailSent: false, calendarAdded: false, error: "Aucun compte Google branché." };
+
+  let calendarAdded = Boolean(b.googleEventId);
+  if (!b.googleEventId && b.status !== "cancelled") {
+    try {
+      const ev = await createEvent(at, {
+        calendarId: settings.calendarId,
+        summary: `NIVEX — ${b.clientName}`,
+        description: eventDescription(b, origin),
+        location: `${b.address}, ${b.city}, QC ${b.postalCode}`,
+        start: b.startsAt.toISOString(),
+        end: b.endsAt.toISOString(),
+        timeZone: settings.timezone,
+        attendeeEmail: b.clientEmail,
+        attendeeName: b.clientName,
+      });
+      await sql()`UPDATE nivex_bookings SET google_event_id = ${ev.id} WHERE id = ${b.id}`;
+      b.googleEventId = ev.id;
+      calendarAdded = true;
+    } catch (e) {
+      await logEvent("calendar_backfill_failed", { ref: b.ref, error: describeGoogle(e).slice(0, 400) });
+    }
+  }
+
+  const emailSent = await sendBookingEmails(b, settings, origin).catch(() => false);
+  await logEvent("booking_resent", { ref: b.ref, emailSent, calendarAdded });
+
+  return {
+    emailSent, calendarAdded,
+    error: emailSent ? null : "Le courriel n'est toujours pas parti. Vérifiez la connexion Google.",
+  };
+}
+
+function describeGoogle(e: unknown): string {
+  if (e instanceof GoogleError) return `${e.op} — HTTP ${e.status} · ${e.body.slice(0, 300)}`;
+  return String((e as Error)?.message ?? e).slice(0, 300);
+}
+
 async function isFirstBooking(email: string): Promise<boolean> {
   const rows = (await sql()`
     SELECT 1 FROM nivex_bookings
