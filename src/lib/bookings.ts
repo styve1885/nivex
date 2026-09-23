@@ -204,9 +204,21 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
 
 /** Renvoie vrai quand la confirmation du client est effectivement partie. */
 async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promise<boolean> {
-  const at = await ownerAccessToken().catch(() => null);
+  /* Un courriel qui ne part pas doit laisser une trace lisible : sans le
+     motif, on ne sait pas s'il faut reconnecter un compte ou corriger une
+     adresse. Le journal le garde, /api/health le résume. */
+  let at: string | null = null;
+  try {
+    at = await ownerAccessToken();
+  } catch (e) {
+    const detail = e instanceof GoogleError
+      ? `${e.op} — HTTP ${e.status} · ${e.body.slice(0, 300)}`
+      : String((e as Error).message).slice(0, 300);
+    await logEvent("email_skipped", { ref: b.ref, reason: "token_refused", detail });
+    return false;
+  }
   if (!at) {
-    await logEvent("email_skipped", { ref: b.ref, reason: "no_access_token" });
+    await logEvent("email_skipped", { ref: b.ref, reason: "no_refresh_token" });
     return false;
   }
   const d = emailData(b, s, origin);
