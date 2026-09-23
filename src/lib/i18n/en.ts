@@ -161,7 +161,7 @@ const terms: LegalDoc = {
     {
       title: "The price",
       body: [
-        "A one-hour session is billed {rate}, a two-hour session {rate2}, and so on, for a minimum of {min}. Applicable taxes, if any, are added to that amount.",
+        "A session lasts {min} at the least and is billed {rate2}. Beyond that, each hour begun is added at the same pace, {rate} per hour. Applicable taxes, if any, are added to that amount.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
@@ -395,16 +395,16 @@ export const en: Dict = {
       "You choose the pieces to be handled; we arrive with all the equipment. The amount is confirmed on site before we begin.",
     offers: [
       {
-        name: "Discovery session",
-        duration: "one hour",
-        volume: "8 to 12 shirts, or 6 to 8 mixed pieces",
-        note: "For a first visit, or a top-up the same day.",
-      },
-      {
-        name: "Weekly session",
+        name: "Week session",
         duration: "two hours",
         volume: "14 to 18 pieces — your whole week's wardrobe",
-        note: "The standard format.",
+        note: "The most requested format, and the shortest visit we make.",
+      },
+      {
+        name: "Family session",
+        duration: "three hours",
+        volume: "20 to 24 pieces — shirts, trousers, school uniforms",
+        note: "For a household, or a fortnight in one go.",
       },
       {
         name: "Monthly plan",
@@ -628,10 +628,10 @@ export const en: Dict = {
     title: "What a session at your place amounts to.",
     lede:
       "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
-    headline: "The one-hour session — {price}",
+    headline: "The two-hour session — {price}",
     visitNote: "minimum {min} per visit · travel included",
     cadence: {
-      title: "What we handle in one hour",
+      title: "Our pace, hour by hour",
       lede:
         "These figures aren't a sales promise: they are the ones our booking engine uses to work out how long your session will take. What you read here is what the form will calculate.",
       colType: "Type of piece",

@@ -96,7 +96,10 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   const t = getDict(locale);
   const s = await getSettings();
   const min = minutesToText(s.minMinutes, locale);
-  const rate = formatMoney(s.hourlyRate, s.currency, locale);
+  /* Le titre annonce la plus courte séance possible, au prix qu'elle coûte :
+     annoncer le taux horaire seul laisserait croire qu'une heure se réserve. */
+  const shortest = Math.max(s.minMinutes, 120);
+  const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
 
   return (
@@ -111,7 +114,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           <p className="mt-7 max-w-2xl text-[1.02rem] font-light leading-[1.9] text-ink-600">{t.tarifs.lede}</p>
 
           <p className="mt-12 font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-            {t.tarifs.headline.replace("{price}", rate)}
+            {t.tarifs.headline.replace("{price}", entry)}
           </p>
           <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
             {t.tarifs.visitNote.replace("{min}", min)}

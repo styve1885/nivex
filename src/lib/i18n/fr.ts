@@ -173,7 +173,7 @@ const terms: LegalDoc = {
     {
       title: "Le prix",
       body: [
-        "Une séance d'une heure est facturée {rate}, une séance de deux heures {rate2}, et ainsi de suite, pour une durée minimale de {min}. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "Une séance dure au minimum {min} et se facture {rate2}. Au-delà, chaque heure entamée s'ajoute au même rythme, soit {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
         "L'estimation affichée pendant la réservation est indicative : elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
         "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
       ],
@@ -407,16 +407,16 @@ export const fr = {
       "Vous choisissez les pièces à traiter, nous venons avec tout le matériel. Le montant est confirmé sur place avant de commencer.",
     offers: [
       {
-        name: "Séance découverte",
-        duration: "une heure",
-        volume: "8 à 12 chemises, ou 6 à 8 pièces mixtes",
-        note: "Pour une première visite ou un complément le même jour.",
-      },
-      {
         name: "Séance semaine",
         duration: "deux heures",
         volume: "14 à 18 pièces — la garde-robe complète de votre semaine",
-        note: "Format standard.",
+        note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
+      },
+      {
+        name: "Séance famille",
+        duration: "trois heures",
+        volume: "20 à 24 pièces — chemises, pantalons, uniformes scolaires",
+        note: "Pour une maisonnée, ou deux semaines d'un coup.",
       },
       {
         name: "Abonnement mensuel",
@@ -640,10 +640,10 @@ export const fr = {
     title: "Ce qu'une séance chez vous représente.",
     lede:
       "Nous ne vendons pas « du repassage » : nous vendons une cadence mesurée, la même d'une séance à l'autre. Voici ce qu'elle vaut, ce qu'elle traite, et ce qui la sépare d'un coup de main.",
-    headline: "La séance d'une heure — {price}",
+    headline: "La séance de deux heures — {price}",
     visitNote: "minimum {min} par déplacement · déplacement inclus",
     cadence: {
-      title: "Ce que nous traitons en une heure",
+      title: "Notre cadence, heure par heure",
       lede:
         "Ces chiffres ne sont pas une promesse commerciale : ce sont ceux que notre moteur de réservation utilise pour calculer la durée de votre séance. Ce que vous lisez ici est ce que le formulaire calculera.",
       colType: "Type de pièce",

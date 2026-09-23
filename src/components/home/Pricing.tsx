@@ -9,18 +9,25 @@ import type { Settings } from "@/lib/settings";
 /**
  * La vitrine tarifaire.
  *
- * On y vend une séance, jamais un taux : le montant se lit « la séance d'une
- * heure — 50 $ », et la durée n'apparaît que comme repère de déroulement.
- * Les montants découlent quand même du taux en vigueur — une séance d'une
- * heure vaut le taux, une séance de deux heures le double — de sorte que la
- * vitrine ne puisse pas contredire le devis du tunnel de réservation.
+ * On y vend une séance, jamais un taux : le montant se lit « la séance de
+ * deux heures — 100 $ », et la durée n'apparaît que comme repère de
+ * déroulement.
+ *
+ * La plus courte séance annoncée est la durée minimale d'un déplacement,
+ * telle que réglée par l'artisan : la vitrine ne peut donc pas proposer
+ * une séance que le tunnel refuserait de réserver. Les montants découlent
+ * du taux en vigueur, si bien qu'ils ne peuvent pas non plus contredire
+ * le devis.
  */
 export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   const money = (cents: number) => formatMoney(cents, settings.currency, locale);
 
+  /* La première séance dure le minimum réglé — jamais moins —, la deuxième
+     une heure de plus. Le prix de chacune en découle. */
+  const shortest = Math.max(settings.minMinutes, 120);
   const amounts = [
-    money(settings.hourlyRate),
-    money(settings.hourlyRate * 2),
+    money(Math.round((shortest / 60) * settings.hourlyRate)),
+    money(Math.round(((shortest + 60) / 60) * settings.hourlyRate)),
     t.pricing.planFrom.replace("{price}", money(cheapestPlanCents(settings))),
   ];
 
