@@ -6,7 +6,7 @@ import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availabi
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX } from "./brand";
+import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX, SETUP_MINUTES } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
 
@@ -142,13 +142,14 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
   /* — Agenda Google : l'invitation part vers le client — */
   if (accessToken) try {
+    const block = occupiedBlock(booking);
     const ev = await createEvent(accessToken, {
       calendarId: settings.calendarId,
       summary: `NIVEX — ${booking.clientName}`,
-      description: eventDescription(booking, origin),
+      description: eventDescription(booking, origin, settings.timezone),
       location: `${booking.address}, ${booking.city}, QC ${booking.postalCode}`,
-      start: booking.startsAt.toISOString(),
-      end: booking.endsAt.toISOString(),
+      start: block.start.toISOString(),
+      end: block.end.toISOString(),
       timeZone: settings.timezone,
       attendeeEmail: booking.clientEmail,
       attendeeName: booking.clientName,
@@ -172,8 +173,23 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   return booking;
 }
 
-function eventDescription(b: Booking, origin: string): string {
+/**
+ * Le temps réellement occupé : la séance, plus l'installation avant et le
+ * rangement après. C'est ce bloc-là qu'il faut réserver dans l'agenda, et
+ * lui qui ne doit jamais en croiser un autre.
+ */
+export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start: Date; end: Date } {
+  return {
+    start: new Date(b.startsAt.getTime() - SETUP_MINUTES * 60_000),
+    end: new Date(b.endsAt.getTime() + SETUP_MINUTES * 60_000),
+  };
+}
+
+function eventDescription(b: Booking, origin: string, tz: string): string {
   const lines = [
+    `Séance : ${formatDateTime(b.startsAt, tz, "fr")} — ${minutesToText(b.durationMinutes, "fr")} de repassage.`,
+    `Ce bloc comprend ${SETUP_MINUTES} min d'installation avant et ${SETUP_MINUTES} min de rangement après.`,
+    "",
     `Client : ${b.clientName}`,
     `Téléphone : ${b.clientPhone}`,
     `Courriel : ${b.clientEmail}`,
@@ -272,10 +288,10 @@ export async function resendBooking(b: Booking, host?: string | null): Promise<{
       const ev = await createEvent(at, {
         calendarId: settings.calendarId,
         summary: `NIVEX — ${b.clientName}`,
-        description: eventDescription(b, origin),
+        description: eventDescription(b, origin, settings.timezone),
         location: `${b.address}, ${b.city}, QC ${b.postalCode}`,
-        start: b.startsAt.toISOString(),
-        end: b.endsAt.toISOString(),
+        start: occupiedBlock(b).start.toISOString(),
+        end: occupiedBlock(b).end.toISOString(),
         timeZone: settings.timezone,
         attendeeEmail: b.clientEmail,
         attendeeName: b.clientName,

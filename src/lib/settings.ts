@@ -59,13 +59,22 @@ export const DEFAULT_HOURS: DayHours[] = [
   { day: 6, enabled: true,  open: "07:00", close: "22:00" }, // samedi
 ];
 
+/**
+ * Temps de traitement par pièce, marge de conversation et d'imprévus
+ * comprise. Ces minutes ne servent pas qu'au devis : la capacité horaire
+ * annoncée sur la page Tarifs en découle (`perHour`), et le site promet de
+ * tenir le volume annoncé. Les gonfler d'optimisme revient donc à promettre
+ * ce qu'on ne tiendra pas.
+ *
+ * Valeurs relevées au chronomètre sur séance réelle, septembre 2026.
+ */
 export const DEFAULT_SERVICES: ServiceItem[] = [
-  { key: "shirt",    icon: "shirt",  fr: "Chemises",              en: "Shirts",              minutesPerUnit: 6,  unitFr: "chemise",  unitEn: "shirt",   enabled: true },
-  { key: "delicate", icon: "dress",  fr: "Robes & délicats",      en: "Dresses & delicates", minutesPerUnit: 11, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "suit",     icon: "suit",   fr: "Costumes & vestes",     en: "Suits & jackets",     minutesPerUnit: 16, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "trousers", icon: "badge",  fr: "Pantalons & jupes",     en: "Trousers & skirts",   minutesPerUnit: 7,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "linen",    icon: "linen",  fr: "Linge de maison",       en: "Household linen",     minutesPerUnit: 5,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",  en: "Uniforms (set)",      minutesPerUnit: 9,  unitFr: "ensemble", unitEn: "set",     enabled: true },
+  { key: "shirt",    icon: "shirt",  fr: "Chemises",              en: "Shirts",              minutesPerUnit: 8,  unitFr: "chemise",  unitEn: "shirt",   enabled: true },
+  { key: "delicate", icon: "dress",  fr: "Robes & délicats",      en: "Dresses & delicates", minutesPerUnit: 15, unitFr: "pièce",    unitEn: "piece",   enabled: true },
+  { key: "suit",     icon: "suit",   fr: "Costumes & vestes",     en: "Suits & jackets",     minutesPerUnit: 19, unitFr: "pièce",    unitEn: "piece",   enabled: true },
+  { key: "trousers", icon: "badge",  fr: "Pantalons & jupes",     en: "Trousers & skirts",   minutesPerUnit: 9,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
+  { key: "linen",    icon: "linen",  fr: "Linge de maison",       en: "Household linen",     minutesPerUnit: 7,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
+  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",  en: "Uniforms (set)",      minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",     enabled: true },
 ];
 
 export const DEFAULT_AREA: ServiceArea = {

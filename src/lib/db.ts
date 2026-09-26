@@ -1,4 +1,5 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { SETUP_MINUTES } from "./brand";
 
 /**
  * Neon (Postgres) via HTTP. Une seule connexion logique par instance
@@ -126,6 +127,45 @@ async function bootstrap() {
     EXCEPTION
       WHEN duplicate_object THEN NULL;
       WHEN duplicate_table  THEN NULL;
+    END $$`;
+
+  /*
+   * L'artisan s'installe un quart d'heure avant et range un quart d'heure
+   * après. Deux séances qui se touchent pile — 13 h–15 h puis 15 h–17 h —
+   * ne se chevauchent pas sur le papier, mais se chevauchent dans la vraie
+   * vie : il range chez l'un pendant qu'il devrait s'installer chez
+   * l'autre. La contrainte porte donc sur le temps réellement occupé.
+   *
+   * Elle remplace la précédente plutôt que de s'y ajouter : plus stricte,
+   * elle la contient. Si des rendez-vous déjà pris se touchent de trop
+   * près, l'ajout échoue — on laisse alors l'ancienne garde en place et on
+   * le consigne, plutôt que de refuser de démarrer.
+   *
+   * L'intervalle est écrit en toutes lettres parce qu'un paramètre ne
+   * s'interpole pas dans un bloc DO. La garde ci-dessous empêche qu'il
+   * s'écarte de SETUP_MINUTES sans qu'on s'en aperçoive.
+   */
+  if (SETUP_MINUTES !== 15) {
+    throw new Error(
+      `SETUP_MINUTES vaut ${SETUP_MINUTES} : la contrainte nivex_bookings_no_overlap_setup ` +
+      "est écrite pour 15 minutes. Mettez les deux d'accord, et renommez la contrainte pour " +
+      "que la nouvelle version remplace l'ancienne.",
+    );
+  }
+
+  await q`
+    DO $$ BEGIN
+      ALTER TABLE nivex_bookings
+        ADD CONSTRAINT nivex_bookings_no_overlap_setup
+        EXCLUDE USING gist (
+          tstzrange(starts_at - interval '15 minutes', ends_at + interval '15 minutes') WITH &&
+        )
+        WHERE (status IN ('confirmed', 'pending'));
+      ALTER TABLE nivex_bookings DROP CONSTRAINT IF EXISTS nivex_bookings_no_overlap;
+    EXCEPTION
+      WHEN duplicate_object     THEN NULL;
+      WHEN duplicate_table      THEN NULL;
+      WHEN exclusion_violation  THEN NULL;
     END $$`;
 
   /* Messages du formulaire de contact. Conservés même si l'envoi du

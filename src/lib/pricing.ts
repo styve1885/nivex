@@ -21,23 +21,23 @@ export const BLOCKS: Offer[] = [
   {
     key: "decouverte", minutes: 120,
     fr: { name: "Exécutif & Découverte",
-          detail: "14 à 18 pièces. Par exemple : 10 chemises, 4 pantalons et 2 vestons." },
+          detail: "10 à 15 pièces. Par exemple : 8 chemises, 4 pantalons et 1 veston." },
     en: { name: "Executive & Discovery",
-          detail: "14 to 18 pieces. For instance: 10 shirts, 4 pairs of trousers and 2 jackets." },
+          detail: "10 to 15 pieces. For instance: 8 shirts, 4 pairs of trousers and 1 jacket." },
   },
   {
     key: "famille", minutes: 180,
     fr: { name: "Famille & Scolaire",
-          detail: "20 à 24 pièces. Par exemple : 12 chemises, 6 pantalons, 4 uniformes scolaires et 2 vestons." },
+          detail: "15 à 22 pièces. Par exemple : 10 chemises, 6 pantalons et 4 uniformes scolaires." },
     en: { name: "Family & School",
-          detail: "20 to 24 pieces. For instance: 12 shirts, 6 pairs of trousers, 4 school uniforms and 2 jackets." },
+          detail: "15 to 22 pieces. For instance: 10 shirts, 6 pairs of trousers and 4 school uniforms." },
   },
   {
     key: "prestige", minutes: 240,
     fr: { name: "Garde-robe Prestige",
-          detail: "28 à 32 pièces. Par exemple : 14 chemises, 8 pantalons, 4 vestons et 6 pièces de linge de maison." },
+          detail: "20 à 30 pièces. Par exemple : 12 chemises, 8 pantalons, 3 vestons et 2 pièces de linge de maison." },
     en: { name: "Prestige Wardrobe",
-          detail: "28 to 32 pieces. For instance: 14 shirts, 8 pairs of trousers, 4 jackets and 6 pieces of household linen." },
+          detail: "20 to 30 pieces. For instance: 12 shirts, 8 pairs of trousers, 3 jackets and 2 pieces of household linen." },
   },
 ];
 
@@ -67,9 +67,9 @@ export const BUNDLES: Offer[] = [
   {
     key: "rentree", minutes: 120,
     fr: { name: "Rentrée & Écoles privées", tag: "Enfants, scolaire",
-          detail: "Jusqu'à 12 ensembles d'uniforme, soit la semaine complète de deux enfants. Jupes plissées, chemises, blazers, sur cintres numérotés." },
+          detail: "Jusqu'à 10 ensembles d'uniforme, soit la semaine complète de deux enfants. Jupes plissées, chemises, blazers, sur cintres numérotés." },
     en: { name: "Back to School", tag: "Children, uniforms",
-          detail: "Up to 12 uniform sets — a full week for two children. Pleated skirts, shirts, blazers, on numbered hangers." },
+          detail: "Up to 10 uniform sets — a full week for two children. Pleated skirts, shirts, blazers, on numbered hangers." },
   },
   {
     key: "affaires", minutes: 180,
@@ -92,23 +92,23 @@ export const ADDONS: Offer[] = [
   {
     key: "panier-bebe", minutes: 60,
     fr: { name: "Panier Bébé", tag: "Tout-petits",
-          detail: "Jusqu'à 18 pièces bébé ou enfant : bodys, pyjamas, draps de berceau, gigoteuses." },
+          detail: "Jusqu'à 15 pièces bébé ou enfant : bodys, pyjamas, draps de berceau, gigoteuses." },
     en: { name: "Baby Basket", tag: "Little ones",
-          detail: "Up to 18 baby or toddler pieces: bodysuits, pyjamas, crib sheets, sleep sacks." },
+          detail: "Up to 15 baby or toddler pieces: bodysuits, pyjamas, crib sheets, sleep sacks." },
   },
   {
     key: "enfant-plus", minutes: 60,
     fr: { name: "Enfant supplémentaire", tag: "Forfait Rentrée",
-          detail: "6 ensembles d'uniforme de plus, pour un troisième enfant et au-delà." },
+          detail: "5 ensembles d'uniforme de plus, pour un troisième enfant et au-delà." },
     en: { name: "Additional Child", tag: "Back to School package",
-          detail: "6 more uniform sets, for a third child and beyond." },
+          detail: "5 more uniform sets, for a third child and beyond." },
   },
   {
     key: "prolongation", minutes: 60,
     fr: { name: "Prolongation", tag: "Décidée sur place",
-          detail: "7 à 8 pièces de plus, si le panier est plus gros que prévu." },
+          detail: "5 à 7 pièces de plus, si le panier est plus gros que prévu." },
     en: { name: "Extra hour", tag: "Decided on the spot",
-          detail: "7 to 8 more pieces, if the basket turns out bigger than expected." },
+          detail: "5 to 7 more pieces, if the basket turns out bigger than expected." },
   },
 ];
 

@@ -13,7 +13,9 @@ const { clientConfirmation, ownerNotification } = await import("../src/lib/email
 const { slotIsFree } = await import("../src/lib/availability.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
-const { REQUEST_INBOX, PHONE } = await import("../src/lib/brand.ts");
+const { REQUEST_INBOX, PHONE, SETUP_MINUTES } = await import("../src/lib/brand.ts");
+const { occupiedBlock } = await import("../src/lib/bookings.ts");
+const { perHour } = await import("../src/lib/pricing.ts");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -141,6 +143,70 @@ test("une occupation de l'agenda ferme le créneau, tampon compris", () => {
   assert.equal(slotIsFree(new Date(neuf).toISOString(), 120, busy, settings), false);
   // À 7 h, l'ouverture, la séance finit à 9 h : deux heures de marge, elle tient.
   assert.equal(slotIsFree(at(lundi, 7), 120, busy, settings), true);
+});
+
+/* ————— Installation et rangement ————— */
+
+test("le bloc occupé déborde la séance d'un quart d'heure de chaque côté", () => {
+  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z") };
+  const block = occupiedBlock(b);
+  assert.equal(block.start.toISOString(), "2026-10-05T16:45:00.000Z", "arrivée 15 min avant");
+  assert.equal(block.end.toISOString(), "2026-10-05T19:15:00.000Z", "départ 15 min après");
+  assert.equal(SETUP_MINUTES, 15);
+});
+
+test("une séance de 13 h à 15 h occupe bien 12 h 45 à 15 h 15", () => {
+  // 13 h à Montréal en octobre = 17 h UTC.
+  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z") };
+  const fmt = (d) => new Intl.DateTimeFormat("fr-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  const block = occupiedBlock(b);
+  assert.equal(flat(fmt(b.startsAt)), "13 h 00");
+  assert.equal(flat(fmt(block.start)), "12 h 45");
+  assert.equal(flat(fmt(block.end)), "15 h 15");
+});
+
+test("deux séances collées ne peuvent pas coexister", () => {
+  const premiere = { start: Date.parse("2026-10-05T17:00:00.000Z"), end: Date.parse("2026-10-05T19:00:00.000Z") };
+  const suivante = occupiedBlock({
+    startsAt: new Date("2026-10-05T19:00:00.000Z"),
+    endsAt: new Date("2026-10-05T21:00:00.000Z"),
+  });
+  const bloque = occupiedBlock({ startsAt: new Date(premiere.start), endsAt: new Date(premiere.end) });
+  // 15 h 15 de rangement contre 14 h 45 d'installation : les deux se croisent.
+  assert.ok(suivante.start.getTime() < bloque.end.getTime(), "les deux blocs se chevauchent bien");
+});
+
+/* ————— Les temps chronométrés ————— */
+
+test("la cadence annoncée découle des minutes du moteur", () => {
+  const attendu = { shirt: 7, delicate: 4, suit: 3, trousers: 6, linen: 8, uniform: 5 };
+  for (const svc of FALLBACK_SETTINGS.services) {
+    assert.equal(perHour(svc.minutesPerUnit), attendu[svc.key], `${svc.key} : cadence horaire`);
+  }
+});
+
+test("les forfaits tiennent dans leur durée, au nouveau rythme", () => {
+  const min = Object.fromEntries(FALLBACK_SETTINGS.services.map((s) => [s.key, s.minutesPerUnit]));
+  // Les exemples affichés sur la grille, recalculés.
+  const exemples = [
+    { nom: "Exécutif & Découverte", minutes: 120, panier: { shirt: 8, trousers: 4, suit: 1 }, plage: [10, 15] },
+    { nom: "Famille & Scolaire",    minutes: 180, panier: { shirt: 10, trousers: 6, uniform: 4 }, plage: [15, 22] },
+    { nom: "Garde-robe Prestige",   minutes: 240, panier: { shirt: 12, trousers: 8, suit: 3, linen: 2 }, plage: [20, 30] },
+  ];
+  for (const e of exemples) {
+    const duree = Object.entries(e.panier).reduce((t, [k, q]) => t + min[k] * q, 0);
+    const pieces = Object.values(e.panier).reduce((t, q) => t + q, 0);
+    assert.ok(duree <= e.minutes, `${e.nom} : ${duree} min pour ${e.minutes} annoncées`);
+    assert.ok(pieces >= e.plage[0] && pieces <= e.plage[1],
+      `${e.nom} : ${pieces} pièces hors de la fourchette ${e.plage.join("–")}`);
+  }
+});
+
+test("le courriel de confirmation annonce l'arrivée anticipée", () => {
+  const m = clientConfirmation(d);
+  assert.match(flat(m.text), /15 minutes avant le début de votre séance/);
+  assert.match(m.html, /15 minutes avant/);
+  assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /15 minutes before your session begins/);
 });
 
 console.log(`\n${n} vérifications passées.\n`);

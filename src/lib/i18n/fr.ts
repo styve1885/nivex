@@ -409,13 +409,13 @@ export const fr = {
       {
         name: "Séance semaine",
         duration: "deux heures",
-        volume: "14 à 18 pièces — la garde-robe complète de votre semaine",
+        volume: "10 à 15 pièces — la garde-robe complète de votre semaine",
         note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
       },
       {
         name: "Séance famille",
         duration: "trois heures",
-        volume: "20 à 24 pièces — chemises, pantalons, uniformes scolaires",
+        volume: "15 à 22 pièces — chemises, pantalons, uniformes scolaires",
         note: "Pour une maisonnée, ou deux semaines d'un coup.",
       },
       {
@@ -517,6 +517,8 @@ export const fr = {
       afternoon: "Après-midi",
       evening: "Soirée",
       timezone: "Fuseau : heure de l'Est (Montréal).",
+      setup:
+        "Votre repasseur arrive 15 minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.",
       comment: "Commentaire libre (facultatif)",
       commentPlaceholder: "Une contrainte d'horaire, une heure à éviter, un accès particulier…",
     },
@@ -648,7 +650,7 @@ export const fr = {
         "Ces chiffres ne sont pas une promesse commerciale : ce sont ceux que notre moteur de réservation utilise pour calculer la durée de votre séance. Ce que vous lisez ici est ce que le formulaire calculera.",
       colType: "Type de pièce",
       colQty: "En 1 h",
-      note: "Un panier mixte tourne autour de 7 à 8 pièces à l'heure. C'est cette moyenne qui donne les fourchettes annoncées sur chaque forfait.",
+      note: "Un panier mixte tourne autour de 5 à 7 pièces à l'heure. C'est cette moyenne qui donne les fourchettes annoncées sur chaque forfait.",
     },
     versus: {
       title: "Ce n'est pas du repassage de ménage.",

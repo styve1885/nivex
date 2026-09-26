@@ -397,13 +397,13 @@ export const en: Dict = {
       {
         name: "Week session",
         duration: "two hours",
-        volume: "14 to 18 pieces — your whole week's wardrobe",
+        volume: "10 to 15 pieces — your whole week's wardrobe",
         note: "The most requested format, and the shortest visit we make.",
       },
       {
         name: "Family session",
         duration: "three hours",
-        volume: "20 to 24 pieces — shirts, trousers, school uniforms",
+        volume: "15 to 22 pieces — shirts, trousers, school uniforms",
         note: "For a household, or a fortnight in one go.",
       },
       {
@@ -505,6 +505,8 @@ export const en: Dict = {
       afternoon: "Afternoon",
       evening: "Evening",
       timezone: "Timezone: Eastern (Montreal).",
+      setup:
+        "Your presser arrives 15 minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.",
       comment: "Anything to add? (optional)",
       commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
     },
@@ -636,7 +638,7 @@ export const en: Dict = {
         "These figures aren't a sales promise: they are the ones our booking engine uses to work out how long your session will take. What you read here is what the form will calculate.",
       colType: "Type of piece",
       colQty: "In 1 h",
-      note: "A mixed basket runs at about 7 to 8 pieces an hour. That average is what sets the ranges quoted on each package.",
+      note: "A mixed basket runs at about 5 to 7 pieces an hour. That average is what sets the ranges quoted on each package.",
     },
     versus: {
       title: "This is not household ironing.",

@@ -373,6 +373,10 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
 
                 <p className="mt-7 text-center text-[0.78rem] text-ink-400">{t.booking.step3.timezone}</p>
 
+                <p className="mx-auto mt-5 max-w-lg border-l-2 border-gold-400 pl-4 text-[0.84rem] font-light leading-[1.8] text-ink-600">
+                  {t.booking.step3.setup}
+                </p>
+
                 <div className="mt-9 border-t border-gold-300/40 pt-8">
                   <label className="label" htmlFor="comment">{t.booking.step3.comment}</label>
                   <textarea id="comment" rows={3} value={comment} maxLength={1000}

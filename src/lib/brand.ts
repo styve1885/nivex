@@ -41,6 +41,20 @@ export const NEQ = "2282362666";
  */
 export const REQUEST_INBOX = "nivexrepassage@gmail.com";
 
+/**
+ * Installation avant la séance, rangement après, en minutes.
+ *
+ * Le bloc réservé par le client est entièrement du repassage : l'artisan
+ * arrive avant et repart après, et ce temps ne lui est pas facturé. Il
+ * doit pourtant être bloqué, sinon deux séances collées se chevauchent
+ * dans la vraie vie tout en paraissant libres dans l'agenda.
+ *
+ * Cette constante gouverne trois choses : l'étendue de l'événement inscrit
+ * à l'agenda, la contrainte de non-chevauchement en base, et la phrase
+ * annoncée au client. Les trois ne peuvent donc pas se contredire.
+ */
+export const SETUP_MINUTES = 15;
+
 export const PHONE = "+1 450 943 1217";
 export const PHONE_HREF = "tel:+14509431217";
 

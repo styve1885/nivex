@@ -1,5 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS } from "./brand";
+import { CANCEL_WINDOW_HOURS, SETUP_MINUTES } from "./brand";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -85,6 +85,7 @@ const T = {
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
     manage: "Gérer ma réservation",
+    setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
     beforeList: [
       "Rassemblez les pièces à traiter (panier, lit, dossier de chaise : tout convient).",
@@ -113,6 +114,7 @@ const T = {
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
     manage: "Manage my booking",
+    setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
     beforeList: [
       "Gather the pieces to be handled (a basket, a bed, the back of a chair: anything works).",
@@ -161,7 +163,10 @@ export function clientConfirmation(d: BookingEmailData) {
       ${row(t.ref, `<code style="font-family:monospace;letter-spacing:0.06em;">${esc(d.ref)}</code>`)}
     </table>
   </td></tr>
-  <tr><td style="padding:30px 40px;text-align:center;">${button(d.manageUrl, t.manage)}
+  <tr><td style="padding:24px 40px 0;">
+    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
+  </td></tr>
+  <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
   </td></tr>
   <tr><td style="padding:0 40px 30px;">
@@ -185,6 +190,7 @@ export function clientConfirmation(d: BookingEmailData) {
     `${t.estimate}: ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
     d.notes ? `${t.notes}: ${d.notes}` : "",
     `${t.ref}: ${d.ref}`, "",
+    t.setup, "",
     `${t.manage}: ${d.manageUrl}`, "",
     t.cancelNote, "", t.footNote, "",
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
