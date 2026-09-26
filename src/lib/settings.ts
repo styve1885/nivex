@@ -130,16 +130,35 @@ function hydrate(row: Row | undefined): Settings {
   };
 }
 
-/** Lecture tolérante : si la base n'est pas encore branchée, on renvoie les valeurs par défaut. */
+/**
+ * Lecture tolérante : si la base n'est pas branchée, on renvoie les valeurs
+ * par défaut plutôt que de faire tomber la page.
+ *
+ * Cette tolérance a un prix, et il faut le connaître : les valeurs par
+ * défaut portent `connected: false`. Une base qui répond mal se lit donc
+ * exactement comme un compte Google absent, et l'espace artisan annonce
+ * « Non connecté » alors que le jeton se porte bien. On consigne donc la
+ * cause au passage — sans elle, le diagnostic part dans la mauvaise
+ * direction.
+ */
 export async function getSettings(): Promise<Settings> {
   if (!isDbConfigured()) return FALLBACK_SETTINGS;
   try {
     await ensureSchema();
     const rows = (await sql()`SELECT * FROM nivex_settings WHERE id = 1`) as Row[];
     return hydrate(rows[0]);
-  } catch {
+  } catch (e) {
+    lastReadError = String((e as Error)?.message ?? e).slice(0, 300);
+    console.error("[nivex] réglages illisibles, retour aux valeurs par défaut :", lastReadError);
     return FALLBACK_SETTINGS;
   }
+}
+
+let lastReadError: string | null = null;
+
+/** Pourquoi la dernière lecture des réglages a échoué, s'il y a lieu. */
+export function settingsReadError(): string | null {
+  return lastReadError;
 }
 
 /** Jeton de rafraîchissement déchiffré — usage serveur uniquement. */

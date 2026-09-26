@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { isDbConfigured } from "@/lib/db";
+import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
-import { getSettings } from "@/lib/settings";
+import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
 
 export const runtime = "nodejs";
@@ -18,6 +18,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const settings = await getSettings();
+
+  /* Une base muette renvoie les réglages par défaut, qui se lisent comme un
+     compte absent. On distingue donc les deux plutôt que de les confondre. */
+  let schema: { ok: boolean; error: string | null } = { ok: true, error: null };
+  if (isDbConfigured()) {
+    try {
+      await ensureSchema();
+      schema = { ok: true, error: settingsReadError() };
+    } catch (e) {
+      schema = { ok: false, error: String((e as Error)?.message ?? e).slice(0, 300) };
+    }
+  }
 
   let tokenUsable: boolean | null = null;
   let tokenError: string | null = null;
@@ -46,6 +58,7 @@ export async function GET() {
       sessionSecret: Boolean(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY),
       setupCode: Boolean(process.env.ADMIN_SETUP_CODE),
     },
+    schema,
     owner: { connected: settings.connected, email: settings.ownerEmail, paused: settings.paused },
     calendar: { id: settings.calendarId, tokenUsable, timezone: settings.timezone },
     /* Ce qu'il faut savoir quand un courriel n'arrive pas. */

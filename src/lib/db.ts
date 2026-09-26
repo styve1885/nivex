@@ -134,39 +134,54 @@ async function bootstrap() {
    * après. Deux séances qui se touchent pile — 13 h–15 h puis 15 h–17 h —
    * ne se chevauchent pas sur le papier, mais se chevauchent dans la vraie
    * vie : il range chez l'un pendant qu'il devrait s'installer chez
-   * l'autre. La contrainte porte donc sur le temps réellement occupé.
+   * l'autre. La garde porte donc sur le temps réellement occupé.
    *
-   * Elle remplace la précédente plutôt que de s'y ajouter : plus stricte,
-   * elle la contient. Si des rendez-vous déjà pris se touchent de trop
-   * près, l'ajout échoue — on laisse alors l'ancienne garde en place et on
-   * le consigne, plutôt que de refuser de démarrer.
+   * Elle passe par une fonction déclarée IMMUTABLE parce qu'une contrainte
+   * d'exclusion indexe son expression, et qu'un index refuse tout ce qui
+   * ne l'est pas. Or `timestamptz - interval` est seulement STABLE aux
+   * yeux de Postgres : l'intervalle pourrait contenir des mois ou des
+   * jours, dont la durée dépend du fuseau. Ici il ne contient que des
+   * minutes, qui durent la même chose partout — la déclaration est donc
+   * exacte, et non un passe-droit.
    *
-   * L'intervalle est écrit en toutes lettres parce qu'un paramètre ne
-   * s'interpole pas dans un bloc DO. La garde ci-dessous empêche qu'il
-   * s'écarte de SETUP_MINUTES sans qu'on s'en aperçoive.
+   * Tout ceci est un confort, pas une fondation : la ligne de défense qui
+   * compte reste la contrainte simple posée plus haut. Un échec ici ne
+   * doit donc jamais empêcher le site de démarrer.
    */
-  if (SETUP_MINUTES !== 15) {
-    throw new Error(
-      `SETUP_MINUTES vaut ${SETUP_MINUTES} : la contrainte nivex_bookings_no_overlap_setup ` +
-      "est écrite pour 15 minutes. Mettez les deux d'accord, et renommez la contrainte pour " +
-      "que la nouvelle version remplace l'ancienne.",
-    );
-  }
+  try {
+    /* Les minutes sont écrites en toutes lettres : à l'intérieur d'un corps
+       de fonction, un paramètre ne s'interpole pas — il s'y confondrait avec
+       les arguments de la fonction elle-même. Si la constante change, on ne
+       pose rien plutôt que de poser une garde mensongère. */
+    if (SETUP_MINUTES !== 15) {
+      throw new Error(`SETUP_MINUTES vaut ${SETUP_MINUTES} ; nivex_occupied est écrite pour 15 minutes.`);
+    }
 
-  await q`
-    DO $$ BEGIN
-      ALTER TABLE nivex_bookings
-        ADD CONSTRAINT nivex_bookings_no_overlap_setup
-        EXCLUDE USING gist (
-          tstzrange(starts_at - interval '15 minutes', ends_at + interval '15 minutes') WITH &&
+    await q`
+      CREATE OR REPLACE FUNCTION nivex_occupied(starts_at timestamptz, ends_at timestamptz)
+      RETURNS tstzrange
+      LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $fn$
+        SELECT tstzrange(
+          starts_at - make_interval(mins => 15),
+          ends_at   + make_interval(mins => 15)
         )
-        WHERE (status IN ('confirmed', 'pending'));
-      ALTER TABLE nivex_bookings DROP CONSTRAINT IF EXISTS nivex_bookings_no_overlap;
-    EXCEPTION
-      WHEN duplicate_object     THEN NULL;
-      WHEN duplicate_table      THEN NULL;
-      WHEN exclusion_violation  THEN NULL;
-    END $$`;
+      $fn$`;
+
+    await q`
+      DO $$ BEGIN
+        ALTER TABLE nivex_bookings
+          ADD CONSTRAINT nivex_bookings_no_overlap_setup
+          EXCLUDE USING gist (nivex_occupied(starts_at, ends_at) WITH &&)
+          WHERE (status IN ('confirmed', 'pending'));
+      EXCEPTION
+        WHEN OTHERS THEN NULL;
+      END $$`;
+  } catch (e) {
+    /* Une base sans droit de créer des fonctions, une version de Postgres
+       récalcitrante, des rendez-vous déjà trop serrés : aucune de ces
+       raisons ne justifie de fermer la maison. */
+    console.warn("[nivex] garde anti-chevauchement élargie non posée :", (e as Error).message);
+  }
 
   /* Messages du formulaire de contact. Conservés même si l'envoi du
      courriel échoue : rien ne doit se perdre. */
