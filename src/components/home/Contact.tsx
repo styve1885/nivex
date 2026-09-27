@@ -6,10 +6,45 @@ import { Photo } from "../Photo";
 import { CheckIcon, ArrowIcon } from "../Icons";
 import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
+import type { Settings } from "@/lib/settings";
 
 type Field = "name" | "email" | "message";
 
-export function Contact({ t, locale, businessEmail }: { t: Dict; locale: "fr" | "en"; businessEmail: string }) {
+/**
+ * « 7 h – 22 h, du lundi au samedi », déduit des jours réellement ouverts.
+ *
+ * Écrire cet horaire à la main, c'était le laisser mentir le jour où
+ * l'artisan ouvre le dimanche. Chaque langue a ses usages : le français
+ * met ses jours en minuscules et compte en heures, l'anglais capitalise
+ * et coupe à midi.
+ */
+function clock(hm: string, locale: "fr" | "en"): string {
+  const [h, m] = hm.split(":").map(Number);
+  if (locale === "fr") return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
+  const suffix = h < 12 ? "a.m." : "p.m.";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${String(m).padStart(2, "0")} ${suffix}` : `${h12} ${suffix}`;
+}
+
+function openingLine(t: Dict, settings: Settings, locale: "fr" | "en"): string {
+  const open = settings.hours.filter((h) => h.enabled);
+  if (open.length === 0) return "";
+
+  const name = (day: number) => (locale === "fr" ? t.days[day].toLowerCase() : t.days[day]);
+  const names = open.map((h) => name(h.day));
+  const contiguous = open.every((h, i) => i === 0 || h.day === open[i - 1].day + 1);
+  const when = contiguous && open.length > 2
+    ? [t.contact.from, names[0], t.contact.to, names[names.length - 1]].filter(Boolean).join(" ")
+    : names.join(", ");
+
+  const sameSpan = open.every((h) => h.open === open[0].open && h.close === open[0].close);
+  if (!sameSpan) return when;
+  return `${clock(open[0].open, locale)} – ${clock(open[0].close, locale)}, ${when}`;
+}
+
+export function Contact({ t, locale, businessEmail, settings }: {
+  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Settings;
+}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -175,7 +210,7 @@ export function Contact({ t, locale, businessEmail }: { t: Dict; locale: "fr" | 
                 </div>
                 <div>
                   <dt className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.contact.hoursLabel}</dt>
-                  <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue}</dd>
+                  <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue.replace("{hours}", openingLine(t, settings, locale))}</dd>
                 </div>
               </dl>
 

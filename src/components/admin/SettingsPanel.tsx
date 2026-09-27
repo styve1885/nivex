@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Settings, DayHours, ServiceItem } from "@/lib/settings";
+import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
@@ -22,6 +22,22 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
 
   function setService(key: string, next: Partial<ServiceItem>) {
     patch("services", s.services.map((x) => (x.key === key ? { ...x, ...next } : x)));
+  }
+
+  /* Ce qui est enregistré ici sert à deux choses à la fois : calculer la
+     durée d'une séance, et annoncer une cadence au client. Un écart avec
+     les temps relevés au chronomètre se paie donc deux fois — en promesse
+     intenable, et en heures travaillées gratuitement. On le montre. */
+  const drift = DEFAULT_SERVICES
+    .map((d) => ({ d, cur: s.services.find((x) => x.key === d.key) }))
+    .filter(({ d, cur }) => cur && cur.minutesPerUnit !== d.minutesPerUnit)
+    .map(({ d, cur }) => ({ key: d.key, fr: cur!.fr, from: cur!.minutesPerUnit, to: d.minutesPerUnit }));
+
+  function adoptRecommended() {
+    patch("services", s.services.map((x) => {
+      const d = DEFAULT_SERVICES.find((y) => y.key === x.key);
+      return d ? { ...x, minutesPerUnit: d.minutesPerUnit } : x;
+    }));
   }
 
   async function save() {
@@ -134,7 +150,29 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
 
       {/* — Prestations — */}
       <Card title="Prestations et durées"
-        hint="La durée par unité sert à estimer le temps d'une séance. Ajustez-la selon votre rythme réel.">
+        hint="La durée par unité sert à estimer le temps d'une séance, et c'est elle qui donne la cadence annoncée sur le site. Ajustez-la selon votre rythme réel.">
+        {drift.length > 0 && (
+          <div className="mb-6 border border-gold-400/60 bg-linen-100 px-5 py-4">
+            <p className="text-[0.88rem] text-ink-800">
+              {drift.length === 1
+                ? "Une durée s'écarte des temps relevés au chronomètre."
+                : `${drift.length} durées s'écartent des temps relevés au chronomètre.`}
+            </p>
+            <ul className="mt-3 space-y-1 text-[0.82rem] text-ink-500">
+              {drift.map((x) => (
+                <li key={x.key} className="tabular-nums">
+                  {x.fr} — <span className="text-[#8E332C]">{x.from} min</span> au lieu de {x.to} min
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={adoptRecommended} className="btn mt-4 !py-2.5 !px-5 !text-[10px]">
+              Adopter les temps relevés
+            </button>
+            <p className="mt-2 text-[11px] text-ink-400">
+              Les valeurs sont reportées ci-dessous. Rien n&apos;est enregistré avant que vous ayez cliqué sur Enregistrer.
+            </p>
+          </div>
+        )}
         <ul className="divide-y divide-gold-300/30">
           {s.services.map((x) => (
             <li key={x.key} className="flex flex-wrap items-center gap-4 py-3.5">

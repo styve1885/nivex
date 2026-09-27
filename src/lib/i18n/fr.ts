@@ -402,7 +402,7 @@ export const fr = {
       {
         n: "3",
         title: "Rencontrez",
-        body: "Votre spécialiste arrive avec l'équipement complet au moment convenu. Vous récupérez une garde-robe prête à porter, sur cintres.",
+        body: "Votre artisan arrive un quart d'heure avant l'heure convenue pour s'installer, puis repasse le temps que vous avez réservé. Vous récupérez une garde-robe prête à porter, sur cintres.",
       },
     ],
   },
@@ -453,7 +453,7 @@ export const fr = {
       },
       {
         q: "Combien de temps prévoir ?",
-        a: "Comptez environ 8 à 12 chemises par heure, ou 6 à 8 pièces mixtes. Lors de la réservation, l'estimateur vous propose une durée selon ce que vous sélectionnez — vous pouvez toujours l'ajuster.",
+        a: "Comptez environ {shirts} chemises par heure, ou 5 à 7 pièces mixtes. Lors de la réservation, l'estimateur vous propose une durée selon ce que vous sélectionnez — vous pouvez toujours l'ajuster.",
       },
       {
         q: "Dois-je être présent pendant la séance ?",
@@ -625,7 +625,9 @@ export const fr = {
     phoneLabel: "Téléphone",
     emailLabel: "Courriel",
     hoursLabel: "Disponible",
-    hoursValue: "7 h – 22 h, du lundi au samedi",
+    hoursValue: "{hours}",
+    from: "du",
+    to: "au",
     errors: {
       required: "Ce champ est requis",
       email: "Courriel invalide",

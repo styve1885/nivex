@@ -390,7 +390,7 @@ export const en: Dict = {
       {
         n: "3",
         title: "Meet",
-        body: "Your specialist arrives with the full kit at the agreed time. You get back a wardrobe that's ready to wear, on hangers.",
+        body: "Your craftsman arrives a quarter of an hour before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.",
       },
     ],
   },
@@ -441,7 +441,7 @@ export const en: Dict = {
       },
       {
         q: "How much time should I plan for?",
-        a: "Figure 8 to 12 shirts per hour, or 6 to 8 mixed pieces. During booking, the estimator suggests a duration based on what you select — you can always adjust it.",
+        a: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces. During booking, the estimator suggests a duration based on what you select — you can always adjust it.",
       },
       {
         q: "Do I have to be there during the session?",
@@ -613,7 +613,9 @@ export const en: Dict = {
     phoneLabel: "Phone",
     emailLabel: "Email",
     hoursLabel: "Available",
-    hoursValue: "7 a.m. – 10 p.m., Monday to Saturday",
+    hoursValue: "{hours}",
+    from: "",
+    to: "to",
     errors: {
       required: "This field is required",
       email: "Invalid email",

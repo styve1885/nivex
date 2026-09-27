@@ -2,10 +2,17 @@
 
 import { useState } from "react";
 import { Reveal } from "../Reveal";
+import { perHour } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
+import type { Settings } from "@/lib/settings";
 
-export function Faq({ t }: { t: Dict }) {
+export function Faq({ t, settings }: { t: Dict; settings: Settings }) {
   const [open, setOpen] = useState<number | null>(0);
+
+  /* La cadence citée dans une réponse doit être celle du moteur, sinon la
+     foire aux questions contredit la grille deux écrans plus haut. */
+  const shirt = settings.services.find((x) => x.key === "shirt" && x.enabled);
+  const fill = (s: string) => s.replace("{shirts}", shirt ? String(perHour(shirt.minutesPerUnit)) : "");
 
   return (
     <section id="questions" className="scroll-mt-24 bg-linen-100 py-28 sm:py-36">
@@ -42,7 +49,7 @@ export function Faq({ t }: { t: Dict }) {
                   className="grid transition-[grid-template-rows] duration-600"
                   style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", transitionTimingFunction: "var(--ease-silk)" }}>
                   <div className="overflow-hidden">
-                    <p className="pb-7 pr-10 text-[0.93rem] font-light leading-[2] text-ink-500">{item.a}</p>
+                    <p className="pb-7 pr-10 text-[0.93rem] font-light leading-[2] text-ink-500">{fill(item.a)}</p>
                   </div>
                 </dd>
               </Reveal>
