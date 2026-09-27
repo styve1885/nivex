@@ -62,7 +62,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <Hero t={t} locale={locale} />
       <Marquee t={t} />
       <Story t={t} />
-      <Services t={t} />
+      <Services t={t} settings={settings} />
       <Gallery t={t} />
       <Protocol t={t} />
       <HowItWorks t={t} />

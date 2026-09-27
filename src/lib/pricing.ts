@@ -216,6 +216,8 @@ export const CADENCE_NOTE: Record<string, { fr: string; en: string }> = {
               en: "Collar, yoke, cuffs, sleeves, body — in that order, always." },
   linen:    { fr: "Pliage hôtelier compris, arêtes vives, prêt pour l'armoire.",
               en: "Hotel folding included, sharp edges, ready for the cupboard." },
+  "linen-xl": { fr: "Les grandes largeurs demandent un second passage sur la table. Comptées à part.",
+              en: "The wide sizes need a second pass on the board. Counted separately." },
   trousers: { fr: "L'arête existante est suivie, jamais recréée.",
               en: "The existing crease is followed, never recreated." },
   uniform:  { fr: "Ensemble haut et bas, rendu sur cintres numérotés par enfant.",

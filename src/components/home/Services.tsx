@@ -1,8 +1,23 @@
 import { Reveal } from "../Reveal";
 import { ServiceIcon } from "../Icons";
+import { perHour } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
+import type { Settings } from "@/lib/settings";
 
-export function Services({ t }: { t: Dict }) {
+/**
+ * Les prestations, et ce qu'on en traite en une heure.
+ *
+ * La cadence n'est pas écrite dans le texte : elle se déduit des minutes
+ * réglées par l'artisan, comme celle de la page Tarifs. Le site promet de
+ * tenir le volume annoncé — il ne peut donc pas l'annoncer d'un côté et le
+ * calculer de l'autre.
+ */
+export function Services({ t, settings }: { t: Dict; settings: Settings }) {
+  const cadence = (key: string) => {
+    const svc = settings.services.find((x) => x.key === key && x.enabled);
+    return svc ? String(perHour(svc.minutesPerUnit)) : "";
+  };
+
   return (
     <section id="prestations" className="scroll-mt-24 bg-linen-50 py-28 sm:py-36">
       <div className="mx-auto max-w-6xl px-7 sm:px-10">
@@ -24,7 +39,9 @@ export function Services({ t }: { t: Dict }) {
               <ServiceIcon name={s.icon} className="h-8 w-8 text-gold-500 transition-transform duration-700 group-hover:-translate-y-1" />
               <h3 className="mt-6 font-display text-[1.45rem] font-normal text-ink-800">{s.name}</h3>
               <p className="mt-3 text-[0.9rem] font-light leading-[1.9] text-ink-500">{s.body}</p>
-              <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-gold-600">{s.detail}</p>
+              <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-gold-600">
+                {s.detail.replace("{qty}", cadence(s.serviceKey))}
+              </p>
             </Reveal>
           ))}
         </div>

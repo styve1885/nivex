@@ -73,8 +73,9 @@ export const DEFAULT_SERVICES: ServiceItem[] = [
   { key: "delicate", icon: "dress",  fr: "Robes & délicats",      en: "Dresses & delicates", minutesPerUnit: 15, unitFr: "pièce",    unitEn: "piece",   enabled: true },
   { key: "suit",     icon: "suit",   fr: "Costumes & vestes",     en: "Suits & jackets",     minutesPerUnit: 19, unitFr: "pièce",    unitEn: "piece",   enabled: true },
   { key: "trousers", icon: "badge",  fr: "Pantalons & jupes",     en: "Trousers & skirts",   minutesPerUnit: 9,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "linen",    icon: "linen",  fr: "Linge de maison",       en: "Household linen",     minutesPerUnit: 7,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",  en: "Uniforms (set)",      minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",     enabled: true },
+  { key: "linen",    icon: "linen",  fr: "Draps simple et 2 places", en: "Single & double sheets", minutesPerUnit: 7,  unitFr: "drap",     unitEn: "sheet", enabled: true },
+  { key: "linen-xl", icon: "linen",  fr: "Draps queen et 3 places",  en: "Queen & king sheets",    minutesPerUnit: 10, unitFr: "drap",     unitEn: "sheet", enabled: true },
+  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",     en: "Uniforms (set)",         minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",   enabled: true },
 ];
 
 export const DEFAULT_AREA: ServiceArea = {
@@ -125,9 +126,23 @@ function hydrate(row: Row | undefined): Settings {
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
     serviceArea: (row.service_area as ServiceArea) ?? DEFAULT_AREA,
-    services: (row.services as ServiceItem[]) ?? DEFAULT_SERVICES,
+    services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
   };
+}
+
+/**
+ * Les prestations enregistrées l'emportent — l'artisan a réglé ses minutes,
+ * on ne les écrase pas. Mais une prestation ajoutée au code depuis doit
+ * quand même apparaître, sinon elle reste invisible pour toujours : la
+ * colonne de la base gagne, et personne ne peut ajouter ce qu'il ne voit
+ * pas. Les nouvelles clés viennent donc s'ajouter à la suite, avec leurs
+ * valeurs par défaut, jusqu'à ce que l'artisan les enregistre à son tour.
+ */
+function mergeServices(stored: ServiceItem[] | null): ServiceItem[] {
+  if (!stored?.length) return DEFAULT_SERVICES;
+  const known = new Set(stored.map((x) => x.key));
+  return [...stored, ...DEFAULT_SERVICES.filter((d) => !known.has(d.key))];
 }
 
 /**

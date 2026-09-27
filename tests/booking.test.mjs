@@ -179,7 +179,7 @@ test("deux séances collées ne peuvent pas coexister", () => {
 /* ————— Les temps chronométrés ————— */
 
 test("la cadence annoncée découle des minutes du moteur", () => {
-  const attendu = { shirt: 7, delicate: 4, suit: 3, trousers: 6, linen: 8, uniform: 5 };
+  const attendu = { shirt: 7, delicate: 4, suit: 3, trousers: 6, linen: 8, "linen-xl": 6, uniform: 5 };
   for (const svc of FALLBACK_SETTINGS.services) {
     assert.equal(perHour(svc.minutesPerUnit), attendu[svc.key], `${svc.key} : cadence horaire`);
   }
