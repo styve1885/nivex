@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { Analytics } from "@vercel/analytics/next";
 import { cormorant, jost } from "@/lib/fonts";
 import { siteOrigin } from "@/lib/google";
 import "./globals.css";
@@ -38,7 +39,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const lang = (await headers()).get("x-nivex-locale") === "en" ? "en-CA" : "fr-CA";
   return (
     <html lang={lang} className={`${cormorant.variable} ${jost.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/*
+          Mesure de fréquentation, chez l'hébergeur qui sert déjà le site :
+          pas de témoin déposé, pas d'identifiant de navigateur conservé,
+          donc rien à demander au visiteur et aucun quatrième fournisseur à
+          déclarer. Ce qui remonte est agrégé — des nombres, des pages, des
+          provenances —, jamais une personne. La politique de
+          confidentialité le dit dans ces termes ; les deux doivent rester
+          d'accord.
+        */}
+        <Analytics />
+      </body>
     </html>
   );
 }

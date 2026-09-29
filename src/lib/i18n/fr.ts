@@ -35,6 +35,7 @@ const privacy: LegalDoc = {
         "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
+        "Mesure de fréquentation — le nombre de pages vues, la page regardée, le site d'où vous arrivez, votre pays et le type d'appareil. Ces données sont agrégées : elles disent combien de personnes sont passées, jamais lesquelles. Aucun témoin n'est déposé et aucun identifiant ne vous suit d'une visite à l'autre.",
       ],
     },
     {
@@ -66,7 +67,7 @@ const privacy: LegalDoc = {
         "Trois fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
       ],
       list: [
-        "Vercel — héberge le site et le sert à votre navigateur.",
+        "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
       ],
@@ -100,7 +101,7 @@ const privacy: LegalDoc = {
     {
       title: "Témoins de connexion",
       body: [
-        "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun.",
+        "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun. Le comptage des visites se fait sans témoin : rien n'est écrit dans votre navigateur, et rien ne vous reconnaît lors d'un prochain passage.",
         "Deux témoins existent, et ils ne concernent que l'artisan : celui qui maintient sa session ouverte dans son espace, et un témoin temporaire qui protège sa connexion Google contre la fraude. Tous deux expirent d'eux-mêmes.",
         "Les polices de caractères sont servies depuis notre propre domaine : afficher cette page n'appelle aucun serveur tiers.",
       ],

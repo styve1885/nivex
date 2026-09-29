@@ -23,6 +23,7 @@ const privacy: LegalDoc = {
         "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
+        "Audience measurement — the number of page views, which page was viewed, the site you arrived from, your country and your device type. This data is aggregated: it says how many people came by, never which ones. No cookie is set and no identifier follows you from one visit to the next.",
       ],
     },
     {
@@ -54,7 +55,7 @@ const privacy: LegalDoc = {
         "Three providers, each for one precise task, and none of them may use any of it for their own ends.",
       ],
       list: [
-        "Vercel — hosts the site and serves it to your browser.",
+        "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
       ],
@@ -88,7 +89,7 @@ const privacy: LegalDoc = {
     {
       title: "Cookies",
       body: [
-        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all.",
+        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting happens without a cookie: nothing is written into your browser, and nothing recognises you on a later visit.",
         "Two cookies exist, and they concern the artisan only: the one that keeps his session open in his own area, and a temporary one that protects his Google sign-in against fraud. Both expire on their own.",
         "Typefaces are served from our own domain: displaying this page calls no third-party server.",
       ],

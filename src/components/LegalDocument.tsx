@@ -16,7 +16,7 @@ import { minutesToText, formatMoney } from "@/lib/time";
  */
 
 /** Date de dernière révision des deux documents. */
-export const LEGAL_UPDATED = "2026-09-15";
+export const LEGAL_UPDATED = "2026-09-29";
 
 function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   const days = locale === "en" ? "days" : "jours";
