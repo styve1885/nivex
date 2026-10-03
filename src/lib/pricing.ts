@@ -155,11 +155,6 @@ export const PLANS: Plan[] = [
     en: { name: "Essential", detail: "One 3-hour visit a month — the month's clothes and the household sheets." },
   },
   {
-    key: "serenite", visits: 1, minutesPerVisit: 180, discount: 0.07,
-    fr: { name: "Sérénité Literie", detail: "1 visite de 3 h par mois — jusqu'à 4 lits refaits à neuf." },
-    en: { name: "Bedding Serenity", detail: "One 3-hour visit a month — up to 4 beds made new again." },
-  },
-  {
     key: "confort", visits: 2, minutesPerVisit: 120, discount: 0.075,
     fr: { name: "Confort", detail: "2 visites de 2 h par mois — une trentaine de pièces au total." },
     en: { name: "Comfort", detail: "Two 2-hour visits a month — around thirty pieces in all." },
