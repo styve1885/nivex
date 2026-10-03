@@ -150,6 +150,11 @@ export type Plan = {
 
 export const PLANS: Plan[] = [
   {
+    key: "essentiel", visits: 1, minutesPerVisit: 180, discount: 0.07,
+    fr: { name: "Essentiel", detail: "1 visite de 3 h par mois — les vêtements du mois et les draps de la maison." },
+    en: { name: "Essential", detail: "One 3-hour visit a month — the month's clothes and the household sheets." },
+  },
+  {
     key: "serenite", visits: 1, minutesPerVisit: 180, discount: 0.07,
     fr: { name: "Sérénité Literie", detail: "1 visite de 3 h par mois — jusqu'à 4 lits refaits à neuf." },
     en: { name: "Bedding Serenity", detail: "One 3-hour visit a month — up to 4 beds made new again." },
