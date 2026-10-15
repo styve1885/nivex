@@ -739,6 +739,9 @@ export const en: Dict = {
     banner: "Your clothes, ready to wear.",
     bannerAlt: "Garments pressed by NIVEX, hanging on wooden hangers",
     items: [
+      { key: "chemise", name: "White shirt",
+        altBefore: "White shirt before pressing",
+        altAfter: "White shirt after pressing" },
       { key: "pantalon", name: "Suit trousers",
         altBefore: "Suit trousers before pressing",
         altAfter: "Suit trousers after pressing" },
@@ -748,6 +751,9 @@ export const en: Dict = {
       { key: "veste", name: "Lined jacket",
         altBefore: "Lined jacket before pressing",
         altAfter: "Lined jacket after pressing" },
+      { key: "velours", name: "Corduroy trousers",
+        altBefore: "Corduroy trousers before pressing",
+        altAfter: "Corduroy trousers after pressing" },
     ],
   },
   gallery: {

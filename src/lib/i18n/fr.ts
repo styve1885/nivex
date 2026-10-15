@@ -751,6 +751,9 @@ export const fr = {
     banner: "Vos vêtements, prêts à porter.",
     bannerAlt: "Vêtements repassés par NIVEX, suspendus sur des cintres de bois",
     items: [
+      { key: "chemise", name: "Chemise blanche",
+        altBefore: "Chemise blanche avant repassage",
+        altAfter: "Chemise blanche après repassage" },
       { key: "pantalon", name: "Pantalon de complet",
         altBefore: "Pantalon de complet avant repassage",
         altAfter: "Pantalon de complet après repassage" },
@@ -760,6 +763,9 @@ export const fr = {
       { key: "veste", name: "Veste doublée",
         altBefore: "Veste doublée avant repassage",
         altAfter: "Veste doublée après repassage" },
+      { key: "velours", name: "Pantalon de velours",
+        altBefore: "Pantalon de velours avant repassage",
+        altAfter: "Pantalon de velours après repassage" },
     ],
   },
   gallery: {
