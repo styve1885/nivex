@@ -4,6 +4,7 @@ import { getSettings } from "@/lib/settings";
 import { listBookings, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
+import { HEARD_FROM_FR } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,16 @@ export default async function AdminPage({
       durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
       currency: b.currency, firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
+      origin: {
+        heardFrom: b.origin.heardFrom,
+        heardFromLabel: b.origin.heardFrom ? HEARD_FROM_FR[b.origin.heardFrom] : null,
+        source: b.origin.source,
+        campaign: b.origin.campaign,
+        referrer: b.origin.referrer,
+        landing: b.origin.landing,
+        firstSeenAt: b.origin.firstSeenAt?.toISOString() ?? null,
+        visits: b.origin.visits,
+      },
     }));
 
   return (

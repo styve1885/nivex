@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
 import { getSettings, inServiceArea, type Settings } from "./settings";
+import { clip, HEARD_FROM_FR, isHeardFrom, referrerHost, type HeardFrom } from "./attribution";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
@@ -25,6 +26,25 @@ export const BookingInput = z.object({
   startsAt: z.string().datetime({ offset: true }),
   consent: z.literal(true),
   hp: z.string().max(0).optional(),          // pot de miel anti-robot
+
+  /* « Comment nous avez-vous connus ? » — facultatif, et volontairement une
+     liste fermée : une réponse libre finirait par contenir des choses qu'on
+     n'a pas demandées. C'est `isHeardFrom` qui tranche plus bas ; ici on se
+     contente d'accepter une chaîne, pour la raison dite juste après. */
+  heardFrom: z.unknown().optional(),
+
+  /* Provenance relevée par le navigateur à la première visite. Elle arrive
+     avec le formulaire et pas avant : tant que la personne n'a rien demandé,
+     le serveur n'en sait rien.
+     
+     Aucune contrainte de forme ici, et c'est délibéré. Ces champs viennent du
+     navigateur du visiteur : une étiquette de campagne à rallonge, un référent
+     de huit cents caractères, un compteur abîmé par une extension. Un schéma
+     strict répondrait 400 et la personne ne pourrait plus réserver — elle
+     perdrait sa séance pour un renseignement de marketing. La provenance est
+     un agrément : elle se nettoie dans `cleanOrigin`, champ par champ, et ce
+     qui ne tient pas est jeté plutôt que refusé. */
+  attribution: z.unknown().optional(),
 });
 
 export type BookingInputType = z.infer<typeof BookingInput>;
@@ -38,6 +58,27 @@ export type Booking = {
   estimateCents: number; currency: string; firstHourFree: boolean;
   googleEventId: string | null; emailSent: boolean;
   createdAt: Date; cancelledAt: Date | null;
+  /* D'où vient ce client — vide pour les rendez-vous pris avant la mesure. */
+  origin: BookingOrigin;
+};
+
+/**
+ * La provenance telle qu'elle est relue en base.
+ *
+ * `heardFrom` est la réponse donnée à la main ; le reste a été relevé par le
+ * navigateur. Les deux se complètent plus qu'ils ne se recoupent : une carte
+ * remise en main propre ne laisse aucune trace technique, et une campagne
+ * étiquetée ne dit pas pourquoi la personne a cliqué.
+ */
+export type BookingOrigin = {
+  heardFrom: HeardFrom | null;
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  referrer: string | null;
+  landing: string | null;
+  firstSeenAt: Date | null;
+  visits: number | null;
 };
 
 type Row = Record<string, unknown>;
@@ -57,11 +98,26 @@ function hydrate(r: Row): Booking {
     emailSent: r.email_sent === true,
     createdAt: new Date(r.created_at as string),
     cancelledAt: r.cancelled_at ? new Date(r.cancelled_at as string) : null,
+    origin: {
+      heardFrom: isHeardFrom(r.heard_from) ? r.heard_from : null,
+      source: (r.utm_source as string) ?? null,
+      medium: (r.utm_medium as string) ?? null,
+      campaign: (r.utm_campaign as string) ?? null,
+      referrer: (r.referrer as string) ?? null,
+      landing: (r.landing_page as string) ?? null,
+      firstSeenAt: r.first_seen_at ? new Date(r.first_seen_at as string) : null,
+      visits: r.visit_count == null ? null : Number(r.visit_count),
+    },
   };
 }
 
 export class BookingError extends Error {
-  constructor(public code: "not_connected" | "slot_taken" | "invalid_slot" | "paused" | "unknown_service", message?: string) {
+  constructor(
+    public code:
+      | "not_connected" | "slot_taken" | "invalid_slot" | "paused"
+      | "unknown_service" | "out_of_area",
+    message?: string,
+  ) {
     super(message ?? code);
     this.name = "BookingError";
   }
@@ -78,6 +134,16 @@ export async function createBooking(input: BookingInputType, host?: string | nul
      garantie de non-chevauchement, et l'agenda comme les courriels suivent
      dès qu'ils le peuvent. Un incident chez Google ne ferme pas la maison. */
   if (settings.paused) throw new BookingError("paused");
+
+  /* La zone desservie, vérifiée ici et pas seulement affichée.
+   *
+   * Le tunnel annonçait déjà « hors zone » sous le champ du code postal,
+   * mais ce n'était qu'un avis : rien n'empêchait l'envoi, et une adresse à
+   * l'autre bout du Québec s'inscrivait dans l'agenda comme une autre. Le
+   * déplacement, lui, n'est pas une opinion. */
+  if (!inServiceArea(input.postalCode, settings.serviceArea)) {
+    throw new BookingError("out_of_area");
+  }
 
   const accessToken = await ownerAccessToken().catch(() => null);
 
@@ -114,6 +180,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
   const ref = bookingRef();
   const manageToken = token(24);
+  const provenance = cleanOrigin(input);
 
   let rows: Row[];
   try {
@@ -121,12 +188,16 @@ export async function createBooking(input: BookingInputType, host?: string | nul
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
-        duration_minutes, estimate_cents, currency, first_hour_free
+        duration_minutes, estimate_cents, currency, first_hour_free,
+        heard_from, utm_source, utm_medium, utm_campaign,
+        referrer, landing_page, first_seen_at, visit_count
       ) VALUES (
         ${ref}, ${manageToken}, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
-        ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree}
+        ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
+        ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
+        ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits}
       ) RETURNING *`) as Row[];
   } catch (e) {
     const msg = String((e as Error).message ?? e);
@@ -185,6 +256,57 @@ export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start:
   };
 }
 
+/**
+ * La provenance, ramenée à ce qui est écrivable en base.
+ *
+ * Tout vient du navigateur du visiteur, donc rien n'est cru sur parole : les
+ * longueurs sont bornées, la date est relue comme une vraie date, et la
+ * source se replie sur le domaine du référent quand aucune campagne n'est
+ * étiquetée. Une provenance absente n'est pas une erreur — un visiteur qui
+ * refuse le stockage de son navigateur doit pouvoir réserver comme un autre.
+ */
+function cleanOrigin(input: BookingInputType): {
+  heardFrom: string | null; source: string | null; medium: string | null;
+  campaign: string | null; referrer: string | null; landing: string | null;
+  firstSeenAt: string | null; visits: number | null;
+} {
+  /* Rien n'est garanti : ni que `attribution` soit un objet, ni qu'un de ses
+     champs soit du bon type. `clip` renvoie null pour tout ce qui n'est pas
+     une chaîne, ce qui suffit à traverser n'importe quelle saleté. */
+  const a = (typeof input.attribution === "object" && input.attribution !== null
+    ? input.attribution
+    : {}) as Record<string, unknown>;
+
+  const referrer = clip(a.referrer, 500);
+
+  const rawVisits = Number(a.visits);
+  const visits = Number.isFinite(rawVisits) && rawVisits > 0
+    ? Math.min(Math.round(rawVisits), 10_000)
+    : null;
+
+  /* Une date venue du navigateur peut être n'importe quoi, y compris une
+     date du futur. On la refuse plutôt que de l'écrire. */
+  let firstSeenAt: string | null = null;
+  const seen = clip(a.firstSeen, 60);
+  if (seen) {
+    const d = new Date(seen);
+    if (!Number.isNaN(d.getTime()) && d.getTime() <= Date.now() + 60_000) {
+      firstSeenAt = d.toISOString();
+    }
+  }
+
+  return {
+    heardFrom: isHeardFrom(input.heardFrom) ? input.heardFrom : null,
+    source: clip(a.source, 120) ?? referrerHost(referrer),
+    medium: clip(a.medium, 120),
+    campaign: clip(a.campaign, 200),
+    referrer,
+    landing: clip(a.landing, 400),
+    firstSeenAt,
+    visits,
+  };
+}
+
 function eventDescription(b: Booking, origin: string, tz: string): string {
   const lines = [
     `Séance : ${formatDateTime(b.startsAt, tz, "fr")} — ${minutesToText(b.durationMinutes, "fr")} de repassage.`,
@@ -201,6 +323,9 @@ function eventDescription(b: Booking, origin: string, tz: string): string {
     `Estimation : ${formatMoney(b.estimateCents, b.currency, "fr")}${b.firstHourFree ? " (1re heure offerte)" : ""}`,
   ];
   if (b.notes) lines.push("", `Précisions du client : ${b.notes}`);
+  if (b.origin.heardFrom) {
+    lines.push("", `Nous a connus par : ${HEARD_FROM_FR[b.origin.heardFrom]}`);
+  }
   lines.push("", `Référence : ${b.ref}`, `Tableau de bord : ${origin}/admin`);
   return lines.join("\n");
 }
@@ -215,6 +340,15 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
     businessEmail: contactEmail(s),
+    /* Seule la notification de l'artisan s'en sert ; le gabarit du client
+       ignore ce champ. */
+    origin: {
+      heardFromLabel: b.origin.heardFrom ? HEARD_FROM_FR[b.origin.heardFrom] : null,
+      source: b.origin.source,
+      campaign: b.origin.campaign,
+      firstSeenAt: b.origin.firstSeenAt,
+      visits: b.origin.visits,
+    },
   };
 }
 

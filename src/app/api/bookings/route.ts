@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
   } catch (e) {
     if (e instanceof BookingError) {
-      const status = e.code === "slot_taken" || e.code === "invalid_slot" ? 409 : 503;
+      /* Hors zone, c'est l'adresse qui ne convient pas, pas le service qui
+         est en panne : 422 et non 503. Le tunnel affiche alors l'invitation
+         à appeler. */
+      const status =
+        e.code === "slot_taken" || e.code === "invalid_slot" ? 409
+          : e.code === "out_of_area" || e.code === "unknown_service" ? 422
+            : 503;
       return NextResponse.json({ ok: false, error: e.code }, { status });
     }
     console.error("[nivex] booking failed:", e);

@@ -7,12 +7,14 @@ import { BookingsPanel } from "./BookingsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { MessagesPanel } from "./MessagesPanel";
+import { VisitsPanel } from "./VisitsPanel";
 import type { AdminBooking, AdminStats, GoogleLink } from "./types";
 import type { Settings } from "@/lib/settings";
 
 const TABS = [
   { key: "bookings", label: "Rendez-vous" },
   { key: "messages", label: "Messages" },
+  { key: "visits", label: "Visites" },
   { key: "settings", label: "Réglages" },
   { key: "connection", label: "Connexion" },
 ] as const;
@@ -122,10 +124,15 @@ export function Dashboard({
         </div>
       )}
 
-      <nav className="mt-10 flex gap-7 border-b border-gold-300/40" aria-label="Sections">
+      {/* Cinq onglets ne tiennent plus sur la largeur d'un téléphone. Sans
+          défilement, « Connexion » sortait de l'écran sans aucun moyen d'y
+          revenir — l'onglet qui sert précisément quand plus rien ne marche.
+          La barre défile donc latéralement, et rien ne se perd. */}
+      <nav className="mt-10 flex gap-7 overflow-x-auto border-b border-gold-300/40 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Sections">
         {TABS.map((x) => (
           <button key={x.key} onClick={() => setTab(x.key)}
-            className={`relative pb-3 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+            className={`relative flex-none whitespace-nowrap pb-3 text-[11px] uppercase tracking-[0.18em] transition-colors ${
               tab === x.key ? "text-ink-800" : "text-ink-400 hover:text-ink-600"
             }`}>
             {x.label}
@@ -139,6 +146,7 @@ export function Dashboard({
           <BookingsPanel upcoming={upcoming} past={past} stats={stats} timezone={settings.timezone} />
         )}
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
+        {tab === "visits" && <VisitsPanel />}
         {tab === "settings" && <SettingsPanel initial={settings} />}
         {tab === "connection" && (
           <ConnectionPanel settings={settings} session={session} env={env} link={link} missingScopes={flash.missingScopes} />

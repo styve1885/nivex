@@ -89,9 +89,33 @@ export const DEFAULT_AREA: ServiceArea = {
     "J4B",                                        // Boucherville
     "J3V",                                        // Saint-Bruno-de-Montarville
     "J3E","J3L","J3X","J5R",                      // Sainte-Julie, Chambly, Varennes, La Prairie
+    "J2W","J2X","J2Y","J3A","J3B",                // Saint-Jean-sur-Richelieu (les cinq de la ville)
+    // Traversée du fleuve : quelques quartiers de l'île, choisis un par un.
+    "H3E",                                        // Île-des-Sœurs
+    "H4G","H4H",                                  // Verdun
+    "H3Y","H3Z",                                  // Westmount
+    "H2V",                                        // Outremont
+    "H2Y",                                        // Vieux-Montréal
   ],
-  labelFr: "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
-  labelEn: "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno and the surrounding South Shore",
+  labelFr: "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
+  labelEn: "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Nuns' Island, Verdun, Westmount, Outremont and Old Montreal",
+};
+
+/**
+ * Les libellés de zone que le code a portés avant aujourd'hui.
+ *
+ * Ils servent à reconnaître une valeur enregistrée que personne n'a jamais
+ * retouchée : si la base répète mot pour mot un ancien défaut, c'est le code
+ * qui parlait, pas l'artisan, et le nouveau texte peut la remplacer sans rien
+ * écraser. Une phrase écrite à la main depuis /admin, elle, est conservée.
+ */
+const PREVIOUS_AREA_LABELS = {
+  fr: [
+    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
+  ],
+  en: [
+    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno and the surrounding South Shore",
+  ],
 };
 
 export const FALLBACK_SETTINGS: Settings = {
@@ -125,7 +149,7 @@ function hydrate(row: Row | undefined): Settings {
     firstHourFree: row.first_hour_free !== false,
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
-    serviceArea: (row.service_area as ServiceArea) ?? DEFAULT_AREA,
+    serviceArea: mergeArea(row.service_area as ServiceArea | null),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
   };
@@ -143,6 +167,37 @@ function mergeServices(stored: ServiceItem[] | null): ServiceItem[] {
   if (!stored?.length) return DEFAULT_SERVICES;
   const known = new Set(stored.map((x) => x.key));
   return [...stored, ...DEFAULT_SERVICES.filter((d) => !known.has(d.key))];
+}
+
+/**
+ * Même raisonnement pour la zone desservie, et le même piège.
+ *
+ * La colonne `service_area` l'emporte sur le code — c'est voulu, l'artisan
+ * règle ses préfixes depuis /admin. Mais `saveConnection` la préserve par un
+ * COALESCE : une fois écrite, elle ne bouge plus d'elle-même. Un quartier
+ * ajouté au code resterait donc invisible en production, et le site
+ * refuserait une adresse qu'il annonce desservir.
+ *
+ * Les préfixes se cumulent donc : ceux de la base, puis ceux du code qui
+ * manquent. Retirer un quartier demande de le retirer depuis /admin, ce qui
+ * est le bon endroit pour une décision commerciale.
+ */
+export function mergeArea(stored: ServiceArea | null): ServiceArea {
+  if (!stored?.prefixes?.length) return DEFAULT_AREA;
+
+  const known = new Set(stored.prefixes.map((p) => p.toUpperCase()));
+  const prefixes = [...stored.prefixes, ...DEFAULT_AREA.prefixes.filter((p) => !known.has(p))];
+
+  /* Un libellé jamais retouché suit le code ; un libellé écrit à la main
+     reste intact, même s'il ne nomme pas les nouveaux quartiers. */
+  const fresh = (cur: string | undefined, previous: string[], next: string) =>
+    !cur?.trim() || previous.includes(cur.trim()) ? next : cur;
+
+  return {
+    prefixes,
+    labelFr: fresh(stored.labelFr, PREVIOUS_AREA_LABELS.fr, DEFAULT_AREA.labelFr),
+    labelEn: fresh(stored.labelEn, PREVIOUS_AREA_LABELS.en, DEFAULT_AREA.labelEn),
+  };
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Analytics } from "@vercel/analytics/next";
+import { SiteMeasurement } from "@/components/SiteMeasurement";
 import { cormorant, jost } from "@/lib/fonts";
 import { siteOrigin } from "@/lib/google";
 import "./globals.css";
@@ -49,8 +49,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           provenances —, jamais une personne. La politique de
           confidentialité le dit dans ces termes ; les deux doivent rester
           d'accord.
+
+          Le composant porte aussi le journal anonyme de l'espace artisan et
+          les deux exclusions qui vont avec : les pages /admin ne se comptent
+          jamais, et un appareil marqué « ne pas compter » n'envoie plus
+          rien. Ce layout enveloppant aussi /admin, le filtre doit vivre là
+          où le chemin est connu — pas ici.
         */}
-        <Analytics />
+        <SiteMeasurement />
       </body>
     </html>
   );

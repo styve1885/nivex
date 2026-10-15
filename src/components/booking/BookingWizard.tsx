@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
+import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
+import { readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
@@ -43,6 +45,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
+  const [heardFrom, setHeardFrom] = useState<HeardFrom | "">("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const [sched, setSched] = useState<Schedule | null>(null);
@@ -128,6 +131,13 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
 
   /* — Validation — */
   const inZone = postal.length >= 3 && config.areaPrefixes.includes(postal.replace(/\s/g, "").slice(0, 3).toUpperCase());
+
+  /* Un code postal hors zone arrête maintenant le tunnel, au lieu de laisser
+     passer une réservation que personne ne pourra honorer. Le serveur
+     applique la même règle : celle-ci n'est que la politesse de le dire
+     avant de faire remplir le reste. */
+  const outOfZone = POSTAL_RE.test(postal.trim()) && !inZone;
+
   const errors = {
     name: name.trim().length < 2 ? t.booking.errors.required : null,
     // Le courriel est facultatif : c'est le téléphone qui porte la confirmation.
@@ -137,7 +147,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     city: city.trim().length < 2 ? t.booking.errors.required : null,
     postal: !POSTAL_RE.test(postal.trim()) ? t.booking.errors.postal : null,
   };
-  const step2Valid = Object.values(errors).every((e) => e === null);
+  const step2Valid = Object.values(errors).every((e) => e === null) && !outOfZone;
 
   const canContinue =
     step === 0 ? duration > 0
@@ -174,6 +184,12 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
           notes: [notes.trim(), comment.trim()].filter(Boolean).join("\n") || undefined,
           startsAt: slot,
           consent: true, hp,
+          /* La provenance quitte le navigateur ici, et nulle part ailleurs :
+             c'est le moment où la personne demande quelque chose. Elle est
+             lue au dernier instant, pour que le compteur de visites reflète
+             bien l'état du navigateur au moment d'envoyer. */
+          heardFrom: heardFrom || undefined,
+          attribution: readAttribution(),
         }),
       });
       const data = await res.json();
@@ -186,6 +202,11 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
           setStep(2);
         } else if (data.error === "paused") {
           setError(t.booking.errors.paused);
+        } else if (data.error === "out_of_area") {
+          /* Le serveur a le dernier mot sur la zone : il lit les réglages en
+             vigueur, pas ceux chargés avec la page. On renvoie à l'adresse. */
+          setError(t.booking.errors.outOfArea);
+          setStep(1);
         } else {
           setError(data.error === "rate_limited" ? t.booking.errors.tooMany : t.booking.errors.generic);
         }
@@ -339,11 +360,36 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             </div>
 
             {POSTAL_RE.test(postal.trim()) && (
-              <p className={`mt-5 flex items-start gap-2 text-[0.85rem] leading-relaxed ${inZone ? "text-gold-700" : "text-ink-500"}`}>
-                <span aria-hidden="true" className="mt-0.5">{inZone ? "◆" : "○"}</span>
-                {inZone ? t.booking.step2.inZone : t.booking.step2.outOfZone}
-              </p>
+              inZone ? (
+                <p className="mt-5 flex items-start gap-2 text-[0.85rem] leading-relaxed text-gold-700">
+                  <span aria-hidden="true" className="mt-0.5">◆</span>
+                  {t.booking.step2.inZone}
+                </p>
+              ) : (
+                <div role="status"
+                  className="mt-5 border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
+                  <p>{t.booking.step2.outOfZone}</p>
+                  <a href={t.brand.phoneHref}
+                    className="mt-3 inline-block text-[0.9rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+                    {t.brand.phone}
+                  </a>
+                </div>
+              )
             )}
+
+            {/* « Comment nous avez-vous connus ? » — facultatif, et c'est le
+                seul endroit du site où une carte remise en main propre peut
+                se faire connaître. Aucune mesure automatique ne la verra. */}
+            <div className="mt-8 border-t border-gold-300/40 pt-7">
+              <label className="label" htmlFor="heard">{t.booking.step2.heardFrom}</label>
+              <select id="heard" value={heardFrom} className="field"
+                onChange={(e) => setHeardFrom(e.target.value as HeardFrom | "")}>
+                <option value="">{t.booking.step2.heardFromEmpty}</option>
+                {HEARD_FROM.map((k) => (
+                  <option key={k} value={k}>{t.booking.step2.heardFromOptions[k]}</option>
+                ))}
+              </select>
+            </div>
 
             {/* pot de miel */}
             <input type="text" name="company" value={hp} onChange={(e) => setHp(e.target.value)}
@@ -405,6 +451,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               <Row label={t.booking.step4.who} value={[name, phone, email.trim()].filter(Boolean).join(" · ")} />
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
               {comment.trim() && <Row label={t.booking.step3.comment} value={comment.trim()} />}
+              {heardFrom && (
+                <Row label={t.booking.step2.heardFrom} value={t.booking.step2.heardFromOptions[heardFrom]} />
+              )}
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
             </dl>

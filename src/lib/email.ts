@@ -33,6 +33,15 @@ export type BookingEmailData = {
   siteUrl: string;
   businessPhone: string;
   businessEmail: string;
+  /* D'où vient ce client. Absent pour les rendez-vous pris avant la mesure,
+     et absent aussi du courriel du client : cela ne regarde que l'artisan. */
+  origin?: {
+    heardFromLabel: string | null;
+    source: string | null;
+    campaign: string | null;
+    firstSeenAt: Date | null;
+    visits: number | null;
+  } | null;
 };
 
 function esc(s: string): string {
@@ -105,6 +114,8 @@ const T = {
     ownerCancelSubject: (n: string, ref: string) => `Annulation — ${n} · ${ref}`,
     ownerCancelIntro: "Un client vient d'annuler sa séance. Le créneau est de nouveau libre.",
     client: "Client", email: "Courriel", clientNotes: "Précisions du client",
+    heardFrom: "Nous a connus par", originSource: "Provenance",
+    firstVisit: "Première visite", visitCount: "Visites avant de réserver",
   },
   en: {
     subject: (ref: string) => `Your NIVEX session is confirmed · ${ref}`,
@@ -215,6 +226,53 @@ export function clientCancellation(d: BookingEmailData) {
 }
 
 /** Fiche de mission pour l'artisan — dense, actionnable. */
+/**
+ * D'où vient ce client, en bas de la fiche de mission.
+ *
+ * Ce bloc est à part, et visuellement en retrait : c'est un renseignement
+ * commercial, pas une consigne de séance. Il ne figure que dans le courriel
+ * de l'artisan — le client n'a pas à relire par quel chemin il est arrivé.
+ * Rien ne s'affiche quand il n'y a rien à dire : un rendez-vous pris avant la
+ * mesure ne doit pas se lire comme une provenance vide.
+ */
+function originRows(d: BookingEmailData): [string, string][] {
+  const t = T.fr;
+  const o = d.origin;
+  if (!o) return [];
+
+  const rows: [string, string][] = [];
+  if (o.heardFromLabel) rows.push([t.heardFrom, o.heardFromLabel]);
+
+  const source = [o.source, o.campaign].filter(Boolean).join(" · ");
+  if (source) rows.push([t.originSource, source]);
+
+  if (o.firstSeenAt) {
+    rows.push([t.firstVisit, formatDateTime(o.firstSeenAt, d.timezone, "fr")]);
+  }
+  if (o.visits && o.visits > 0) {
+    rows.push([t.visitCount, String(o.visits)]);
+  }
+  return rows;
+}
+
+function originHtml(d: BookingEmailData): string {
+  const rows = originRows(d);
+  if (rows.length === 0) return "";
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="margin-top:26px;border-top:1px solid #F0E6D2;padding-top:4px;">
+      <tr><td style="padding:16px 0 6px;font-family:Helvetica,Arial,sans-serif;font-size:10px;
+                     letter-spacing:0.2em;text-transform:uppercase;color:${MUTED};">Provenance</td></tr>
+      ${rows.map(([k, v]) => row(k, esc(v))).join("")}
+    </table>`;
+}
+
+function originText(d: BookingEmailData): string[] {
+  const rows = originRows(d);
+  if (rows.length === 0) return [];
+  return ["", "Provenance :", ...rows.map(([k, v]) => `${k}: ${v}`)];
+}
+
 export function ownerNotification(d: BookingEmailData, cancelled = false) {
   const t = T.fr; // l'artisan lit en français
   const when = formatDateTime(d.startsAt, d.timezone, "fr");
@@ -237,6 +295,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
     </table>
+    ${originHtml(d)}
   </td></tr>
   <tr><td style="padding:26px 40px 34px;text-align:center;">${button(`${d.siteUrl}/admin`, "Ouvrir le tableau de bord")}</td></tr>`;
 
@@ -246,7 +305,8 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     `${t.phone}: ${d.clientPhone}`, `${t.email}: ${d.clientEmail}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d.items),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
-    d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`, "", `${d.siteUrl}/admin`,
+    d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,
+    ...originText(d), "", `${d.siteUrl}/admin`,
   ].filter(Boolean).join("\n");
 
   return {

@@ -36,6 +36,9 @@ const privacy: LegalDoc = {
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
         "Mesure de fréquentation — le nombre de pages vues, la page regardée, le site d'où vous arrivez, votre pays et le type d'appareil. Ces données sont agrégées : elles disent combien de personnes sont passées, jamais lesquelles. Aucun témoin n'est déposé et aucun identifiant ne vous suit d'une visite à l'autre.",
+        "Journal des visites — pour chaque page affichée : la date et l'heure, la page, le site ou la campagne d'où vous arrivez, le type d'appareil, et la ville approximative que notre hébergeur déduit du réseau. Votre adresse IP n'y est jamais inscrite : elle sert à deviner la ville, puis elle est oubliée avec la requête. Aucun identifiant ne relie deux lignes entre elles — deux de vos visites y figurent comme deux inconnus. Les pages de l'espace réservé à l'artisan ne sont jamais comptées.",
+        "Provenance d'une réservation — à votre première visite, votre navigateur retient pour lui seul l'étiquette de campagne du lien suivi, le site d'où vous veniez, la page d'arrivée, la date de cette première visite et le nombre de fois que vous êtes revenu. Ces informations restent dans votre navigateur et n'en sortent que si vous réservez : elles accompagnent alors votre réservation, pour que nous sachions quel moyen vous a fait connaître la maison. Si vous ne réservez pas, nous n'en savons rien, et vider les données de votre navigateur les efface.",
+        "Comment vous nous avez connus — la réponse que vous donnez, si vous le souhaitez, à la question facultative du formulaire de réservation. Une carte remise en main propre ou un accroche-porte ne laissent aucune trace technique : cette réponse est le seul moyen de le savoir.",
       ],
     },
     {
@@ -49,6 +52,7 @@ const privacy: LegalDoc = {
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
+        "Le journal des visites et la provenance servent à savoir quel moyen de se faire connaître fonctionne — une carte distribuée dans un quartier, une publication, une recherche — afin de ne pas dépenser au hasard. Ils ne servent jamais à vous démarcher, ni à vous recontacter, ni à vous classer.",
       ],
     },
     {
@@ -86,6 +90,8 @@ const privacy: LegalDoc = {
         "Un rendez-vous et ce qui l'accompagne : trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre.",
         "Un message du formulaire de contact : deux ans, ou jusqu'à ce que vous en demandiez la suppression.",
         "Le journal technique : douze mois.",
+        "Le journal des visites : douze mois, après quoi les entrées sont supprimées d'elles-mêmes.",
+        "La provenance jointe à une réservation : elle suit le sort de cette réservation, et disparaît avec elle.",
       ],
     },
     {
@@ -104,6 +110,7 @@ const privacy: LegalDoc = {
         "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun. Le comptage des visites se fait sans témoin : rien n'est écrit dans votre navigateur, et rien ne vous reconnaît lors d'un prochain passage.",
         "Deux témoins existent, et ils ne concernent que l'artisan : celui qui maintient sa session ouverte dans son espace, et un témoin temporaire qui protège sa connexion Google contre la fraude. Tous deux expirent d'eux-mêmes.",
         "Les polices de caractères sont servies depuis notre propre domaine : afficher cette page n'appelle aucun serveur tiers.",
+        "Votre navigateur retient en revanche deux choses pour lui-même, dans son espace de stockage local : la provenance décrite plus haut, qui ne nous parvient que si vous réservez, et le fait que vous avez déjà ouvert le site au cours de cette session, qui sert à ne compter qu'une visite pour plusieurs pages lues. Ni l'une ni l'autre n'est un identifiant, aucune n'est lisible par un autre site, et vider les données de navigation les efface.",
       ],
     },
     {
@@ -281,7 +288,7 @@ export const fr = {
     phoneHref: "tel:+14509431217",
     email: "styve1885@gmail.com",
     emailHref: "mailto:styve1885@gmail.com",
-    region: "Longueuil · Rive-Sud · Montérégie",
+    region: "Longueuil · Rive-Sud · Montréal",
   },
   hero: {
     eyebrow: "Service à domicile · Longueuil",
@@ -382,7 +389,7 @@ export const fr = {
         serviceKey: "trousers",
         name: "Tout se fait chez vous",
         body: "Rien ne quitte votre domicile. Votre artisan vient avec sa table, sa vapeur et ses cintres, travaille devant vous, et range avant de partir.",
-        detail: "Longueuil & la Rive-Sud",
+        detail: "Rive-Sud, Saint-Jean et l'ouest de l'île",
       },
     ],
   },
@@ -466,7 +473,7 @@ export const fr = {
       },
       {
         q: "Quelles zones desservez-vous ?",
-        a: "Longueuil et ses arrondissements — Vieux-Longueuil, Saint-Hubert, Greenfield Park — ainsi que la Rive-Sud environnante : Brossard, Saint-Lambert, Boucherville, Saint-Bruno. Indiquez votre code postal lors de la réservation : si vous êtes hors zone, nous vous le disons immédiatement.",
+        a: "Longueuil et ses arrondissements, Brossard, Saint-Lambert, Boucherville, Saint-Bruno et Saint-Jean-sur-Richelieu, ainsi que quelques quartiers de l'île : l'Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal. Indiquez votre code postal lors de la réservation : s'il est hors zone, nous vous le disons tout de suite, avant que vous remplissiez le reste.",
       },
       {
         q: "Comment se fait le paiement ?",
@@ -512,8 +519,20 @@ export const fr = {
       city: "Ville",
       postal: "Code postal",
       postalPlaceholder: "J4K 1A1",
-      outOfZone: "Cette adresse semble hors de notre zone. Réservez tout de même — nous vous confirmerons par téléphone.",
+      outOfZone:
+        "Cette adresse se trouve hors de notre zone de déplacement, et la réservation en ligne ne peut pas aller plus loin. Appelez-nous : il arrive que nous puissions nous arranger, et nous vous le dirons franchement.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
+      heardFrom: "Comment nous avez-vous connus ? (facultatif)",
+      heardFromEmpty: "Je préfère ne pas le dire",
+      heardFromOptions: {
+        "carte": "Carte remise en main propre",
+        "accroche-porte": "Accroche-porte",
+        "instagram": "Instagram",
+        "facebook": "Facebook",
+        "google": "Recherche Google",
+        "recommandation": "Recommandation",
+        "autre": "Autre",
+      },
     },
     step3: {
       title: "Quand vous conviendrait-il ?",
@@ -562,6 +581,7 @@ export const fr = {
       email: "Courriel invalide",
       phone: "Numéro invalide",
       postal: "Code postal invalide (ex. J4K 1A1)",
+      outOfArea: `Cette adresse est hors de notre zone de déplacement. Appelez-nous au ${PHONE}, nous verrons ensemble ce qui est possible.`,
     },
   },
   manage: {

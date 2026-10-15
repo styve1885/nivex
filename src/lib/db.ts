@@ -214,6 +214,52 @@ async function bootstrap() {
       detail     jsonb,
       created_at timestamptz NOT NULL DEFAULT now()
     )`;
+
+  /*
+   * Provenance d'une réservation.
+   *
+   * Ces colonnes arrivent après coup : la table existe déjà en production,
+   * et les rendez-vous déjà pris n'ont évidemment pas de provenance. Elles
+   * sont donc toutes facultatives, et un ancien rendez-vous se lit comme
+   * « provenance inconnue » plutôt que de faire échouer la lecture.
+   */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS heard_from     text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS utm_source     text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS utm_medium     text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS utm_campaign   text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS referrer       text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS landing_page   text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS first_seen_at  timestamptz`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS visit_count    integer`;
+
+  /*
+   * Journal anonyme des visites.
+   *
+   * Ce qu'on ne trouvera pas dans cette table : aucune adresse IP, aucun
+   * identifiant de visiteur, aucune empreinte d'appareil, aucune clé qui
+   * permettrait de recoller deux lignes entre elles. La ville est celle que
+   * l'hébergeur déduit du réseau, à la ville près — elle sert à savoir si le
+   * quartier répond, pas à retrouver quelqu'un.
+   *
+   * Une ligne par page vue, sans clé primaire parlante : `bigserial` donne
+   * l'ordre d'arrivée, et c'est tout ce dont l'onglet Visites a besoin.
+   */
+  await q`
+    CREATE TABLE IF NOT EXISTS nivex_visits (
+      id         bigserial PRIMARY KEY,
+      path       text        NOT NULL,
+      source     text        NOT NULL DEFAULT 'direct',
+      referrer   text,
+      device     text        NOT NULL DEFAULT 'ordinateur',
+      city       text,
+      region     text,
+      country    text,
+      locale     text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+
+  await q`CREATE INDEX IF NOT EXISTS nivex_visits_created_idx ON nivex_visits (created_at DESC)`;
+  await q`CREATE INDEX IF NOT EXISTS nivex_visits_source_idx  ON nivex_visits (source)`;
 }
 
 export async function logEvent(kind: string, detail?: unknown) {

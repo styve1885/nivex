@@ -24,6 +24,9 @@ const privacy: LegalDoc = {
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
         "Audience measurement — the number of page views, which page was viewed, the site you arrived from, your country and your device type. This data is aggregated: it says how many people came by, never which ones. No cookie is set and no identifier follows you from one visit to the next.",
+        "Visit log — for each page displayed: the date and time, the page, the site or campaign you arrived from, the device type, and the approximate city our host infers from the network. Your IP address is never written down: it serves to infer the city, then it is forgotten along with the request. No identifier ties two entries together — two of your visits appear there as two strangers. Pages in the craftsman's own area are never counted.",
+        "Where a booking came from — on your first visit, your browser keeps to itself the campaign tag of the link you followed, the site you came from, the page you landed on, the date of that first visit, and the number of times you came back. This stays in your browser and leaves it only if you book: it then travels with your booking, so that we know which means made the house known to you. If you do not book, we know none of it, and clearing your browser data erases it.",
+        "How you heard about us — the answer you give, if you wish to, to the optional question in the booking form. A card handed to you in person or a door hanger leaves no technical trace: that answer is the only way to know.",
       ],
     },
     {
@@ -37,6 +40,7 @@ const privacy: LegalDoc = {
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
+        "The visit log and the booking's origin serve to know which way of making ourselves known works — a card handed out in a neighbourhood, a post, a search — so that nothing is spent at random. They are never used to solicit you, to contact you again, or to sort you.",
       ],
     },
     {
@@ -74,6 +78,8 @@ const privacy: LegalDoc = {
         "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way.",
         "A message from the contact form: two years, or until you ask us to delete it.",
         "The technical log: twelve months.",
+        "The visit log: twelve months, after which entries are deleted of their own accord.",
+        "The origin attached to a booking: it follows the fate of that booking, and goes when it goes.",
       ],
     },
     {
@@ -92,6 +98,7 @@ const privacy: LegalDoc = {
         "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting happens without a cookie: nothing is written into your browser, and nothing recognises you on a later visit.",
         "Two cookies exist, and they concern the artisan only: the one that keeps his session open in his own area, and a temporary one that protects his Google sign-in against fraud. Both expire on their own.",
         "Typefaces are served from our own domain: displaying this page calls no third-party server.",
+        "Your browser does, however, keep two things for itself, in its local storage: the origin described above, which reaches us only if you book, and the fact that you have already opened the site during this session, which serves to count one visit rather than one per page read. Neither is an identifier, neither is readable by another site, and clearing your browsing data erases both.",
       ],
     },
     {
@@ -269,7 +276,7 @@ export const en: Dict = {
     phoneHref: "tel:+14509431217",
     email: "styve1885@gmail.com",
     emailHref: "mailto:styve1885@gmail.com",
-    region: "Longueuil · South Shore · Montérégie",
+    region: "Longueuil · South Shore · Montreal",
   },
   hero: {
     eyebrow: "In-home service · Longueuil",
@@ -370,7 +377,7 @@ export const en: Dict = {
         serviceKey: "trousers",
         name: "Everything happens at your home",
         body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
-        detail: "Longueuil & the South Shore",
+        detail: "South Shore, Saint-Jean and the west of the island",
       },
     ],
   },
@@ -454,7 +461,7 @@ export const en: Dict = {
       },
       {
         q: "Which areas do you serve?",
-        a: "Longueuil and its boroughs — Vieux-Longueuil, Saint-Hubert, Greenfield Park — plus the surrounding South Shore: Brossard, Saint-Lambert, Boucherville, Saint-Bruno. Enter your postal code when booking: if you're outside the zone, we'll tell you right away.",
+        a: "Longueuil and its boroughs, Brossard, Saint-Lambert, Boucherville, Saint-Bruno and Saint-Jean-sur-Richelieu, plus a few neighbourhoods on the island: Nuns' Island, Verdun, Westmount, Outremont and Old Montreal. Enter your postal code when booking: if it falls outside the zone, we tell you straight away, before you fill in the rest.",
       },
       {
         q: "How does payment work?",
@@ -500,8 +507,20 @@ export const en: Dict = {
       city: "City",
       postal: "Postal code",
       postalPlaceholder: "J4K 1A1",
-      outOfZone: "This address looks outside our zone. Book anyway — we'll confirm by phone.",
+      outOfZone:
+        "This address falls outside the area we travel to, and online booking cannot go further. Do call us: sometimes an arrangement is possible, and we will tell you plainly either way.",
       inZone: "Good news, you're inside the service area.",
+      heardFrom: "How did you hear about us? (optional)",
+      heardFromEmpty: "I'd rather not say",
+      heardFromOptions: {
+        "carte": "A card handed to me in person",
+        "accroche-porte": "Door hanger",
+        "instagram": "Instagram",
+        "facebook": "Facebook",
+        "google": "Google search",
+        "recommandation": "Word of mouth",
+        "autre": "Other",
+      },
     },
     step3: {
       title: "When would suit you?",
@@ -550,6 +569,7 @@ export const en: Dict = {
       email: "Invalid email",
       phone: "Invalid number",
       postal: "Invalid postal code (e.g. J4K 1A1)",
+      outOfArea: `This address is outside the area we travel to. Call us at ${PHONE} and we will see together what is possible.`,
     },
   },
   manage: {

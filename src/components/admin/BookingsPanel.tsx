@@ -151,6 +151,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             </Line>
             <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
 
+            <Origin origin={b.origin} tz={tz} />
+
             {silent && (
               <div className="!mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-4">
                 <p className="text-[0.85rem] leading-relaxed text-[#8E332C]">
@@ -202,6 +204,44 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * D'où vient ce client.
+ *
+ * Mis à part visuellement : c'est un renseignement commercial, pas une
+ * consigne de séance. Rien ne s'affiche quand il n'y a rien à dire — un
+ * rendez-vous pris avant la mesure n'a pas de provenance, et une provenance
+ * vide ne doit pas se lire comme une provenance perdue.
+ */
+function Origin({ origin, tz }: { origin: AdminBooking["origin"]; tz: string }) {
+  const source = [origin.source, origin.campaign].filter(Boolean).join(" · ");
+  const known = origin.heardFromLabel || source || origin.firstSeenAt || origin.visits;
+  if (!known) return null;
+
+  return (
+    <div className="!mt-5 border-t border-gold-300/30 pt-4">
+      <p className="mb-3 text-[9px] uppercase tracking-[0.2em] text-gold-600">Provenance</p>
+      <div className="space-y-3">
+        {origin.heardFromLabel && <Line label="Nous a connus par">{origin.heardFromLabel}</Line>}
+        {source && (
+          <Line label="Source">
+            {source}
+            {origin.referrer && (
+              <span className="mt-0.5 block break-all text-[0.74rem] text-ink-400">{origin.referrer}</span>
+            )}
+          </Line>
+        )}
+        {origin.landing && (
+          <Line label="Page d'arrivée"><code className="font-mono text-[0.76rem]">{origin.landing}</code></Line>
+        )}
+        {origin.firstSeenAt && <Line label="Première visite">{when(origin.firstSeenAt, tz)}</Line>}
+        {origin.visits != null && (
+          <Line label="Visites avant de réserver">{origin.visits}</Line>
+        )}
+      </div>
+    </div>
   );
 }
 
