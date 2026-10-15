@@ -747,7 +747,7 @@ export const fr = {
     eyebrow: "Le résultat",
     title: "Avant, après",
     lede: "Repassé sur place, remis sur cintre de bois.",
-    labels: { before: "Avant", after: "Après", instruction: "glissez pour comparer" },
+    labels: { before: "Avant", after: "Après" },
     banner: "Vos vêtements, prêts à porter.",
     bannerAlt: "Vêtements repassés par NIVEX, suspendus sur des cintres de bois",
     items: [

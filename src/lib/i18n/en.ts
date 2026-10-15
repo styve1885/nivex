@@ -735,7 +735,7 @@ export const en: Dict = {
     eyebrow: "The result",
     title: "Before, after",
     lede: "Pressed on site, returned on a wooden hanger.",
-    labels: { before: "Before", after: "After", instruction: "drag to compare" },
+    labels: { before: "Before", after: "After" },
     banner: "Your clothes, ready to wear.",
     bannerAlt: "Garments pressed by NIVEX, hanging on wooden hangers",
     items: [

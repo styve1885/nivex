@@ -1,87 +1,49 @@
-"use client";
-
-import { useCallback, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { Reveal } from "../Reveal";
 import type { Dict } from "@/lib/i18n";
 
 /**
- * Curseur de comparaison « avant / après ».
+ * Avant / après, en deux photos entières.
  *
- * Les deux photos sont cadrées à l'identique : la seconde se découpe à la
- * position du curseur et laisse voir la première en dessous. Rien ne se
- * déplace, rien ne se redimensionne — seul le découpage bouge, ce qui tient
- * à soixante images par seconde même sur un téléphone modeste.
+ * Un curseur de comparaison semblait plus vivant, mais il suppose deux
+ * cadrages jumeaux : il découpe une image par-dessus l'autre, et le moindre
+ * décalage de l'appareil fait sauter le vêtement à la jointure. Ces photos
+ * ont été prises à main levée, à des moments différents — les montrer
+ * entières, côte à côte, est la seule façon honnête de les présenter.
  *
- * La poignée est un vrai curseur de formulaire, transparent et étendu sur
- * toute la surface : le doigt l'attrape n'importe où sur la photo, le
- * clavier la déplace avec les flèches, et les lecteurs d'écran annoncent
- * une valeur de zéro à cent. Rien de tout cela n'aurait été gratuit avec
- * un gestionnaire d'événements maison.
+ * L'œil compare mieux deux images complètes qu'une image coupée, de toute
+ * façon : le col, l'épaule et l'ourlet se lisent d'un coup, au lieu d'être
+ * tranchés au milieu.
  */
-function Slider({ item, labels }: {
+function Pair({ item, labels }: {
   item: { key: string; name: string; altBefore: string; altAfter: string };
-  labels: { before: string; after: string; instruction: string };
+  labels: { before: string; after: string };
 }) {
-  const [pos, setPos] = useState(50);
-  const id = useId();
-  const frame = useRef<HTMLDivElement>(null);
-
-  /* La barre suit le curseur sans repasser par React à chaque pixel. */
-  const onInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setPos(Number(e.target.value));
-  }, []);
+  const shot = (side: "avant" | "apres", alt: string, label: string) => (
+    <div className="relative overflow-hidden bg-linen-200">
+      <div className="relative aspect-[3/4]">
+        <Image
+          src={`/images/avant-apres/${item.key}-${side}.jpg`}
+          alt={alt}
+          fill sizes="(min-width: 1024px) 25vw, 50vw"
+          loading="lazy"
+          className="object-cover"
+        />
+      </div>
+      <span className="absolute left-2.5 top-2.5 bg-ink-800/75 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-linen-100 sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-[10px]">
+        {label}
+      </span>
+    </div>
+  );
 
   return (
     <figure className="m-0">
-      <div ref={frame} className="group relative overflow-hidden border border-gold-300/50 bg-linen-200">
-        <div className="relative aspect-[3/4]">
-          {/* — Avant : le fond, toujours entier — */}
-          <Image
-            src={`/images/avant-apres/${item.key}-avant.jpg`}
-            alt={item.altBefore}
-            fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            loading="lazy"
-            className="object-cover"
-          />
-
-          {/* — Après : découpé à la position du curseur — */}
-          <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
-            <Image
-              src={`/images/avant-apres/${item.key}-apres.jpg`}
-              alt={item.altAfter}
-              fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-              loading="lazy"
-              className="object-cover"
-            />
-          </div>
-
-          {/* — Étiquettes — */}
-          <span className="pointer-events-none absolute left-3 top-3 bg-ink-800/75 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-linen-100">
-            {labels.before}
-          </span>
-          <span className="pointer-events-none absolute right-3 top-3 bg-ink-800/75 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-linen-100">
-            {labels.after}
-          </span>
-
-          {/* — La ligne de partage et sa poignée — */}
-          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 w-px bg-linen-50/90 shadow-[0_0_0_1px_rgba(31,27,22,0.25)]"
-            style={{ left: `${pos}%` }}>
-            <span className="absolute top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-gold-400 bg-linen-50 text-[0.7rem] tracking-[0.1em] text-gold-700 shadow-[0_2px_10px_rgba(31,27,22,0.22)]">
-              ‹ ›
-            </span>
-          </div>
-
-          {/* — La commande : invisible, mais c'est elle qu'on manipule — */}
-          <input
-            id={id} type="range" min={0} max={100} step={0.1} value={pos}
-            onChange={onInput}
-            aria-label={`${item.name} — ${labels.instruction}`}
-            className="absolute inset-0 h-full w-full cursor-ew-resize appearance-none bg-transparent opacity-0 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-gold-500)]"
-          />
-        </div>
+      {/* Un seul filet d'or entre les deux : la séparation se voit sans
+          qu'on ait besoin d'une bordure autour de chaque photo. */}
+      <div className="grid grid-cols-2 gap-px border border-gold-300/50 bg-gold-300/50">
+        {shot("avant", item.altBefore, labels.before)}
+        {shot("apres", item.altAfter, labels.after)}
       </div>
-
       <figcaption className="mt-3.5 text-center text-[0.88rem] font-light text-ink-600">{item.name}</figcaption>
     </figure>
   );
@@ -99,10 +61,12 @@ export function BeforeAfter({ t }: { t: Dict }) {
           <p className="mt-6 text-[0.97rem] font-light leading-[1.95] text-ink-500">{t.beforeAfter.lede}</p>
         </Reveal>
 
-        <div className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Une paire par rangée au téléphone, deux à l'écran large : chaque
+            paire vaut deux photos, elle occupe donc la place de deux. */}
+        <div className="mt-16 grid gap-10 sm:gap-8 lg:grid-cols-2">
           {t.beforeAfter.items.map((item, i) => (
             <Reveal key={item.key} delay={i * 70}>
-              <Slider item={item} labels={t.beforeAfter.labels} />
+              <Pair item={item} labels={t.beforeAfter.labels} />
             </Reveal>
           ))}
         </div>
