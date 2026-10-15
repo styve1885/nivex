@@ -4,6 +4,7 @@ import { bookingRef, token } from "./crypto";
 import { getSettings, inServiceArea, type Settings } from "./settings";
 import { clip, HEARD_FROM_FR, isHeardFrom, referrerHost, type HeardFrom } from "./attribution";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
+import { travelFee } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
@@ -56,6 +57,8 @@ export type Booking = {
   items: { key: string; label: string; qty: number }[];
   startsAt: Date; endsAt: Date; durationMinutes: number;
   estimateCents: number; currency: string; firstHourFree: boolean;
+  /* Les frais de route, à part de l'estimation : voir travel.ts. */
+  travelFeeCents: number; travelZone: string | null;
   googleEventId: string | null; emailSent: boolean;
   createdAt: Date; cancelledAt: Date | null;
   /* D'où vient ce client — vide pour les rendez-vous pris avant la mesure. */
@@ -94,6 +97,8 @@ function hydrate(r: Row): Booking {
     startsAt: new Date(r.starts_at as string), endsAt: new Date(r.ends_at as string),
     durationMinutes: Number(r.duration_minutes), estimateCents: Number(r.estimate_cents),
     currency: r.currency as string, firstHourFree: r.first_hour_free === true,
+    travelFeeCents: Number(r.travel_fee_cents ?? 0),
+    travelZone: (r.travel_zone as string) ?? null,
     googleEventId: (r.google_event_id as string) ?? null,
     emailSent: r.email_sent === true,
     createdAt: new Date(r.created_at as string),
@@ -173,6 +178,11 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     && (await isFirstBooking(input.email));
   const cents = estimateCents(durationMinutes, settings, firstHourFree);
 
+  /* Les frais sont calculés ici, jamais repris du navigateur — comme la
+     durée et le prix. Et sur la durée réservée, pas sur le temps facturé :
+     une heure offerte ne raccourcit pas la route. */
+  const travel = travelFee(input.postalCode, durationMinutes, settings);
+
   const labelled = items.map((i) => {
     const svc = settings.services.find((s) => s.key === i.key)!;
     return { key: i.key, label: input.locale === "en" ? svc.en : svc.fr, qty: i.qty };
@@ -189,6 +199,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
         duration_minutes, estimate_cents, currency, first_hour_free,
+        travel_fee_cents, travel_zone,
         heard_from, utm_source, utm_medium, utm_campaign,
         referrer, landing_page, first_seen_at, visit_count
       ) VALUES (
@@ -196,6 +207,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
         ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
+        ${travel?.cents ?? 0}, ${travel?.labelFr ?? null},
         ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
         ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits}
       ) RETURNING *`) as Row[];
@@ -322,6 +334,12 @@ function eventDescription(b: Booking, origin: string, tz: string): string {
     `Durée estimée : ${minutesToText(b.durationMinutes, "fr")}`,
     `Estimation : ${formatMoney(b.estimateCents, b.currency, "fr")}${b.firstHourFree ? " (1re heure offerte)" : ""}`,
   ];
+  if (b.travelFeeCents > 0) {
+    lines.push(
+      `Frais de déplacement${b.travelZone ? ` (${b.travelZone})` : ""} : ${formatMoney(b.travelFeeCents, b.currency, "fr")}`,
+      `Total : ${formatMoney(b.estimateCents + b.travelFeeCents, b.currency, "fr")}`,
+    );
+  }
   if (b.notes) lines.push("", `Précisions du client : ${b.notes}`);
   if (b.origin.heardFrom) {
     lines.push("", `Nous a connus par : ${HEARD_FROM_FR[b.origin.heardFrom]}`);
@@ -337,6 +355,7 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     notes: b.notes, items: b.items.map((i) => ({ label: i.label, qty: i.qty })),
     startsAt: b.startsAt, durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
     currency: b.currency, firstHourFree: b.firstHourFree, timezone: s.timezone,
+    travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
     businessEmail: contactEmail(s),

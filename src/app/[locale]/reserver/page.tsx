@@ -41,6 +41,9 @@ export default async function BookPage({ params }: { params: Promise<{ locale: s
     firstHourFree: s.firstHourFree,
     timezone: s.timezone,
     areaPrefixes: s.serviceArea.prefixes.map((p) => p.toUpperCase()),
+    /* Annoncés avant la confirmation ; recalculés par le serveur à la
+       création, qui seul fait foi. */
+    travelZones: s.travelZones.filter((z) => z.enabled),
   };
 
   return (

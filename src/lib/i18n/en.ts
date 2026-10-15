@@ -510,6 +510,8 @@ export const en: Dict = {
       outOfZone:
         "This address falls outside the area we travel to, and online booking cannot go further. Do call us: sometimes an arrangement is possible, and we will tell you plainly either way.",
       inZone: "Good news, you're inside the service area.",
+      travelFee: "Travel fee",
+      travelNote: "This fee is added to the price of the session. The first-hour-free offer does not cover it and does not reduce it.",
       heardFrom: "How did you hear about us? (optional)",
       heardFromEmpty: "I'd rather not say",
       heardFromOptions: {
@@ -543,6 +545,9 @@ export const en: Dict = {
       what: "Services",
       who: "Contact",
       total: "Estimate",
+      travelFee: "Travel fee",
+      travelHint: "Not covered by the free first hour",
+      grandTotal: "Estimated total",
       consent:
         "I understand the estimate is indicative and the final amount will be confirmed on site before the session begins.",
       submit: "Confirm booking",
@@ -744,6 +749,8 @@ export const en: Dict = {
         { dt: "Payment", dd: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking." },
         { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
       ],
+      travel: "Travel fee",
+      travelNote: "This fee is added to the price of the session. It is not covered by the first-hour-free offer and is never reduced by it. It also applies to every visit for subscribers living at these addresses.",
     },
     firstFreeLabel: "First session",
     cta: {

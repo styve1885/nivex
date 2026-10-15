@@ -5,6 +5,7 @@ import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettings, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
+import { travelTerms } from "@/lib/travel";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
   firstTimeCents, offerCents, perHour, planCents, planFullCents,
@@ -101,6 +102,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   const shortest = Math.max(s.minMinutes, 120);
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
+  const travelLines = travelTerms(s.travelZones, locale, (c) => formatMoney(c, s.currency, locale));
 
   return (
     <div className="bg-linen-100">
@@ -327,6 +329,20 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                 <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">{item.dd}</dd>
               </div>
             ))}
+
+            {/* Les frais de route, écrits depuis les réglages en vigueur et
+                non récités : changer un montant depuis /admin change cette
+                page, sinon les conditions publiées finiraient par
+                contredire ce que le tunnel facture. */}
+            {travelLines.length > 0 && (
+              <div className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
+                <dt className="font-display text-[1rem] text-ink-800">{t.tarifs.terms.travel}</dt>
+                <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">
+                  {travelLines.map((line) => <span key={line} className="block">{line}</span>)}
+                  <span className="mt-2 block text-ink-400">{t.tarifs.terms.travelNote}</span>
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
       </section>

@@ -68,6 +68,7 @@ async function bootstrap() {
       paused          boolean     NOT NULL DEFAULT false,
       hours           jsonb,
       service_area    jsonb,
+      travel_zones    jsonb,
       services        jsonb,
       connected_at    timestamptz,
       updated_at      timestamptz NOT NULL DEFAULT now(),
@@ -231,6 +232,21 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS landing_page   text`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS first_seen_at  timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS visit_count    integer`;
+
+  /* Frais de déplacement.
+   *
+   * Dans leur propre colonne, et non fondus dans l'estimation : ils ne sont
+   * pas du temps de repassage, l'offre « première heure offerte » n'a donc
+   * aucune prise sur eux, et le client comme l'artisan doivent pouvoir lire
+   * la ligne séparément. Le libellé de la zone est recopié avec eux — un
+   * tarif qui change plus tard ne doit pas réécrire l'histoire d'une
+   * réservation déjà prise. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_fee_cents integer NOT NULL DEFAULT 0`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_zone      text`;
+
+  /* Même migration pour les réglages : la colonne manque aux bases créées
+     avant les frais de déplacement. NULL y veut dire « jamais réglé ». */
+  await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS travel_zones jsonb`;
 
   /*
    * Journal anonyme des visites.

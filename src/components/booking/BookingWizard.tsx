@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
+import { travelFeeFor, type TravelZone } from "@/lib/travel";
 import { readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
@@ -24,6 +25,9 @@ export type WizardConfig = {
   firstHourFree: boolean;
   timezone: string;
   areaPrefixes: string[];
+  /* Les zones à frais de route. Le serveur recalcule les frais à la
+     création : ceci ne sert qu'à les annoncer avant de confirmer. */
+  travelZones: TravelZone[];
 };
 
 /* L'horaire de la maison : les jours ouverts et les heures praticables,
@@ -82,6 +86,17 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     const billable = firstFree ? Math.max(0, duration - 60) : duration;
     return Math.round((billable / 60) * config.hourlyRate);
   }, [duration, firstFree, config.hourlyRate]);
+
+  /* Les frais de route suivent deux choses à la fois : l'adresse et la durée.
+     Changer le panier change la durée, donc peut faire basculer le tarif d'un
+     côté ou de l'autre du seuil — d'où un calcul dérivé, qui se refait tout
+     seul, plutôt qu'un montant figé au moment de la saisie du code postal. */
+  const travel = useMemo(
+    () => (duration > 0 ? travelFeeFor(postal, duration, config.travelZones) : null),
+    [postal, duration, config.travelZones],
+  );
+  const travelCents = travel?.cents ?? 0;
+  const total = estimate + travelCents;
 
   const money = useCallback(
     (cents: number) =>
@@ -377,6 +392,26 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               )
             )}
 
+            {/* Les frais de route, annoncés ici et pas à la confirmation.
+                Une adresse de Saint-Jean coûte une route : le client doit
+                l'apprendre au moment où il donne son adresse, pas trois
+                écrans plus loin alors qu'il a déjà choisi son heure. */}
+            {travel && (
+              <div className="mt-5 flex items-baseline justify-between gap-5 border border-gold-300/60 bg-linen-50 px-5 py-4">
+                <span className="text-[0.85rem] font-light leading-snug text-ink-600">
+                  {t.booking.step2.travelFee} ({config.locale === "en" ? travel.labelEn : travel.labelFr})
+                </span>
+                <span className="flex-none font-display text-[1.15rem] tabular-nums text-ink-800">
+                  {money(travel.cents)}
+                </span>
+              </div>
+            )}
+            {travel && (
+              <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
+                {t.booking.step2.travelNote}
+              </p>
+            )}
+
             {/* « Comment nous avez-vous connus ? » — facultatif, et c'est le
                 seul endroit du site où une carte remise en main propre peut
                 se faire connaître. Aucune mesure automatique ne la verra. */}
@@ -456,6 +491,13 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               )}
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
+              {travel && (
+                <Row
+                  label={`${t.booking.step4.travelFee} (${config.locale === "en" ? travel.labelEn : travel.labelFr})`}
+                  value={money(travel.cents)}
+                  hint={t.booking.step4.travelHint} />
+              )}
+              {travel && <Row label={t.booking.step4.grandTotal} value={money(total)} />}
             </dl>
 
             <label className="mt-8 flex cursor-pointer items-start gap-3">

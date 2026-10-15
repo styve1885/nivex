@@ -522,6 +522,8 @@ export const fr = {
       outOfZone:
         "Cette adresse se trouve hors de notre zone de déplacement, et la réservation en ligne ne peut pas aller plus loin. Appelez-nous : il arrive que nous puissions nous arranger, et nous vous le dirons franchement.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
+      travelFee: "Frais de déplacement",
+      travelNote: "Ces frais s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas et ne les réduit pas.",
       heardFrom: "Comment nous avez-vous connus ? (facultatif)",
       heardFromEmpty: "Je préfère ne pas le dire",
       heardFromOptions: {
@@ -555,6 +557,9 @@ export const fr = {
       what: "Prestations",
       who: "Coordonnées",
       total: "Estimation",
+      travelFee: "Frais de déplacement",
+      travelHint: "Non couverts par la première heure offerte",
+      grandTotal: "Total estimé",
       consent:
         "Je comprends que l'estimation est indicative et que le montant final sera confirmé sur place avant le début de la séance.",
       submit: "Confirmer la réservation",
@@ -756,6 +761,8 @@ export const fr = {
         { dt: "Paiement", dd: "Sur place, à la fin de la séance : comptant, virement Interac ou carte. Aucun prépaiement à la réservation." },
         { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre : le matériel professionnel arrive avec l'artisan." },
       ],
+      travel: "Frais de déplacement",
+      travelNote: "Ces frais s'ajoutent au prix de la séance. Ils ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent également à chaque visite des abonnés résidant à ces adresses.",
     },
     firstFreeLabel: "Première séance",
     cta: {

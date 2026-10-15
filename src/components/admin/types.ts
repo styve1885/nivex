@@ -5,6 +5,8 @@ export type AdminBooking = {
   items: { key: string; label: string; qty: number }[];
   startsAt: string; endsAt: string; durationMinutes: number;
   estimateCents: number; currency: string; firstHourFree: boolean; createdAt: string;
+  /* Frais de route, hors estimation : zéro pour la plupart des adresses. */
+  travelFeeCents: number; travelZone: string | null;
   /* Ce qui a suivi la réservation — ou ce qui a manqué. */
   emailSent: boolean; inCalendar: boolean;
   /* D'où vient ce client. Tout y est nul pour les rendez-vous pris avant

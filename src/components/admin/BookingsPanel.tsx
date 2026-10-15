@@ -130,8 +130,10 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             Muet
           </span>
         )}
+        {/* Le montant replié dit le total, frais compris : c'est la somme que
+            l'artisan encaissera, et la seule qu'il cherche d'un coup d'œil. */}
         <span className="hidden text-[0.85rem] tabular-nums text-ink-600 sm:block">
-          {money(b.estimateCents, b.currency)}
+          {money(b.estimateCents + b.travelFeeCents, b.currency)}
         </span>
         <span aria-hidden="true" className={`text-gold-500 transition-transform duration-500 ${open ? "rotate-180" : ""}`}>⌄</span>
       </button>
@@ -149,6 +151,17 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               {money(b.estimateCents, b.currency)}
               {b.firstHourFree && <span className="ml-2 text-[10px] uppercase tracking-wider text-gold-600">1re heure offerte</span>}
             </Line>
+            {b.travelFeeCents > 0 && (
+              <>
+                <Line label="Frais de déplacement">
+                  {money(b.travelFeeCents, b.currency)}
+                  {b.travelZone && <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-400">{b.travelZone}</span>}
+                </Line>
+                <Line label="Total">
+                  <strong className="font-medium">{money(b.estimateCents + b.travelFeeCents, b.currency)}</strong>
+                </Line>
+              </>
+            )}
             <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
 
             <Origin origin={b.origin} tz={tz} />

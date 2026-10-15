@@ -1,5 +1,6 @@
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
+import { DEFAULT_TRAVEL_ZONES, type TravelZone } from "./travel";
 
 export type DayHours = { day: number; enabled: boolean; open: string; close: string };
 export type ServiceItem = {
@@ -33,6 +34,7 @@ export type Settings = {
   paused: boolean;
   hours: DayHours[];
   serviceArea: ServiceArea;
+  travelZones: TravelZone[];
   services: ServiceItem[];
   connectedAt: string | null;
 };
@@ -123,7 +125,8 @@ export const FALLBACK_SETTINGS: Settings = {
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
   hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 45, slotStep: 30, firstHourFree: true, paused: false,
-  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, services: DEFAULT_SERVICES,
+  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, travelZones: DEFAULT_TRAVEL_ZONES,
+  services: DEFAULT_SERVICES,
   connectedAt: null,
 };
 
@@ -150,6 +153,7 @@ function hydrate(row: Row | undefined): Settings {
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
     serviceArea: mergeArea(row.service_area as ServiceArea | null),
+    travelZones: readTravelZones(row.travel_zones as TravelZone[] | null | undefined),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
   };
@@ -201,6 +205,25 @@ export function mergeArea(stored: ServiceArea | null): ServiceArea {
 }
 
 /**
+ * Les zones à frais de déplacement, et pourquoi elles ne se fusionnent pas.
+ *
+ * Les prestations et la zone desservie se complètent : une nouveauté du code
+ * vient s'ajouter à ce qui est enregistré, parce qu'oublier d'offrir quelque
+ * chose est un moindre mal. Pour des frais, le moindre mal est à l'envers.
+ * Si l'artisan supprime une zone depuis /admin, la réinjecter au prochain
+ * déploiement lui ferait facturer des frais qu'il a décidé de ne plus
+ * demander — et il n'aurait aucun moyen de s'en débarrasser.
+ *
+ * La colonne distingue donc deux silences. `null` : jamais réglé, on sème
+ * les valeurs par défaut. `[]` : réglé, et volontairement vide — on la
+ * respecte. Ce qui est enregistré fait foi, sans exception.
+ */
+export function readTravelZones(stored: TravelZone[] | null | undefined): TravelZone[] {
+  if (stored == null) return DEFAULT_TRAVEL_ZONES;
+  return Array.isArray(stored) ? stored : DEFAULT_TRAVEL_ZONES;
+}
+
+/**
  * Lecture tolérante : si la base n'est pas branchée, on renvoie les valeurs
  * par défaut plutôt que de faire tomber la page.
  *
@@ -248,10 +271,11 @@ export async function saveConnection(input: {
   const enc = input.refreshToken ? encrypt(input.refreshToken) : null;
   await sql()`
     INSERT INTO nivex_settings (id, owner_email, owner_name, owner_picture, refresh_token,
-                                hours, service_area, services, connected_at, updated_at)
+                                hours, service_area, travel_zones, services, connected_at, updated_at)
     VALUES (1, ${input.email}, ${input.name}, ${input.picture}, ${enc},
             ${JSON.stringify(DEFAULT_HOURS)}::jsonb,
             ${JSON.stringify(DEFAULT_AREA)}::jsonb,
+            ${JSON.stringify(DEFAULT_TRAVEL_ZONES)}::jsonb,
             ${JSON.stringify(DEFAULT_SERVICES)}::jsonb,
             now(), now())
     ON CONFLICT (id) DO UPDATE SET
@@ -261,6 +285,7 @@ export async function saveConnection(input: {
       refresh_token = COALESCE(EXCLUDED.refresh_token, nivex_settings.refresh_token),
       hours         = COALESCE(nivex_settings.hours, EXCLUDED.hours),
       service_area  = COALESCE(nivex_settings.service_area, EXCLUDED.service_area),
+      travel_zones  = COALESCE(nivex_settings.travel_zones, EXCLUDED.travel_zones),
       services      = COALESCE(nivex_settings.services, EXCLUDED.services),
       connected_at  = now(),
       updated_at    = now()`;
@@ -276,7 +301,7 @@ export async function disconnect() {
 export type SettingsPatch = Partial<Pick<Settings,
   "calendarId" | "timezone" | "businessName" | "hourlyRate" | "currency" | "minMinutes" |
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
-  "hours" | "serviceArea" | "services">>;
+  "hours" | "serviceArea" | "travelZones" | "services">>;
 
 export async function updateSettings(patch: SettingsPatch) {
   await ensureSchema();
@@ -298,6 +323,7 @@ export async function updateSettings(patch: SettingsPatch) {
       paused          = ${n.paused},
       hours           = ${JSON.stringify(n.hours)}::jsonb,
       service_area    = ${JSON.stringify(n.serviceArea)}::jsonb,
+      travel_zones    = ${JSON.stringify(n.travelZones)}::jsonb,
       services        = ${JSON.stringify(n.services)}::jsonb,
       updated_at      = now()
     WHERE id = 1`;

@@ -28,6 +28,9 @@ export type BookingEmailData = {
   estimateCents: number;
   currency: string;
   firstHourFree: boolean;
+  /* Frais de route, hors estimation. Zéro quand l'adresse n'en demande pas. */
+  travelFeeCents?: number;
+  travelZone?: string | null;
   timezone: string;
   manageUrl: string;
   siteUrl: string;
@@ -93,6 +96,8 @@ const T = {
     when: "Rendez-vous", where: "Adresse", what: "Prestations", duration: "Durée estimée",
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
+    travel: "Frais de déplacement", total: "Total estimé",
+    travelNote: "Les frais de déplacement s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
     setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
@@ -124,6 +129,8 @@ const T = {
     when: "Appointment", where: "Address", what: "Services", duration: "Estimated duration",
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
+    travel: "Travel fee", total: "Estimated total",
+    travelNote: "The travel fee is added to the price of the session. The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
     setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
@@ -154,6 +161,40 @@ function itemsText(items: { label: string; qty: number }[]): string {
   return items.map((i) => `  · ${i.label} × ${i.qty}`).join("\n");
 }
 
+/**
+ * La ligne des frais de route, et le total qu'elle rend nécessaire.
+ *
+ * Rien ne s'affiche quand il n'y a pas de frais : un « 0 $ » sur la
+ * confirmation d'un client de Longueuil n'apprend rien et inquiète. Dès
+ * qu'il y en a, en revanche, l'estimation seule devient trompeuse — c'est
+ * donc le total qui ferme le tableau, et une note dit pourquoi l'offre ne
+ * s'applique pas à eux.
+ */
+/* Typé sur les deux seules clés utilisées, et non sur un dictionnaire
+   entier : la confirmation du client se rend en anglais, où les libellés
+   propres à la fiche de l'artisan n'existent pas. */
+type TravelLabels = { travel: string; total: string };
+
+function travelRowsHtml(d: BookingEmailData, t: TravelLabels): string {
+  const fee = d.travelFeeCents ?? 0;
+  if (fee <= 0) return "";
+  const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
+  return (
+    row(label, esc(formatMoney(fee, d.currency, d.locale))) +
+    row(t.total, `<strong>${esc(formatMoney(d.estimateCents + fee, d.currency, d.locale))}</strong>`)
+  );
+}
+
+function travelRowsText(d: BookingEmailData, t: TravelLabels): string[] {
+  const fee = d.travelFeeCents ?? 0;
+  if (fee <= 0) return [];
+  const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
+  return [
+    `${label}: ${formatMoney(fee, d.currency, d.locale)}`,
+    `${t.total}: ${formatMoney(d.estimateCents + fee, d.currency, d.locale)}`,
+  ];
+}
+
 export function clientConfirmation(d: BookingEmailData) {
   const t = T[d.locale];
   const when = formatDateTime(d.startsAt, d.timezone, d.locale);
@@ -170,10 +211,14 @@ export function clientConfirmation(d: BookingEmailData) {
       ${row(t.what, itemsHtml(d.items))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
+      ${travelRowsHtml(d, t)}
       ${d.notes ? row(t.notes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;letter-spacing:0.06em;">${esc(d.ref)}</code>`)}
     </table>
   </td></tr>
+  ${(d.travelFeeCents ?? 0) > 0 ? `<tr><td style="padding:20px 40px 0;">
+    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}</p>
+  </td></tr>` : ""}
   <tr><td style="padding:24px 40px 0;">
     <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
   </td></tr>
@@ -199,6 +244,7 @@ export function clientConfirmation(d: BookingEmailData) {
     `${t.what}:`, itemsText(d.items),
     `${t.duration}: ${dur}`,
     `${t.estimate}: ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
+    ...travelRowsText(d, t),
     d.notes ? `${t.notes}: ${d.notes}` : "",
     `${t.ref}: ${d.ref}`, "",
     t.setup, "",
@@ -292,6 +338,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${row(t.what, itemsHtml(d.items))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
+      ${travelRowsHtml(d, t)}
       ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
     </table>
@@ -305,6 +352,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     `${t.phone}: ${d.clientPhone}`, `${t.email}: ${d.clientEmail}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d.items),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
+    ...travelRowsText(d, t),
     d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,
     ...originText(d), "", `${d.siteUrl}/admin`,
   ].filter(Boolean).join("\n");
