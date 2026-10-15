@@ -9,6 +9,7 @@ import { Services } from "@/components/home/Services";
 import { Gallery } from "@/components/home/Gallery";
 import { Protocol } from "@/components/home/Protocol";
 import { HowItWorks } from "@/components/home/HowItWorks";
+import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
 import { Faq } from "@/components/home/Faq";
 import { Contact } from "@/components/home/Contact";
@@ -66,6 +67,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <Gallery t={t} />
       <Protocol t={t} />
       <HowItWorks t={t} />
+      <BeforeAfter t={t} />
+      <BeforeAfterBanner t={t} />
       <Pricing t={t} locale={locale} settings={settings} />
       <Faq t={t} settings={settings} />
       <Contact t={t} locale={locale} businessEmail={contactEmail(settings)} settings={settings} />
