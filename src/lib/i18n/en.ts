@@ -534,6 +534,7 @@ export const en: Dict = {
         "instagram": "Instagram",
         "facebook": "Facebook",
         "google": "Google search",
+        "assistant-ia": "An AI assistant (ChatGPT and the like)",
         "recommandation": "Word of mouth",
         "autre": "Other",
       },

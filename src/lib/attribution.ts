@@ -57,7 +57,7 @@ export const EMPTY_ATTRIBUTION: Attribution = {
  */
 export const HEARD_FROM = [
   "carte", "accroche-porte", "instagram", "facebook",
-  "google", "recommandation", "autre",
+  "google", "assistant-ia", "recommandation", "autre",
 ] as const;
 
 export type HeardFrom = (typeof HEARD_FROM)[number];
@@ -73,6 +73,7 @@ export const HEARD_FROM_FR: Record<HeardFrom, string> = {
   "instagram": "Instagram",
   "facebook": "Facebook",
   "google": "Recherche Google",
+  "assistant-ia": "Assistant IA (ChatGPT, etc.)",
   "recommandation": "Recommandation",
   "autre": "Autre",
 };

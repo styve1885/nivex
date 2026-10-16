@@ -121,8 +121,8 @@ test("une valeur hors bornes est coupée, jamais devinée", () => {
 console.log("\nQuestion « Comment nous avez-vous connus ? »");
 
 test("la liste est fermée", () => {
-  assert.equal(HEARD_FROM.length, 7);
-  for (const k of ["carte", "accroche-porte", "instagram", "facebook", "google", "recommandation", "autre"]) {
+  assert.equal(HEARD_FROM.length, 8);
+  for (const k of ["carte", "accroche-porte", "instagram", "facebook", "google", "assistant-ia", "recommandation", "autre"]) {
     assert.equal(isHeardFrom(k), true, `${k} devrait être accepté`);
   }
   for (const k of ["<script>", "", "CARTE", null, 7]) {

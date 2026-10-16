@@ -546,6 +546,7 @@ export const fr = {
         "instagram": "Instagram",
         "facebook": "Facebook",
         "google": "Recherche Google",
+        "assistant-ia": "Assistant IA (ChatGPT, etc.)",
         "recommandation": "Recommandation",
         "autre": "Autre",
       },
