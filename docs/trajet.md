@@ -45,10 +45,12 @@ crédit mensuel offert.
 
 11. Menu de gauche → **Facturation**. Si le projet n'a pas de compte lié,
     suivez l'assistant.
-12. Google offre un crédit mensuel récurrent sur Maps Platform. Un calcul
-    de trajet se compte en fractions de cent, et le site met chaque mesure
-    en cache un mois par quartier et par jour de la semaine : vous resterez
-    très probablement dans le crédit offert.
+12. Depuis 2025, Google n'offre plus un crédit mensuel global : chaque
+    service a son propre quota gratuit. Pour la Routes API, il se compte en
+    milliers d'appels par mois. Le site met chaque mesure en cache un mois,
+    par quartier et par jour de la semaine — il en fera donc quelques
+    dizaines, très loin du quota. En pratique : rien à payer, mais le compte
+    de facturation reste exigé pour activer le service.
 13. Par prudence, posez une alerte : **Facturation** → **Budgets et
     alertes** → **Créer un budget**, par exemple 5 $ par mois, avec un
     courriel à 50 % et 100 %. Cela ne coupe rien, cela vous prévient.
