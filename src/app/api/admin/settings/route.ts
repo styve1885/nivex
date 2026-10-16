@@ -32,17 +32,18 @@ const Patch = z.object({
     labelFr: z.string().max(300),
     labelEn: z.string().max(300),
   }).optional(),
-  /* La politique de déplacement, réglée depuis l'espace artisan. */
-  travelPolicy: z.object({
-    enabled: z.boolean(),
-    freeUnderMinutes: z.number().int().min(0).max(600),
-    feeShortCents: z.number().int().min(0).max(50_000),
-    feeLongCents: z.number().int().min(0).max(50_000),
+  /* Les zones de déplacement, réglées depuis l'espace artisan. */
+  zonePolicy: z.object({
     longSessionMinutes: z.number().int().min(30).max(960),
-    minSessionOverMinutes: z.number().int().min(0).max(600),
-    maxMinutes: z.number().int().min(1).max(600),
-    fallbackPrefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).max(300),
-    cacheDays: z.number().int().min(1).max(365),
+    zones: z.array(z.object({
+      key: z.string().min(1).max(60),
+      labelFr: z.string().max(120),
+      labelEn: z.string().max(120),
+      prefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).min(1).max(300),
+      shortFeeCents: z.number().int().min(0).max(50_000),
+      longFeeCents: z.number().int().min(0).max(50_000),
+      enabled: z.boolean(),
+    })).min(1).max(20),
   }).optional(),
   services: z.array(z.object({
     key: z.string().min(1).max(40),
@@ -58,18 +59,26 @@ const Patch = z.object({
   (v) => !v.hours || v.hours.every((h) => !h.enabled || h.open < h.close),
   { message: "L'heure de fermeture doit suivre l'heure d'ouverture", path: ["hours"] },
 ).refine(
-  /* Les trois seuils doivent rester dans l'ordre. Sans cette garde, une
-     politique incohérente s'enregistrerait sans bruit : un trajet « gratuit »
-     plus long que le maximum autorisé, et plus personne ne paierait rien. */
+  /* Un même code postal dans deux zones actives rendrait le tarif dépendant
+     de l'ordre du tableau — imprévisible pour qui le règle. L'interface le
+     signale déjà ; ici on refuse de l'enregistrer. */
   (v) => {
-    const t = v.travelPolicy;
-    if (!t) return true;
-    return t.freeUnderMinutes <= t.minSessionOverMinutes
-      && t.minSessionOverMinutes <= t.maxMinutes;
+    if (!v.zonePolicy) return true;
+    const vu = new Set<string>();
+    for (const z of v.zonePolicy.zones) {
+      if (!z.enabled) continue;
+      for (const px of z.prefixes.map((x) => x.toUpperCase())) {
+        if (vu.has(px)) return false;
+        vu.add(px);
+      }
+    }
+    return true;
   },
-  { message: "Les seuils de trajet doivent aller du plus court au plus long", path: ["travelPolicy"] },
+  { message: "Un même code postal figure dans deux zones", path: ["zonePolicy"] },
+).refine(
+  (v) => !v.zonePolicy || v.zonePolicy.zones.every((z) => !z.enabled || z.labelFr.trim().length > 0),
+  { message: "Une zone active doit porter un nom", path: ["zonePolicy"] },
 );
-
 export async function GET() {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
   return NextResponse.json({ ok: true, settings: await getSettings() });

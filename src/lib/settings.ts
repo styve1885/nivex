@@ -1,6 +1,6 @@
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
-import { DEFAULT_TRAVEL_POLICY, type TravelPolicy } from "./travel";
+import { DEFAULT_ZONE_POLICY, type FeeZone, type ZonePolicy } from "./travel";
 
 export type DayHours = { day: number; enabled: boolean; open: string; close: string };
 export type ServiceItem = {
@@ -34,7 +34,7 @@ export type Settings = {
   paused: boolean;
   hours: DayHours[];
   serviceArea: ServiceArea;
-  travelPolicy: TravelPolicy;
+  zonePolicy: ZonePolicy;
   services: ServiceItem[];
   connectedAt: string | null;
 };
@@ -99,8 +99,8 @@ export const DEFAULT_AREA: ServiceArea = {
     "H2V",                                        // Outremont
     "H2Y",                                        // Vieux-Montréal
   ],
-  labelFr: "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
-  labelEn: "We travel to Longueuil, across the South Shore and to several Montreal neighbourhoods. Enter your postal code to check that your address is served and to find out about any travel fee.",
+  labelFr: "Nous nous déplaçons à Longueuil, sur la Rive-Sud, à Saint-Jean-sur-Richelieu et dans plusieurs quartiers de Montréal : Île-des-Sœurs, Verdun, Vieux-Montréal, Westmount et Outremont.",
+  labelEn: "We travel to Longueuil, across the South Shore, to Saint-Jean-sur-Richelieu and to several Montreal neighbourhoods: Nuns' Island, Verdun, Old Montreal, Westmount and Outremont.",
 };
 
 /**
@@ -115,10 +115,12 @@ const PREVIOUS_AREA_LABELS = {
   fr: [
     "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
     "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
+    "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
   ],
   en: [
     "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno and the surrounding South Shore",
     "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Nuns' Island, Verdun, Westmount, Outremont and Old Montreal",
+    "We travel to Longueuil, across the South Shore and to several Montreal neighbourhoods. Enter your postal code to check that your address is served and to find out about any travel fee.",
   ],
 };
 
@@ -127,7 +129,7 @@ export const FALLBACK_SETTINGS: Settings = {
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
   hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 45, slotStep: 30, firstHourFree: true, paused: false,
-  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, travelPolicy: DEFAULT_TRAVEL_POLICY,
+  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, zonePolicy: DEFAULT_ZONE_POLICY,
   services: DEFAULT_SERVICES,
   connectedAt: null,
 };
@@ -155,7 +157,7 @@ function hydrate(row: Row | undefined): Settings {
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
     serviceArea: mergeArea(row.service_area as ServiceArea | null),
-    travelPolicy: readTravelPolicy(row.travel_policy, row.service_area as ServiceArea | null),
+    zonePolicy: readZonePolicy(row.travel_policy),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
   };
@@ -207,48 +209,64 @@ export function mergeArea(stored: ServiceArea | null): ServiceArea {
 }
 
 /**
- * La politique de déplacement, et la bascule depuis l'ancien système.
+ * Les zones de déplacement, et la bascule depuis l'ancien système.
  *
- * Avant, la zone desservie était une liste de codes postaux : dedans on
- * venait, dehors on refusait. La règle porte maintenant sur le temps de
- * trajet réel, et cette liste ne sert plus que de secours quand la mesure
- * échoue. La migration en tire la conséquence : une base qui n'a jamais
- * connu de politique reprend les préfixes qu'elle avait enregistrés, de
- * sorte qu'une panne de mesure le lendemain du déploiement se rattrape sur
- * la zone que l'artisan avait lui-même réglée, et non sur une liste écrite
- * ici.
+ * La colonne a porté successivement une liste de zones à frais, puis une
+ * politique fondée sur le temps de trajet. Elle porte maintenant trois
+ * cercles. Plutôt que de deviner laquelle de ces formes on relit, on vérifie
+ * qu'elle a bien celle d'aujourd'hui : un objet avec un tableau `zones`.
+ * Tout le reste — null, un tableau, une politique de trajet — se lit comme
+ * « jamais réglé », et les valeurs par défaut s'appliquent.
  *
- * `null` : jamais réglé, on sème. Un objet : il fait foi, champ par champ,
- * avec les valeurs par défaut pour ce qui manque — une politique enregistrée
- * avant l'ajout d'un réglage ne doit pas rendre ce réglage inatteignable.
+ * C'est délibérément brutal, et c'est le bon choix ici : une politique à
+ * moitié relue facturerait des montants que personne n'a décidés. Mieux vaut
+ * repartir d'une grille connue, que l'artisan ajustera depuis /admin.
  */
-export function readTravelPolicy(stored: unknown, area: ServiceArea | null): TravelPolicy {
-  const secours = area?.prefixes?.length
-    ? area.prefixes.map((p) => p.toUpperCase())
-    : DEFAULT_TRAVEL_POLICY.fallbackPrefixes;
-
-  if (stored == null || typeof stored !== "object" || Array.isArray(stored)) {
-    return { ...DEFAULT_TRAVEL_POLICY, fallbackPrefixes: secours };
-  }
+export function readZonePolicy(stored: unknown): ZonePolicy {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return DEFAULT_ZONE_POLICY;
 
   const o = stored as Record<string, unknown>;
-  const nombre = (v: unknown, defaut: number) => {
+  if (!Array.isArray(o.zones)) return DEFAULT_ZONE_POLICY;
+
+  const zones = (o.zones as unknown[])
+    .filter((z): z is Record<string, unknown> => Boolean(z) && typeof z === "object" && !Array.isArray(z))
+    .map(hydrateZone)
+    .filter((z): z is FeeZone => z !== null);
+
+  if (zones.length === 0) return DEFAULT_ZONE_POLICY;
+
+  const seuil = Number(o.longSessionMinutes);
+  return {
+    zones,
+    longSessionMinutes: Number.isFinite(seuil) && seuil > 0
+      ? Math.round(seuil)
+      : DEFAULT_ZONE_POLICY.longSessionMinutes,
+  };
+}
+
+/** Une zone enregistrée, ramenée à une forme sûre — ou rien si elle n'a pas de préfixes. */
+function hydrateZone(z: Record<string, unknown>): FeeZone | null {
+  const prefixes = Array.isArray(z.prefixes)
+    ? (z.prefixes as unknown[])
+        .filter((x): x is string => typeof x === "string")
+        .map((x) => x.toUpperCase())
+        .filter((x) => /^[A-Z]\d[A-Z]$/.test(x))
+    : [];
+  if (prefixes.length === 0) return null;
+
+  const cents = (v: unknown) => {
     const n = Number(v);
-    return Number.isFinite(n) && n >= 0 ? Math.round(n) : defaut;
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
   };
 
   return {
-    enabled: typeof o.enabled === "boolean" ? o.enabled : DEFAULT_TRAVEL_POLICY.enabled,
-    freeUnderMinutes: nombre(o.freeUnderMinutes, DEFAULT_TRAVEL_POLICY.freeUnderMinutes),
-    feeShortCents: nombre(o.feeShortCents, DEFAULT_TRAVEL_POLICY.feeShortCents),
-    feeLongCents: nombre(o.feeLongCents, DEFAULT_TRAVEL_POLICY.feeLongCents),
-    longSessionMinutes: nombre(o.longSessionMinutes, DEFAULT_TRAVEL_POLICY.longSessionMinutes),
-    minSessionOverMinutes: nombre(o.minSessionOverMinutes, DEFAULT_TRAVEL_POLICY.minSessionOverMinutes),
-    maxMinutes: nombre(o.maxMinutes, DEFAULT_TRAVEL_POLICY.maxMinutes),
-    fallbackPrefixes: Array.isArray(o.fallbackPrefixes)
-      ? (o.fallbackPrefixes as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.toUpperCase())
-      : secours,
-    cacheDays: nombre(o.cacheDays, DEFAULT_TRAVEL_POLICY.cacheDays),
+    key: typeof z.key === "string" && z.key.trim() ? z.key.trim().slice(0, 60) : `zone-${prefixes[0]}`,
+    labelFr: typeof z.labelFr === "string" ? z.labelFr.slice(0, 120) : "",
+    labelEn: typeof z.labelEn === "string" ? z.labelEn.slice(0, 120) : "",
+    prefixes,
+    shortFeeCents: cents(z.shortFeeCents),
+    longFeeCents: cents(z.longFeeCents),
+    enabled: z.enabled !== false,
   };
 }
 
@@ -304,7 +322,7 @@ export async function saveConnection(input: {
     VALUES (1, ${input.email}, ${input.name}, ${input.picture}, ${enc},
             ${JSON.stringify(DEFAULT_HOURS)}::jsonb,
             ${JSON.stringify(DEFAULT_AREA)}::jsonb,
-            ${JSON.stringify(DEFAULT_TRAVEL_POLICY)}::jsonb,
+            ${JSON.stringify(DEFAULT_ZONE_POLICY)}::jsonb,
             ${JSON.stringify(DEFAULT_SERVICES)}::jsonb,
             now(), now())
     ON CONFLICT (id) DO UPDATE SET
@@ -330,7 +348,7 @@ export async function disconnect() {
 export type SettingsPatch = Partial<Pick<Settings,
   "calendarId" | "timezone" | "businessName" | "hourlyRate" | "currency" | "minMinutes" |
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
-  "hours" | "serviceArea" | "travelPolicy" | "services">>;
+  "hours" | "serviceArea" | "zonePolicy" | "services">>;
 
 export async function updateSettings(patch: SettingsPatch) {
   await ensureSchema();
@@ -352,7 +370,7 @@ export async function updateSettings(patch: SettingsPatch) {
       paused          = ${n.paused},
       hours           = ${JSON.stringify(n.hours)}::jsonb,
       service_area    = ${JSON.stringify(n.serviceArea)}::jsonb,
-      travel_policy   = ${JSON.stringify(n.travelPolicy)}::jsonb,
+      travel_policy   = ${JSON.stringify(n.zonePolicy)}::jsonb,
       services        = ${JSON.stringify(n.services)}::jsonb,
       updated_at      = now()
     WHERE id = 1`;

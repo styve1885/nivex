@@ -12,22 +12,22 @@ import type { Dict } from "@/lib/i18n";
  * répondait pas — on n'y trouve jamais la sienne, et celles qu'on y trouve
  * ne disent rien des frais.
  *
- * La réponse est une estimation, et le dit : elle est calculée pour un jour
- * ouvré ordinaire, alors que l'horaire d'un dimanche soir n'a rien à voir.
- * Le tunnel de réservation refait la mesure pour le vrai jour.
+ * La réponse est celle du tarif le moins avantageux — celui d'une séance
+ * courte —, parce qu'on ne connaît pas encore la durée. Le tunnel de
+ * réservation affine ensuite, et peut donc annoncer moins, jamais plus.
  */
 
 type Reponse = {
-  status: "free" | "fee" | "too-far" | "blocked";
-  minutes: number | null;
-  verified: boolean;
+  status: "free" | "fee" | "out";
+  zoneKey: string | null;
+  labelFr: string | null;
+  labelEn: string | null;
   feeCents: number;
-  requiredSessionMinutes: number;
   currency: string;
 };
 
-export function ZoneChecker({ t, locale, className = "" }: {
-  t: Dict; locale: "fr" | "en"; className?: string;
+export function ZoneChecker({ t, locale, longSession, className = "" }: {
+  t: Dict; locale: "fr" | "en"; longSession: string; className?: string;
 }) {
   const [postal, setPostal] = useState("");
   const [etat, setEtat] = useState<"vide" | "chargement" | "reponse" | "erreur">("vide");
@@ -88,26 +88,29 @@ export function ZoneChecker({ t, locale, className = "" }: {
           <p className="text-[0.95rem] leading-snug text-ink-800">
             {r.status === "free" && z.served}
             {r.status === "fee" && z.servedWithFee.replace("{fee}", money(r.feeCents, r.currency))}
-            {(r.status === "too-far" || r.status === "blocked") && z.tooFar}
+            {r.status === "out" && z.tooFar}
           </p>
 
-          {r.status === "fee" && r.requiredSessionMinutes > 0 && (
+          {r.status !== "out" && (locale === "en" ? r.labelEn : r.labelFr) && (
             <p className="mt-2 text-[0.82rem] font-light leading-relaxed text-ink-500">
-              {z.minSession.replace("{hours}", String(Math.round(r.requiredSessionMinutes / 60)))}
+              {z.zone.replace("{zone}", (locale === "en" ? r.labelEn : r.labelFr) ?? "")}
             </p>
           )}
 
-          {(r.status === "too-far" || r.status === "blocked") && (
+          {/* Le montant annoncé est celui d'une séance courte : on dit donc
+              qu'il baisse au-delà du seuil, plutôt que de laisser croire
+              qu'il est le seul possible. */}
+          {r.status === "fee" && (
+            <p className="mt-1.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
+              {z.reduced.replace("{hours}", longSession)}
+            </p>
+          )}
+
+          {r.status === "out" && (
             <a href={t.brand.phoneHref}
               className="mt-3 inline-block text-[0.9rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
               {t.brand.phone}
             </a>
-          )}
-
-          {r.minutes != null && (
-            <p className="mt-2.5 text-[0.78rem] font-light leading-relaxed text-ink-400">
-              {z.estimate.replace("{minutes}", String(r.minutes))}
-            </p>
           )}
         </div>
       )}

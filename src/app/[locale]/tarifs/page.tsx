@@ -5,7 +5,7 @@ import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettings, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { travelTerms } from "@/lib/travel";
+import { feeTable, longSessionText } from "@/lib/travel";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
@@ -103,7 +103,8 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   const shortest = Math.max(s.minMinutes, 120);
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
-  const travelLine = travelTerms(s.travelPolicy, locale, (c) => formatMoney(c, s.currency, locale));
+  const fees = feeTable(s.zonePolicy, locale, (c) => formatMoney(c, s.currency, locale));
+  const seuil = longSessionText(s.zonePolicy, locale);
 
   return (
     <div className="bg-linen-100">
@@ -328,7 +329,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
               {locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr}
             </p>
-            <ZoneChecker t={t} locale={locale} className="mt-6" />
+            <ZoneChecker t={t} locale={locale} longSession={seuil} className="mt-6" />
           </div>
 
           <dl className="mt-10 border-t border-gold-300/40">
@@ -343,12 +344,38 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                 non récités : changer un montant depuis /admin change cette
                 page, sinon les conditions publiées finiraient par
                 contredire ce que le tunnel facture. */}
-            {travelLine && (
+            {fees.length > 0 && (
               <div className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
                 <dt className="font-display text-[1rem] text-ink-800">{t.tarifs.terms.travel}</dt>
                 <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">
-                  <span className="block">{travelLine}</span>
-                  <span className="mt-2 block text-ink-400">{t.tarifs.terms.travelNote}</span>
+                  {/* Un tableau plutôt qu'une phrase : trois zones et deux
+                      tarifs chacune ne se lisent pas en prose. Les montants
+                      viennent des réglages, jamais d'un texte figé. */}
+                  <table className="w-full max-w-md border-collapse text-[0.85rem]">
+                    <thead>
+                      <tr className="border-b border-gold-300/40">
+                        <th scope="col" className="py-2 pr-4 text-left text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
+                          {t.tarifs.terms.travelZone}
+                        </th>
+                        <th scope="col" className="py-2 pr-4 text-right text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
+                          {t.tarifs.terms.travelShort.replace("{hours}", seuil)}
+                        </th>
+                        <th scope="col" className="py-2 text-right text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
+                          {t.tarifs.terms.travelLong.replace("{hours}", seuil)}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fees.map((f) => (
+                        <tr key={f.zone} className="border-b border-gold-300/20 last:border-0">
+                          <td className="py-2.5 pr-4 text-ink-700">{f.zone}</td>
+                          <td className="py-2.5 pr-4 text-right tabular-nums text-ink-700">{f.short}</td>
+                          <td className="py-2.5 text-right tabular-nums text-ink-700">{f.long}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <span className="mt-4 block text-ink-400">{t.tarifs.terms.travelNote}</span>
                 </dd>
               </div>
             )}

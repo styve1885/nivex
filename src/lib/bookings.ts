@@ -4,8 +4,7 @@ import { bookingRef, token } from "./crypto";
 import { getSettings, inServiceArea, type Settings } from "./settings";
 import { clip, HEARD_FROM_FR, isHeardFrom, referrerHost, type HeardFrom } from "./attribution";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
-import { bookable, sessionTooShort } from "./travel";
-import { judgeZone } from "./zone";
+import { bookable, evaluateZone } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
@@ -60,8 +59,6 @@ export type Booking = {
   estimateCents: number; currency: string; firstHourFree: boolean;
   /* Les frais de route, à part de l'estimation : voir travel.ts. */
   travelFeeCents: number; travelZone: string | null;
-  /* Le trajet mesuré, et s'il l'a vraiment été. */
-  travelMinutes: number | null; travelVerified: boolean;
   googleEventId: string | null; emailSent: boolean;
   createdAt: Date; cancelledAt: Date | null;
   /* D'où vient ce client — vide pour les rendez-vous pris avant la mesure. */
@@ -102,8 +99,6 @@ function hydrate(r: Row): Booking {
     currency: r.currency as string, firstHourFree: r.first_hour_free === true,
     travelFeeCents: Number(r.travel_fee_cents ?? 0),
     travelZone: (r.travel_zone as string) ?? null,
-    travelMinutes: r.travel_minutes == null ? null : Number(r.travel_minutes),
-    travelVerified: r.travel_verified !== false,
     googleEventId: (r.google_event_id as string) ?? null,
     emailSent: r.email_sent === true,
     createdAt: new Date(r.created_at as string),
@@ -125,7 +120,7 @@ export class BookingError extends Error {
   constructor(
     public code:
       | "not_connected" | "slot_taken" | "invalid_slot" | "paused"
-      | "unknown_service" | "out_of_area" | "session_too_short",
+      | "unknown_service" | "out_of_area",
     message?: string,
   ) {
     super(message ?? code);
@@ -173,29 +168,13 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     && (await isFirstBooking(input.email));
   const cents = estimateCents(durationMinutes, settings, firstHourFree);
 
-  /* Le verdict de déplacement, mesuré ici et jamais repris du navigateur —
-     comme la durée et le prix. Le tunnel a déjà posé la même question en
-     chemin, mais c'est cet appel-ci qui engage la maison : entre les deux,
-     un réglage a pu changer, ou l'horaire du jour choisi n'est pas celui
-     qu'on avait estimé. */
-  const verdict = await judgeZone({
-    postalCode: input.postalCode,
-    durationMinutes,
-    startsAt: start,
-    settings,
-  });
-
-  if (verdict.status === "too-far" || verdict.status === "blocked") {
-    throw new BookingError("out_of_area");
-  }
-  if (sessionTooShort(verdict, durationMinutes)) {
-    throw new BookingError("session_too_short");
-  }
-  /* Ceinture et bretelles : `bookable` dit la même chose que les deux gardes
-     ci-dessus. Si l'une d'elles venait à manquer un cas, celle-ci refuse. */
-  if (!bookable(verdict, durationMinutes)) {
-    throw new BookingError("out_of_area");
-  }
+  /* La zone, décidée ici et jamais reprise du navigateur — comme la durée et
+     le prix. Le tunnel a déjà posé la même question en chemin, mais c'est cet
+     appel-ci qui engage la maison : entre les deux, un réglage a pu changer.
+     Et les frais se calculent sur la durée réservée, pas sur le temps
+     facturé : une heure offerte ne raccourcit pas la route. */
+  const verdict = evaluateZone(input.postalCode, durationMinutes, settings.zonePolicy);
+  if (!bookable(verdict)) throw new BookingError("out_of_area");
 
   const labelled = items.map((i) => {
     const svc = settings.services.find((s) => s.key === i.key)!;
@@ -213,7 +192,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
         duration_minutes, estimate_cents, currency, first_hour_free,
-        travel_fee_cents, travel_zone, travel_minutes, travel_verified,
+        travel_fee_cents, travel_zone,
         heard_from, utm_source, utm_medium, utm_campaign,
         referrer, landing_page, first_seen_at, visit_count
       ) VALUES (
@@ -221,7 +200,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
         ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
-        ${verdict.feeCents}, ${travelLabel(verdict)}, ${verdict.minutes}, ${verdict.verified},
+        ${verdict.feeCents}, ${verdict.labelFr},
         ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
         ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits}
       ) RETURNING *`) as Row[];
@@ -333,16 +312,6 @@ function cleanOrigin(input: BookingInputType): {
   };
 }
 
-/**
- * Ce qu'on écrit dans la colonne `travel_zone` : non plus un nom de zone,
- * mais le trajet mesuré. Recopié avec la réservation pour que l'histoire
- * reste lisible si la politique change ensuite.
- */
-function travelLabel(v: { minutes: number | null; verified: boolean }): string | null {
-  if (v.minutes == null) return v.verified ? null : "trajet non vérifié";
-  return `${v.minutes} min de trajet`;
-}
-
 function eventDescription(b: Booking, origin: string, tz: string): string {
   const lines = [
     `Séance : ${formatDateTime(b.startsAt, tz, "fr")} — ${minutesToText(b.durationMinutes, "fr")} de repassage.`,
@@ -360,14 +329,9 @@ function eventDescription(b: Booking, origin: string, tz: string): string {
   ];
   if (b.travelFeeCents > 0) {
     lines.push(
-      `Frais de déplacement${b.travelMinutes != null ? ` (${b.travelMinutes} min de trajet)` : ""} : ${formatMoney(b.travelFeeCents, b.currency, "fr")}`,
+      `Frais de déplacement${b.travelZone ? ` (${b.travelZone})` : ""} : ${formatMoney(b.travelFeeCents, b.currency, "fr")}`,
       `Total : ${formatMoney(b.estimateCents + b.travelFeeCents, b.currency, "fr")}`,
     );
-  } else if (b.travelMinutes != null) {
-    lines.push(`Trajet : ${b.travelMinutes} min en transport en commun, sans frais.`);
-  }
-  if (!b.travelVerified) {
-    lines.push("", "⚠ Trajet NON VÉRIFIÉ — l'horaire n'a pas pu être consulté. Vérifiez le déplacement avant de vous engager.");
   }
   if (b.notes) lines.push("", `Précisions du client : ${b.notes}`);
   if (b.origin.heardFrom) {
@@ -385,7 +349,6 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     startsAt: b.startsAt, durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
     currency: b.currency, firstHourFree: b.firstHourFree, timezone: s.timezone,
     travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
-    travelMinutes: b.travelMinutes, travelVerified: b.travelVerified,
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
     businessEmail: contactEmail(s),

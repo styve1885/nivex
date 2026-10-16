@@ -461,7 +461,7 @@ export const en: Dict = {
       },
       {
         q: "Which areas do you serve?",
-        a: "Longueuil, the South Shore and several Montreal neighbourhoods. Rather than a list of towns, we look at the real travel time by public transit to your door, on the day of your session. Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs if anything.",
+        a: "Longueuil and the South Shore with no travel fee; Saint-Jean-sur-Richelieu and several Montreal neighbourhoods — Nuns' Island, Verdun, Old Montreal, Westmount, Outremont — with a fee that depends on the area and on the length of the session. Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs if anything.",
       },
       {
         q: "How does payment work?",
@@ -485,10 +485,10 @@ export const en: Dict = {
     check: "Check",
     checking: "Checking…",
     served: "Your address is served.",
-    servedWithFee: "Served, with a {fee} travel fee.",
+    servedWithFee: "Served, with a {fee} travel fee per visit.",
     tooFar: "Outside the area for online booking. Do call us and we will see together what is possible.",
-    minSession: "At this distance, a session runs {hours} hours at the least.",
-    estimate: "Estimate for an ordinary weekday: around {minutes} minutes of travel by public transit. The day you pick is recalculated.",
+    zone: "Area: {zone}.",
+    reduced: "The reduced rate applies from {hours} of session onward.",
     error: "The check did not go through. Try again, or call us at",
   },
   booking: {
@@ -520,16 +520,12 @@ export const en: Dict = {
       postal: "Postal code",
       postalPlaceholder: "J4K 1A1",
       outOfZone:
-        "This address needs more travel than online booking can take on. Do call us: sometimes an arrangement is possible, and we will tell you plainly either way.",
-      checking: "Checking the journey…",
-      unverified:
-        "We could not reach the transit schedule for this address. Your booking can still go ahead: we will check the journey and call you back if anything is off.",
-      travelFree: "Your address is {minutes} minutes away. No travel fee.",
-      minSession:
-        "At {minutes} minutes of travel, a session runs {hours} hours at the least. Your selection comes to {current}. Go back a step to add pieces.",
+        "This address falls outside the area we travel to, and online booking cannot go further. Do call us: sometimes an arrangement is possible, and we will tell you plainly either way.",
+      checking: "Checking the area…",
+      travelFree: "Your address is served, travel included.",
       inZone: "Good news, you're inside the service area.",
       travelFee: "Travel fee",
-      travelNote: "Worked out from the travel time to your address. It is added to the price of the session: the first-hour-free offer does not cover it and does not reduce it.",
+      travelNote: "This fee is added to the price of the session. The first-hour-free offer does not cover it and does not reduce it.",
       heardFrom: "How did you hear about us? (optional)",
       heardFromEmpty: "I'd rather not say",
       heardFromOptions: {
@@ -593,7 +589,6 @@ export const en: Dict = {
       phone: "Invalid number",
       postal: "Invalid postal code (e.g. J4K 1A1)",
       outOfArea: `This address is outside the area we travel to. Call us at ${PHONE} and we will see together what is possible.`,
-      sessionTooShort: "At this distance, the session has to run longer. Go back to the first step to add pieces.",
     },
   },
   manage: {
@@ -769,7 +764,10 @@ export const en: Dict = {
         { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
       ],
       travel: "Travel fee",
-      travelNote: "The fee is worked out from the real travel time by public transit to your address, on the day of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It also applies to every subscriber visit. Beyond a certain distance a session must run three hours at the least, and further still the booking is made by telephone.",
+      travelZone: "Area",
+      travelShort: "Under {hours}",
+      travelLong: "{hours} or more",
+      travelNote: "The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit, subscribers included. Longueuil and the South Shore pay none.",
     },
     firstFreeLabel: "First session",
     cta: {

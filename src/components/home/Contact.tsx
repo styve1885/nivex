@@ -8,6 +8,7 @@ import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { ZoneChecker } from "../ZoneChecker";
+import { longSessionText } from "@/lib/travel";
 
 type Field = "name" | "email" | "message";
 
@@ -224,7 +225,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
                 {locale === "en" ? settings.serviceArea.labelEn : settings.serviceArea.labelFr}
               </p>
 
-              <ZoneChecker t={t} locale={locale} className="mt-6" />
+              <ZoneChecker t={t} locale={locale} longSession={longSessionText(settings.zonePolicy, locale)} className="mt-6" />
             </div>
           </Reveal>
         </div>

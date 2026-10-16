@@ -124,12 +124,6 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             {when(b.startsAt, tz)} · {duration(b.durationMinutes)}
           </p>
         </div>
-        {!b.travelVerified && (
-          <span title="Trajet non vérifié" aria-label="Trajet non vérifié"
-            className="flex-none border border-[#B4453C]/50 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
-            Trajet ?
-          </span>
-        )}
         {silent && (
           <span title="Ni courriel ni agenda" aria-label="Confirmation non envoyée"
             className="flex-none border border-[#B4453C]/50 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
@@ -157,31 +151,19 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               {money(b.estimateCents, b.currency)}
               {b.firstHourFree && <span className="ml-2 text-[10px] uppercase tracking-wider text-gold-600">1re heure offerte</span>}
             </Line>
-            {b.travelMinutes != null && (
-              <Line label="Trajet">
-                {b.travelMinutes} min en transport en commun
-              </Line>
-            )}
             {b.travelFeeCents > 0 && (
               <>
-                <Line label="Frais de déplacement">{money(b.travelFeeCents, b.currency)}</Line>
+                <Line label="Frais de déplacement">
+                  {money(b.travelFeeCents, b.currency)}
+                  {b.travelZone && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-400">{b.travelZone}</span>
+                  )}
+                </Line>
                 <Line label="Total">
                   <strong className="font-medium">{money(b.estimateCents + b.travelFeeCents, b.currency)}</strong>
                 </Line>
               </>
             )}
-            {!b.travelVerified && (
-              <div className="!mt-4 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3">
-                <p className="text-[0.82rem] leading-relaxed text-[#8E332C]">
-                  Trajet non vérifié : l&apos;horaire de transport n&apos;a pas répondu, et cette adresse a été
-                  acceptée sur la seule foi de son code postal. Vérifiez le déplacement avant de vous engager.
-                </p>
-              </div>
-            )}
-            <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
-
-            <Origin origin={b.origin} tz={tz} />
-
             {silent && (
               <div className="!mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-4">
                 <p className="text-[0.85rem] leading-relaxed text-[#8E332C]">

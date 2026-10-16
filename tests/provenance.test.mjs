@@ -28,17 +28,19 @@ console.log("\nZone desservie : un libellé, plus une décision");
    que la bascule n'a rien cassé en chemin — le libellé affiché suit le code,
    et une phrase écrite à la main depuis /admin survit. */
 
-test("le nouveau libellé invite à vérifier, au lieu d'énumérer des villes", () => {
-  assert.match(DEFAULT_AREA.labelFr, /Entrez votre code postal/);
-  assert.match(DEFAULT_AREA.labelEn, /Enter your postal code/);
-  assert.doesNotMatch(DEFAULT_AREA.labelFr, /Saint-Jean-sur-Richelieu/,
-    "plus de liste de villes : elle ne répondait pas à la question posée");
+test("le libellé nomme les quartiers desservis", () => {
+  /* Le détail des zones et des frais vit dans travel.test.mjs ; ici on
+     vérifie seulement que la phrase affichée suit bien le code. */
+  assert.match(DEFAULT_AREA.labelFr, /Saint-Jean-sur-Richelieu/);
+  assert.match(DEFAULT_AREA.labelFr, /Outremont/);
+  assert.match(DEFAULT_AREA.labelEn, /Nuns' Island/);
 });
 
 test("un libellé laissé au défaut d'hier suit le code", () => {
   for (const ancien of [
     "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
     "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
+    "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
   ]) {
     const merged = mergeArea({ prefixes: ["J4K"], labelFr: ancien, labelEn: "x" });
     assert.equal(merged.labelFr, DEFAULT_AREA.labelFr, "le nouveau texte doit prendre la place");

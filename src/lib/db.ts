@@ -244,45 +244,13 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_fee_cents integer NOT NULL DEFAULT 0`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_zone      text`;
 
-  /* Le temps de trajet mesuré, et s'il l'a vraiment été.
+  /* La grille des zones et des frais, réglée depuis /admin.
    *
-   * `travel_verified` à faux signale une réservation acceptée sur la seule
-   * foi du code postal, l'API n'ayant pas répondu. L'artisan doit la
-   * regarder avant de s'engager : c'est le seul cas où le site promet un
-   * déplacement qu'il n'a pas mesuré. La valeur par défaut est `true` pour
-   * que les réservations d'avant ne se signalent pas à tort. */
-  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_minutes   integer`;
-  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS travel_verified  boolean NOT NULL DEFAULT true`;
-
-  /* Même migration pour les réglages : la colonne manque aux bases créées
-     avant les frais de déplacement. NULL y veut dire « jamais réglé ». */
+   * La colonne garde son nom d'origine : elle a porté successivement des
+   * zones à frais, une politique de temps de trajet, puis les trois cercles
+   * d'aujourd'hui. La renommer obligerait à migrer pour un gain cosmétique,
+   * et `readZonePolicy` reconnaît déjà la forme qu'elle doit avoir. */
   await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS travel_policy jsonb`;
-
-  /* L'ancienne colonne des zones par code postal. On la laisse en place :
-     la supprimer ferait perdre les réglages d'un artisan qui reviendrait en
-     arrière, et une colonne inutilisée ne coûte rien. */
-
-  /*
-   * Mesures de trajet, en cache.
-   *
-   * Chaque appel à Google se paie. Une mesure par code postal et par jour de
-   * la semaine suffit : le jour compte beaucoup — le dimanche, les autobus
-   * se font rares —, l'heure beaucoup moins, et la retenir multiplierait les
-   * appels par le nombre de créneaux proposés.
-   *
-   * Aucune adresse ici, seulement les trois premiers caractères d'un code
-   * postal : de quoi désigner un quartier, jamais quelqu'un.
-   */
-  await q`
-    CREATE TABLE IF NOT EXISTS nivex_transit_cache (
-      postal      text        NOT NULL,
-      weekday     smallint    NOT NULL,
-      minutes     integer     NOT NULL,
-      computed_at timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY (postal, weekday)
-    )`;
-
-  await q`CREATE INDEX IF NOT EXISTS nivex_transit_cache_age_idx ON nivex_transit_cache (computed_at)`;
 
   /*
    * Journal anonyme des visites.

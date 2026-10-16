@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
-import type { TravelStatus } from "@/lib/travel";
+import type { ZoneStatus } from "@/lib/travel";
 import { readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
@@ -31,13 +31,13 @@ export type WizardConfig = {
 /* L'horaire de la maison : les jours ouverts et les heures praticables,
    tels que le serveur les calcule à partir des réglages. Aucun agenda
    n'est lu — c'est l'appel de l'artisan qui fixe le rendez-vous. */
-/** Ce que le serveur répond sur le déplacement, sans jamais dire d'où il part. */
+/** Ce que le serveur répond sur la zone et les frais. */
 type TravelAnswer = {
-  status: TravelStatus;
-  minutes: number | null;
-  verified: boolean;
+  status: ZoneStatus;
+  zoneKey: string | null;
+  labelFr: string | null;
+  labelEn: string | null;
   feeCents: number;
-  requiredSessionMinutes: number;
 };
 
 type DaySlots = { date: string; weekday: number; open: boolean; slots: { time: string; iso: string }[] };
@@ -178,12 +178,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   }, [travelKey, postalKey, duration]);
 
   /* — Validation — */
-  /* Trois refus possibles, et une seule source : le serveur. Celui-ci n'est
+  /* Un seul refus possible, et une seule source : le serveur. Celui-ci n'est
      que la politesse de le dire avant de faire remplir le reste. */
-  const outOfZone = travel?.status === "too-far" || travel?.status === "blocked";
-  const tooShort = Boolean(
-    travel && travel.requiredSessionMinutes > 0 && duration < travel.requiredSessionMinutes,
-  );
+  const outOfZone = travel?.status === "out";
   const inZone = travel?.status === "free" || travel?.status === "fee";
 
   const errors = {
@@ -197,7 +194,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   };
   const step2Valid =
     Object.values(errors).every((e) => e === null)
-    && !outOfZone && !tooShort && !travelLoading;
+    && !outOfZone && !travelLoading;
 
   const canContinue =
     step === 0 ? duration > 0
@@ -432,33 +429,20 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   </div>
                 )}
 
-                {inZone && tooShort && (
-                  <div role="status"
-                    className="border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
-                    <p>
-                      {t.booking.step2.minSession
-                        .replace("{minutes}", String(travel.minutes ?? "—"))
-                        .replace("{hours}", String(Math.round(travel.requiredSessionMinutes / 60)))
-                        .replace("{current}", durationText)}
-                    </p>
-                  </div>
-                )}
-
-                {inZone && !tooShort && travel.status === "free" && (
+                {inZone && travel.status === "free" && (
                   <p className="flex items-start gap-2 text-[0.85rem] leading-relaxed text-gold-700">
                     <span aria-hidden="true" className="mt-0.5">◆</span>
-                    {travel.minutes != null
-                      ? t.booking.step2.travelFree.replace("{minutes}", String(travel.minutes))
-                      : t.booking.step2.inZone}
+                    {t.booking.step2.travelFree}
                   </p>
                 )}
 
-                {inZone && !tooShort && travel.status === "fee" && (
+                {inZone && travel.status === "fee" && (
                   <>
                     <div className="flex items-baseline justify-between gap-5 border border-gold-300/60 bg-linen-50 px-5 py-4">
                       <span className="text-[0.85rem] font-light leading-snug text-ink-600">
                         {t.booking.step2.travelFee}
-                        {travel.minutes != null && ` (${travel.minutes} min)`}
+                        {(config.locale === "en" ? travel.labelEn : travel.labelFr) &&
+                          ` (${config.locale === "en" ? travel.labelEn : travel.labelFr})`}
                       </span>
                       <span className="flex-none font-display text-[1.15rem] tabular-nums text-ink-800">
                         {money(travel.feeCents)}
@@ -470,14 +454,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   </>
                 )}
 
-                {/* L'horaire n'a pas répondu : on le dit plutôt que de faire
-                    comme si de rien n'était. La réservation reste possible,
-                    et l'artisan la verra marquée comme non vérifiée. */}
-                {inZone && !travel.verified && (
-                  <p className="mt-3 text-[0.78rem] font-light leading-[1.7] text-ink-400">
-                    {t.booking.step2.unverified}
-                  </p>
-                )}
               </div>
             )}
 
@@ -562,8 +538,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
               {travel && travel.feeCents > 0 && (
                 <Row
-                  label={travel.minutes != null
-                    ? `${t.booking.step4.travelFee} (${travel.minutes} min)`
+                  label={(config.locale === "en" ? travel.labelEn : travel.labelFr)
+                    ? `${t.booking.step4.travelFee} (${config.locale === "en" ? travel.labelEn : travel.labelFr})`
                     : t.booking.step4.travelFee}
                   value={money(travel.feeCents)}
                   hint={t.booking.step4.travelHint} />

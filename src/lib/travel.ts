@@ -1,92 +1,123 @@
 /**
- * Frais et limites de déplacement, décidés par le temps de trajet réel.
+ * Zones desservies et frais de déplacement.
  *
- * Une liste de codes postaux dit où l'artisan accepte d'aller ; elle ne dit
- * pas ce que le voyage coûte. Deux adresses du même quartier peuvent être à
- * quarante minutes l'une de l'autre en autobus, et un dimanche ne ressemble
- * pas à un mardi. La règle porte donc sur la seule chose qui compte vraiment
- * — le temps qu'il faut pour s'y rendre —, mesuré par `transit.ts`.
+ * Trois cercles autour de la maison, reconnus aux trois premiers caractères
+ * du code postal. Le plus proche ne coûte rien ; les deux autres ajoutent des
+ * frais, moindres pour une longue séance puisque la route se répartit sur
+ * plus d'heures de travail.
  *
- * Ce module ne parle à personne : il reçoit un nombre de minutes et rend un
- * verdict. C'est ce qui le rend vérifiable sans réseau.
+ * Deux principes gouvernent ces frais, et ils tiennent ensemble dans une
+ * seule décision : ils vivent dans leur propre colonne, jamais fondus dans
+ * l'estimation.
+ *
+ *  — Ils ne sont pas du temps de repassage. L'offre « première heure
+ *    offerte » escompte des heures de travail ; elle n'a donc aucune prise
+ *    sur eux, ni pour les effacer ni pour les réduire.
+ *
+ *  — Ils se règlent depuis l'espace artisan. Les zones, les préfixes et les
+ *    montants sont des décisions commerciales : elles ne doivent pas
+ *    demander une mise en production.
+ *
+ * Ce module ne parle à personne : il reçoit un code postal et une durée, et
+ * rend un verdict. C'est ce qui le rend vérifiable sans réseau ni base.
  */
 
-export type TravelPolicy = {
-  /** Faux : on ne mesure rien et personne ne paie de frais. */
-  enabled: boolean;
-  /** En deçà, le déplacement est compris dans le prix. */
-  freeUnderMinutes: number;
+export type FeeZone = {
+  key: string;
+  labelFr: string;
+  labelEn: string;
+  /** Les trois premiers caractères des codes postaux couverts. */
+  prefixes: string[];
   /** Frais d'une séance plus courte que `longSessionMinutes`, en cents. */
-  feeShortCents: number;
+  shortFeeCents: number;
   /** Frais d'une séance qui l'atteint, en cents. */
-  feeLongCents: number;
-  /** Ce qu'on appelle une longue séance. */
-  longSessionMinutes: number;
-  /** Au-delà de ce trajet, la séance doit durer `longSessionMinutes`. */
-  minSessionOverMinutes: number;
-  /** Au-delà, la réservation en ligne est fermée : il faut appeler. */
-  maxMinutes: number;
-  /**
-   * Codes postaux acceptés quand la mesure est impossible.
-   *
-   * Volontairement plus courte que la zone affichée : une adresse qu'on sait
-   * lointaine ne doit pas passer en aveugle. Mieux vaut un client qui
-   * téléphone qu'un déplacement de deux heures facturé comme un voisinage.
-   */
-  fallbackPrefixes: string[];
-  /** Durée de vie d'une mesure en cache, en jours. */
-  cacheDays: number;
+  longFeeCents: number;
+  enabled: boolean;
 };
 
-export const DEFAULT_TRAVEL_POLICY: TravelPolicy = {
-  enabled: true,
-  freeUnderMinutes: 60,
-  feeShortCents: 2500,
-  feeLongCents: 1500,
+export type ZonePolicy = {
+  zones: FeeZone[];
+  /**
+   * Ce qu'on appelle une longue séance.
+   *
+   * Le seuil est atteint, non dépassé : trois heures tout rond paient déjà
+   * le tarif réduit. C'est la lecture qui favorise le client, et celle qu'on
+   * a annoncée.
+   */
+  longSessionMinutes: number;
+};
+
+export const DEFAULT_ZONE_POLICY: ZonePolicy = {
   longSessionMinutes: 180,
-  minSessionOverMinutes: 75,
-  maxMinutes: 105,
-  fallbackPrefixes: [
-    "J4G","J4H","J4J","J4K","J4L","J4M","J4N",   // Vieux-Longueuil
-    "J3Y","J4T",                                  // Saint-Hubert
-    "J4V",                                        // Greenfield Park
-    "J4P","J4R","J4S",                            // Saint-Lambert
-    "J4W","J4X","J4Y","J4Z",                      // Brossard
-    "J4B",                                        // Boucherville
-    "J3V",                                        // Saint-Bruno-de-Montarville
-    "H3E",                                        // Île-des-Sœurs
-    "H4G","H4H",                                  // Verdun
-    "H3Y","H3Z",                                  // Westmount
-    "H2V",                                        // Outremont
-    "H2Y",                                        // Vieux-Montréal
+  zones: [
+    {
+      key: "a",
+      labelFr: "Longueuil et la Rive-Sud",
+      labelEn: "Longueuil and the South Shore",
+      prefixes: [
+        "J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N",  // Vieux-Longueuil
+        "J3Y", "J4T",                                      // Saint-Hubert
+        "J4V",                                             // Greenfield Park
+        "J4P", "J4R", "J4S",                               // Saint-Lambert
+        "J4W", "J4X", "J4Y", "J4Z",                        // Brossard
+        "J4B",                                             // Boucherville
+        "J3V",                                             // Saint-Bruno-de-Montarville
+        "J3E",                                             // Sainte-Julie
+        "J3L",                                             // Chambly
+        "J3X",                                             // Varennes
+        "J5R",                                             // La Prairie
+      ],
+      shortFeeCents: 0,
+      longFeeCents: 0,
+      enabled: true,
+    },
+    {
+      key: "b",
+      labelFr: "Quartiers de Montréal",
+      labelEn: "Montreal neighbourhoods",
+      prefixes: [
+        "H3E",          // Île-des-Sœurs
+        "H4G", "H4H",   // Verdun
+        "H2Y",          // Vieux-Montréal
+        "H3Y", "H3Z",   // Westmount
+        "H2V",          // Outremont
+      ],
+      shortFeeCents: 1500,
+      longFeeCents: 1000,
+      enabled: true,
+    },
+    {
+      key: "c",
+      labelFr: "Saint-Jean-sur-Richelieu",
+      labelEn: "Saint-Jean-sur-Richelieu",
+      prefixes: ["J2W", "J2X", "J2Y", "J3A", "J3B"],
+      shortFeeCents: 2500,
+      longFeeCents: 2000,
+      enabled: true,
+    },
   ],
-  cacheDays: 30,
 };
 
 /* ============================ Verdict ============================ */
 
-export type TravelStatus =
-  /** Dans le voisinage : rien à payer. */
+export type ZoneStatus =
+  /** Desservi, déplacement compris dans le prix. */
   | "free"
   /** Desservi, avec des frais de route. */
   | "fee"
-  /** Trop loin pour la réservation en ligne : il faut appeler. */
-  | "too-far"
-  /** Mesure impossible et adresse hors liste de secours : on n'engage rien. */
-  | "blocked";
+  /** Hors zone : la réservation en ligne ne peut pas aboutir. */
+  | "out";
 
-export type TravelVerdict = {
-  status: TravelStatus;
-  /** Le trajet mesuré, ou `null` quand la mesure a échoué. */
-  minutes: number | null;
-  /** Vrai quand le trajet a été réellement mesuré, faux quand on a fait confiance au code postal. */
-  verified: boolean;
+export type ZoneVerdict = {
+  status: ZoneStatus;
+  zoneKey: string | null;
+  labelFr: string | null;
+  labelEn: string | null;
   feeCents: number;
-  /**
-   * Durée minimale de séance imposée par l'éloignement, en minutes.
-   * Zéro quand l'adresse n'en impose aucune.
-   */
-  requiredSessionMinutes: number;
+};
+
+export const OUT_OF_ZONE: ZoneVerdict = {
+  status: "out", zoneKey: null, labelFr: null, labelEn: null, feeCents: 0,
 };
 
 /** Les trois premiers caractères, sans espace ni casse. */
@@ -94,99 +125,79 @@ export function postalHead(postal: string): string {
   return postal.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 3);
 }
 
-export function inFallback(postal: string, policy: TravelPolicy): boolean {
+/** La zone qui reconnaît ce code postal, ou rien. */
+export function zoneFor(postal: string, policy: ZonePolicy): FeeZone | null {
   const p = postalHead(postal);
-  return p.length === 3 && policy.fallbackPrefixes.some((x) => x.toUpperCase() === p);
+  if (p.length !== 3) return null;
+  for (const z of policy.zones) {
+    if (!z.enabled) continue;
+    if (z.prefixes.some((x) => x.toUpperCase() === p)) return z;
+  }
+  return null;
 }
 
 /**
  * Le verdict pour une adresse et une séance.
  *
- * `minutes` vaut `null` quand l'API n'a pas répondu. On bascule alors sur la
- * liste de secours : l'adresse passe, sans frais — on ne facture pas une
- * route qu'on n'a pas mesurée — et la réservation est marquée comme non
- * vérifiée pour que l'artisan sache qu'il doit regarder.
- *
- * Les frais se calculent sur la durée que la séance aura réellement, c'est-à-dire
- * au moins celle que l'éloignement impose. Afficher le tarif court à quelqu'un
- * qui devra de toute façon réserver trois heures serait une annonce fausse.
+ * La durée est celle de la séance réservée, pas le temps facturé : une
+ * première heure offerte ne raccourcit pas la route, et ne doit donc pas
+ * faire basculer les frais du côté du tarif plein.
  */
-export function evaluateTravel(
-  minutes: number | null,
-  durationMinutes: number,
+export function evaluateZone(
   postal: string,
-  policy: TravelPolicy,
-): TravelVerdict {
-  if (!policy.enabled) {
-    return { status: "free", minutes, verified: minutes != null, feeCents: 0, requiredSessionMinutes: 0 };
-  }
+  durationMinutes: number,
+  policy: ZonePolicy,
+): ZoneVerdict {
+  const z = zoneFor(postal, policy);
+  if (!z) return OUT_OF_ZONE;
 
-  if (minutes == null) {
-    return inFallback(postal, policy)
-      ? { status: "free", minutes: null, verified: false, feeCents: 0, requiredSessionMinutes: 0 }
-      : { status: "blocked", minutes: null, verified: false, feeCents: 0, requiredSessionMinutes: 0 };
-  }
+  const cents = durationMinutes >= policy.longSessionMinutes ? z.longFeeCents : z.shortFeeCents;
 
-  if (minutes > policy.maxMinutes) {
-    return { status: "too-far", minutes, verified: true, feeCents: 0, requiredSessionMinutes: 0 };
-  }
-
-  if (minutes < policy.freeUnderMinutes) {
-    return { status: "free", minutes, verified: true, feeCents: 0, requiredSessionMinutes: 0 };
-  }
-
-  const requiredSessionMinutes = minutes > policy.minSessionOverMinutes ? policy.longSessionMinutes : 0;
-  const effective = Math.max(durationMinutes, requiredSessionMinutes);
-  const feeCents = effective >= policy.longSessionMinutes ? policy.feeLongCents : policy.feeShortCents;
-
-  return { status: "fee", minutes, verified: true, feeCents, requiredSessionMinutes };
-}
-
-/** La séance proposée est-elle assez longue pour cette adresse ? */
-export function sessionTooShort(v: TravelVerdict, durationMinutes: number): boolean {
-  return v.requiredSessionMinutes > 0 && durationMinutes < v.requiredSessionMinutes;
+  return {
+    status: cents > 0 ? "fee" : "free",
+    zoneKey: z.key,
+    labelFr: z.labelFr,
+    labelEn: z.labelEn,
+    feeCents: Math.max(0, Math.round(cents)),
+  };
 }
 
 /** La réservation en ligne peut-elle aboutir ? */
-export function bookable(v: TravelVerdict, durationMinutes: number): boolean {
-  if (v.status === "too-far" || v.status === "blocked") return false;
-  return !sessionTooShort(v, durationMinutes);
+export function bookable(v: ZoneVerdict): boolean {
+  return v.status !== "out";
 }
 
 /* ============================ Textes ============================ */
 
 /**
- * La phrase des conditions, construite depuis la politique en vigueur.
+ * Le tableau des frais, construit depuis la politique en vigueur.
  *
- * La page Tarifs ne récite pas « 25 $ » : elle lit ce qui est réglé. Changer
+ * La page Tarifs ne récite pas « 15 $ » : elle lit ce qui est réglé. Changer
  * un montant depuis /admin change la page, sans quoi les conditions publiées
- * finiraient par contredire ce que le tunnel facture.
+ * finiraient par contredire ce que le tunnel facture. Les zones sans frais
+ * n'y figurent pas : une ligne « 0 $ » n'apprend rien.
  */
-export function travelTerms(
-  policy: TravelPolicy,
+export type FeeRow = { zone: string; short: string; long: string };
+
+export function feeTable(
+  policy: ZonePolicy,
   locale: "fr" | "en",
   money: (cents: number) => string,
-): string | null {
-  if (!policy.enabled || (policy.feeShortCents <= 0 && policy.feeLongCents <= 0)) return null;
-  const h = hoursText(policy.longSessionMinutes, locale);
-  const free = hoursText(policy.freeUnderMinutes, locale);
-  if (locale === "en") {
-    return `Travel fee by distance: ${money(policy.feeShortCents)} per visit shorter than ${h}, ${money(policy.feeLongCents)} per visit of ${h} or more, for addresses more than ${free} of travel away.`;
-  }
-  /* « à plus de une heure » ne s'écrit pas. L'élision dépend de ce que les
-     réglages produisent — « une heure », « 45 minutes », « 1 h 30 » —, elle
-     se décide donc ici et non dans une chaîne figée. */
-  const plusDe = /^[aeiouâêîôûàéèùh]/i.test(free) ? `plus d'${free}` : `plus de ${free}`;
-  return `Frais de déplacement selon la distance : ${money(policy.feeShortCents)} par visite de moins de ${h}, ${money(policy.feeLongCents)} par visite de ${h} ou plus, pour les adresses situées à ${plusDe} de trajet.`;
+): FeeRow[] {
+  return policy.zones
+    .filter((z) => z.enabled && (z.shortFeeCents > 0 || z.longFeeCents > 0))
+    .map((z) => ({
+      zone: locale === "en" ? z.labelEn : z.labelFr,
+      short: money(z.shortFeeCents),
+      long: money(z.longFeeCents),
+    }));
 }
 
-function hoursText(minutes: number, locale: "fr" | "en"): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return locale === "en" ? `${m} minutes` : `${m} minutes`;
-  if (m === 0) {
-    if (locale === "en") return h === 1 ? "one hour" : `${h} hours`;
-    return h === 1 ? "une heure" : `${h} heures`;
-  }
-  return locale === "en" ? `${h} h ${m}` : `${h} h ${m}`;
+/** Les heures du seuil, écrites comme on les dit. */
+export function longSessionText(policy: ZonePolicy, locale: "fr" | "en"): string {
+  const h = Math.floor(policy.longSessionMinutes / 60);
+  const m = policy.longSessionMinutes % 60;
+  if (m !== 0) return `${h} h ${m}`;
+  if (locale === "en") return h === 1 ? "one hour" : `${h} hours`;
+  return h === 1 ? "une heure" : `${h} heures`;
 }
