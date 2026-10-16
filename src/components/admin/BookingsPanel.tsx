@@ -164,6 +164,10 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                 </Line>
               </>
             )}
+            <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
+
+            <Origin origin={b.origin} tz={tz} />
+
             {silent && (
               <div className="!mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-4">
                 <p className="text-[0.85rem] leading-relaxed text-[#8E332C]">
