@@ -43,6 +43,7 @@ export default async function AdminPage({
       durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
       currency: b.currency, firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
+      travelMinutes: b.travelMinutes, travelVerified: b.travelVerified,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
       origin: {
         heardFrom: b.origin.heardFrom,

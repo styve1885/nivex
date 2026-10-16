@@ -7,6 +7,7 @@ import { CheckIcon, ArrowIcon } from "../Icons";
 import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
+import { ZoneChecker } from "../ZoneChecker";
 
 type Field = "name" | "email" | "message";
 
@@ -216,7 +217,14 @@ export function Contact({ t, locale, businessEmail, settings }: {
 
               <div className="rule-diamond my-8" aria-hidden="true"><span className="text-[10px]">◆</span></div>
 
-              <p className="text-[0.85rem] font-light leading-[1.9] text-ink-500">{t.brand.region}</p>
+              {/* Le texte de zone, puis de quoi le vérifier. Une liste de
+                  villes ne répond pas à la seule question qui se pose :
+                  venez-vous chez moi, et combien. */}
+              <p className="text-[0.85rem] font-light leading-[1.9] text-ink-500">
+                {locale === "en" ? settings.serviceArea.labelEn : settings.serviceArea.labelFr}
+              </p>
+
+              <ZoneChecker t={t} locale={locale} className="mt-6" />
             </div>
           </Reveal>
         </div>

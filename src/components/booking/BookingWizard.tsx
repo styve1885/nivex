@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
 import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
-import { travelFeeFor, type TravelZone } from "@/lib/travel";
+import type { TravelStatus } from "@/lib/travel";
 import { readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
@@ -24,15 +24,22 @@ export type WizardConfig = {
   slotStep: number;
   firstHourFree: boolean;
   timezone: string;
-  areaPrefixes: string[];
-  /* Les zones à frais de route. Le serveur recalcule les frais à la
-     création : ceci ne sert qu'à les annoncer avant de confirmer. */
-  travelZones: TravelZone[];
+  /* Plus aucune liste de codes postaux ici : le verdict vient du serveur,
+     qui seul connaît l'adresse de départ et interroge les horaires. */
 };
 
 /* L'horaire de la maison : les jours ouverts et les heures praticables,
    tels que le serveur les calcule à partir des réglages. Aucun agenda
    n'est lu — c'est l'appel de l'artisan qui fixe le rendez-vous. */
+/** Ce que le serveur répond sur le déplacement, sans jamais dire d'où il part. */
+type TravelAnswer = {
+  status: TravelStatus;
+  minutes: number | null;
+  verified: boolean;
+  feeCents: number;
+  requiredSessionMinutes: number;
+};
+
 type DaySlots = { date: string; weekday: number; open: boolean; slots: { time: string; iso: string }[] };
 type Schedule = { timezone: string; duration: number; today: string; days: DaySlots[] };
 
@@ -50,6 +57,17 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
   const [heardFrom, setHeardFrom] = useState<HeardFrom | "">("");
+
+  /* Le verdict de déplacement vient du serveur : lui seul connaît l'adresse
+     de départ et peut interroger les horaires. Le navigateur ne fait que
+     demander et afficher — et la création de la réservation repose la même
+     question, car c'est elle qui engage la maison.
+
+     On retient la réponse avec l'étiquette de la demande qui l'a produite.
+     L'attente se déduit alors — on attend tant que ce qu'on tient ne répond
+     pas à l'adresse et à la durée courantes —, et une réponse en retard,
+     partie sous un code postal changé depuis, se reconnaît et se jette. */
+  const [heldTravel, setHeldTravel] = useState<{ key: string; data: TravelAnswer | null } | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const [sched, setSched] = useState<Schedule | null>(null);
@@ -87,16 +105,6 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     return Math.round((billable / 60) * config.hourlyRate);
   }, [duration, firstFree, config.hourlyRate]);
 
-  /* Les frais de route suivent deux choses à la fois : l'adresse et la durée.
-     Changer le panier change la durée, donc peut faire basculer le tarif d'un
-     côté ou de l'autre du seuil — d'où un calcul dérivé, qui se refait tout
-     seul, plutôt qu'un montant figé au moment de la saisie du code postal. */
-  const travel = useMemo(
-    () => (duration > 0 ? travelFeeFor(postal, duration, config.travelZones) : null),
-    [postal, duration, config.travelZones],
-  );
-  const travelCents = travel?.cents ?? 0;
-  const total = estimate + travelCents;
 
   const money = useCallback(
     (cents: number) =>
@@ -144,14 +152,39 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step, done]);
 
-  /* — Validation — */
-  const inZone = postal.length >= 3 && config.areaPrefixes.includes(postal.replace(/\s/g, "").slice(0, 3).toUpperCase());
+  /* L'interrogation du serveur, dès que le code postal est complet.
+   *
+   * Elle se refait aussi quand la durée change : le tarif dépend de la durée
+   * autant que de la distance, et une adresse lointaine impose une séance
+   * longue. Une réponse en retard, partie sous un code postal qu'on a changé
+   * depuis, est jetée — sans quoi l'ancien verdict écraserait le nouveau. */
+  const postalKey = POSTAL_RE.test(postal.trim()) ? postal.trim().toUpperCase() : "";
+  const travelKey = postalKey && duration > 0 ? `${postalKey}|${duration}` : "";
 
-  /* Un code postal hors zone arrête maintenant le tunnel, au lieu de laisser
-     passer une réservation que personne ne pourra honorer. Le serveur
-     applique la même règle : celle-ci n'est que la politesse de le dire
-     avant de faire remplir le reste. */
-  const outOfZone = POSTAL_RE.test(postal.trim()) && !inZone;
+  const travel = travelKey && heldTravel?.key === travelKey ? heldTravel.data : null;
+  const travelLoading = Boolean(travelKey) && heldTravel?.key !== travelKey;
+
+  const travelCents = travel?.feeCents ?? 0;
+  const total = estimate + travelCents;
+
+  useEffect(() => {
+    if (!travelKey) return;
+    let abandonne = false;
+    fetch(`/api/zone?postal=${encodeURIComponent(postalKey)}&minutes=${duration}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (!abandonne) setHeldTravel({ key: travelKey, data: d.ok ? d : null }); })
+      .catch(() => { if (!abandonne) setHeldTravel({ key: travelKey, data: null }); });
+    return () => { abandonne = true; };
+  }, [travelKey, postalKey, duration]);
+
+  /* — Validation — */
+  /* Trois refus possibles, et une seule source : le serveur. Celui-ci n'est
+     que la politesse de le dire avant de faire remplir le reste. */
+  const outOfZone = travel?.status === "too-far" || travel?.status === "blocked";
+  const tooShort = Boolean(
+    travel && travel.requiredSessionMinutes > 0 && duration < travel.requiredSessionMinutes,
+  );
+  const inZone = travel?.status === "free" || travel?.status === "fee";
 
   const errors = {
     name: name.trim().length < 2 ? t.booking.errors.required : null,
@@ -162,7 +195,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     city: city.trim().length < 2 ? t.booking.errors.required : null,
     postal: !POSTAL_RE.test(postal.trim()) ? t.booking.errors.postal : null,
   };
-  const step2Valid = Object.values(errors).every((e) => e === null) && !outOfZone;
+  const step2Valid =
+    Object.values(errors).every((e) => e === null)
+    && !outOfZone && !tooShort && !travelLoading;
 
   const canContinue =
     step === 0 ? duration > 0
@@ -374,42 +409,76 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                 error={touched.postal ? errors.postal : null} onBlur={() => setTouched((x) => ({ ...x, postal: true }))} />
             </div>
 
-            {POSTAL_RE.test(postal.trim()) && (
-              inZone ? (
-                <p className="mt-5 flex items-start gap-2 text-[0.85rem] leading-relaxed text-gold-700">
-                  <span aria-hidden="true" className="mt-0.5">◆</span>
-                  {t.booking.step2.inZone}
-                </p>
-              ) : (
-                <div role="status"
-                  className="mt-5 border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
-                  <p>{t.booking.step2.outOfZone}</p>
-                  <a href={t.brand.phoneHref}
-                    className="mt-3 inline-block text-[0.9rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
-                    {t.brand.phone}
-                  </a>
-                </div>
-              )
+            {/* Le verdict de déplacement, annoncé ici.
+                Le client l'apprend au moment où il donne son adresse, pas
+                trois écrans plus loin alors qu'il a déjà choisi son heure.
+                Quatre réponses possibles, et une seule s'affiche. */}
+            {POSTAL_RE.test(postal.trim()) && travelLoading && (
+              <p role="status" className="mt-5 text-[0.85rem] font-light text-ink-400">
+                {t.booking.step2.checking}
+              </p>
             )}
 
-            {/* Les frais de route, annoncés ici et pas à la confirmation.
-                Une adresse de Saint-Jean coûte une route : le client doit
-                l'apprendre au moment où il donne son adresse, pas trois
-                écrans plus loin alors qu'il a déjà choisi son heure. */}
-            {travel && (
-              <div className="mt-5 flex items-baseline justify-between gap-5 border border-gold-300/60 bg-linen-50 px-5 py-4">
-                <span className="text-[0.85rem] font-light leading-snug text-ink-600">
-                  {t.booking.step2.travelFee} ({config.locale === "en" ? travel.labelEn : travel.labelFr})
-                </span>
-                <span className="flex-none font-display text-[1.15rem] tabular-nums text-ink-800">
-                  {money(travel.cents)}
-                </span>
+            {!travelLoading && travel && (
+              <div className="mt-5">
+                {outOfZone && (
+                  <div role="status"
+                    className="border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
+                    <p>{t.booking.step2.outOfZone}</p>
+                    <a href={t.brand.phoneHref}
+                      className="mt-3 inline-block text-[0.9rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+                      {t.brand.phone}
+                    </a>
+                  </div>
+                )}
+
+                {inZone && tooShort && (
+                  <div role="status"
+                    className="border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
+                    <p>
+                      {t.booking.step2.minSession
+                        .replace("{minutes}", String(travel.minutes ?? "—"))
+                        .replace("{hours}", String(Math.round(travel.requiredSessionMinutes / 60)))
+                        .replace("{current}", durationText)}
+                    </p>
+                  </div>
+                )}
+
+                {inZone && !tooShort && travel.status === "free" && (
+                  <p className="flex items-start gap-2 text-[0.85rem] leading-relaxed text-gold-700">
+                    <span aria-hidden="true" className="mt-0.5">◆</span>
+                    {travel.minutes != null
+                      ? t.booking.step2.travelFree.replace("{minutes}", String(travel.minutes))
+                      : t.booking.step2.inZone}
+                  </p>
+                )}
+
+                {inZone && !tooShort && travel.status === "fee" && (
+                  <>
+                    <div className="flex items-baseline justify-between gap-5 border border-gold-300/60 bg-linen-50 px-5 py-4">
+                      <span className="text-[0.85rem] font-light leading-snug text-ink-600">
+                        {t.booking.step2.travelFee}
+                        {travel.minutes != null && ` (${travel.minutes} min)`}
+                      </span>
+                      <span className="flex-none font-display text-[1.15rem] tabular-nums text-ink-800">
+                        {money(travel.feeCents)}
+                      </span>
+                    </div>
+                    <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
+                      {t.booking.step2.travelNote}
+                    </p>
+                  </>
+                )}
+
+                {/* L'horaire n'a pas répondu : on le dit plutôt que de faire
+                    comme si de rien n'était. La réservation reste possible,
+                    et l'artisan la verra marquée comme non vérifiée. */}
+                {inZone && !travel.verified && (
+                  <p className="mt-3 text-[0.78rem] font-light leading-[1.7] text-ink-400">
+                    {t.booking.step2.unverified}
+                  </p>
+                )}
               </div>
-            )}
-            {travel && (
-              <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
-                {t.booking.step2.travelNote}
-              </p>
             )}
 
             {/* « Comment nous avez-vous connus ? » — facultatif, et c'est le
@@ -491,13 +560,15 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               )}
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />
-              {travel && (
+              {travel && travel.feeCents > 0 && (
                 <Row
-                  label={`${t.booking.step4.travelFee} (${config.locale === "en" ? travel.labelEn : travel.labelFr})`}
-                  value={money(travel.cents)}
+                  label={travel.minutes != null
+                    ? `${t.booking.step4.travelFee} (${travel.minutes} min)`
+                    : t.booking.step4.travelFee}
+                  value={money(travel.feeCents)}
                   hint={t.booking.step4.travelHint} />
               )}
-              {travel && <Row label={t.booking.step4.grandTotal} value={money(total)} />}
+              {travel && travel.feeCents > 0 && <Row label={t.booking.step4.grandTotal} value={money(total)} />}
             </dl>
 
             <label className="mt-8 flex cursor-pointer items-start gap-3">

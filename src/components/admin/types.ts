@@ -7,6 +7,9 @@ export type AdminBooking = {
   estimateCents: number; currency: string; firstHourFree: boolean; createdAt: string;
   /* Frais de route, hors estimation : zéro pour la plupart des adresses. */
   travelFeeCents: number; travelZone: string | null;
+  /* Le trajet mesuré. `travelVerified` à faux : accepté sur la seule foi du
+     code postal, l'horaire n'ayant pas répondu. À regarder. */
+  travelMinutes: number | null; travelVerified: boolean;
   /* Ce qui a suivi la réservation — ou ce qui a manqué. */
   emailSent: boolean; inCalendar: boolean;
   /* D'où vient ce client. Tout y est nul pour les rendez-vous pris avant

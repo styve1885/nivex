@@ -473,7 +473,7 @@ export const fr = {
       },
       {
         q: "Quelles zones desservez-vous ?",
-        a: "Longueuil et ses arrondissements, Brossard, Saint-Lambert, Boucherville, Saint-Bruno et Saint-Jean-sur-Richelieu, ainsi que quelques quartiers de l'île : l'Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal. Indiquez votre code postal lors de la réservation : s'il est hors zone, nous vous le disons tout de suite, avant que vous remplissiez le reste.",
+        a: "Longueuil, la Rive-Sud et plusieurs quartiers de Montréal. Plutôt qu'une liste de villes, nous regardons le temps de trajet réel en transport en commun jusque chez vous, le jour de votre séance. Entrez votre code postal sur l'accueil ou sur la page Tarifs : vous saurez tout de suite si votre adresse est desservie, et ce que le déplacement coûte s'il y a lieu.",
       },
       {
         q: "Comment se fait le paiement ?",
@@ -490,6 +490,18 @@ export const fr = {
     body: "Choisissez un créneau. La confirmation part par courriel, avec l'invitation pour votre agenda.",
     button: "Réserver maintenant",
     or: "ou appelez le",
+  },
+  zoneCheck: {
+    label: "Votre code postal",
+    placeholder: "J4K 1A1",
+    check: "Vérifier",
+    checking: "Vérification…",
+    served: "Votre adresse est desservie.",
+    servedWithFee: "Desservie, avec des frais de déplacement de {fee}.",
+    tooFar: "Hors zone pour la réservation en ligne. Appelez-nous, nous verrons ensemble ce qui est possible.",
+    minSession: "À cette distance, la séance dure au minimum {hours} heures.",
+    estimate: "Estimation pour un jour ouvré ordinaire : environ {minutes} minutes de trajet en transport en commun. Le jour que vous choisirez sera recalculé.",
+    error: "La vérification n'a pas abouti. Réessayez, ou appelez-nous au",
   },
   booking: {
     title: "Réserver une séance",
@@ -520,10 +532,16 @@ export const fr = {
       postal: "Code postal",
       postalPlaceholder: "J4K 1A1",
       outOfZone:
-        "Cette adresse se trouve hors de notre zone de déplacement, et la réservation en ligne ne peut pas aller plus loin. Appelez-nous : il arrive que nous puissions nous arranger, et nous vous le dirons franchement.",
+        "Cette adresse demande plus de trajet que ce que la réservation en ligne peut prendre en charge. Appelez-nous : il arrive que nous puissions nous arranger, et nous vous le dirons franchement.",
+      checking: "Vérification du trajet…",
+      unverified:
+        "Nous n'avons pas pu consulter l'horaire de transport pour cette adresse. Votre réservation reste possible : nous vérifierons le trajet et vous rappellerons si quelque chose cloche.",
+      travelFree: "Votre adresse est à {minutes} minutes de trajet. Aucun frais de déplacement.",
+      minSession:
+        "À {minutes} minutes de trajet, une séance dure au minimum {hours} heures. Votre sélection en fait {current}. Revenez à l'étape précédente pour ajouter des pièces.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
       travelFee: "Frais de déplacement",
-      travelNote: "Ces frais s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas et ne les réduit pas.",
+      travelNote: "Calculés d'après le temps de trajet jusqu'à votre adresse. Ils s'ajoutent au prix de la séance : l'offre « première heure offerte » ne les couvre pas et ne les réduit pas.",
       heardFrom: "Comment nous avez-vous connus ? (facultatif)",
       heardFromEmpty: "Je préfère ne pas le dire",
       heardFromOptions: {
@@ -587,6 +605,7 @@ export const fr = {
       phone: "Numéro invalide",
       postal: "Code postal invalide (ex. J4K 1A1)",
       outOfArea: `Cette adresse est hors de notre zone de déplacement. Appelez-nous au ${PHONE}, nous verrons ensemble ce qui est possible.`,
+      sessionTooShort: "À cette distance, la séance doit durer plus longtemps. Revenez à la première étape pour ajouter des pièces.",
     },
   },
   manage: {
@@ -762,7 +781,7 @@ export const fr = {
         { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre : le matériel professionnel arrive avec l'artisan." },
       ],
       travel: "Frais de déplacement",
-      travelNote: "Ces frais s'ajoutent au prix de la séance. Ils ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent également à chaque visite des abonnés résidant à ces adresses.",
+      travelNote: "Les frais sont calculés d'après le temps de trajet réel en transport en commun jusqu'à votre adresse, le jour de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent également à chaque visite des abonnés. Au-delà d'une certaine distance, la séance doit durer trois heures au minimum, et plus loin encore la réservation se fait par téléphone.",
     },
     firstFreeLabel: "Première séance",
     cta: {

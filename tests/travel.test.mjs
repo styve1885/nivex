@@ -1,162 +1,213 @@
 /**
- * Tests des frais de déplacement.
+ * Tests du déplacement : les règles de trajet, et ce qui se passe quand la
+ * mesure échoue.
  * Exécution : npx tsx tests/travel.test.mjs
  *
- * Deux règles portent tout le reste, et ce sont elles qu'on vérifie ici :
- * les frais suivent la durée réservée — pas le temps facturé —, et l'offre
- * « première heure offerte » n'a aucune prise sur eux.
+ * Ce qui n'est pas vérifiable ici : la réponse de Google. Ce qui l'est, et
+ * qui compte : que la règle soit juste pour chaque nombre de minutes, qu'une
+ * panne de mesure ne ferme pas la boutique, et qu'elle n'ouvre pas non plus
+ * la porte à n'importe quelle adresse.
  */
 import assert from "node:assert/strict";
 
-const { travelFeeFor, travelTerms, DEFAULT_TRAVEL_ZONES } = await import("../src/lib/travel.ts");
-const { readTravelZones } = await import("../src/lib/settings.ts");
-const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+const { evaluateTravel, bookable, sessionTooShort, travelTerms, inFallback,
+        DEFAULT_TRAVEL_POLICY } = await import("../src/lib/travel.ts");
+const { readTravelPolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+const { weekdayIn } = await import("../src/lib/transit.ts");
 const { estimateCents } = await import("../src/lib/availability.ts");
 const { ownerNotification, clientConfirmation } = await import("../src/lib/email.ts");
 
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
 const flat = (x) => x.replace(/[   ]/g, " ");
-const Z = DEFAULT_TRAVEL_ZONES;
 
-console.log("\nLes deux tarifs, de part et d'autre du seuil");
+const P = DEFAULT_TRAVEL_POLICY;
+const DANS = "J4K 1A1";     // dans la liste de secours
+const HORS = "G1A 1A1";     // hors liste de secours
 
-test("moins de 3 heures : 25 $", () => {
-  for (const m of [120, 150, 179]) {
-    assert.equal(travelFeeFor("J3A 1P1", m, Z).cents, 2500, `${m} min devrait coûter 25 $`);
+console.log("\nLes quatre bandes de trajet");
+
+test("moins de 60 min : aucun frais", () => {
+  for (const m of [0, 15, 45, 59]) {
+    const v = evaluateTravel(m, 120, DANS, P);
+    assert.equal(v.status, "free", `${m} min devrait être gratuit`);
+    assert.equal(v.feeCents, 0);
+    assert.equal(v.requiredSessionMinutes, 0);
   }
 });
 
-test("3 heures ou plus : 15 $", () => {
-  for (const m of [180, 210, 240, 480]) {
-    assert.equal(travelFeeFor("J3A 1P1", m, Z).cents, 1500, `${m} min devrait coûter 15 $`);
+test("60 à 75 min : frais, et la séance courte reste permise", () => {
+  for (const m of [60, 70, 75]) {
+    const court = evaluateTravel(m, 120, DANS, P);
+    assert.equal(court.status, "fee", `${m} min devrait coûter`);
+    assert.equal(court.feeCents, 2500, `${m} min, séance de 2 h → 25 $`);
+    assert.equal(court.requiredSessionMinutes, 0, `${m} min n'impose pas 3 h`);
+    assert.equal(bookable(court, 120), true);
+
+    const long = evaluateTravel(m, 180, DANS, P);
+    assert.equal(long.feeCents, 1500, `${m} min, séance de 3 h → 15 $`);
   }
 });
 
-test("le seuil est inclusif : 180 min bascule déjà au tarif long", () => {
-  assert.equal(travelFeeFor("J3A 1P1", 179, Z).cents, 2500);
-  assert.equal(travelFeeFor("J3A 1P1", 180, Z).cents, 1500);
-});
-
-console.log("\nQuelles adresses");
-
-test("les cinq codes de Saint-Jean sont concernés", () => {
-  for (const p of ["J2W 2X2", "J2X 1R1", "J2Y 1A1", "J3A 1P1", "J3B 4J4"]) {
-    assert.ok(travelFeeFor(p, 120, Z), `${p} devrait payer des frais`);
-    assert.equal(travelFeeFor(p, 120, Z).labelFr, "Saint-Jean-sur-Richelieu");
+test("au-delà de 75 min : la séance doit durer 3 h", () => {
+  for (const m of [76, 90, 105]) {
+    const v = evaluateTravel(m, 120, DANS, P);
+    assert.equal(v.requiredSessionMinutes, 180, `${m} min devrait imposer 3 h`);
+    assert.equal(sessionTooShort(v, 120), true, "2 h est trop court");
+    assert.equal(bookable(v, 120), false, "et donc non réservable");
+    assert.equal(bookable(v, 180), true, "3 h passe");
   }
 });
 
-test("le reste de la zone desservie ne paie rien", () => {
-  for (const p of ["J4K 1A1", "J4W 2B2", "H3E 1A1", "H4G 1A1", "H3Y 2P6", "H2V 1S2", "H2Y 1C6", "J3V 1A1"]) {
-    assert.equal(travelFeeFor(p, 120, Z), null, `${p} ne devrait pas payer de frais`);
+test("plus de 105 min : réservation en ligne fermée", () => {
+  for (const m of [106, 150, 400]) {
+    const v = evaluateTravel(m, 240, DANS, P);
+    assert.equal(v.status, "too-far", `${m} min devrait être hors ligne`);
+    assert.equal(bookable(v, 240), false);
+    assert.equal(v.feeCents, 0, "on ne facture pas ce qu'on refuse");
   }
 });
 
-test("l'espacement et la casse n'y changent rien", () => {
-  for (const p of ["j3a1p1", "J3A 1P1", "j3a-1p1", " J3A1P1 "]) {
-    assert.equal(travelFeeFor(p, 120, Z).cents, 2500, `${p} devrait être reconnu`);
-  }
+test("les bornes tombent du bon côté", () => {
+  assert.equal(evaluateTravel(59, 120, DANS, P).status, "free");
+  assert.equal(evaluateTravel(60, 120, DANS, P).status, "fee", "60 n'est plus « moins de 60 »");
+  assert.equal(evaluateTravel(75, 120, DANS, P).requiredSessionMinutes, 0, "75 n'est pas « au-delà de 75 »");
+  assert.equal(evaluateTravel(76, 120, DANS, P).requiredSessionMinutes, 180);
+  assert.equal(evaluateTravel(105, 240, DANS, P).status, "fee", "105 n'est pas « plus de 105 »");
+  assert.equal(evaluateTravel(106, 240, DANS, P).status, "too-far");
 });
 
-test("un code postal incomplet ne déclenche rien", () => {
-  assert.equal(travelFeeFor("J3", 120, Z), null);
-  assert.equal(travelFeeFor("", 120, Z), null);
-});
+console.log("\nLe tarif annoncé est celui qu'on paiera vraiment");
 
-console.log("\nCe que les réglages peuvent faire");
-
-test("une zone désactivée ne facture plus", () => {
-  const off = [{ ...Z[0], enabled: false }];
-  assert.equal(travelFeeFor("J3A 1P1", 120, off), null);
-});
-
-test("aucune zone du tout : aucun frais", () => {
-  assert.equal(travelFeeFor("J3A 1P1", 120, []), null);
-  assert.equal(travelFeeFor("J3A 1P1", 120, null), null);
-});
-
-test("des montants à zéro ne produisent pas une ligne à 0 $", () => {
-  const gratuit = [{ ...Z[0], shortFeeCents: 0, longFeeCents: 0 }];
-  assert.equal(travelFeeFor("J3A 1P1", 120, gratuit), null, "rien ne doit s'afficher");
-});
-
-test("un seuil et des montants réglés autrement sont respectés", () => {
-  const custom = [{ ...Z[0], thresholdMinutes: 240, shortFeeCents: 4000, longFeeCents: 1000 }];
-  assert.equal(travelFeeFor("J3A 1P1", 180, custom).cents, 4000, "180 min est sous un seuil de 4 h");
-  assert.equal(travelFeeFor("J3A 1P1", 240, custom).cents, 1000);
-});
-
-console.log("\nUne zone supprimée doit le rester");
-
-test("colonne jamais réglée (null) : on sème les valeurs par défaut", () => {
-  assert.deepEqual(readTravelZones(null), DEFAULT_TRAVEL_ZONES);
-  assert.deepEqual(readTravelZones(undefined), DEFAULT_TRAVEL_ZONES);
-});
-
-test("colonne vidée exprès ([]) : on la respecte", () => {
-  /* La règle qui distingue ces zones des prestations. Réinjecter une zone
-     supprimée ferait facturer des frais que l'artisan a retirés, et il
-     n'aurait aucun moyen de s'en débarrasser. */
-  assert.deepEqual(readTravelZones([]), [], "aucune zone ne doit revenir");
-  assert.equal(travelFeeFor("J3A 1P1", 120, readTravelZones([])), null);
-});
-
-test("des zones enregistrées font foi, sans ajout du code", () => {
-  const sienne = [{ ...Z[0], key: "autre", prefixes: ["J5R"], labelFr: "La Prairie",
-                    labelEn: "La Prairie", shortFeeCents: 1000, longFeeCents: 500 }];
-  const lu = readTravelZones(sienne);
-  assert.equal(lu.length, 1, "Saint-Jean ne doit pas se rajouter tout seul");
-  assert.equal(travelFeeFor("J3A 1P1", 120, lu), null, "Saint-Jean a été retiré");
-  assert.equal(travelFeeFor("J5R 1A1", 120, lu).cents, 1000);
+test("une adresse qui impose 3 h annonce le tarif long, pas le court", () => {
+  /* Le piège : à 90 min de trajet, une séance de 2 h est impossible. Annoncer
+     25 $ — le tarif des séances courtes — serait une promesse intenable,
+     puisque le client devra de toute façon réserver trois heures. */
+  const v = evaluateTravel(90, 120, DANS, P);
+  assert.equal(v.feeCents, 1500, "le tarif doit déjà être celui des 3 h");
+  assert.equal(v.requiredSessionMinutes, 180);
 });
 
 console.log("\nLa première heure offerte n'a aucune prise");
 
 test("elle escompte la séance, jamais la route", () => {
   const s = { ...FALLBACK_SETTINGS };
-  /* Trois heures, dont une offerte : la séance tombe de 150 $ à 100 $, mais
-     la visite reste une visite de trois heures — donc tarif long, 15 $. */
   const avec = estimateCents(180, s, true);
   const sans = estimateCents(180, s, false);
   assert.equal(sans, 15000);
-  assert.equal(avec, 10000, "une heure offerte sur trois");
+  assert.equal(avec, 10000);
 
-  const frais = travelFeeFor("J3A 1P1", 180, Z).cents;
+  const frais = evaluateTravel(90, 180, DANS, P).feeCents;
   assert.equal(frais, 1500, "la route ne se raccourcit pas");
   assert.equal(avec + frais, 11500, "le total additionne, il ne compense pas");
 });
 
-test("une heure offerte ne fait pas repasser sous le seuil", () => {
-  /* Le piège : facturer 2 h sur une séance de 3 h ferait croire à une visite
-     courte, donc 25 $ au lieu de 15 $. Les frais suivent la durée réservée. */
-  const frais = travelFeeFor("J3A 1P1", 180, Z).cents;
-  assert.equal(frais, 1500, "180 min réservées, quoi qu'il soit facturé");
-  assert.notEqual(frais, 2500);
+console.log("\nQuand la mesure échoue");
+
+test("une adresse de la liste de secours passe, sans frais, non vérifiée", () => {
+  const v = evaluateTravel(null, 120, DANS, P);
+  assert.equal(v.status, "free");
+  assert.equal(v.verified, false, "il faut que l'artisan le sache");
+  assert.equal(v.feeCents, 0, "on ne facture pas une route qu'on n'a pas mesurée");
+  assert.equal(bookable(v, 120), true);
+});
+
+test("une adresse hors liste est refusée : on n'engage rien à l'aveugle", () => {
+  const v = evaluateTravel(null, 120, HORS, P);
+  assert.equal(v.status, "blocked");
+  assert.equal(bookable(v, 120), false);
+});
+
+test("la liste de secours est volontairement plus courte que la zone annoncée", () => {
+  assert.equal(inFallback("J4K 1A1", P), true, "Longueuil");
+  assert.equal(inFallback("H3E 1A1", P), true, "Île-des-Sœurs");
+  assert.equal(inFallback("H2Y 1C6", P), true, "Vieux-Montréal");
+  assert.equal(inFallback("J3A 1P1", P), false, "Saint-Jean est trop loin pour passer en aveugle");
+  assert.equal(inFallback("G1A 1A1", P), false, "Québec");
+});
+
+console.log("\nCe que les réglages peuvent faire");
+
+test("politique désactivée : plus de frais, plus de refus", () => {
+  const off = { ...P, enabled: false };
+  assert.equal(evaluateTravel(300, 120, HORS, off).status, "free");
+  assert.equal(evaluateTravel(300, 120, HORS, off).feeCents, 0);
+  assert.equal(bookable(evaluateTravel(null, 120, HORS, off), 120), true);
+});
+
+test("des seuils réglés autrement sont respectés", () => {
+  const custom = { ...P, freeUnderMinutes: 30, minSessionOverMinutes: 40, maxMinutes: 50, feeShortCents: 4000 };
+  assert.equal(evaluateTravel(25, 120, DANS, custom).status, "free");
+  assert.equal(evaluateTravel(35, 120, DANS, custom).feeCents, 4000);
+  assert.equal(evaluateTravel(45, 120, DANS, custom).requiredSessionMinutes, 180);
+  assert.equal(evaluateTravel(55, 120, DANS, custom).status, "too-far");
+});
+
+console.log("\nMigration depuis l'ancien système");
+
+test("jamais réglé : les préfixes enregistrés deviennent la liste de secours", () => {
+  /* La bascule qui compte : une base qui connaissait une zone par codes
+     postaux doit s'en servir comme filet, et non d'une liste écrite dans le
+     code qui ne lui ressemblerait pas. */
+  const p = readTravelPolicy(null, { prefixes: ["J4K", "J4W"], labelFr: "", labelEn: "" });
+  assert.deepEqual(p.fallbackPrefixes, ["J4K", "J4W"]);
+  assert.equal(p.freeUnderMinutes, 60, "les seuils viennent du code");
+});
+
+test("sans zone enregistrée, le filet par défaut s'applique", () => {
+  const p = readTravelPolicy(null, null);
+  assert.deepEqual(p.fallbackPrefixes, P.fallbackPrefixes);
+});
+
+test("une politique enregistrée fait foi, champ par champ", () => {
+  const p = readTravelPolicy({ freeUnderMinutes: 45, maxMinutes: 90 }, null);
+  assert.equal(p.freeUnderMinutes, 45, "ce qui est réglé l'emporte");
+  assert.equal(p.maxMinutes, 90);
+  assert.equal(p.feeShortCents, 2500, "ce qui manque prend la valeur par défaut");
+  assert.equal(p.cacheDays, 30);
+});
+
+test("une politique abîmée ne fait pas tomber la lecture", () => {
+  for (const sale of ["n'importe quoi", 42, [], { freeUnderMinutes: "beaucoup" }]) {
+    const p = readTravelPolicy(sale, null);
+    assert.equal(typeof p.freeUnderMinutes, "number", `${JSON.stringify(sale)} devrait retomber sur un nombre`);
+    assert.ok(p.freeUnderMinutes >= 0);
+  }
+});
+
+console.log("\nLe jour de la semaine, à Montréal et non en UTC");
+
+test("un dimanche soir à Montréal reste un dimanche", () => {
+  /* Le serveur vit en UTC : dimanche 20 h à Montréal y est déjà lundi. Lire
+     le jour sans fuseau ferait mesurer l'horaire d'un lundi — exactement
+     l'erreur que la règle « le dimanche, il y a moins de bus » veut éviter. */
+  const d = new Date("2026-11-02T01:00:00Z");   // dimanche 1er nov., 20 h à Montréal
+  assert.equal(d.getUTCDay(), 1, "en UTC c'est un lundi");
+  assert.equal(weekdayIn(d, "America/Toronto"), 0, "à Montréal c'est un dimanche");
 });
 
 console.log("\nLa phrase des conditions");
 
-test("elle se construit depuis les montants réglés", () => {
+test("elle se construit depuis les réglages", () => {
   const money = (c) => `${Math.round(c / 100)} $`;
-  const [ligne] = travelTerms(Z, "fr", money);
-  assert.match(flat(ligne), /Saint-Jean-sur-Richelieu : frais de déplacement de 25 \$ par visite de moins de 3 heures, 15 \$ par visite de 3 heures ou plus\./);
+  const ligne = travelTerms(P, "fr", money);
+  assert.match(flat(ligne), /Frais de déplacement selon la distance : 25 \$ par visite de moins de 3 heures, 15 \$ par visite de 3 heures ou plus, pour les adresses situées à plus d'une heure de trajet\./);
 });
 
 test("elle suit un changement de tarif, sans toucher au code", () => {
   const money = (c) => `${Math.round(c / 100)} $`;
-  const [ligne] = travelTerms([{ ...Z[0], shortFeeCents: 3000, longFeeCents: 2000 }], "fr", money);
-  assert.match(flat(ligne), /de 30 \$ par visite de moins de 3 heures, 20 \$/);
+  const ligne = travelTerms({ ...P, feeShortCents: 3000, feeLongCents: 2000 }, "fr", money);
+  assert.match(flat(ligne), /: 30 \$ par visite de moins de 3 heures, 20 \$/);
 });
 
 test("et elle existe en anglais", () => {
   const money = (c) => `$${Math.round(c / 100)}`;
-  const [line] = travelTerms(Z, "en", money);
-  assert.match(flat(line), /Saint-Jean-sur-Richelieu: a \$25 travel fee per visit shorter than 3 hours, \$15 per visit of 3 hours or more\./);
+  const line = travelTerms(P, "en", money);
+  assert.match(flat(line), /Travel fee by distance: \$25 per visit shorter than 3 hours, \$15 per visit of 3 hours or more, for addresses more than one hour of travel away\./);
 });
 
-test("une zone désactivée ne s'annonce pas", () => {
-  assert.deepEqual(travelTerms([{ ...Z[0], enabled: false }], "fr", (c) => String(c)), []);
+test("politique désactivée : aucune condition ne s'annonce", () => {
+  assert.equal(travelTerms({ ...P, enabled: false }, "fr", String), null);
 });
 
 console.log("\nDans les courriels");
@@ -172,36 +223,32 @@ const base = {
   siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217",
   businessEmail: "nivexrepassage@gmail.com",
 };
-const avecFrais = { ...base, travelFeeCents: 1500, travelZone: "Saint-Jean-sur-Richelieu" };
+const avec = { ...base, travelFeeCents: 1500, travelMinutes: 92, travelVerified: true };
 
-test("le client voit la ligne, le total, et pourquoi l'offre ne s'y applique pas", () => {
-  const mail = clientConfirmation(avecFrais);
-  const txt = flat(mail.text), htm = flat(mail.html);
-  assert.match(txt, /Frais de déplacement \(Saint-Jean-sur-Richelieu\): 15 \$/);
+test("le client voit le trajet, la ligne et le total", () => {
+  const mail = clientConfirmation(avec);
+  const txt = flat(mail.text);
+  assert.match(txt, /Frais de déplacement \(92 min de trajet\): 15 \$/);
   assert.match(txt, /Total estimé: 115 \$/);
-  assert.match(htm, /Frais de déplacement/);
-  assert.match(htm, /Total estimé/);
-  assert.match(htm, /ne les couvre pas/, "la note doit expliquer l'exclusion");
+  assert.match(flat(mail.html), /ne les couvre pas/, "la note doit expliquer l'exclusion");
 });
 
-test("l'artisan voit la même ligne et le même total", () => {
-  const mail = ownerNotification(avecFrais);
-  assert.match(flat(mail.text), /Frais de déplacement \(Saint-Jean-sur-Richelieu\): 15 \$/);
+test("l'artisan voit la même chose", () => {
+  const mail = ownerNotification(avec);
+  assert.match(flat(mail.text), /Frais de déplacement \(92 min de trajet\): 15 \$/);
   assert.match(flat(mail.text), /Total estimé: 115 \$/);
-  assert.match(flat(mail.html), /Total estimé/);
 });
 
-test("sans frais, aucune ligne et aucun total ne s'affichent", () => {
+test("sans frais, aucune ligne ni total ne s'affichent", () => {
   for (const mail of [clientConfirmation(base), ownerNotification(base)]) {
-    assert.doesNotMatch(flat(mail.text), /Frais de déplacement/, "un 0 $ n'apprend rien");
-    assert.doesNotMatch(flat(mail.text), /Total estimé/, "sans frais, l'estimation suffit");
-    assert.doesNotMatch(flat(mail.html), /Frais de déplacement/);
+    assert.doesNotMatch(flat(mail.text), /Frais de déplacement/);
+    assert.doesNotMatch(flat(mail.text), /Total estimé/);
   }
 });
 
-test("le total du courriel anglais se lit en anglais", () => {
-  const mail = clientConfirmation({ ...avecFrais, locale: "en" });
-  assert.match(flat(mail.text), /Travel fee \(Saint-Jean-sur-Richelieu\): \$15/);
+test("le courriel anglais se lit en anglais", () => {
+  const mail = clientConfirmation({ ...avec, locale: "en" });
+  assert.match(flat(mail.text), /Travel fee \(92 min of travel\): \$15/);
   assert.match(flat(mail.text), /Estimated total: \$115/);
 });
 

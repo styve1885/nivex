@@ -32,19 +32,18 @@ const Patch = z.object({
     labelFr: z.string().max(300),
     labelEn: z.string().max(300),
   }).optional(),
-  /* Les zones à frais de route, réglées depuis l'espace artisan.
-     Un tableau vide est une réponse valable, et différente de l'absence :
-     il veut dire « plus aucune zone », et sera respecté tel quel. */
-  travelZones: z.array(z.object({
-    key: z.string().min(1).max(60),
-    prefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).max(200),
-    labelFr: z.string().max(120),
-    labelEn: z.string().max(120),
-    shortFeeCents: z.number().int().min(0).max(50_000),
-    longFeeCents: z.number().int().min(0).max(50_000),
-    thresholdMinutes: z.number().int().min(30).max(720),
+  /* La politique de déplacement, réglée depuis l'espace artisan. */
+  travelPolicy: z.object({
     enabled: z.boolean(),
-  })).max(20).optional(),
+    freeUnderMinutes: z.number().int().min(0).max(600),
+    feeShortCents: z.number().int().min(0).max(50_000),
+    feeLongCents: z.number().int().min(0).max(50_000),
+    longSessionMinutes: z.number().int().min(30).max(960),
+    minSessionOverMinutes: z.number().int().min(0).max(600),
+    maxMinutes: z.number().int().min(1).max(600),
+    fallbackPrefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).max(300),
+    cacheDays: z.number().int().min(1).max(365),
+  }).optional(),
   services: z.array(z.object({
     key: z.string().min(1).max(40),
     icon: z.string().max(30),
@@ -59,25 +58,16 @@ const Patch = z.object({
   (v) => !v.hours || v.hours.every((h) => !h.enabled || h.open < h.close),
   { message: "L'heure de fermeture doit suivre l'heure d'ouverture", path: ["hours"] },
 ).refine(
-  /* Deux zones actives qui réclament le même code postal rendraient le tarif
-     dépendant de l'ordre du tableau — c'est-à-dire imprévisible pour qui le
-     règle. L'interface le signale déjà ; ici on refuse de l'enregistrer. */
+  /* Les trois seuils doivent rester dans l'ordre. Sans cette garde, une
+     politique incohérente s'enregistrerait sans bruit : un trajet « gratuit »
+     plus long que le maximum autorisé, et plus personne ne paierait rien. */
   (v) => {
-    if (!v.travelZones) return true;
-    const seen = new Set<string>();
-    for (const z of v.travelZones) {
-      if (!z.enabled) continue;
-      for (const px of z.prefixes.map((x) => x.toUpperCase())) {
-        if (seen.has(px)) return false;
-        seen.add(px);
-      }
-    }
-    return true;
+    const t = v.travelPolicy;
+    if (!t) return true;
+    return t.freeUnderMinutes <= t.minSessionOverMinutes
+      && t.minSessionOverMinutes <= t.maxMinutes;
   },
-  { message: "Un même code postal figure dans deux zones de frais", path: ["travelZones"] },
-).refine(
-  (v) => !v.travelZones || v.travelZones.every((z) => !z.enabled || z.labelFr.trim().length > 0),
-  { message: "Une zone active doit porter un nom", path: ["travelZones"] },
+  { message: "Les seuils de trajet doivent aller du plus court au plus long", path: ["travelPolicy"] },
 );
 
 export async function GET() {

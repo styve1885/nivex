@@ -6,6 +6,7 @@ import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettings, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { travelTerms } from "@/lib/travel";
+import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
   firstTimeCents, offerCents, perHour, planCents, planFullCents,
@@ -102,7 +103,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   const shortest = Math.max(s.minMinutes, 120);
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
-  const travelLines = travelTerms(s.travelZones, locale, (c) => formatMoney(c, s.currency, locale));
+  const travelLine = travelTerms(s.travelPolicy, locale, (c) => formatMoney(c, s.currency, locale));
 
   return (
     <div className="bg-linen-100">
@@ -322,6 +323,14 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           <div>
             <h2 className="font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.terms.title}</h2>
           </div>
+          {/* De quoi vérifier avant de lire les conditions, plutôt qu'après. */}
+          <div className="paper mt-10 px-7 py-8 sm:px-9">
+            <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
+              {locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr}
+            </p>
+            <ZoneChecker t={t} locale={locale} className="mt-6" />
+          </div>
+
           <dl className="mt-10 border-t border-gold-300/40">
             {t.tarifs.terms.items.map((item) => (
               <div key={item.dt} className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
@@ -334,11 +343,11 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                 non récités : changer un montant depuis /admin change cette
                 page, sinon les conditions publiées finiraient par
                 contredire ce que le tunnel facture. */}
-            {travelLines.length > 0 && (
+            {travelLine && (
               <div className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
                 <dt className="font-display text-[1rem] text-ink-800">{t.tarifs.terms.travel}</dt>
                 <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">
-                  {travelLines.map((line) => <span key={line} className="block">{line}</span>)}
+                  <span className="block">{travelLine}</span>
                   <span className="mt-2 block text-ink-400">{t.tarifs.terms.travelNote}</span>
                 </dd>
               </div>

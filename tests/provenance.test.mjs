@@ -10,7 +10,7 @@
  */
 import assert from "node:assert/strict";
 
-const { inServiceArea, mergeArea, DEFAULT_AREA } = await import("../src/lib/settings.ts");
+const { mergeArea, DEFAULT_AREA } = await import("../src/lib/settings.ts");
 const { visitSource, referrerHost, deviceType, clip, isHeardFrom, HEARD_FROM } =
   await import("../src/lib/attribution.ts");
 const { isCounted } = await import("../src/lib/visits.ts");
@@ -21,76 +21,45 @@ let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
 const flat = (x) => x.replace(/[   ]/g, " ");
 
-console.log("\nZone desservie");
+console.log("\nZone desservie : un libellé, plus une décision");
 
-test("les quartiers ajoutés sont reconnus", () => {
-  for (const [code, lieu] of [
-    ["H3E 1A1", "Île-des-Sœurs"], ["H4G 2B2", "Verdun"], ["H4H 1C3", "Verdun"],
-    ["H3Y 2P6", "Westmount"], ["H3Z 1V8", "Westmount"], ["H2V 1S2", "Outremont"],
-    ["H2Y 1C6", "Vieux-Montréal"],
-    ["J2W 2X2", "Saint-Jean-sur-Richelieu"], ["J2X 1R1", "Saint-Jean"],
-    ["J2Y 1A1", "Saint-Jean"], ["J3A 1P1", "Saint-Jean"], ["J3B 4J4", "Saint-Jean"],
+/* La liste de codes postaux ne décide plus rien : le temps de trajet réel a
+   pris sa place (voir travel.test.mjs). Ce qui reste à vérifier ici, c'est
+   que la bascule n'a rien cassé en chemin — le libellé affiché suit le code,
+   et une phrase écrite à la main depuis /admin survit. */
+
+test("le nouveau libellé invite à vérifier, au lieu d'énumérer des villes", () => {
+  assert.match(DEFAULT_AREA.labelFr, /Entrez votre code postal/);
+  assert.match(DEFAULT_AREA.labelEn, /Enter your postal code/);
+  assert.doesNotMatch(DEFAULT_AREA.labelFr, /Saint-Jean-sur-Richelieu/,
+    "plus de liste de villes : elle ne répondait pas à la question posée");
+});
+
+test("un libellé laissé au défaut d'hier suit le code", () => {
+  for (const ancien of [
+    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
+    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
   ]) {
-    assert.equal(inServiceArea(code, DEFAULT_AREA), true, `${code} (${lieu}) devrait être dans la zone`);
+    const merged = mergeArea({ prefixes: ["J4K"], labelFr: ancien, labelEn: "x" });
+    assert.equal(merged.labelFr, DEFAULT_AREA.labelFr, "le nouveau texte doit prendre la place");
   }
-});
-
-test("la Rive-Sud historique reste desservie", () => {
-  for (const code of ["J4K 1A1", "J4W 2B2", "J4B 1C3", "J3V 1A1", "J4P 1A1"]) {
-    assert.equal(inServiceArea(code, DEFAULT_AREA), true, `${code} devrait rester dans la zone`);
-  }
-});
-
-test("le reste du Québec est hors zone", () => {
-  for (const code of ["G1A 1A1", "H1A 1A1", "J0J 1R0", "H3T 1A1", "H2Z 1A1", "K1A 0A6"]) {
-    assert.equal(inServiceArea(code, DEFAULT_AREA), false, `${code} ne devrait pas être dans la zone`);
-  }
-});
-
-test("l'espacement et la casse n'y changent rien", () => {
-  for (const code of ["h3e1a1", "H3E 1A1", "h3e-1a1", " H3E1A1 "]) {
-    assert.equal(inServiceArea(code, DEFAULT_AREA), true, `${code} devrait être accepté`);
-  }
-});
-
-console.log("\nFusion de la zone enregistrée");
-
-test("une zone déjà en base reçoit les nouveaux préfixes", () => {
-  /* Le cas qui a motivé mergeArea : saveConnection garde la valeur existante
-     par un COALESCE, donc une base ancienne ne verrait jamais les quartiers
-     ajoutés au code, et le site refuserait une adresse qu'il annonce. */
-  const merged = mergeArea({
-    prefixes: ["J4K", "J4W"],
-    labelFr: "Longueuil et Brossard",
-    labelEn: "Longueuil and Brossard",
-  });
-  assert.equal(merged.prefixes.includes("H3E"), true, "H3E devrait avoir été ajouté");
-  assert.equal(merged.prefixes.includes("J4K"), true, "J4K enregistré devrait survivre");
-  assert.equal(merged.prefixes.filter((p) => p === "J4K").length, 1, "aucun doublon");
-  assert.equal(inServiceArea("H3E 1A1", merged), true, "et l'adresse doit passer");
 });
 
 test("un libellé écrit à la main n'est pas écrasé", () => {
   const merged = mergeArea({
-    prefixes: ["J4K"],
-    labelFr: "Longueuil et Brossard",
-    labelEn: "Longueuil and Brossard",
+    prefixes: ["J4K"], labelFr: "Longueuil et Brossard", labelEn: "Longueuil and Brossard",
   });
   assert.equal(merged.labelFr, "Longueuil et Brossard", "la phrase de l'artisan doit survivre");
 });
 
-test("un libellé laissé au défaut d'hier suit le code", () => {
-  /* Celui-ci n'a jamais été retouché : c'est le code qui parlait. */
-  const ancien = "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante";
-  const merged = mergeArea({ prefixes: ["J4K"], labelFr: ancien, labelEn: "x" });
-  assert.equal(merged.labelFr, DEFAULT_AREA.labelFr, "le nouveau texte doit prendre la place");
-  assert.match(merged.labelFr, /Saint-Jean-sur-Richelieu/);
-  assert.match(merged.labelFr, /Vieux-Montréal/);
+test("les préfixes enregistrés survivent : ils servent de liste de secours", () => {
+  const merged = mergeArea({ prefixes: ["J4K", "J4W"], labelFr: "", labelEn: "" });
+  assert.equal(merged.prefixes.includes("J4K"), true);
+  assert.equal(merged.prefixes.filter((p) => p === "J4K").length, 1, "aucun doublon");
 });
 
 test("une zone absente retombe sur le défaut complet", () => {
   assert.deepEqual(mergeArea(null), DEFAULT_AREA);
-  assert.deepEqual(mergeArea({ prefixes: [], labelFr: "", labelEn: "" }), DEFAULT_AREA);
 });
 
 console.log("\nSource d'une visite");

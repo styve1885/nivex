@@ -31,6 +31,9 @@ export type BookingEmailData = {
   /* Frais de route, hors estimation. Zéro quand l'adresse n'en demande pas. */
   travelFeeCents?: number;
   travelZone?: string | null;
+  /* Le trajet mesuré, et s'il l'a vraiment été. */
+  travelMinutes?: number | null;
+  travelVerified?: boolean;
   timezone: string;
   manageUrl: string;
   siteUrl: string;
@@ -96,7 +99,8 @@ const T = {
     when: "Rendez-vous", where: "Adresse", what: "Prestations", duration: "Durée estimée",
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
-    travel: "Frais de déplacement", total: "Total estimé",
+    travel: "Frais de déplacement", total: "Total estimé", travelUnit: "min de trajet",
+    travelUnverified: "Trajet non vérifié — l'horaire de transport n'a pas pu être consulté.",
     travelNote: "Les frais de déplacement s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
     setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
@@ -129,7 +133,8 @@ const T = {
     when: "Appointment", where: "Address", what: "Services", duration: "Estimated duration",
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
-    travel: "Travel fee", total: "Estimated total",
+    travel: "Travel fee", total: "Estimated total", travelUnit: "min of travel",
+    travelUnverified: "Journey not verified — the transit schedule could not be reached.",
     travelNote: "The travel fee is added to the price of the session. The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
     setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
@@ -173,12 +178,14 @@ function itemsText(items: { label: string; qty: number }[]): string {
 /* Typé sur les deux seules clés utilisées, et non sur un dictionnaire
    entier : la confirmation du client se rend en anglais, où les libellés
    propres à la fiche de l'artisan n'existent pas. */
-type TravelLabels = { travel: string; total: string };
+type TravelLabels = { travel: string; total: string; travelUnit: string };
 
 function travelRowsHtml(d: BookingEmailData, t: TravelLabels): string {
   const fee = d.travelFeeCents ?? 0;
   if (fee <= 0) return "";
-  const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
+  const label = d.travelMinutes != null
+    ? `${t.travel} (${d.travelMinutes} ${t.travelUnit})`
+    : t.travel;
   return (
     row(label, esc(formatMoney(fee, d.currency, d.locale))) +
     row(t.total, `<strong>${esc(formatMoney(d.estimateCents + fee, d.currency, d.locale))}</strong>`)
@@ -188,7 +195,9 @@ function travelRowsHtml(d: BookingEmailData, t: TravelLabels): string {
 function travelRowsText(d: BookingEmailData, t: TravelLabels): string[] {
   const fee = d.travelFeeCents ?? 0;
   if (fee <= 0) return [];
-  const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
+  const label = d.travelMinutes != null
+    ? `${t.travel} (${d.travelMinutes} ${t.travelUnit})`
+    : t.travel;
   return [
     `${label}: ${formatMoney(fee, d.currency, d.locale)}`,
     `${t.total}: ${formatMoney(d.estimateCents + fee, d.currency, d.locale)}`,

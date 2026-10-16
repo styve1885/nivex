@@ -3,6 +3,7 @@ import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
+import { transitConfigured, transitError } from "@/lib/transit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,17 @@ export async function GET() {
       setupCode: Boolean(process.env.ADMIN_SETUP_CODE),
     },
     schema,
+    /* Le calcul de trajet : ce qui manque, et pourquoi la dernière mesure a
+       échoué. Aucune adresse ni aucune clé n'apparaît ici — seulement de
+       quoi savoir quelle case cocher dans la console Google. */
+    transit: {
+      configured: transitConfigured(),
+      homeAddress: Boolean(process.env.NIVEX_HOME_ADDRESS?.trim()),
+      apiKey: Boolean((process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_ROUTES_API_KEY)?.trim()),
+      lastError: transitError(),
+      policyEnabled: settings.travelPolicy.enabled,
+      fallbackPrefixes: settings.travelPolicy.fallbackPrefixes.length,
+    },
     owner: { connected: settings.connected, email: settings.ownerEmail, paused: settings.paused },
     calendar: { id: settings.calendarId, tokenUsable, timezone: settings.timezone },
     /* Ce qu'il faut savoir quand un courriel n'arrive pas. */

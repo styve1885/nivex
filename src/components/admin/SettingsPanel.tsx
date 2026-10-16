@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
-import type { TravelZone } from "@/lib/travel";
+import type { TravelPolicy } from "@/lib/travel";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
@@ -25,40 +25,43 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
     patch("services", s.services.map((x) => (x.key === key ? { ...x, ...next } : x)));
   }
 
-  function setZone(key: string, next: Partial<TravelZone>) {
-    patch("travelZones", s.travelZones.map((z) => (z.key === key ? { ...z, ...next } : z)));
-  }
+  const [clearing, setClearing] = useState(false);
+  const [cleared, setCleared] = useState<number | null>(null);
 
-  function addZone() {
-    /* Une clé qui ne collisionne pas, même si l'artisan en ajoute trois de
-       suite sans enregistrer entre-temps. */
-    const key = `zone-${Date.now().toString(36)}`;
-    patch("travelZones", [...s.travelZones, {
-      key, prefixes: [], labelFr: "", labelEn: "",
-      shortFeeCents: 2500, longFeeCents: 1500, thresholdMinutes: 180, enabled: true,
-    }]);
-  }
-
-  function removeZone(key: string) {
-    patch("travelZones", s.travelZones.filter((z) => z.key !== key));
-  }
-
-  /* Deux zones qui réclament le même code postal sont une erreur de saisie :
-     la première l'emporterait en silence, et l'artisan croirait facturer
-     l'autre tarif. On la nomme plutôt que de la laisser passer. */
-  const zoneClashes = (() => {
-    const vu = new Map<string, string>();
-    const out: string[] = [];
-    for (const z of s.travelZones) {
-      if (!z.enabled) continue;
-      for (const raw of z.prefixes) {
-        const px = raw.toUpperCase();
-        const first = vu.get(px);
-        if (first && first !== z.key) out.push(px);
-        else if (!first) vu.set(px, z.key);
-      }
+  async function viderCache() {
+    setClearing(true);
+    setCleared(null);
+    try {
+      const res = await fetch("/api/admin/transit-cache", { method: "DELETE" });
+      const d = await res.json();
+      setCleared(d.ok ? Number(d.cleared ?? 0) : 0);
+    } catch {
+      setCleared(0);
+    } finally {
+      setClearing(false);
     }
-    return [...new Set(out)];
+  }
+
+  function setPolicy(next: Partial<TravelPolicy>) {
+    patch("travelPolicy", { ...s.travelPolicy, ...next });
+  }
+
+  /* Les trois seuils doivent rester dans l'ordre, sans quoi la règle devient
+     incohérente sans que rien ne le signale : un trajet « gratuit » plus long
+     que le maximum autorisé, ou une séance longue exigée en deçà du seuil de
+     gratuité. On le dit plutôt que de laisser enregistrer une absurdité. */
+  const policyIssue = (() => {
+    const t = s.travelPolicy;
+    if (t.freeUnderMinutes > t.minSessionOverMinutes) {
+      return "Le seuil de gratuité dépasse celui de la séance longue : des trajets gratuits exigeraient une séance de trois heures.";
+    }
+    if (t.minSessionOverMinutes > t.maxMinutes) {
+      return "Le seuil de séance longue dépasse le trajet maximum : il ne s'appliquerait jamais.";
+    }
+    if (t.freeUnderMinutes > t.maxMinutes) {
+      return "Le seuil de gratuité dépasse le trajet maximum : plus personne ne paierait de frais.";
+    }
+    return null;
   })();
 
   /* Ce qui est enregistré ici sert à deux choses à la fois : calculer la
@@ -89,7 +92,7 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
           bufferMinutes: s.bufferMinutes, leadHours: s.leadHours, horizonDays: s.horizonDays,
           slotStep: s.slotStep, firstHourFree: s.firstHourFree, paused: s.paused,
           hours: s.hours, services: s.services, serviceArea: s.serviceArea,
-          travelZones: s.travelZones,
+          travelPolicy: s.travelPolicy,
           businessName: s.businessName, timezone: s.timezone,
         }),
       });
@@ -256,81 +259,74 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
         </div>
       </Card>
 
-      {/* — Frais de déplacement — */}
-      <Card title="Frais de déplacement"
-        hint="Des adresses desservies mais éloignées. Les frais s'ajoutent au prix de la séance et ne sont jamais réduits par la première heure offerte, ni pour les abonnés. Deux tarifs par zone, selon que la visite atteint le seuil ou non.">
+      {/* — Déplacement — */}
+      <Card title="Déplacement"
+        hint="La règle porte sur le temps de trajet réel en transport en commun depuis votre adresse, mesuré pour le jour de la séance. Les frais s'ajoutent au prix et ne sont jamais réduits par la première heure offerte, abonnés compris.">
 
-        {s.travelZones.length === 0 && (
-          <p className="text-[0.85rem] font-light text-ink-400">
-            Aucune zone à frais. Toutes vos adresses sont au même prix.
-          </p>
-        )}
+        <div className="flex items-center justify-between gap-5 border-b border-gold-300/40 pb-5">
+          <div>
+            <p className="text-[0.92rem] text-ink-800">Mesurer le temps de trajet</p>
+            <p className="mt-1 text-[0.8rem] font-light leading-relaxed text-ink-400">
+              Désactivé, aucun frais n&apos;est demandé et toute adresse est acceptée.
+            </p>
+          </div>
+          <Toggle checked={s.travelPolicy.enabled}
+            onChange={(v) => setPolicy({ enabled: v })} />
+        </div>
 
-        <ul className="space-y-5">
-          {s.travelZones.map((z) => (
-            <li key={z.key} className="border border-gold-300/50 bg-linen-100/60 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="grid flex-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="label" htmlFor={`zfr-${z.key}`}>Nom (français)</label>
-                    <input id={`zfr-${z.key}`} value={z.labelFr} placeholder="Saint-Jean-sur-Richelieu"
-                      onChange={(e) => setZone(z.key, { labelFr: e.target.value })} className="field" />
-                  </div>
-                  <div>
-                    <label className="label" htmlFor={`zen-${z.key}`}>Nom (anglais)</label>
-                    <input id={`zen-${z.key}`} value={z.labelEn} placeholder="Saint-Jean-sur-Richelieu"
-                      onChange={(e) => setZone(z.key, { labelEn: e.target.value })} className="field" />
-                  </div>
-                </div>
-                <div className="flex flex-none items-center gap-3 pt-7">
-                  <Toggle small checked={z.enabled} onChange={(v) => setZone(z.key, { enabled: v })} />
-                </div>
-              </div>
+        <div className="mt-6 grid gap-5 sm:grid-cols-3">
+          <Minutes label="Gratuit en deçà de" id="tp-free" value={s.travelPolicy.freeUnderMinutes}
+            onChange={(v) => setPolicy({ freeUnderMinutes: v })} />
+          <Minutes label="Séance longue exigée au-delà de" id="tp-min" value={s.travelPolicy.minSessionOverMinutes}
+            onChange={(v) => setPolicy({ minSessionOverMinutes: v })} />
+          <Minutes label="Réservation fermée au-delà de" id="tp-max" value={s.travelPolicy.maxMinutes}
+            onChange={(v) => setPolicy({ maxMinutes: v })} />
+        </div>
 
-              <div className="mt-4">
-                <label className="label" htmlFor={`zp-${z.key}`}>Codes postaux (3 premiers caractères)</label>
-                <textarea id={`zp-${z.key}`} rows={2} value={z.prefixes.join(", ")}
-                  onChange={(e) => setZone(z.key, {
-                    prefixes: e.target.value.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z]\d[A-Z]$/.test(x)),
-                  })}
-                  className="field resize-none font-mono text-sm uppercase tracking-wider" />
-                <p className="mt-1.5 text-[11px] text-ink-400">{z.prefixes.length} préfixes · séparez par des virgules</p>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="label" htmlFor={`zt-${z.key}`}>Seuil</label>
-                  <div className="flex items-center gap-2">
-                    <input id={`zt-${z.key}`} type="number" min={30} max={720} step={30} value={z.thresholdMinutes}
-                      onChange={(e) => setZone(z.key, { thresholdMinutes: Math.max(30, Number(e.target.value) || 180) })}
-                      className="field !w-24 text-center tabular-nums" />
-                    <span className="text-[11px] text-ink-400">min</span>
-                  </div>
-                </div>
-                <Fee label={`Moins de ${fmtHours(z.thresholdMinutes)}`} id={`zs-${z.key}`}
-                  cents={z.shortFeeCents} onChange={(c) => setZone(z.key, { shortFeeCents: c })} />
-                <Fee label={`${fmtHours(z.thresholdMinutes)} ou plus`} id={`zl-${z.key}`}
-                  cents={z.longFeeCents} onChange={(c) => setZone(z.key, { longFeeCents: c })} />
-              </div>
-
-              <button type="button" onClick={() => removeZone(z.key)}
-                className="mt-4 text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-[#8E332C]">
-                Retirer cette zone
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {zoneClashes.length > 0 && (
+        {policyIssue && (
           <p className="mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.82rem] leading-relaxed text-[#8E332C]">
-            {zoneClashes.join(", ")} {zoneClashes.length > 1 ? "figurent" : "figure"} dans plusieurs zones actives.
-            C&apos;est la première de la liste qui s&apos;appliquerait.
+            {policyIssue}
           </p>
         )}
 
-        <button type="button" onClick={addZone} className="btn btn-ghost mt-6 !py-2.5 !px-5 !text-[10px]">
-          Ajouter une zone
-        </button>
+        <div className="mt-7 grid gap-5 sm:grid-cols-3">
+          <Minutes label="Ce qu'on appelle une séance longue" id="tp-long" value={s.travelPolicy.longSessionMinutes}
+            onChange={(v) => setPolicy({ longSessionMinutes: v })} />
+          <Fee label={`Séance de moins de ${fmtHours(s.travelPolicy.longSessionMinutes)}`} id="tp-short"
+            cents={s.travelPolicy.feeShortCents} onChange={(c) => setPolicy({ feeShortCents: c })} />
+          <Fee label={`Séance de ${fmtHours(s.travelPolicy.longSessionMinutes)} ou plus`} id="tp-longfee"
+            cents={s.travelPolicy.feeLongCents} onChange={(c) => setPolicy({ feeLongCents: c })} />
+        </div>
+
+        <div className="mt-8 border-t border-gold-300/40 pt-6">
+          <label className="label" htmlFor="tp-fallback">Liste de secours</label>
+          <p className="mb-2 text-[0.8rem] font-light leading-relaxed text-ink-400">
+            Quand l&apos;horaire de transport ne répond pas, seules ces adresses sont acceptées, sans frais, et la
+            réservation vous est signalée comme « trajet non vérifié ». Gardez-la courte : une adresse qu&apos;on
+            sait lointaine ne doit pas passer en aveugle.
+          </p>
+          <textarea id="tp-fallback" rows={3}
+            value={s.travelPolicy.fallbackPrefixes.join(", ")}
+            onChange={(e) => setPolicy({
+              fallbackPrefixes: e.target.value.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z]\d[A-Z]$/.test(x)),
+            })}
+            className="field resize-none font-mono text-sm uppercase tracking-wider" />
+          <p className="mt-1.5 text-[11px] text-ink-400">
+            {s.travelPolicy.fallbackPrefixes.length} préfixes · séparez par des virgules
+          </p>
+        </div>
+
+        <div className="mt-7 flex flex-wrap items-end gap-5 border-t border-gold-300/40 pt-6">
+          <Minutes label="Garder une mesure (jours)" id="tp-cache" value={s.travelPolicy.cacheDays} unit="j"
+            onChange={(v) => setPolicy({ cacheDays: v })} />
+          <button type="button" onClick={viderCache} disabled={clearing}
+            className="btn btn-ghost !py-2.5 !px-5 !text-[10px]">
+            {clearing ? "Vidage…" : cleared != null ? `${cleared} mesures effacées` : "Vider les mesures en cache"}
+          </button>
+        </div>
+        <p className="mt-2 text-[0.78rem] font-light leading-relaxed text-ink-400">
+          Videz le cache si vous déménagez, ou si un horaire de transport a changé pour de bon.
+        </p>
       </Card>
 
       {/* — Barre d'enregistrement — */}
@@ -375,6 +371,23 @@ function Fee({ label, id, cents, onChange }: {
           onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value) || 0)) * 100)}
           className="field !w-24 text-center tabular-nums" />
         <span className="text-[11px] text-ink-400">$</span>
+      </div>
+    </div>
+  );
+}
+
+/** Un nombre de minutes, borné pour qu'aucun réglage absurde ne s'enregistre. */
+function Minutes({ label, id, value, onChange, unit = "min" }: {
+  label: string; id: string; value: number; onChange: (v: number) => void; unit?: string;
+}) {
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <div className="flex items-center gap-2">
+        <input id={id} type="number" min={1} max={600} step={5} value={value}
+          onChange={(e) => onChange(Math.max(1, Math.min(600, Math.round(Number(e.target.value) || 1))))}
+          className="field !w-24 text-center tabular-nums" />
+        <span className="text-[11px] text-ink-400">{unit}</span>
       </div>
     </div>
   );

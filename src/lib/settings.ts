@@ -1,6 +1,6 @@
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
-import { DEFAULT_TRAVEL_ZONES, type TravelZone } from "./travel";
+import { DEFAULT_TRAVEL_POLICY, type TravelPolicy } from "./travel";
 
 export type DayHours = { day: number; enabled: boolean; open: string; close: string };
 export type ServiceItem = {
@@ -34,7 +34,7 @@ export type Settings = {
   paused: boolean;
   hours: DayHours[];
   serviceArea: ServiceArea;
-  travelZones: TravelZone[];
+  travelPolicy: TravelPolicy;
   services: ServiceItem[];
   connectedAt: string | null;
 };
@@ -99,8 +99,8 @@ export const DEFAULT_AREA: ServiceArea = {
     "H2V",                                        // Outremont
     "H2Y",                                        // Vieux-Montréal
   ],
-  labelFr: "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
-  labelEn: "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Nuns' Island, Verdun, Westmount, Outremont and Old Montreal",
+  labelFr: "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
+  labelEn: "We travel to Longueuil, across the South Shore and to several Montreal neighbourhoods. Enter your postal code to check that your address is served and to find out about any travel fee.",
 };
 
 /**
@@ -114,9 +114,11 @@ export const DEFAULT_AREA: ServiceArea = {
 const PREVIOUS_AREA_LABELS = {
   fr: [
     "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
+    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
   ],
   en: [
     "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno and the surrounding South Shore",
+    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Nuns' Island, Verdun, Westmount, Outremont and Old Montreal",
   ],
 };
 
@@ -125,7 +127,7 @@ export const FALLBACK_SETTINGS: Settings = {
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
   hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 45, slotStep: 30, firstHourFree: true, paused: false,
-  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, travelZones: DEFAULT_TRAVEL_ZONES,
+  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, travelPolicy: DEFAULT_TRAVEL_POLICY,
   services: DEFAULT_SERVICES,
   connectedAt: null,
 };
@@ -153,7 +155,7 @@ function hydrate(row: Row | undefined): Settings {
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
     serviceArea: mergeArea(row.service_area as ServiceArea | null),
-    travelZones: readTravelZones(row.travel_zones as TravelZone[] | null | undefined),
+    travelPolicy: readTravelPolicy(row.travel_policy, row.service_area as ServiceArea | null),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
   };
@@ -205,22 +207,49 @@ export function mergeArea(stored: ServiceArea | null): ServiceArea {
 }
 
 /**
- * Les zones à frais de déplacement, et pourquoi elles ne se fusionnent pas.
+ * La politique de déplacement, et la bascule depuis l'ancien système.
  *
- * Les prestations et la zone desservie se complètent : une nouveauté du code
- * vient s'ajouter à ce qui est enregistré, parce qu'oublier d'offrir quelque
- * chose est un moindre mal. Pour des frais, le moindre mal est à l'envers.
- * Si l'artisan supprime une zone depuis /admin, la réinjecter au prochain
- * déploiement lui ferait facturer des frais qu'il a décidé de ne plus
- * demander — et il n'aurait aucun moyen de s'en débarrasser.
+ * Avant, la zone desservie était une liste de codes postaux : dedans on
+ * venait, dehors on refusait. La règle porte maintenant sur le temps de
+ * trajet réel, et cette liste ne sert plus que de secours quand la mesure
+ * échoue. La migration en tire la conséquence : une base qui n'a jamais
+ * connu de politique reprend les préfixes qu'elle avait enregistrés, de
+ * sorte qu'une panne de mesure le lendemain du déploiement se rattrape sur
+ * la zone que l'artisan avait lui-même réglée, et non sur une liste écrite
+ * ici.
  *
- * La colonne distingue donc deux silences. `null` : jamais réglé, on sème
- * les valeurs par défaut. `[]` : réglé, et volontairement vide — on la
- * respecte. Ce qui est enregistré fait foi, sans exception.
+ * `null` : jamais réglé, on sème. Un objet : il fait foi, champ par champ,
+ * avec les valeurs par défaut pour ce qui manque — une politique enregistrée
+ * avant l'ajout d'un réglage ne doit pas rendre ce réglage inatteignable.
  */
-export function readTravelZones(stored: TravelZone[] | null | undefined): TravelZone[] {
-  if (stored == null) return DEFAULT_TRAVEL_ZONES;
-  return Array.isArray(stored) ? stored : DEFAULT_TRAVEL_ZONES;
+export function readTravelPolicy(stored: unknown, area: ServiceArea | null): TravelPolicy {
+  const secours = area?.prefixes?.length
+    ? area.prefixes.map((p) => p.toUpperCase())
+    : DEFAULT_TRAVEL_POLICY.fallbackPrefixes;
+
+  if (stored == null || typeof stored !== "object" || Array.isArray(stored)) {
+    return { ...DEFAULT_TRAVEL_POLICY, fallbackPrefixes: secours };
+  }
+
+  const o = stored as Record<string, unknown>;
+  const nombre = (v: unknown, defaut: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : defaut;
+  };
+
+  return {
+    enabled: typeof o.enabled === "boolean" ? o.enabled : DEFAULT_TRAVEL_POLICY.enabled,
+    freeUnderMinutes: nombre(o.freeUnderMinutes, DEFAULT_TRAVEL_POLICY.freeUnderMinutes),
+    feeShortCents: nombre(o.feeShortCents, DEFAULT_TRAVEL_POLICY.feeShortCents),
+    feeLongCents: nombre(o.feeLongCents, DEFAULT_TRAVEL_POLICY.feeLongCents),
+    longSessionMinutes: nombre(o.longSessionMinutes, DEFAULT_TRAVEL_POLICY.longSessionMinutes),
+    minSessionOverMinutes: nombre(o.minSessionOverMinutes, DEFAULT_TRAVEL_POLICY.minSessionOverMinutes),
+    maxMinutes: nombre(o.maxMinutes, DEFAULT_TRAVEL_POLICY.maxMinutes),
+    fallbackPrefixes: Array.isArray(o.fallbackPrefixes)
+      ? (o.fallbackPrefixes as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.toUpperCase())
+      : secours,
+    cacheDays: nombre(o.cacheDays, DEFAULT_TRAVEL_POLICY.cacheDays),
+  };
 }
 
 /**
@@ -271,11 +300,11 @@ export async function saveConnection(input: {
   const enc = input.refreshToken ? encrypt(input.refreshToken) : null;
   await sql()`
     INSERT INTO nivex_settings (id, owner_email, owner_name, owner_picture, refresh_token,
-                                hours, service_area, travel_zones, services, connected_at, updated_at)
+                                hours, service_area, travel_policy, services, connected_at, updated_at)
     VALUES (1, ${input.email}, ${input.name}, ${input.picture}, ${enc},
             ${JSON.stringify(DEFAULT_HOURS)}::jsonb,
             ${JSON.stringify(DEFAULT_AREA)}::jsonb,
-            ${JSON.stringify(DEFAULT_TRAVEL_ZONES)}::jsonb,
+            ${JSON.stringify(DEFAULT_TRAVEL_POLICY)}::jsonb,
             ${JSON.stringify(DEFAULT_SERVICES)}::jsonb,
             now(), now())
     ON CONFLICT (id) DO UPDATE SET
@@ -285,7 +314,7 @@ export async function saveConnection(input: {
       refresh_token = COALESCE(EXCLUDED.refresh_token, nivex_settings.refresh_token),
       hours         = COALESCE(nivex_settings.hours, EXCLUDED.hours),
       service_area  = COALESCE(nivex_settings.service_area, EXCLUDED.service_area),
-      travel_zones  = COALESCE(nivex_settings.travel_zones, EXCLUDED.travel_zones),
+      travel_policy = COALESCE(nivex_settings.travel_policy, EXCLUDED.travel_policy),
       services      = COALESCE(nivex_settings.services, EXCLUDED.services),
       connected_at  = now(),
       updated_at    = now()`;
@@ -301,7 +330,7 @@ export async function disconnect() {
 export type SettingsPatch = Partial<Pick<Settings,
   "calendarId" | "timezone" | "businessName" | "hourlyRate" | "currency" | "minMinutes" |
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
-  "hours" | "serviceArea" | "travelZones" | "services">>;
+  "hours" | "serviceArea" | "travelPolicy" | "services">>;
 
 export async function updateSettings(patch: SettingsPatch) {
   await ensureSchema();
@@ -323,7 +352,7 @@ export async function updateSettings(patch: SettingsPatch) {
       paused          = ${n.paused},
       hours           = ${JSON.stringify(n.hours)}::jsonb,
       service_area    = ${JSON.stringify(n.serviceArea)}::jsonb,
-      travel_zones    = ${JSON.stringify(n.travelZones)}::jsonb,
+      travel_policy   = ${JSON.stringify(n.travelPolicy)}::jsonb,
       services        = ${JSON.stringify(n.services)}::jsonb,
       updated_at      = now()
     WHERE id = 1`;
