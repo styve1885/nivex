@@ -161,8 +161,8 @@ const terms: LegalDoc = {
     {
       title: "Where we go",
       body: [
-        "{zone}.",
-        "The postal code you enter while booking tells you at once whether you are inside the area. Outside it, booking remains possible: we call you back to confirm, or to tell you plainly that we cannot make the trip.",
+        "{zone}",
+        "The postal code you enter while booking tells you at once whether you are inside the area, and what the journey costs if anything. Outside it, online booking is not possible: call us at {phone} and we will tell you plainly whether we can make the trip.",
       ],
     },
     {
@@ -397,7 +397,7 @@ export const en: Dict = {
         serviceKey: "trousers",
         name: "Everything happens at your home",
         body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
-        detail: "South Shore, Saint-Jean and the west of the island",
+        detail: "South Shore, Saint-Jean and several Montreal neighbourhoods",
       },
     ],
   },
@@ -481,7 +481,7 @@ export const en: Dict = {
       },
       {
         q: "Which areas do you serve?",
-        a: "Longueuil and the South Shore with no travel fee; Saint-Jean-sur-Richelieu and several Montreal neighbourhoods — Nuns' Island, Verdun, Old Montreal, Westmount, Outremont — with a fee that depends on the area and on the length of the session. Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs if anything.",
+        a: "{zone} The travel fee depends on the area and on the length of the session; the full table is on the pricing page. Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs if anything.",
       },
       {
         q: "How does payment work?",
@@ -499,16 +499,19 @@ export const en: Dict = {
     button: "Book now",
     or: "or call",
   },
+  zoneText: {
+    served: "Areas served: {list}.",
+    none: "Online booking is closed for every area at the moment. Call us.",
+  },
   zoneCheck: {
     label: "Your postal code",
     placeholder: "J4K 1A1",
     check: "Check",
     checking: "Checking…",
     served: "Your address is served.",
-    servedWithFee: "Served, with a {fee} travel fee per visit.",
-    tooFar: "Outside the area for online booking. Do call us and we will see together what is possible.",
-    zone: "Area: {zone}.",
-    reduced: "The reduced rate applies from {hours} of session onward.",
+    servedWithFee: "Served, with a travel fee of {fee} per visit ({long} for a session of {hours} or more).",
+    servedWithFlatFee: "Served, with a travel fee of {fee} per visit.",
+    tooFar: "Outside the area for online booking, call us at {phone}.",
     error: "The check did not go through. Try again, or call us at",
   },
   booking: {
@@ -540,7 +543,7 @@ export const en: Dict = {
       postal: "Postal code",
       postalPlaceholder: "J4K 1A1",
       outOfZone:
-        "This address falls outside the area we travel to, and online booking cannot go further. Do call us: sometimes an arrangement is possible, and we will tell you plainly either way.",
+        "This address is outside our area for online booking. Do call us, we will gladly see together what is possible:",
       checking: "Checking the area…",
       travelFree: "Your address is served, travel included.",
       inZone: "Good news, you're inside the service area.",
@@ -879,10 +882,11 @@ export const en: Dict = {
         { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
       ],
       travel: "Travel fee",
-      travelZone: "Area",
-      travelShort: "Under {hours}",
-      travelLong: "{hours} or more",
-      travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle. Longueuil and the South Shore pay none.`,
+      travelFree: "No travel fee",
+      travelFlat: "{fee} per visit",
+      travelShort: "{fee} for a session under {hours}",
+      travelLong: "{fee} for a session of {hours} or more",
+      travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
     },
     firstFreeLabel: "First session",
     cta: {

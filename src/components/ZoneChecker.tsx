@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { normalisePostal, POSTAL_RE } from "./booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
+import { thresholdText } from "@/lib/travel";
 
 /**
  * Le vérificateur de code postal.
@@ -12,9 +13,10 @@ import type { Dict } from "@/lib/i18n";
  * répondait pas — on n'y trouve jamais la sienne, et celles qu'on y trouve
  * ne disent rien des frais.
  *
- * La réponse est celle du tarif le moins avantageux — celui d'une séance
- * courte —, parce qu'on ne connaît pas encore la durée. Le tunnel de
- * réservation affine ensuite, et peut donc annoncer moins, jamais plus.
+ * On ne connaît pas encore la durée : la réponse annonce donc les deux tarifs
+ * de la zone, celui d'une séance courte d'abord, celui d'une longue séance
+ * entre parenthèses, avec le seuil propre à la zone. Le tunnel de
+ * réservation tranche ensuite selon la durée réelle.
  */
 
 type Reponse = {
@@ -23,11 +25,14 @@ type Reponse = {
   labelFr: string | null;
   labelEn: string | null;
   feeCents: number;
+  shortFeeCents: number;
+  longFeeCents: number;
+  thresholdMinutes: number;
   currency: string;
 };
 
-export function ZoneChecker({ t, locale, longSession, className = "" }: {
-  t: Dict; locale: "fr" | "en"; longSession: string; className?: string;
+export function ZoneChecker({ t, locale, className = "" }: {
+  t: Dict; locale: "fr" | "en"; className?: string;
 }) {
   const [postal, setPostal] = useState("");
   const [etat, setEtat] = useState<"vide" | "chargement" | "reponse" | "erreur">("vide");
@@ -58,6 +63,18 @@ export function ZoneChecker({ t, locale, longSession, className = "" }: {
 
   const z = t.zoneCheck;
 
+  /* Trois réponses, pas une de plus : desservie sans frais, desservie avec
+     les frais de la zone, ou hors zone. Une zone au tarif unique ne
+     s'encombre pas d'une parenthèse qui répéterait le même montant. */
+  function verdictText(v: Reponse): string {
+    if (v.shortFeeCents === 0 && v.longFeeCents === 0) return z.served;
+    if (v.shortFeeCents === v.longFeeCents) return z.servedWithFlatFee.replace("{fee}", money(v.shortFeeCents, v.currency));
+    return z.servedWithFee
+      .replace("{fee}", money(v.shortFeeCents, v.currency))
+      .replace("{long}", money(v.longFeeCents, v.currency))
+      .replace("{hours}", thresholdText(v.thresholdMinutes, locale));
+  }
+
   return (
     <div className={className}>
       <form onSubmit={verifier} className="flex flex-wrap items-end gap-3">
@@ -86,32 +103,22 @@ export function ZoneChecker({ t, locale, longSession, className = "" }: {
         <div role="status" aria-live="polite"
           className="mt-5 border-l-2 border-gold-400 bg-linen-50 px-5 py-4">
           <p className="text-[0.95rem] leading-snug text-ink-800">
-            {r.status === "free" && z.served}
-            {r.status === "fee" && z.servedWithFee.replace("{fee}", money(r.feeCents, r.currency))}
-            {r.status === "out" && z.tooFar}
+            {r.status !== "out" && verdictText(r)}
+            {r.status === "out" && (() => {
+              /* Le numéro, au milieu de la phrase, se touche pour appeler. */
+              const [avant, apres] = z.tooFar.split("{phone}");
+              return (
+                <>
+                  {avant}
+                  <a href={t.brand.phoneHref}
+                    className="whitespace-nowrap text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+                    {t.brand.phone}
+                  </a>
+                  {apres}
+                </>
+              );
+            })()}
           </p>
-
-          {r.status !== "out" && (locale === "en" ? r.labelEn : r.labelFr) && (
-            <p className="mt-2 text-[0.82rem] font-light leading-relaxed text-ink-500">
-              {z.zone.replace("{zone}", (locale === "en" ? r.labelEn : r.labelFr) ?? "")}
-            </p>
-          )}
-
-          {/* Le montant annoncé est celui d'une séance courte : on dit donc
-              qu'il baisse au-delà du seuil, plutôt que de laisser croire
-              qu'il est le seul possible. */}
-          {r.status === "fee" && (
-            <p className="mt-1.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
-              {z.reduced.replace("{hours}", longSession)}
-            </p>
-          )}
-
-          {r.status === "out" && (
-            <a href={t.brand.phoneHref}
-              className="mt-3 inline-block text-[0.9rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
-              {t.brand.phone}
-            </a>
-          )}
         </div>
       )}
     </div>

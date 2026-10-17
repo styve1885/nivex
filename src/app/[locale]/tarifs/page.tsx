@@ -5,7 +5,7 @@ import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettings, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { feeTable, longSessionText } from "@/lib/travel";
+import { feeTable, servedText } from "@/lib/travel";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
@@ -104,7 +104,6 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
   const fees = feeTable(s.zonePolicy, locale, (c) => formatMoney(c, s.currency, locale));
-  const seuil = longSessionText(s.zonePolicy, locale);
 
   return (
     <div className="bg-linen-100">
@@ -332,9 +331,9 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           {/* De quoi vérifier avant de lire les conditions, plutôt qu'après. */}
           <div className="paper mt-10 px-7 py-8 sm:px-9">
             <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
-              {locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr}
+              {servedText(s.zonePolicy, locale, t.zoneText)}
             </p>
-            <ZoneChecker t={t} locale={locale} longSession={seuil} className="mt-6" />
+            <ZoneChecker t={t} locale={locale} className="mt-6" />
           </div>
 
           <dl className="mt-10 border-t border-gold-300/40">
@@ -353,33 +352,32 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               <div className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
                 <dt className="font-display text-[1rem] text-ink-800">{t.tarifs.terms.travel}</dt>
                 <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">
-                  {/* Un tableau plutôt qu'une phrase : trois zones et deux
-                      tarifs chacune ne se lisent pas en prose. Les montants
-                      viennent des réglages, jamais d'un texte figé. */}
-                  <table className="w-full max-w-md border-collapse text-[0.85rem]">
-                    <thead>
-                      <tr className="border-b border-gold-300/40">
-                        <th scope="col" className="py-2 pr-4 text-left text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
-                          {t.tarifs.terms.travelZone}
-                        </th>
-                        <th scope="col" className="py-2 pr-4 text-right text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
-                          {t.tarifs.terms.travelShort.replace("{hours}", seuil)}
-                        </th>
-                        <th scope="col" className="py-2 text-right text-[10px] font-normal uppercase tracking-[0.16em] text-ink-400">
-                          {t.tarifs.terms.travelLong.replace("{hours}", seuil)}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fees.map((f) => (
-                        <tr key={f.zone} className="border-b border-gold-300/20 last:border-0">
-                          <td className="py-2.5 pr-4 text-ink-700">{f.zone}</td>
-                          <td className="py-2.5 pr-4 text-right tabular-nums text-ink-700">{f.short}</td>
-                          <td className="py-2.5 text-right tabular-nums text-ink-700">{f.long}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {/* Une zone par ligne, avec ses secteurs et ses deux tarifs.
+                      Le seuil est propre à chaque zone, d'où une phrase par
+                      tarif plutôt qu'un en-tête de colonne commun. Rien n'est
+                      récité : tout vient de l'onglet « Zones et frais ». */}
+                  <ul className="divide-y divide-gold-300/30 border-y border-gold-300/40">
+                    {fees.map((f) => (
+                      <li key={f.key} className="grid gap-2 py-4 sm:grid-cols-[1fr_auto] sm:gap-6">
+                        <div>
+                          <p className="font-display text-[1rem] text-ink-800">{f.zone}</p>
+                          <p className="mt-1 text-[0.8rem] leading-relaxed text-ink-400">{f.sectors.join(", ")}</p>
+                        </div>
+                        <div className="text-[0.85rem] tabular-nums text-ink-700 sm:text-right">
+                          {f.free ? (
+                            <p>{t.tarifs.terms.travelFree}</p>
+                          ) : f.short === f.long ? (
+                            <p>{t.tarifs.terms.travelFlat.replace("{fee}", f.short)}</p>
+                          ) : (
+                            <>
+                              <p>{t.tarifs.terms.travelShort.replace("{fee}", f.short).replace("{hours}", f.threshold)}</p>
+                              <p>{t.tarifs.terms.travelLong.replace("{fee}", f.long).replace("{hours}", f.threshold)}</p>
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                   <span className="mt-4 block text-ink-400">{t.tarifs.terms.travelNote}</span>
                 </dd>
               </div>

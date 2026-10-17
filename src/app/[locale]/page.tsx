@@ -12,6 +12,8 @@ import { HowItWorks } from "@/components/home/HowItWorks";
 import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
 import { Faq } from "@/components/home/Faq";
+import { faqFill } from "@/components/home/faq-fill";
+import { sectorNames } from "@/lib/travel";
 import { Contact } from "@/components/home/Contact";
 import { ClosingCta } from "@/components/home/ClosingCta";
 
@@ -34,7 +36,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     telephone: "+14509431217",
     email: contactEmail(settings),
     priceRange: "$$",
-    areaServed: settings.serviceArea.prefixes.map((p) => ({ "@type": "PostalCodeRangeSpecification", postalCodeBegin: p })),
+    areaServed: sectorNames(settings.zonePolicy, locale).map((name) => ({ "@type": "Place", name })),
     address: { "@type": "PostalAddress", addressRegion: "QC", addressCountry: "CA", addressLocality: "Longueuil" },
     openingHoursSpecification: settings.hours.filter((h) => h.enabled).map((h) => ({
       "@type": "OpeningHoursSpecification",
@@ -51,7 +53,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     "@type": "FAQPage",
     mainEntity: t.faq.items.map((f) => ({
       "@type": "Question", name: f.q,
-      acceptedAnswer: { "@type": "Answer", text: f.a },
+      acceptedAnswer: { "@type": "Answer", text: faqFill(f.a, t, settings, locale) },
     })),
   };
 
@@ -70,7 +72,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <BeforeAfter t={t} />
       <BeforeAfterBanner t={t} />
       <Pricing t={t} locale={locale} settings={settings} />
-      <Faq t={t} settings={settings} />
+      <Faq t={t} settings={settings} locale={locale} />
       <Contact t={t} locale={locale} businessEmail={contactEmail(settings)} settings={settings} />
       <ClosingCta t={t} locale={locale} />
     </>

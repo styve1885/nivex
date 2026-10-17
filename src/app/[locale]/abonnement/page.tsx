@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
+import { servedText } from "@/lib/travel";
 import { PLANS, planCents, planFullCents } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
@@ -52,6 +53,7 @@ export default async function SubscribePage({
     discountCents: SUBSCRIBER_TRAVEL_DISCOUNT_CENTS,
     seriesCycles: SERIES_CYCLES,
     initialPlan: sp.formule ?? null,
+    areaText: servedText(s.zonePolicy, locale, t.zoneText),
   };
 
   return (

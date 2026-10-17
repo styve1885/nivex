@@ -9,6 +9,7 @@ import { ConnectionPanel } from "./ConnectionPanel";
 import { MessagesPanel } from "./MessagesPanel";
 import { VisitsPanel } from "./VisitsPanel";
 import { SubscribersPanel } from "./SubscribersPanel";
+import { ZonesPanel } from "./ZonesPanel";
 import { PLANS } from "@/lib/pricing";
 import type { AdminBooking, AdminStats, GoogleLink } from "./types";
 import type { Settings } from "@/lib/settings";
@@ -19,6 +20,7 @@ const TABS = [
   { key: "messages", label: "Messages" },
   { key: "visits", label: "Visites" },
   { key: "settings", label: "Réglages" },
+  { key: "zones", label: "Zones et frais" },
   { key: "connection", label: "Connexion" },
 ] as const;
 
@@ -127,7 +129,7 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Six onglets ne tiennent plus sur la largeur d'un téléphone. Sans
+      {/* Sept onglets ne tiennent plus sur la largeur d'un téléphone. Sans
           défilement, « Connexion » sortait de l'écran sans aucun moyen d'y
           revenir — l'onglet qui sert précisément quand plus rien ne marche.
           La barre défile donc latéralement, et rien ne se perd. */}
@@ -155,6 +157,7 @@ export function Dashboard({
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
         {tab === "visits" && <VisitsPanel />}
         {tab === "settings" && <SettingsPanel initial={settings} />}
+        {tab === "zones" && <ZonesPanel initial={settings.zonePolicy} />}
         {tab === "connection" && (
           <ConnectionPanel settings={settings} session={session} env={env} link={link} missingScopes={flash.missingScopes} />
         )}

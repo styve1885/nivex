@@ -173,8 +173,8 @@ const terms: LegalDoc = {
     {
       title: "Où nous allons",
       body: [
-        "{zone}.",
-        "Le code postal saisi pendant la réservation vous dit immédiatement si vous êtes dans la zone. Hors zone, la réservation reste possible : nous vous rappelons pour confirmer, ou pour vous dire franchement que nous ne pouvons pas nous y rendre.",
+        "{zone}",
+        "Le code postal saisi pendant la réservation vous dit immédiatement si vous êtes dans la zone, et ce que coûte le déplacement s'il y a lieu. Hors zone, la réservation en ligne n'est pas possible : appelez-nous au {phone}, nous vous dirons franchement si nous pouvons nous y rendre.",
       ],
     },
     {
@@ -409,7 +409,7 @@ export const fr = {
         serviceKey: "trousers",
         name: "Tout se fait chez vous",
         body: "Rien ne quitte votre domicile. Votre artisan vient avec sa table, sa vapeur et ses cintres, travaille devant vous, et range avant de partir.",
-        detail: "Rive-Sud, Saint-Jean et l'ouest de l'île",
+        detail: "Rive-Sud, Saint-Jean et plusieurs quartiers de Montréal",
       },
     ],
   },
@@ -493,7 +493,7 @@ export const fr = {
       },
       {
         q: "Quelles zones desservez-vous ?",
-        a: "Longueuil et la Rive-Sud sans frais de déplacement ; Saint-Jean-sur-Richelieu et plusieurs quartiers de Montréal — Île-des-Sœurs, Verdun, Vieux-Montréal, Westmount, Outremont — avec des frais qui dépendent de la zone et de la durée. Entrez votre code postal sur l'accueil ou sur la page Tarifs : vous saurez tout de suite si votre adresse est desservie, et ce que le déplacement coûte s'il y a lieu.",
+        a: "{zone} Les frais de déplacement dépendent de la zone et de la durée de la séance ; la grille complète est sur la page Tarifs. Entrez votre code postal sur l'accueil ou sur la page Tarifs : vous saurez tout de suite si votre adresse est desservie, et ce que le déplacement coûte s'il y a lieu.",
       },
       {
         q: "Comment se fait le paiement ?",
@@ -511,16 +511,20 @@ export const fr = {
     button: "Réserver maintenant",
     or: "ou appelez le",
   },
+  /* La phrase de la zone desservie, remplie depuis les secteurs actifs. */
+  zoneText: {
+    served: "Secteurs desservis : {list}.",
+    none: "La réservation en ligne est fermée pour tous les secteurs en ce moment. Appelez-nous.",
+  },
   zoneCheck: {
     label: "Votre code postal",
     placeholder: "J4K 1A1",
     check: "Vérifier",
     checking: "Vérification…",
     served: "Votre adresse est desservie.",
-    servedWithFee: "Desservie, avec des frais de déplacement de {fee} par visite.",
-    tooFar: "Hors zone pour la réservation en ligne. Appelez-nous, nous verrons ensemble ce qui est possible.",
-    zone: "Zone : {zone}.",
-    reduced: "Le tarif réduit s'applique dès {hours} de séance.",
+    servedWithFee: "Desservie, avec des frais de déplacement de {fee} par visite ({long} pour une séance de {hours} ou plus).",
+    servedWithFlatFee: "Desservie, avec des frais de déplacement de {fee} par visite.",
+    tooFar: "Hors zone pour la réservation en ligne, appelez-nous au {phone}.",
     error: "La vérification n'a pas abouti. Réessayez, ou appelez-nous au",
   },
   booking: {
@@ -552,7 +556,7 @@ export const fr = {
       postal: "Code postal",
       postalPlaceholder: "J4K 1A1",
       outOfZone:
-        "Cette adresse se trouve hors de notre zone de déplacement, et la réservation en ligne ne peut pas aller plus loin. Appelez-nous : il arrive que nous puissions nous arranger, et nous vous le dirons franchement.",
+        "Cette adresse se trouve hors de notre zone pour la réservation en ligne. Appelez-nous, nous verrons volontiers ensemble ce qui est possible :",
       checking: "Vérification de la zone…",
       travelFree: "Votre adresse est desservie, déplacement compris.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
@@ -891,10 +895,11 @@ export const fr = {
         { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre : le matériel professionnel arrive avec l'artisan." },
       ],
       travel: "Frais de déplacement",
-      travelZone: "Zone",
-      travelShort: "Moins de {hours}",
-      travelLong: "{hours} ou plus",
-      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite ; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle. Longueuil et la Rive-Sud n'en paient aucun.`,
+      travelFree: "Sans frais de déplacement",
+      travelFlat: "{fee} par visite",
+      travelShort: "{fee} pour une séance de moins de {hours}",
+      travelLong: "{fee} pour une séance de {hours} ou plus",
+      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite ; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
     },
     firstFreeLabel: "Première séance",
     cta: {

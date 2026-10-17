@@ -24,6 +24,8 @@ export type WizardConfig = {
   slotStep: number;
   firstHourFree: boolean;
   timezone: string;
+  /** La phrase des secteurs desservis, écrite par le serveur depuis les réglages. */
+  areaText: string;
   /* Plus aucune liste de codes postaux ici : le verdict vient du serveur,
      qui seul connaît l'adresse de départ et interroge les horaires. */
 };
@@ -385,6 +387,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
         {step === 1 && (
           <section aria-labelledby="s2">
             <h2 id="s2" className="font-display text-2xl font-normal text-ink-800">{t.booking.step2.title}</h2>
+            <p className="mt-2 text-[0.8rem] font-light leading-relaxed text-ink-400">{config.areaText}</p>
 
             <div className="mt-8 grid gap-5 sm:grid-cols-2">
               <Field label={t.booking.step2.name} value={name} onChange={setName} autoComplete="name"

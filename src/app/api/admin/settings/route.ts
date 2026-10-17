@@ -27,24 +27,6 @@ const Patch = z.object({
     open: z.string().regex(HM),
     close: z.string().regex(HM),
   })).length(7).optional(),
-  serviceArea: z.object({
-    prefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).max(200),
-    labelFr: z.string().max(300),
-    labelEn: z.string().max(300),
-  }).optional(),
-  /* Les zones de déplacement, réglées depuis l'espace artisan. */
-  zonePolicy: z.object({
-    longSessionMinutes: z.number().int().min(30).max(960),
-    zones: z.array(z.object({
-      key: z.string().min(1).max(60),
-      labelFr: z.string().max(120),
-      labelEn: z.string().max(120),
-      prefixes: z.array(z.string().regex(/^[A-Za-z]\d[A-Za-z]$/)).min(1).max(300),
-      shortFeeCents: z.number().int().min(0).max(50_000),
-      longFeeCents: z.number().int().min(0).max(50_000),
-      enabled: z.boolean(),
-    })).min(1).max(20),
-  }).optional(),
   services: z.array(z.object({
     key: z.string().min(1).max(40),
     icon: z.string().max(30),
@@ -58,27 +40,11 @@ const Patch = z.object({
 }).refine(
   (v) => !v.hours || v.hours.every((h) => !h.enabled || h.open < h.close),
   { message: "L'heure de fermeture doit suivre l'heure d'ouverture", path: ["hours"] },
-).refine(
-  /* Un même code postal dans deux zones actives rendrait le tarif dépendant
-     de l'ordre du tableau — imprévisible pour qui le règle. L'interface le
-     signale déjà ; ici on refuse de l'enregistrer. */
-  (v) => {
-    if (!v.zonePolicy) return true;
-    const vu = new Set<string>();
-    for (const z of v.zonePolicy.zones) {
-      if (!z.enabled) continue;
-      for (const px of z.prefixes.map((x) => x.toUpperCase())) {
-        if (vu.has(px)) return false;
-        vu.add(px);
-      }
-    }
-    return true;
-  },
-  { message: "Un même code postal figure dans deux zones", path: ["zonePolicy"] },
-).refine(
-  (v) => !v.zonePolicy || v.zonePolicy.zones.every((z) => !z.enabled || z.labelFr.trim().length > 0),
-  { message: "Une zone active doit porter un nom", path: ["zonePolicy"] },
 );
+
+/* Les zones et les frais ne passent plus par ici : ils ont leur onglet et
+   leur route (/api/admin/zones), pour qu'un enregistrement des réglages ne
+   ramène jamais une grille lue avant qu'on la modifie ailleurs. */
 export async function GET() {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
   return NextResponse.json({ ok: true, settings: await getSettings() });

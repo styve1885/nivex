@@ -1,6 +1,9 @@
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
-import { DEFAULT_ZONE_POLICY, type FeeZone, type ZonePolicy } from "./travel";
+import {
+  DEFAULT_ZONE_POLICY, POLICY_VERSION, PREFIX_RE, describeChanges,
+  type Sector, type Zone, type ZonePolicy,
+} from "./travel";
 
 export type DayHours = { day: number; enabled: boolean; open: string; close: string };
 export type ServiceItem = {
@@ -13,7 +16,6 @@ export type ServiceItem = {
   unitEn: string;
   enabled: boolean;
 };
-export type ServiceArea = { prefixes: string[]; labelFr: string; labelEn: string };
 
 export type Settings = {
   ownerEmail: string | null;
@@ -33,7 +35,6 @@ export type Settings = {
   firstHourFree: boolean;
   paused: boolean;
   hours: DayHours[];
-  serviceArea: ServiceArea;
   zonePolicy: ZonePolicy;
   services: ServiceItem[];
   connectedAt: string | null;
@@ -80,56 +81,12 @@ export const DEFAULT_SERVICES: ServiceItem[] = [
   { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",     en: "Uniforms (set)",         minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",   enabled: true },
 ];
 
-export const DEFAULT_AREA: ServiceArea = {
-  // Longueuil et ses arrondissements, puis la Rive-Sud immédiate.
-  prefixes: [
-    "J4G","J4H","J4J","J4K","J4L","J4M","J4N",   // Vieux-Longueuil
-    "J3Y","J4T",                                  // Saint-Hubert
-    "J4V",                                        // Greenfield Park
-    "J4P","J4R","J4S",                            // Saint-Lambert
-    "J4W","J4X","J4Y","J4Z",                      // Brossard
-    "J4B",                                        // Boucherville
-    "J3V",                                        // Saint-Bruno-de-Montarville
-    "J3E","J3L","J3X","J5R",                      // Sainte-Julie, Chambly, Varennes, La Prairie
-    "J2W","J2X","J2Y","J3A","J3B",                // Saint-Jean-sur-Richelieu (les cinq de la ville)
-    // Traversée du fleuve : quelques quartiers de l'île, choisis un par un.
-    "H3E",                                        // Île-des-Sœurs
-    "H4G","H4H",                                  // Verdun
-    "H3Y","H3Z",                                  // Westmount
-    "H2V",                                        // Outremont
-    "H2Y",                                        // Vieux-Montréal
-  ],
-  labelFr: "Nous nous déplaçons à Longueuil, sur la Rive-Sud, à Saint-Jean-sur-Richelieu et dans plusieurs quartiers de Montréal : Île-des-Sœurs, Verdun, Vieux-Montréal, Westmount et Outremont.",
-  labelEn: "We travel to Longueuil, across the South Shore, to Saint-Jean-sur-Richelieu and to several Montreal neighbourhoods: Nuns' Island, Verdun, Old Montreal, Westmount and Outremont.",
-};
-
-/**
- * Les libellés de zone que le code a portés avant aujourd'hui.
- *
- * Ils servent à reconnaître une valeur enregistrée que personne n'a jamais
- * retouchée : si la base répète mot pour mot un ancien défaut, c'est le code
- * qui parlait, pas l'artisan, et le nouveau texte peut la remplacer sans rien
- * écraser. Une phrase écrite à la main depuis /admin, elle, est conservée.
- */
-const PREVIOUS_AREA_LABELS = {
-  fr: [
-    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
-    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
-    "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
-  ],
-  en: [
-    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno and the surrounding South Shore",
-    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Nuns' Island, Verdun, Westmount, Outremont and Old Montreal",
-    "We travel to Longueuil, across the South Shore and to several Montreal neighbourhoods. Enter your postal code to check that your address is served and to find out about any travel fee.",
-  ],
-};
-
 export const FALLBACK_SETTINGS: Settings = {
   ownerEmail: null, ownerName: null, ownerPicture: null, connected: false,
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
   hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 45, slotStep: 30, firstHourFree: true, paused: false,
-  hours: DEFAULT_HOURS, serviceArea: DEFAULT_AREA, zonePolicy: DEFAULT_ZONE_POLICY,
+  hours: DEFAULT_HOURS, zonePolicy: DEFAULT_ZONE_POLICY,
   services: DEFAULT_SERVICES,
   connectedAt: null,
 };
@@ -156,7 +113,6 @@ function hydrate(row: Row | undefined): Settings {
     firstHourFree: row.first_hour_free !== false,
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
-    serviceArea: mergeArea(row.service_area as ServiceArea | null),
     zonePolicy: readZonePolicy(row.travel_policy),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
@@ -178,95 +134,86 @@ function mergeServices(stored: ServiceItem[] | null): ServiceItem[] {
 }
 
 /**
- * Même raisonnement pour la zone desservie, et le même piège.
+ * Les zones et les secteurs, et la bascule depuis les grilles d'avant.
  *
- * La colonne `service_area` l'emporte sur le code — c'est voulu, l'artisan
- * règle ses préfixes depuis /admin. Mais `saveConnection` la préserve par un
- * COALESCE : une fois écrite, elle ne bouge plus d'elle-même. Un quartier
- * ajouté au code resterait donc invisible en production, et le site
- * refuserait une adresse qu'il annonce desservir.
+ * La colonne `travel_policy` a porté successivement une liste de zones à
+ * frais, une politique de temps de trajet, puis trois cercles de préfixes.
+ * Elle porte maintenant des secteurs rattachés à des zones, marqués
+ * `version: 2`. Plutôt que de deviner laquelle de ces formes on relit, on
+ * exige celle d'aujourd'hui : tout le reste — null, un tableau, les trois
+ * cercles — se lit comme « jamais réglé », et la grille par défaut
+ * s'applique. `bootstrap()` l'écrit d'ailleurs en base une fois pour toutes.
  *
- * Les préfixes se cumulent donc : ceux de la base, puis ceux du code qui
- * manquent. Retirer un quartier demande de le retirer depuis /admin, ce qui
- * est le bon endroit pour une décision commerciale.
- */
-export function mergeArea(stored: ServiceArea | null): ServiceArea {
-  if (!stored?.prefixes?.length) return DEFAULT_AREA;
-
-  const known = new Set(stored.prefixes.map((p) => p.toUpperCase()));
-  const prefixes = [...stored.prefixes, ...DEFAULT_AREA.prefixes.filter((p) => !known.has(p))];
-
-  /* Un libellé jamais retouché suit le code ; un libellé écrit à la main
-     reste intact, même s'il ne nomme pas les nouveaux quartiers. */
-  const fresh = (cur: string | undefined, previous: string[], next: string) =>
-    !cur?.trim() || previous.includes(cur.trim()) ? next : cur;
-
-  return {
-    prefixes,
-    labelFr: fresh(stored.labelFr, PREVIOUS_AREA_LABELS.fr, DEFAULT_AREA.labelFr),
-    labelEn: fresh(stored.labelEn, PREVIOUS_AREA_LABELS.en, DEFAULT_AREA.labelEn),
-  };
-}
-
-/**
- * Les zones de déplacement, et la bascule depuis l'ancien système.
+ * C'est délibérément brutal, et c'est le bon choix ici : une grille à moitié
+ * relue facturerait des montants que personne n'a décidés.
  *
- * La colonne a porté successivement une liste de zones à frais, puis une
- * politique fondée sur le temps de trajet. Elle porte maintenant trois
- * cercles. Plutôt que de deviner laquelle de ces formes on relit, on vérifie
- * qu'elle a bien celle d'aujourd'hui : un objet avec un tableau `zones`.
- * Tout le reste — null, un tableau, une politique de trajet — se lit comme
- * « jamais réglé », et les valeurs par défaut s'appliquent.
- *
- * C'est délibérément brutal, et c'est le bon choix ici : une politique à
- * moitié relue facturerait des montants que personne n'a décidés. Mieux vaut
- * repartir d'une grille connue, que l'artisan ajustera depuis /admin.
+ * L'ancienne colonne `service_area` n'est plus lue du tout, ni pour les
+ * préfixes ni pour le texte : le COALESCE de `saveConnection` peut bien la
+ * conserver, elle ne décide plus de rien.
  */
 export function readZonePolicy(stored: unknown): ZonePolicy {
-  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return DEFAULT_ZONE_POLICY;
+  if (!isRecord(stored) || stored.version !== POLICY_VERSION) return DEFAULT_ZONE_POLICY;
+  if (!Array.isArray(stored.zones) || !Array.isArray(stored.sectors)) return DEFAULT_ZONE_POLICY;
 
-  const o = stored as Record<string, unknown>;
-  if (!Array.isArray(o.zones)) return DEFAULT_ZONE_POLICY;
-
-  const zones = (o.zones as unknown[])
-    .filter((z): z is Record<string, unknown> => Boolean(z) && typeof z === "object" && !Array.isArray(z))
-    .map(hydrateZone)
-    .filter((z): z is FeeZone => z !== null);
-
+  const zones: Zone[] = [];
+  for (const z of stored.zones.filter(isRecord).map(hydrateZone)) {
+    if (z && !zones.some((x) => x.key === z.key)) zones.push(z);
+  }
   if (zones.length === 0) return DEFAULT_ZONE_POLICY;
 
-  const seuil = Number(o.longSessionMinutes);
+  /* Un secteur rattaché à une zone disparue ne reconnaît plus rien : on le
+     laisse de côté plutôt que de l'afficher sans tarif. */
+  const known = new Set(zones.map((z) => z.key));
+  const sectors: Sector[] = [];
+  for (const s of stored.sectors.filter(isRecord).map(hydrateSector)) {
+    if (s && known.has(s.zoneKey) && !sectors.some((x) => x.key === s.key)) sectors.push(s);
+  }
+
+  return { version: POLICY_VERSION, zones, sectors };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === "object" && !Array.isArray(v);
+}
+
+const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** Une zone enregistrée, ramenée à une forme sûre — ou rien si elle n'a pas de clé. */
+function hydrateZone(z: Record<string, unknown>): Zone | null {
+  const key = text(z.key, 60);
+  if (!key) return null;
+  const cents = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.min(50_000, Math.round(n)) : 0;
+  };
+  const seuil = Number(z.thresholdMinutes);
   return {
-    zones,
-    longSessionMinutes: Number.isFinite(seuil) && seuil > 0
-      ? Math.round(seuil)
-      : DEFAULT_ZONE_POLICY.longSessionMinutes,
+    key,
+    nameFr: text(z.nameFr, 80) || key.toUpperCase(),
+    nameEn: text(z.nameEn, 80),
+    shortFeeCents: cents(z.shortFeeCents),
+    longFeeCents: cents(z.longFeeCents),
+    thresholdMinutes: Number.isFinite(seuil) && seuil >= 30 && seuil <= 960 ? Math.round(seuil) : 180,
   };
 }
 
-/** Une zone enregistrée, ramenée à une forme sûre — ou rien si elle n'a pas de préfixes. */
-function hydrateZone(z: Record<string, unknown>): FeeZone | null {
-  const prefixes = Array.isArray(z.prefixes)
-    ? (z.prefixes as unknown[])
+/** Un secteur enregistré, ramené à une forme sûre. Les préfixes mal formés tombent. */
+function hydrateSector(s: Record<string, unknown>): Sector | null {
+  const key = text(s.key, 60);
+  const nameFr = text(s.nameFr, 80);
+  if (!key || !nameFr) return null;
+  const prefixes = Array.isArray(s.prefixes)
+    ? [...new Set((s.prefixes as unknown[])
         .filter((x): x is string => typeof x === "string")
-        .map((x) => x.toUpperCase())
-        .filter((x) => /^[A-Z]\d[A-Z]$/.test(x))
+        .map((x) => x.trim().toUpperCase())
+        .filter((x) => PREFIX_RE.test(x)))]
     : [];
-  if (prefixes.length === 0) return null;
-
-  const cents = (v: unknown) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
-  };
-
   return {
-    key: typeof z.key === "string" && z.key.trim() ? z.key.trim().slice(0, 60) : `zone-${prefixes[0]}`,
-    labelFr: typeof z.labelFr === "string" ? z.labelFr.slice(0, 120) : "",
-    labelEn: typeof z.labelEn === "string" ? z.labelEn.slice(0, 120) : "",
+    key, nameFr,
+    nameEn: text(s.nameEn, 80),
     prefixes,
-    shortFeeCents: cents(z.shortFeeCents),
-    longFeeCents: cents(z.longFeeCents),
-    enabled: z.enabled !== false,
+    zoneKey: text(s.zoneKey, 60),
+    enabled: s.enabled !== false,
   };
 }
 
@@ -318,10 +265,9 @@ export async function saveConnection(input: {
   const enc = input.refreshToken ? encrypt(input.refreshToken) : null;
   await sql()`
     INSERT INTO nivex_settings (id, owner_email, owner_name, owner_picture, refresh_token,
-                                hours, service_area, travel_policy, services, connected_at, updated_at)
+                                hours, travel_policy, services, connected_at, updated_at)
     VALUES (1, ${input.email}, ${input.name}, ${input.picture}, ${enc},
             ${JSON.stringify(DEFAULT_HOURS)}::jsonb,
-            ${JSON.stringify(DEFAULT_AREA)}::jsonb,
             ${JSON.stringify(DEFAULT_ZONE_POLICY)}::jsonb,
             ${JSON.stringify(DEFAULT_SERVICES)}::jsonb,
             now(), now())
@@ -331,8 +277,10 @@ export async function saveConnection(input: {
       owner_picture = EXCLUDED.owner_picture,
       refresh_token = COALESCE(EXCLUDED.refresh_token, nivex_settings.refresh_token),
       hours         = COALESCE(nivex_settings.hours, EXCLUDED.hours),
-      service_area  = COALESCE(nivex_settings.service_area, EXCLUDED.service_area),
-      travel_policy = COALESCE(nivex_settings.travel_policy, EXCLUDED.travel_policy),
+      /* Une grille déjà migrée reste ; toute autre forme cède la place à la
+         grille par défaut, jamais l'inverse. */
+      travel_policy = CASE WHEN nivex_settings.travel_policy->>'version' = '2'
+                           THEN nivex_settings.travel_policy ELSE EXCLUDED.travel_policy END,
       services      = COALESCE(nivex_settings.services, EXCLUDED.services),
       connected_at  = now(),
       updated_at    = now()`;
@@ -348,7 +296,7 @@ export async function disconnect() {
 export type SettingsPatch = Partial<Pick<Settings,
   "calendarId" | "timezone" | "businessName" | "hourlyRate" | "currency" | "minMinutes" |
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
-  "hours" | "serviceArea" | "zonePolicy" | "services">>;
+  "hours" | "services">>;
 
 export async function updateSettings(patch: SettingsPatch) {
   await ensureSchema();
@@ -369,8 +317,6 @@ export async function updateSettings(patch: SettingsPatch) {
       first_hour_free = ${n.firstHourFree},
       paused          = ${n.paused},
       hours           = ${JSON.stringify(n.hours)}::jsonb,
-      service_area    = ${JSON.stringify(n.serviceArea)}::jsonb,
-      travel_policy   = ${JSON.stringify(n.zonePolicy)}::jsonb,
       services        = ${JSON.stringify(n.services)}::jsonb,
       updated_at      = now()
     WHERE id = 1`;
@@ -382,7 +328,45 @@ export function isBookable(s: Settings): boolean {
   return s.connected && !s.paused;
 }
 
-export function inServiceArea(postal: string, area: ServiceArea): boolean {
-  const p = postal.replace(/\s+/g, "").toUpperCase().slice(0, 3);
-  return area.prefixes.some((x) => x.toUpperCase() === p);
+/* ============================ Zones et frais ============================ */
+
+/**
+ * Enregistre la grille des zones et note ce qui a changé.
+ *
+ * À part des autres réglages, et c'est voulu : l'onglet Réglages garde sa
+ * propre copie de tout ce qu'il affiche, et l'enregistrer ne doit jamais
+ * ramener une grille de zones lue avant qu'on la modifie ailleurs. La grille
+ * ne s'écrit donc qu'ici, et seulement depuis l'onglet « Zones et frais ».
+ */
+export async function saveZonePolicy(next: ZonePolicy, author: string | null): Promise<string[]> {
+  await ensureSchema();
+  const cur = (await getSettings()).zonePolicy;
+  const changes = describeChanges(cur, next);
+  await sql()`
+    INSERT INTO nivex_settings (id, travel_policy, updated_at)
+    VALUES (1, ${JSON.stringify(next)}::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET travel_policy = EXCLUDED.travel_policy, updated_at = now()`;
+  if (changes.length) {
+    await sql()`
+      INSERT INTO nivex_zone_history (summary, author)
+      SELECT value, ${author}
+      FROM jsonb_array_elements_text(${JSON.stringify(changes)}::jsonb) WITH ORDINALITY
+      ORDER BY ordinality`;
+  }
+  return changes;
+}
+
+export type ZoneHistoryEntry = { at: string; summary: string; author: string | null };
+
+export async function zoneHistory(limit = 150): Promise<ZoneHistoryEntry[]> {
+  if (!isDbConfigured()) return [];
+  await ensureSchema();
+  const rows = (await sql()`
+    SELECT created_at, summary, author FROM nivex_zone_history
+    ORDER BY id DESC LIMIT ${limit}`) as Row[];
+  return rows.map((r) => ({
+    at: new Date(r.created_at as string).toISOString(),
+    summary: r.summary as string,
+    author: (r.author as string) ?? null,
+  }));
 }

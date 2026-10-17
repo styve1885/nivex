@@ -4,6 +4,7 @@ import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/l
 import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
 import { smsConfigured } from "@/lib/sms";
+import { activeSectors } from "@/lib/travel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,9 +65,14 @@ export async function GET() {
     schema,
     /* Les zones desservies, résumées : de quoi voir d'un coup d'œil qu'une
        grille est bien en place, sans révéler les montants. */
-    zones: settings.zonePolicy.zones
-      .filter((z) => z.enabled)
-      .map((z) => ({ key: z.key, prefixes: z.prefixes.length, free: z.shortFeeCents === 0 && z.longFeeCents === 0 })),
+    zones: settings.zonePolicy.zones.map((z) => {
+      const sectors = activeSectors(settings.zonePolicy).filter((x) => x.zoneKey === z.key);
+      return {
+        key: z.key, sectors: sectors.length,
+        prefixes: new Set(sectors.flatMap((x) => x.prefixes)).size,
+        free: z.shortFeeCents === 0 && z.longFeeCents === 0,
+      };
+    }),
     owner: { connected: settings.connected, email: settings.ownerEmail, paused: settings.paused },
     calendar: { id: settings.calendarId, tokenUsable, timezone: settings.timezone },
     /* Ce qu'il faut savoir quand un courriel n'arrive pas. */

@@ -2,17 +2,13 @@
 
 import { useState } from "react";
 import { Reveal } from "../Reveal";
-import { perHour } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
+import { faqFill } from "./faq-fill";
 
-export function Faq({ t, settings }: { t: Dict; settings: Settings }) {
+export function Faq({ t, settings, locale }: { t: Dict; settings: Settings; locale: "fr" | "en" }) {
   const [open, setOpen] = useState<number | null>(0);
-
-  /* La cadence citée dans une réponse doit être celle du moteur, sinon la
-     foire aux questions contredit la grille deux écrans plus haut. */
-  const shirt = settings.services.find((x) => x.key === "shirt" && x.enabled);
-  const fill = (s: string) => s.replace("{shirts}", shirt ? String(perHour(shirt.minutesPerUnit)) : "");
+  const fill = (s: string) => faqFill(s, t, settings, locale);
 
   return (
     <section id="questions" className="scroll-mt-24 bg-linen-100 py-28 sm:py-36">

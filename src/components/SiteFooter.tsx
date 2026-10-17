@@ -3,6 +3,7 @@ import { Wordmark } from "./Logo";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { contactEmail, contactEmailHref } from "@/lib/brand";
+import { servedText } from "@/lib/travel";
 
 export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   const year = new Date().getFullYear();
@@ -57,7 +58,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
           <div>
             <h3 className="mb-5 text-[10px] uppercase tracking-[0.26em] text-gold-400">{t.footer.zone}</h3>
             <p className="text-sm leading-relaxed text-linen-300/85">
-              {locale === "en" ? settings.serviceArea.labelEn : settings.serviceArea.labelFr}
+              {servedText(settings.zonePolicy, locale, t.zoneText)}
             </p>
             <Link href={`${home}/reserver`}
               className="mt-6 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-gold-300 transition-colors hover:text-gold-200">

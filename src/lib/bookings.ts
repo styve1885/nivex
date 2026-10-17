@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, inServiceArea, type Settings } from "./settings";
+import { getSettings, type Settings } from "./settings";
 import { clip, HEARD_FROM_FR, isHeardFrom, referrerHost, type HeardFrom } from "./attribution";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
 import { bookable, evaluateZone } from "./travel";
@@ -630,4 +630,4 @@ export function canSelfCancel(b: Booking, tz = "America/Toronto"): boolean {
   return b.startsAt.getTime() - Date.now() > CANCEL_WINDOW_HOURS * 3600_000;
 }
 
-export { formatDateTime, inServiceArea };
+export { formatDateTime };
