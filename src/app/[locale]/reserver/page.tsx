@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
+import { servedText } from "@/lib/travel";
 import { BookingWizard, type WizardConfig } from "@/components/booking/BookingWizard";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export default async function BookPage({ params }: { params: Promise<{ locale: s
     slotStep: s.slotStep,
     firstHourFree: s.firstHourFree,
     timezone: s.timezone,
+    areaText: servedText(s.zonePolicy, locale, t.zoneText),
   };
 
   return (

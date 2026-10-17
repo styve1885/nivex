@@ -4,6 +4,8 @@ import type { Settings } from "@/lib/settings";
 import { CANCEL_WINDOW_HOURS, contactEmail, contactEmailHref, NEQ, PHONE, PHONE_HREF } from "@/lib/brand";
 import { siteOrigin } from "@/lib/google";
 import { minutesToText, formatMoney } from "@/lib/time";
+import { getDict } from "@/lib/i18n";
+import { servedText } from "@/lib/travel";
 
 /**
  * Rendu d'un document légal.
@@ -28,7 +30,7 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
     // Le nom du site, tel qu'on le prononce : sans le protocole, et sans le
     // « www. » que l'hébergeur garde dans l'origine canonique.
     site: siteOrigin().replace(/^https?:\/\//, "").replace(/^www\./, ""),
-    zone: locale === "en" ? s.serviceArea.labelEn : s.serviceArea.labelFr,
+    zone: servedText(s.zonePolicy, locale, getDict(locale).zoneText),
     rate: formatMoney(s.hourlyRate, s.currency, locale),
     rate2: formatMoney(s.hourlyRate * 2, s.currency, locale),
     min: minutesToText(s.minMinutes, locale),

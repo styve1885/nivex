@@ -27,7 +27,6 @@ const settings = {
     { day: 5, enabled: true,  open: "09:00", close: "19:00" },
     { day: 6, enabled: true,  open: "09:00", close: "16:00" },
   ],
-  serviceArea: { prefixes: ["J4K"], labelFr: "", labelEn: "" },
   services: [
     { key: "shirt", icon: "shirt", fr: "Chemises", en: "Shirts", minutesPerUnit: 6, unitFr: "", unitEn: "", enabled: true },
     { key: "suit",  icon: "suit",  fr: "Costumes", en: "Suits",  minutesPerUnit: 16, unitFr: "", unitEn: "", enabled: true },

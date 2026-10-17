@@ -8,7 +8,7 @@ import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { ZoneChecker } from "../ZoneChecker";
-import { longSessionText } from "@/lib/travel";
+import { servedText } from "@/lib/travel";
 
 type Field = "name" | "email" | "message";
 
@@ -222,10 +222,10 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   villes ne répond pas à la seule question qui se pose :
                   venez-vous chez moi, et combien. */}
               <p className="text-[0.85rem] font-light leading-[1.9] text-ink-500">
-                {locale === "en" ? settings.serviceArea.labelEn : settings.serviceArea.labelFr}
+                {servedText(settings.zonePolicy, locale, t.zoneText)}
               </p>
 
-              <ZoneChecker t={t} locale={locale} longSession={longSessionText(settings.zonePolicy, locale)} className="mt-6" />
+              <ZoneChecker t={t} locale={locale} className="mt-6" />
             </div>
           </Reveal>
         </div>

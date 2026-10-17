@@ -25,9 +25,9 @@ export async function GET(req: NextRequest) {
   const s = await getSettings();
 
   /* La durée départage le tarif court du tarif long. Le vérificateur des
-     pages publiques n'en a pas : on répond alors pour la séance la plus
-     courte possible, c'est-à-dire le tarif le moins avantageux. Annoncer le
-     meilleur cas serait une promesse à tenir. */
+     pages publiques n'en a pas : `feeCents` vaut alors pour la séance la
+     plus courte possible, c'est-à-dire le tarif le moins avantageux, et les
+     deux tarifs sont rendus à côté pour être annoncés ensemble. */
   const demandee = Number(sp.get("minutes"));
   const durationMinutes = Number.isFinite(demandee) && demandee > 0
     ? Math.min(Math.round(demandee), 960)
@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
 
   const v = evaluateZone(postal, durationMinutes, s.zonePolicy);
 
+  /* Les deux tarifs de la zone et son seuil voyagent avec la réponse : le
+     vérificateur des pages publiques les annonce ensemble, le tunnel n'en
+     retient que `feeCents`, calculé pour sa durée. */
   return NextResponse.json({
     ok: true,
     status: v.status,
@@ -42,6 +45,9 @@ export async function GET(req: NextRequest) {
     labelFr: v.labelFr,
     labelEn: v.labelEn,
     feeCents: v.feeCents,
+    shortFeeCents: v.shortFeeCents,
+    longFeeCents: v.longFeeCents,
+    thresholdMinutes: v.thresholdMinutes,
     currency: s.currency,
   });
 }

@@ -4,13 +4,16 @@
  *
  * Ce qui n'est pas vérifiable ici : l'écriture en base et la lecture de
  * l'en-tête de l'hébergeur, qui demandent une requête réelle. Ce qui l'est,
- * et qui compte : qu'un code postal hors zone soit refusé, que la fusion des
- * préfixes survive à une valeur déjà enregistrée, et qu'aucune adresse IP ne
- * puisse se glisser dans le journal.
+ * et qui compte : que la phrase de la zone suive les secteurs réglés plutôt
+ * qu'une ancienne liste, et qu'aucune adresse IP ne puisse se glisser dans
+ * le journal.
  */
 import assert from "node:assert/strict";
 
-const { mergeArea, DEFAULT_AREA } = await import("../src/lib/settings.ts");
+const { readZonePolicy } = await import("../src/lib/settings.ts");
+const { servedText, DEFAULT_ZONE_POLICY } = await import("../src/lib/travel.ts");
+const { fr } = await import("../src/lib/i18n/fr.ts");
+const { en } = await import("../src/lib/i18n/en.ts");
 const { visitSource, referrerHost, deviceType, clip, isHeardFrom, HEARD_FROM } =
   await import("../src/lib/attribution.ts");
 const { isCounted } = await import("../src/lib/visits.ts");
@@ -21,47 +24,24 @@ let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
 const flat = (x) => x.replace(/[   ]/g, " ");
 
-console.log("\nZone desservie : un libellé, plus une décision");
+console.log("\nZone desservie : une phrase écrite depuis les secteurs");
 
-/* La liste de codes postaux ne décide plus rien : le temps de trajet réel a
-   pris sa place (voir travel.test.mjs). Ce qui reste à vérifier ici, c'est
-   que la bascule n'a rien cassé en chemin — le libellé affiché suit le code,
-   et une phrase écrite à la main depuis /admin survit. */
+/* Les secteurs, les zones et les frais vivent dans travel.test.mjs. Ce qui
+   reste à vérifier ici, c'est que la phrase affichée suit la grille, et que
+   l'ancienne liste `service_area` — préfixes et libellé écrits à la main —
+   ne peut plus revenir par la lecture. */
 
-test("le libellé nomme les quartiers desservis", () => {
-  /* Le détail des zones et des frais vit dans travel.test.mjs ; ici on
-     vérifie seulement que la phrase affichée suit bien le code. */
-  assert.match(DEFAULT_AREA.labelFr, /Saint-Jean-sur-Richelieu/);
-  assert.match(DEFAULT_AREA.labelFr, /Outremont/);
-  assert.match(DEFAULT_AREA.labelEn, /Nuns' Island/);
+test("la phrase nomme les secteurs desservis", () => {
+  const f = servedText(DEFAULT_ZONE_POLICY, "fr", fr.zoneText);
+  for (const lieu of ["Saint-Jean-sur-Richelieu", "Outremont", "L'Île-des-Sœurs", "Candiac"]) assert.ok(f.includes(lieu), lieu);
+  assert.match(servedText(DEFAULT_ZONE_POLICY, "en", en.zoneText), /Nuns' Island/);
 });
 
-test("un libellé laissé au défaut d'hier suit le code", () => {
-  for (const ancien of [
-    "Longueuil (Vieux-Longueuil, Saint-Hubert, Greenfield Park), Brossard, Saint-Lambert, Boucherville, Saint-Bruno et la Rive-Sud environnante",
-    "Longueuil, Brossard, Saint-Lambert, Boucherville, Saint-Bruno, Saint-Jean-sur-Richelieu, Île-des-Sœurs, Verdun, Westmount, Outremont et le Vieux-Montréal",
-    "Nous nous déplaçons à Longueuil, sur la Rive-Sud et dans plusieurs quartiers de Montréal. Entrez votre code postal pour vérifier que votre adresse est desservie et connaître les éventuels frais de déplacement.",
-  ]) {
-    const merged = mergeArea({ prefixes: ["J4K"], labelFr: ancien, labelEn: "x" });
-    assert.equal(merged.labelFr, DEFAULT_AREA.labelFr, "le nouveau texte doit prendre la place");
-  }
-});
-
-test("un libellé écrit à la main n'est pas écrasé", () => {
-  const merged = mergeArea({
-    prefixes: ["J4K"], labelFr: "Longueuil et Brossard", labelEn: "Longueuil and Brossard",
-  });
-  assert.equal(merged.labelFr, "Longueuil et Brossard", "la phrase de l'artisan doit survivre");
-});
-
-test("les préfixes enregistrés survivent : ils servent de liste de secours", () => {
-  const merged = mergeArea({ prefixes: ["J4K", "J4W"], labelFr: "", labelEn: "" });
-  assert.equal(merged.prefixes.includes("J4K"), true);
-  assert.equal(merged.prefixes.filter((p) => p === "J4K").length, 1, "aucun doublon");
-});
-
-test("une zone absente retombe sur le défaut complet", () => {
-  assert.deepEqual(mergeArea(null), DEFAULT_AREA);
+test("l'ancienne liste, même enregistrée, ne décide plus rien", () => {
+  const ancienne = { prefixes: ["J4K"], labelFr: "Longueuil et Brossard", labelEn: "Longueuil and Brossard" };
+  const lu = readZonePolicy(ancienne);
+  assert.deepEqual(lu, DEFAULT_ZONE_POLICY, "une forme qui n'est pas la 2 se lit comme jamais réglée");
+  assert.doesNotMatch(servedText(lu, "fr", fr.zoneText), /Longueuil et Brossard/);
 });
 
 console.log("\nSource d'une visite");

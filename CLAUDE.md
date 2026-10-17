@@ -91,7 +91,7 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/settings.ts` | Les réglages, lus en base, avec les valeurs par défaut du code |
 | `lib/availability.ts` | Les créneaux libres, la durée et le prix d'une séance |
 | `lib/bookings.ts` | La création d'un rendez-vous — c'est **lui** qui engage la maison |
-| `lib/travel.ts` | Les zones desservies et les frais de déplacement |
+| `lib/travel.ts` | Les secteurs et les zones, les frais de déplacement, le texte de la zone desservie, les conflits de préfixes |
 | `lib/pricing.ts` | La grille publiée : blocs, forfaits, abonnements |
 | `lib/cycles.ts` | Le calendrier d'un abonnement, en fonctions pures : dates, rang des visites, montant d'un cycle, délai de la veille |
 | `lib/subscriptions.ts` | Les abonnements en base, dans l'agenda et par courriel ; la tâche quotidienne |
@@ -102,16 +102,17 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
-`nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`. Le schéma se pose tout
+`nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
+`nivex_zone_history`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 **idempotent** : il s'exécute à chaque instance froide.
 
 ### L'espace artisan
 
-`/admin`, derrière une session Google. Six onglets : Rendez-vous,
-Abonnés, Messages, Visites, Réglages, Connexion. Presque tout ce qui est
-commercial s'y règle — tarifs, horaire, prestations, zones et frais,
-texte de la zone desservie.
+`/admin`, derrière une session Google. Sept onglets : Rendez-vous,
+Abonnés, Messages, Visites, Réglages, Zones et frais, Connexion. Presque
+tout ce qui est commercial s'y règle — tarifs, horaire, prestations,
+secteurs, zones et frais.
 
 ## Le tunnel de réservation
 
@@ -195,9 +196,30 @@ conservé : ni le texte, ni le numéro.
 
 ## Zones et frais de déplacement
 
-Trois zones, reconnues aux trois premiers caractères du code postal, dans
-`lib/travel.ts` et réglables depuis `/admin`. Un code hors zone ne peut
-pas réserver en ligne.
+Deux étages, dans `lib/travel.ts`. Des **secteurs** (Longueuil, Verdun,
+Candiac… vingt, ceux du profil Google), chacun reconnu aux trois premiers
+caractères du code postal, rattachés à des **zones** (A, B, C) qui portent
+les deux tarifs et leur propre seuil. Un code hors de tout secteur actif ne
+peut pas réserver en ligne : le client est invité à appeler.
+
+- Tout se règle dans l'onglet « Zones et frais », et s'écrit dans
+  `travel_policy` (forme `version: 2`) par `saveZonePolicy`, **seulement
+  là** : l'onglet Réglages n'y touche plus, pour qu'il ne ramène jamais une
+  grille lue avant qu'on la modifie. Chaque changement s'inscrit dans
+  `nivex_zone_history`.
+- **Un préfixe, une zone.** Deux secteurs de la même zone peuvent partager
+  un préfixe (J5R, La Prairie et Candiac) ; deux zones, jamais.
+  `policyProblems` le refuse, à la saisie comme au serveur, en nommant les
+  deux secteurs. On ne tranche pas à la place de l'artisan.
+- Le texte de la zone desservie (accueil, Tarifs, tunnel, pied de page,
+  conditions, FAQ, données structurées), le tableau des frais et la liste
+  « Copier pour Google » s'écrivent depuis les secteurs actifs. Aucune
+  phrase de zone ne s'écrit à la main.
+- L'ancienne colonne `service_area` n'est plus lue du tout. Elle reste en
+  base, sans effet.
+- La bascule vers les secteurs est écrite une fois par `bootstrap()` : toute
+  grille qui n'est pas à la forme 2 est remplacée, et une grille déjà
+  migrée n'est jamais touchée. `saveConnection` suit la même règle.
 
 Deux règles tiennent ensemble dans une seule décision — les frais vivent
 dans **leur propre colonne**, jamais fondus dans l'estimation :
@@ -243,8 +265,8 @@ date dans `LEGAL_UPDATED`.
 1. **`saveConnection` préserve les colonnes jsonb par `COALESCE`.** Une
    valeur enregistrée ne bouge plus d'elle-même. Changer une valeur par
    défaut dans le code ne change donc **rien** en production. Selon ce
-   qu'on ajoute, il faut une fusion à la lecture (`mergeServices`,
-   `mergeArea`) ou une relecture stricte (`readZonePolicy`).
+   qu'on ajoute, il faut une fusion à la lecture (`mergeServices`) ou une
+   relecture stricte (`readZonePolicy`, qui n'accepte que la forme 2).
 2. **Le serveur vit en UTC.** Un dimanche soir à Montréal y est déjà
    lundi. Tout jour de semaine se lit avec `timeZone: "America/Toronto"`.
 3. **Le mode démonstration** (`NIVEX_DEMO=1`) a un double verrou : la
@@ -272,7 +294,8 @@ pas.
 
 Cinq fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements), `booking` (courriels, durées), `provenance` (zone
-desservie, journal, provenance), `travel` (zones et frais), `subscription`
+desservie, journal, provenance), `travel` (secteurs, zones, frais,
+conflits de préfixes, historique), `subscription`
 (grille des dates, rang des visites, montants, délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 

@@ -36,6 +36,8 @@ export type SubscriptionConfig = {
   discountCents: number;
   seriesCycles: number;
   initialPlan: string | null;
+  /** La phrase des secteurs desservis, écrite par le serveur depuis les réglages. */
+  areaText: string;
 };
 
 type TravelAnswer = { status: ZoneStatus; labelFr: string | null; labelEn: string | null; feeCents: number };
@@ -327,6 +329,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
         {step === 1 && plan && (
           <section aria-labelledby="a2">
             <h2 id="a2" className="font-display text-2xl font-normal text-ink-800">{s.address.title}</h2>
+            <p className="mt-2 text-[0.8rem] font-light leading-relaxed text-ink-400">{config.areaText}</p>
             <div className="mt-8 grid gap-5 sm:grid-cols-2">
               <Field label={t.booking.step2.name} value={name} onChange={setName} autoComplete="name"
                 error={touched.name ? errors.name : null} onBlur={() => setTouched((x) => ({ ...x, name: true }))} />

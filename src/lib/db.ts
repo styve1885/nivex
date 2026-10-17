@@ -1,5 +1,6 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { SETUP_MINUTES } from "./brand";
+import { DEFAULT_ZONE_POLICY } from "./travel";
 
 /**
  * Neon (Postgres) via HTTP. Une seule connexion logique par instance
@@ -247,10 +248,40 @@ async function bootstrap() {
   /* La grille des zones et des frais, réglée depuis /admin.
    *
    * La colonne garde son nom d'origine : elle a porté successivement des
-   * zones à frais, une politique de temps de trajet, puis les trois cercles
-   * d'aujourd'hui. La renommer obligerait à migrer pour un gain cosmétique,
-   * et `readZonePolicy` reconnaît déjà la forme qu'elle doit avoir. */
+   * zones à frais, une politique de temps de trajet, trois cercles de
+   * préfixes, et aujourd'hui des secteurs rattachés à des zones. La renommer
+   * obligerait à migrer pour un gain cosmétique, et `readZonePolicy` exige
+   * déjà la forme qu'elle doit avoir. */
   await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS travel_policy jsonb`;
+
+  /* L'historique de l'onglet « Zones et frais » : une ligne par changement. */
+  await q`
+    CREATE TABLE IF NOT EXISTS nivex_zone_history (
+      id         bigserial PRIMARY KEY,
+      summary    text        NOT NULL,
+      author     text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+
+  /*
+   * La bascule vers les secteurs, écrite une seule fois.
+   *
+   * Toute grille enregistrée sous une forme antérieure — les trois cercles,
+   * ou rien — est remplacée par la grille par défaut, et la bascule se note
+   * dans l'historique. Une grille déjà à la forme 2 n'est jamais touchée :
+   * la condition ne la retient pas, et un second passage ne fait rien. C'est
+   * ce qui rend l'instruction idempotente, et ce qui garantit qu'une valeur
+   * réglée depuis /admin ne sera pas écrasée au démarrage suivant.
+   */
+  await q`
+    WITH migre AS (
+      UPDATE nivex_settings
+      SET travel_policy = ${JSON.stringify(DEFAULT_ZONE_POLICY)}::jsonb, updated_at = now()
+      WHERE id = 1 AND (travel_policy IS NULL OR travel_policy->>'version' IS DISTINCT FROM '2')
+      RETURNING 1
+    )
+    INSERT INTO nivex_zone_history (summary, author)
+    SELECT ${MIGRATION_NOTE}, 'migration' FROM migre`;
 
   /*
    * Journal anonyme des visites.
@@ -348,6 +379,14 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_reminded_at  timestamptz`;
   await q`CREATE INDEX IF NOT EXISTS nivex_bookings_subscription_idx ON nivex_bookings (subscription_id) WHERE subscription_id IS NOT NULL`;
 }
+
+/* La note de la bascule, écrite depuis la grille qu'elle pose. */
+const MIGRATION_NOTE = (() => {
+  const $ = (c: number) => `${c / 100} $`;
+  const zones = DEFAULT_ZONE_POLICY.zones.map((z) =>
+    `${z.nameFr} (${z.shortFeeCents === z.longFeeCents ? $(z.shortFeeCents) : `${$(z.shortFeeCents)} / ${$(z.longFeeCents)}`})`);
+  return `Grille remplacée par les ${DEFAULT_ZONE_POLICY.sectors.length} secteurs du profil Google : ${zones.join(", ")}.`;
+})();
 
 export async function logEvent(kind: string, detail?: unknown) {
   try {

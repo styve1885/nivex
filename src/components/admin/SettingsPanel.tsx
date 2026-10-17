@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
-import type { FeeZone } from "@/lib/travel";
 import { ServiceIcon } from "../Icons";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
@@ -52,48 +51,6 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
     patch("services", s.services.filter((x) => x.key !== key));
   }
 
-  function setZone(key: string, next: Partial<FeeZone>) {
-    patch("zonePolicy", {
-      ...s.zonePolicy,
-      zones: s.zonePolicy.zones.map((z) => (z.key === key ? { ...z, ...next } : z)),
-    });
-  }
-
-  function addZone() {
-    /* Une clé qui ne collisionne pas, même si l'artisan en ajoute trois de
-       suite sans enregistrer entre-temps. */
-    const key = `zone-${Date.now().toString(36)}`;
-    patch("zonePolicy", {
-      ...s.zonePolicy,
-      zones: [...s.zonePolicy.zones, {
-        key, labelFr: "", labelEn: "", prefixes: [],
-        shortFeeCents: 0, longFeeCents: 0, enabled: true,
-      }],
-    });
-  }
-
-  function removeZone(key: string) {
-    patch("zonePolicy", { ...s.zonePolicy, zones: s.zonePolicy.zones.filter((z) => z.key !== key) });
-  }
-
-  /* Un même code postal dans deux zones actives rendrait le tarif dépendant
-     de l'ordre du tableau — c'est-à-dire imprévisible pour qui le règle. La
-     première l'emporterait en silence. On le nomme. */
-  const zoneClashes = (() => {
-    const vu = new Map<string, string>();
-    const out: string[] = [];
-    for (const z of s.zonePolicy.zones) {
-      if (!z.enabled) continue;
-      for (const brut of z.prefixes) {
-        const px = brut.toUpperCase();
-        const premier = vu.get(px);
-        if (premier && premier !== z.key) out.push(px);
-        else if (!premier) vu.set(px, z.key);
-      }
-    }
-    return [...new Set(out)];
-  })();
-
   /* Ce qui est enregistré ici sert à deux choses à la fois : calculer la
      durée d'une séance, et annoncer une cadence au client. Un écart avec
      les temps relevés au chronomètre se paie donc deux fois — en promesse
@@ -133,8 +90,7 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
           hourlyRate: s.hourlyRate, currency: s.currency, minMinutes: s.minMinutes,
           bufferMinutes: s.bufferMinutes, leadHours: s.leadHours, horizonDays: s.horizonDays,
           slotStep: s.slotStep, firstHourFree: s.firstHourFree, paused: s.paused,
-          hours: s.hours, services, serviceArea: s.serviceArea,
-          zonePolicy: s.zonePolicy,
+          hours: s.hours, services,
           businessName: s.businessName, timezone: s.timezone,
         }),
       });
@@ -302,99 +258,11 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
         </p>
       </Card>
 
-      {/* — Texte de la zone desservie —
-          Les préfixes ne se règlent plus ici : ce sont les zones ci-dessous
-          qui décident, et deux listes dont une seule compte finiraient par
-          se contredire. Il ne reste donc que la phrase affichée au client. */}
-      <Card title="Texte de la zone desservie"
-        hint="La phrase lue sur l'accueil, la page Tarifs et le pied de page. Les codes postaux acceptés se règlent dans « Zones et frais de déplacement », plus bas.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="areaFr">Description (français)</label>
-            <input id="areaFr" value={s.serviceArea.labelFr}
-              onChange={(e) => patch("serviceArea", { ...s.serviceArea, labelFr: e.target.value })} className="field" />
-          </div>
-          <div>
-            <label className="label" htmlFor="areaEn">Description (anglais)</label>
-            <input id="areaEn" value={s.serviceArea.labelEn}
-              onChange={(e) => patch("serviceArea", { ...s.serviceArea, labelEn: e.target.value })} className="field" />
-          </div>
-        </div>
-      </Card>
-
-      {/* — Zones et frais de déplacement — */}
-      <Card title="Zones et frais de déplacement"
-        hint="Les adresses sont reconnues aux trois premiers caractères du code postal. Un code hors de toute zone ne peut pas réserver en ligne. Les frais s'ajoutent au prix et ne sont jamais réduits par la première heure offerte, abonnés compris.">
-
-        <div className="flex items-end gap-3 border-b border-gold-300/40 pb-5">
-          <Minutes label="Ce qu'on appelle une séance longue" id="zp-long"
-            value={s.zonePolicy.longSessionMinutes}
-            onChange={(v) => patch("zonePolicy", { ...s.zonePolicy, longSessionMinutes: v })} />
-          <p className="pb-3 text-[0.8rem] font-light leading-relaxed text-ink-400">
-            Le seuil est atteint, non dépassé : {fmtHours(s.zonePolicy.longSessionMinutes)} tout rond paient déjà le tarif réduit.
-          </p>
-        </div>
-
-        <ul className="mt-6 space-y-5">
-          {s.zonePolicy.zones.map((z) => (
-            <li key={z.key} className="border border-gold-300/50 bg-linen-100/60 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="grid flex-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="label" htmlFor={`zfr-${z.key}`}>Nom (français)</label>
-                    <input id={`zfr-${z.key}`} value={z.labelFr} placeholder="Longueuil et la Rive-Sud"
-                      onChange={(e) => setZone(z.key, { labelFr: e.target.value })} className="field" />
-                  </div>
-                  <div>
-                    <label className="label" htmlFor={`zen-${z.key}`}>Nom (anglais)</label>
-                    <input id={`zen-${z.key}`} value={z.labelEn} placeholder="Longueuil and the South Shore"
-                      onChange={(e) => setZone(z.key, { labelEn: e.target.value })} className="field" />
-                  </div>
-                </div>
-                <div className="flex flex-none items-center gap-3 pt-7">
-                  <Toggle small checked={z.enabled} onChange={(v) => setZone(z.key, { enabled: v })} />
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <label className="label" htmlFor={`zp-${z.key}`}>Codes postaux (3 premiers caractères)</label>
-                <textarea id={`zp-${z.key}`} rows={2} value={z.prefixes.join(", ")}
-                  onChange={(e) => setZone(z.key, {
-                    prefixes: e.target.value.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z]\d[A-Z]$/.test(x)),
-                  })}
-                  className="field resize-none font-mono text-sm uppercase tracking-wider" />
-                <p className="mt-1.5 text-[11px] text-ink-400">{z.prefixes.length} préfixes · séparez par des virgules</p>
-              </div>
-
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Fee label={`Séance de moins de ${fmtHours(s.zonePolicy.longSessionMinutes)}`} id={`zs-${z.key}`}
-                  cents={z.shortFeeCents} onChange={(c) => setZone(z.key, { shortFeeCents: c })} />
-                <Fee label={`Séance de ${fmtHours(s.zonePolicy.longSessionMinutes)} ou plus`} id={`zl-${z.key}`}
-                  cents={z.longFeeCents} onChange={(c) => setZone(z.key, { longFeeCents: c })} />
-              </div>
-              {z.shortFeeCents === 0 && z.longFeeCents === 0 && (
-                <p className="mt-2 text-[11px] text-gold-700">Déplacement compris : cette zone ne paie aucuns frais.</p>
-              )}
-
-              <button type="button" onClick={() => removeZone(z.key)}
-                className="mt-4 text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-[#8E332C]">
-                Retirer cette zone
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {zoneClashes.length > 0 && (
-          <p className="mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.82rem] leading-relaxed text-[#8E332C]">
-            {zoneClashes.join(", ")} {zoneClashes.length > 1 ? "figurent" : "figure"} dans plusieurs zones actives.
-            C&apos;est la première de la liste qui s&apos;appliquerait.
-          </p>
-        )}
-
-        <button type="button" onClick={addZone} className="btn btn-ghost mt-6 !py-2.5 !px-5 !text-[10px]">
-          Ajouter une zone
-        </button>
-      </Card>
+      {/* Les zones, les secteurs et le texte de la zone desservie ont leur
+          propre onglet, « Zones et frais ». */}
+      <p className="text-[0.82rem] font-light leading-relaxed text-ink-400">
+        Les secteurs desservis, les zones et les frais de déplacement se règlent dans l&apos;onglet « Zones et frais ».
+      </p>
 
       {/* — Barre d'enregistrement — */}
       <div className="sticky bottom-0 -mx-1 flex items-center justify-between gap-5 border-t border-gold-300/50 bg-linen-100/95 px-1 py-5 backdrop-blur">
@@ -413,54 +281,7 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
 
 /* ————— Primitives ————— */
 
-/** Les heures du seuil, écrites comme on les dit. */
-function fmtHours(minutes: number): string {
-  const h = minutes / 60;
-  if (Number.isInteger(h)) return `${h} h`;
-  return `${Math.floor(h)} h ${minutes % 60}`;
-}
-
-/**
- * Un montant, saisi en dollars et conservé en cents.
- *
- * Toute la maison compte en cents ; l'artisan, lui, pense en dollars. La
- * conversion vit ici, à la frontière, pour qu'aucun montant à virgule ne se
- * promène dans les réglages.
- */
-function Fee({ label, id, cents, onChange }: {
-  label: string; id: string; cents: number; onChange: (cents: number) => void;
-}) {
-  return (
-    <div>
-      <label className="label" htmlFor={id}>{label}</label>
-      <div className="flex items-center gap-2">
-        <input id={id} type="number" min={0} max={500} step={1} value={Math.round(cents / 100)}
-          onChange={(e) => onChange(Math.max(0, Math.round(Number(e.target.value) || 0)) * 100)}
-          className="field !w-24 text-center tabular-nums" />
-        <span className="text-[11px] text-ink-400">$</span>
-      </div>
-    </div>
-  );
-}
-
-/** Un nombre de minutes, borné pour qu'aucun réglage absurde ne s'enregistre. */
-function Minutes({ label, id, value, onChange, unit = "min" }: {
-  label: string; id: string; value: number; onChange: (v: number) => void; unit?: string;
-}) {
-  return (
-    <div>
-      <label className="label" htmlFor={id}>{label}</label>
-      <div className="flex items-center gap-2">
-        <input id={id} type="number" min={1} max={600} step={5} value={value}
-          onChange={(e) => onChange(Math.max(1, Math.min(600, Math.round(Number(e.target.value) || 1))))}
-          className="field !w-24 text-center tabular-nums" />
-        <span className="text-[11px] text-ink-400">{unit}</span>
-      </div>
-    </div>
-  );
-}
-
-function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+export function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="border border-gold-300/40 bg-linen-50 p-7">
       <h3 className="font-display text-xl font-normal text-ink-800">{title}</h3>
@@ -470,7 +291,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
   );
 }
 
-function Toggle({ checked, onChange, small }: { checked: boolean; onChange: (v: boolean) => void; small?: boolean }) {
+export function Toggle({ checked, onChange, small }: { checked: boolean; onChange: (v: boolean) => void; small?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
       className={`relative flex-none rounded-full border transition-colors duration-400 ${
