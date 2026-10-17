@@ -13,7 +13,7 @@ export function ConnectionPanel({
 }: {
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
-  env: { database: boolean; google: boolean; origin: string };
+  env: { database: boolean; google: boolean; sms: boolean; origin: string };
   link: GoogleLink;
   missingScopes: string[];
 }) {
@@ -25,6 +25,8 @@ export function ConnectionPanel({
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<{ ok: boolean; to?: string; at?: string; reason?: string; hint?: string } | null>(null);
+  const [smsTesting, setSmsTesting] = useState(false);
+  const [smsTest, setSmsTest] = useState<{ ok: boolean; to?: string; reason?: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -62,6 +64,20 @@ export function ConnectionPanel({
       setTest({ ok: false, reason: "Le site n'a pas répondu. Réessayez." });
     } finally {
       setTesting(false);
+    }
+  }
+
+  /* Même idée pour les textos : on essaie, et Twilio dit pourquoi s'il refuse. */
+  async function sendSmsTest() {
+    setSmsTesting(true);
+    setSmsTest(null);
+    try {
+      const res = await fetch("/api/admin/test-sms", { method: "POST" });
+      setSmsTest(await res.json());
+    } catch {
+      setSmsTest({ ok: false, reason: "Le site n'a pas répondu. Réessayez." });
+    } finally {
+      setSmsTesting(false);
     }
   }
 
@@ -180,6 +196,32 @@ export function ConnectionPanel({
         </section>
       )}
 
+      {/* — Essai de texto — */}
+      <section className="border border-gold-300/40 bg-linen-50 p-7">
+        <h3 className="font-display text-xl font-normal text-ink-800">Les textos partent-ils ?</h3>
+        <p className="mt-1.5 max-w-2xl text-[0.82rem] font-light leading-relaxed text-ink-400">
+          {env.sms
+            ? "Envoie un texto d'essai vers votre téléphone, par le même chemin que les confirmations et les rappels. S'il n'arrive pas, la raison donnée par Twilio s'affiche ici."
+            : "Les textos ne partent pas encore : les clés Twilio ne sont pas posées dans Vercel (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM). Les courriels, eux, continuent."}
+        </p>
+        {env.sms && (
+          <button type="button" onClick={sendSmsTest} disabled={smsTesting} className="btn mt-6 !py-3 !px-6 !text-[10px]">
+            {smsTesting ? "Envoi en cours…" : "Envoyer un texto de test"}
+          </button>
+        )}
+        {smsTest?.ok && (
+          <p className="mt-5 border border-gold-400/60 bg-linen-100 px-5 py-4 text-[0.85rem] leading-relaxed text-ink-700">
+            Parti vers <strong>{smsTest.to}</strong>. Il arrive en général en quelques secondes.
+          </p>
+        )}
+        {smsTest && !smsTest.ok && (
+          <div className="mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-5 py-4 text-[0.85rem] leading-relaxed text-[#8E332C]">
+            <p className="font-medium">L&apos;envoi a échoué.</p>
+            {smsTest.reason && <p className="mt-1 break-words">{smsTest.reason}</p>}
+          </div>
+        )}
+      </section>
+
       {/* — Diagnostic — */}
       <section className="border border-gold-300/40 bg-linen-50 p-7">
         <h3 className="font-display text-xl font-normal text-ink-800">État du système</h3>
@@ -190,6 +232,7 @@ export function ConnectionPanel({
           <Check ok={link.usable} label="Google accepte le jeton"
             fail={link.reason ? `Google refuse le jeton (${link.reason}) — reconnectez le compte` : "Jeton inutilisable — reconnectez le compte"} />
           <Check ok={!settings.paused} label="Réservations ouvertes" fail="Réservations suspendues (onglet Réglages)" />
+          <Check ok={env.sms} label="Textos (Twilio)" fail="Clés Twilio absentes — seuls les courriels partent" />
         </ul>
         <p className="mt-6 border-t border-gold-300/30 pt-5 text-[0.78rem] leading-relaxed text-ink-400">
           Adresse publique du site : <code className="font-mono text-ink-600">{env.origin}</code><br />

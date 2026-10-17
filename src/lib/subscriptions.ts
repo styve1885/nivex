@@ -16,6 +16,8 @@ import {
   type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
 import { cleanOrigin, hydrate, occupiedBlock, type Booking } from "./bookings";
+import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
+import { rhythmPhrase } from "./email";
 import {
   canSubscriberChange, cycleAmount, gridDate, gridDates, gridFrom, gridIndexAfter, quoteCycle,
   seriesConflicts, seriesOfCycle, seriesSpanEnd, startOffset, viewSubscription, visitsToEndOfSeries,
@@ -434,6 +436,23 @@ async function insertSubscription(p: {
   }
 
   const emailSent = at ? await sendConfirmation(full, at, settings, origin, p.createdBy === "owner") : false;
+
+  /* Les textos ne dépendent pas de Google : ils partent même si le compte
+     est débranché. L'artisan n'est prévenu que de ce qu'il n'a pas fait. */
+  const first = full.visits[0];
+  if (first) {
+    const l = full.sub.locale;
+    await Promise.all([
+      sendSms(full.sub.clientPhone, SMS.subscriptionConfirmed(l, planName(full.sub, l),
+        smsWhen(first.startsAt, settings.timezone, l), rhythmPhrase(full.sub.everyWeeks, l),
+        `${origin}/${l}/abonnement/${full.sub.manageToken}`), full.sub.ref),
+      p.createdBy === "client"
+        ? sendSms(ownerSmsNumber(), SMS.owner.newSubscription(full.sub.clientName, full.sub.planName,
+            smsWhen(first.startsAt, settings.timezone, "fr")), full.sub.ref)
+        : Promise.resolve(false),
+    ]);
+  }
+
   await logEvent("subscription_created", {
     ref: full.sub.ref, plan: plan.key, visits: p.starts.length, by: p.createdBy, email: emailSent,
   });
@@ -742,6 +761,14 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
     }
   }
 
+  /* Le client reçoit toujours le texto ; l'artisan, quand le client a annulé. */
+  const l = b.locale;
+  await sendSms(b.clientPhone, SMS.visitCancelled(l, smsWhen(b.startsAt, settings.timezone, l),
+    replacement ? smsWhen(replacement.startsAt, settings.timezone, l) : null), b.ref);
+  if (by === "client") {
+    await sendSms(ownerSmsNumber(), SMS.owner.cancelled(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr")), b.ref);
+  }
+
   await logEvent("subscription_visit_cancelled", {
     ref: b.ref, subscription: before.sub.ref, by, replacement: replacement?.startsAt.toISOString() ?? null,
   });
@@ -769,7 +796,7 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   try {
     await sql()`
       UPDATE nivex_bookings
-      SET starts_at = ${to.toISOString()}, ends_at = ${end.toISOString()}, reminder_sent_at = NULL
+      SET starts_at = ${to.toISOString()}, ends_at = ${end.toISOString()}, reminder_sent_at = NULL, sms_reminded_at = NULL
       WHERE id = ${b.id} AND status = 'confirmed'`;
   } catch (e) {
     if (isOverlap(e)) throw new SubscriptionError("slot_taken");
@@ -793,6 +820,13 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
     if (by === "client") {
       await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: full.sub.planName }, change), b.clientEmail);
     }
+  }
+
+  await sendSms(b.clientPhone, SMS.visitMoved(b.locale, smsWhen(b.startsAt, settings.timezone, b.locale),
+    smsWhen(to, settings.timezone, b.locale)), b.ref);
+  if (by === "client") {
+    await sendSms(ownerSmsNumber(), SMS.owner.moved(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr"),
+      smsWhen(to, settings.timezone, "fr")), b.ref);
   }
 
   await logEvent("subscription_visit_moved", { ref: b.ref, by, from: b.startsAt.toISOString(), to: to.toISOString() });
@@ -1068,25 +1102,24 @@ export async function resendSubscription(subId: string, host?: string | null): P
 /**
  * Ce que la maison fait seule, une fois par jour.
  *
- *  — Le rappel de la veille, pour chaque visite d'abonné de demain. Une
- *    visite d'aujourd'hui qui n'en a pas reçu — déplacée après le passage
- *    d'hier — reçoit le sien le matin même.
+ *  — Le rappel de la veille. Pour une visite d'abonné : un courriel et un
+ *    texto. Pour une séance ponctuelle : un texto. Une visite d'aujourd'hui
+ *    qui n'a rien reçu — déplacée après le passage d'hier — reçoit le sien le
+ *    matin même.
  *  — Le courriel de l'artisan, une semaine avant la dernière visite d'une
  *    série : la suite est-elle confirmée, ou quelque chose change-t-il ?
  *
- * Chaque envoi est noté en base avant d'être compté : un second passage le
- * même jour ne renvoie rien.
+ * Courriels et textos se notent chacun dans leur colonne : un second passage
+ * le même jour ne renvoie rien, et l'un qui échoue n'empêche pas l'autre. Un
+ * compte Google débranché coupe les courriels, pas les textos.
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
-  reminders: number; notices: number; skipped?: string;
+  reminders: number; smsReminders: number; notices: number; google: boolean;
 }> {
   await ensureSchema();
   const settings = await getSettings();
   const at = await ownerAccessToken().catch(() => null);
-  if (!at) {
-    await logEvent("daily_skipped", { reason: "no_access_token" });
-    return { reminders: 0, notices: 0, skipped: "no_google" };
-  }
+  if (!at) await logEvent("daily_emails_skipped", { reason: "no_access_token" });
   const tz = settings.timezone;
   const origin = siteOrigin(host);
   const today = dateKey(now, tz);
@@ -1101,35 +1134,53 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
   /* — Rappels — */
   const due = ((await sql()`
     SELECT * FROM nivex_bookings
-    WHERE subscription_id IS NOT NULL AND status = 'confirmed' AND reminder_sent_at IS NULL
+    WHERE status = 'confirmed'
+      AND ((subscription_id IS NOT NULL AND reminder_sent_at IS NULL) OR sms_reminded_at IS NULL)
       AND starts_at > ${new Date(now.getTime() + 3600_000).toISOString()}
       AND starts_at < ${new Date(now.getTime() + 2 * DAY).toISOString()}
-    ORDER BY starts_at`) as Row[]).map(hydrate);
+    ORDER BY starts_at`) as Row[]);
 
   let reminders = 0;
-  for (const v of due) {
+  let smsReminders = 0;
+  for (const r of due) {
+    const v = hydrate(r);
     const key = dateKey(v.startsAt, tz);
     if (key !== today && key !== tomorrow) continue;
-    const full = await subOf(v.subscriptionId!);
-    if (!full || full.sub.status !== "active") continue;
-    const ok = await send(at, settings, { email: v.clientEmail, name: v.clientName },
-      visitReminder(visitData(full, v, settings, origin), key === today));
-    if (ok) {
-      await sql()`UPDATE nivex_bookings SET reminder_sent_at = now() WHERE id = ${v.id}`;
-      reminders++;
+    const isToday = key === today;
+
+    let payment: string | null = null;
+    if (v.subscriptionId) {
+      const full = await subOf(v.subscriptionId);
+      if (!full || full.sub.status !== "active") continue;
+      const d = visitData(full, v, settings, origin);
+      if (d.paymentDue) payment = formatMoney(d.totalCents, d.currency, v.locale);
+      if (at && !v.reminderSentAt) {
+        if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) {
+          await sql()`UPDATE nivex_bookings SET reminder_sent_at = now() WHERE id = ${v.id}`;
+          reminders++;
+        }
+      }
+    }
+
+    if (!r.sms_reminded_at) {
+      const body = SMS.reminder(v.locale, smsWhen(v.startsAt, tz, v.locale), isToday, payment);
+      if (await sendSms(v.clientPhone, body, v.ref)) {
+        await sql()`UPDATE nivex_bookings SET sms_reminded_at = now() WHERE id = ${v.id}`;
+        smsReminders++;
+      }
     }
   }
 
   /* — Fin de série — */
   let notices = 0;
-  const active = (await sql()`SELECT * FROM nivex_subscriptions WHERE status = 'active'`) as Row[];
+  const active = at ? (await sql()`SELECT * FROM nivex_subscriptions WHERE status = 'active'`) as Row[] : [];
   for (const r of active) {
     const full = await subOf(r.id as string);
     if (!full) continue;
     const { view, sub } = full;
     const alert = view.alerts.find((a) => a.kind === "series_ending");
     if (!alert || alert.kind !== "series_ending" || sub.noticeSeries >= alert.series) continue;
-    const ok = await send(at, settings, { email: REQUEST_INBOX },
+    const ok = await send(at!, settings, { email: REQUEST_INBOX },
       seriesNotice({ ...emailBase(full, settings, origin), planName: sub.planName }, {
         series: alert.series, lastAt: alert.lastAt, termEnds: alert.series >= TERM_SERIES,
       }), sub.clientEmail);
@@ -1139,8 +1190,8 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
-  await logEvent("daily_done", { reminders, notices, day: today });
-  return { reminders, notices };
+  await logEvent("daily_done", { reminders, smsReminders, notices, day: today });
+  return { reminders, smsReminders, notices, google: Boolean(at) };
 }
 
 /* ============================ Pour l'affichage ============================ */

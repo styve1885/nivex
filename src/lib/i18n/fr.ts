@@ -55,7 +55,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre — et, pour un abonné, à rappeler chaque visite la veille.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le téléphone reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous ; répondez STOP à l'un de ces textos pour ne plus en recevoir.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -75,18 +75,19 @@ const privacy: LegalDoc = {
     {
       title: "Qui d'autre y a accès",
       body: [
-        "Trois fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
+        "Quatre fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
       ],
       list: [
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
+        "Twilio — achemine les textos de confirmation et de rappel. Il reçoit votre numéro de téléphone et le texte du message, rien d'autre.",
       ],
     },
     {
       title: "Hors du Québec",
       body: [
-        "Le site, la base de données et les services Google sont hébergés aux États-Unis. Vos renseignements sortent donc du Québec pour y être conservés, et ils y sont soumis au droit du pays d'accueil — lequel peut, dans certains cas, permettre à ses autorités d'y accéder.",
+        "Le site, la base de données, les services Google et Twilio sont hébergés aux États-Unis. Vos renseignements sortent donc du Québec pour y être conservés, et ils y sont soumis au droit du pays d'accueil — lequel peut, dans certains cas, permettre à ses autorités d'y accéder.",
         "Nous avons retenu des fournisseurs tenus contractuellement à des mesures de protection comparables à celles exigées ici, et nous ne leur confions que ce qui est nécessaire. En réservant ou en nous écrivant par le site, vous consentez à cette communication hors Québec. Si elle vous gêne, appelez-nous : nous conviendrons du rendez-vous de vive voix.",
       ],
     },
@@ -183,7 +184,7 @@ const terms: LegalDoc = {
         "Les créneaux proposés tiennent compte de l'horaire de la maison et des rendez-vous déjà pris. Ce que vous voyez est réservable.",
         "Une séance dure au minimum {min}.",
         "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
-        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous.",
+        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Un texto la double, et un autre vous rappelle le rendez-vous la veille.",
       ],
     },
     {

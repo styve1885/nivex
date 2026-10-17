@@ -3,6 +3,7 @@ import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
+import { smsConfigured } from "@/lib/sms";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +58,8 @@ export async function GET() {
       encryptionKey: Boolean(process.env.ENCRYPTION_KEY),
       sessionSecret: Boolean(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY),
       setupCode: Boolean(process.env.ADMIN_SETUP_CODE),
+      sms: smsConfigured(),
+      cron: Boolean(process.env.CRON_SECRET),
     },
     schema,
     /* Les zones desservies, résumées : de quoi voir d'un coup d'œil qu'une

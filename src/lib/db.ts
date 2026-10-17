@@ -342,6 +342,10 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS done_at          timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS google_series_id text`;
+
+  /* Le rappel par texto, noté à part du courriel : l'un peut partir sans
+     l'autre, et une séance ponctuelle ne reçoit que le texto. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_reminded_at  timestamptz`;
   await q`CREATE INDEX IF NOT EXISTS nivex_bookings_subscription_idx ON nivex_bookings (subscription_id) WHERE subscription_id IS NOT NULL`;
 }
 

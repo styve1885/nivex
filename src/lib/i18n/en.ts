@@ -43,7 +43,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, and answer you — and, for a subscriber, how we remind you of each visit the day before.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. Your phone also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -63,18 +63,19 @@ const privacy: LegalDoc = {
     {
       title: "Who else has access",
       body: [
-        "Three providers, each for one precise task, and none of them may use any of it for their own ends.",
+        "Four providers, each for one precise task, and none of them may use any of it for their own ends.",
       ],
       list: [
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
+        "Twilio — carries the confirmation and reminder text messages. It receives your phone number and the text of the message, nothing else.",
       ],
     },
     {
       title: "Outside Quebec",
       body: [
-        "The site, the database and the Google services are hosted in the United States. Your information therefore leaves Quebec to be kept there, and is subject to the law of the host country — which may, in certain cases, allow its authorities to reach it.",
+        "The site, the database, the Google services and Twilio are hosted in the United States. Your information therefore leaves Quebec to be kept there, and is subject to the law of the host country — which may, in certain cases, allow its authorities to reach it.",
         "We chose providers contractually bound to protection comparable to what is required here, and we entrust them with nothing beyond what is necessary. By booking or writing to us through the site, you consent to this communication outside Quebec. If that troubles you, call us and we will arrange the appointment by voice.",
       ],
     },
@@ -171,7 +172,7 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. A text message doubles it, and another reminds you of the appointment the day before.",
       ],
     },
     {

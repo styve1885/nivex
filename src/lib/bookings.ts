@@ -9,6 +9,7 @@ import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, Goog
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { canSubscriberChange } from "./cycles";
+import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
 import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX, SETUP_MINUTES } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
@@ -251,6 +252,15 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
   /* — Courriels (au mieux : jamais bloquants) — */
   booking.emailSent = await sendBookingEmails(booking, settings, origin).catch(() => false);
+
+  /* — Textos : la confirmation au client, l'alerte à l'artisan (au mieux) — */
+  const whenClient = smsWhen(booking.startsAt, settings.timezone, booking.locale);
+  await Promise.all([
+    sendSms(booking.clientPhone, SMS.bookingConfirmed(booking.locale, whenClient,
+      `${origin}/${booking.locale}/reservation/${booking.manageToken}`), ref),
+    sendSms(ownerSmsNumber(), SMS.owner.newBooking(booking.clientName,
+      smsWhen(booking.startsAt, settings.timezone, "fr"), booking.city), ref),
+  ]);
 
   await logEvent("booking_created", {
     ref, startsAt: booking.startsAt.toISOString(), durationMinutes,
@@ -596,6 +606,13 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
         ? sendGmail(at, { to: settings.ownerEmail, subject: on.subject, html: on.html, text: on.text, fromName })
         : Promise.resolve(null),
     ]);
+  }
+
+  /* Celui qui n'a pas annulé l'apprend aussi par texto. */
+  if (by === "owner") {
+    await sendSms(b.clientPhone, SMS.bookingCancelled(b.locale, smsWhen(b.startsAt, settings.timezone, b.locale)), b.ref);
+  } else {
+    await sendSms(ownerSmsNumber(), SMS.owner.cancelled(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr")), b.ref);
   }
 
   await logEvent("booking_cancelled", { ref: b.ref, by });
