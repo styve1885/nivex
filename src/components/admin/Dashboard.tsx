@@ -8,11 +8,14 @@ import { SettingsPanel } from "./SettingsPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
 import { MessagesPanel } from "./MessagesPanel";
 import { VisitsPanel } from "./VisitsPanel";
+import { SubscribersPanel } from "./SubscribersPanel";
+import { PLANS } from "@/lib/pricing";
 import type { AdminBooking, AdminStats, GoogleLink } from "./types";
 import type { Settings } from "@/lib/settings";
 
 const TABS = [
   { key: "bookings", label: "Rendez-vous" },
+  { key: "subscribers", label: "Abonnés" },
   { key: "messages", label: "Messages" },
   { key: "visits", label: "Visites" },
   { key: "settings", label: "Réglages" },
@@ -124,7 +127,7 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Cinq onglets ne tiennent plus sur la largeur d'un téléphone. Sans
+      {/* Six onglets ne tiennent plus sur la largeur d'un téléphone. Sans
           défilement, « Connexion » sortait de l'écran sans aucun moyen d'y
           revenir — l'onglet qui sert précisément quand plus rien ne marche.
           La barre défile donc latéralement, et rien ne se perd. */}
@@ -144,6 +147,10 @@ export function Dashboard({
       <div className="mt-10">
         {tab === "bookings" && (
           <BookingsPanel upcoming={upcoming} past={past} stats={stats} timezone={settings.timezone} />
+        )}
+        {tab === "subscribers" && (
+          <SubscribersPanel timezone={settings.timezone}
+            plans={PLANS.map((p) => ({ key: p.key, name: p.fr.name, visits: p.visits }))} />
         )}
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
         {tab === "visits" && <VisitsPanel />}

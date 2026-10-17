@@ -140,8 +140,11 @@ export const UNIT_GARMENTS: UnitPrice[] = [
 
 export type Plan = {
   key: string;
+  /** Visites par cycle : c'est ce nombre, effectué, qui fait un « mois ». */
   visits: number;
   minutesPerVisit: number;
+  /** Rythme des visites, en semaines : 1 chaque semaine, 2 aux deux semaines… */
+  everyWeeks: number;
   /** Remise sur le tarif horaire, de 0 à 1. */
   discount: number;
   fr: { name: string; detail: string };
@@ -150,24 +153,24 @@ export type Plan = {
 
 export const PLANS: Plan[] = [
   {
-    key: "essentiel", visits: 1, minutesPerVisit: 180, discount: 0.07,
-    fr: { name: "Essentiel", detail: "1 visite de 3 h par mois — les vêtements du mois et les draps de la maison." },
-    en: { name: "Essential", detail: "One 3-hour visit a month — the month's clothes and the household sheets." },
+    key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4, discount: 0.07,
+    fr: { name: "Essentiel", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison." },
+    en: { name: "Essential", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets." },
   },
   {
-    key: "confort", visits: 2, minutesPerVisit: 120, discount: 0.075,
-    fr: { name: "Confort", detail: "2 visites de 2 h par mois — une trentaine de pièces au total." },
-    en: { name: "Comfort", detail: "Two 2-hour visits a month — around thirty pieces in all." },
+    key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2, discount: 0.075,
+    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — une trentaine de pièces par cycle." },
+    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — around thirty pieces per cycle." },
   },
   {
-    key: "executif", visits: 4, minutesPerVisit: 120, discount: 0.10,
+    key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1, discount: 0.10,
     fr: { name: "Exécutif", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour." },
     en: { name: "Executive", detail: "Four 2-hour visits, one a week — the work wardrobe kept current." },
   },
   {
-    key: "grande-famille", visits: 4, minutesPerVisit: 180, discount: 0.12,
-    fr: { name: "Grande Famille", detail: "4 visites de 3 h par mois — vêtements, uniformes et literie de toute la maison." },
-    en: { name: "Large Family", detail: "Four 3-hour visits a month — clothes, uniforms and bedding for the whole house." },
+    key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1, discount: 0.12,
+    fr: { name: "Grande Famille", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison." },
+    en: { name: "Large Family", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house." },
   },
 ];
 
@@ -183,13 +186,13 @@ export function firstTimeCents(o: Offer, s: Settings): number {
   return Math.max(0, offerCents(o, s) - s.hourlyRate);
 }
 
-/** Montant mensuel d'un abonnement, arrondi au multiple de 5 $ le plus proche. */
+/** Montant d'un cycle d'abonnement, arrondi au multiple de 5 $ le plus proche. */
 export function planCents(p: Plan, s: Settings): number {
   const full = (p.visits * p.minutesPerVisit / 60) * s.hourlyRate;
   return Math.round((full * (1 - p.discount)) / 500) * 500;
 }
 
-/** Le plus bas montant mensuel de la gamme — le « à partir de » annoncé. */
+/** Le plus bas montant par cycle de la gamme — le « à partir de » annoncé. */
 export function cheapestPlanCents(s: Settings): number {
   return Math.min(...PLANS.map((p) => planCents(p, s)));
 }

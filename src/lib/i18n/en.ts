@@ -1,5 +1,11 @@
 import type { Dict, LegalDoc } from "./fr";
-import { CANCEL_WINDOW_HOURS, PHONE } from "../brand";
+import {
+  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, PHONE, SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+} from "../brand";
+import { formatMoney } from "../time";
+
+/* The subscriber reduction on travel fees, written from the constant. */
+const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "en");
 
 const privacy: LegalDoc = {
   eyebrow: "Privacy",
@@ -21,6 +27,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
+        "Subscription — the same details as a booking, plus the plan you chose, the day and time of your visits, the visits completed and the cycles paid.",
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
         "Audience measurement — the number of page views, which page was viewed, the site you arrived from, your country and your device type. This data is aggregated: it says how many people came by, never which ones. No cookie is set and no identifier follows you from one visit to the next.",
@@ -36,7 +43,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, and answer you.",
+        "Your email and phone number are how we confirm, warn you of a delay, and answer you — and, for a subscriber, how we remind you of each visit the day before.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -76,6 +83,7 @@ const privacy: LegalDoc = {
       body: [],
       list: [
         "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way.",
+        "A subscription: three years after its last visit, for the same reason.",
         "A message from the contact form: two years, or until you ask us to delete it.",
         "The technical log: twelve months.",
         "The visit log: twelve months, after which entries are deleted of their own accord.",
@@ -89,7 +97,7 @@ const privacy: LegalDoc = {
         "The site is served over HTTPS only: what you write is encrypted in transit.",
         "The token that links the site to the artisan's Google account is encrypted with AES-256-GCM before it reaches the database.",
         "The artisan's area requires a Google sign-in, and the very first sign-in also requires a setup code.",
-        "The “Manage my booking” link carries a random token belonging to your appointment alone. It opens that one, and nothing else.",
+        "The “Manage my booking” link carries a random token belonging to your appointment alone. It opens that one, and nothing else. A subscription's “Manage my visits” link works the same way, for that subscription's visits only.",
       ],
     },
     {
@@ -184,14 +192,25 @@ const terms: LegalDoc = {
       title: "Payment",
       body: [
         "At the end of the session, on site: cash, Interac e-transfer or card. No prepayment is asked for when booking, and the site collects no banking information.",
+        "A subscription differs on one point only: each cycle is paid at its first visit, on site, by the same means. Nothing is ever paid online.",
       ],
     },
     {
       title: "Cancelling or moving",
       body: [
         "Freely, up to {cancel} before the appointment, from the personal link you received by email, or by phone at {phone}. Nothing to pay, nothing to justify.",
+        "A subscription visit can be cancelled or moved at no charge until 11:59 p.m. the day before, in the same way, without touching the rest of the series.",
         "Past that, call us at {phone}: we will do our best.",
         "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
+      ],
+    },
+    {
+      title: "Subscriptions",
+      body: [
+        "A subscription reserves your visits on the same day and at the same time, at the plan's rhythm: every week, every other week or every four weeks. Those slots are offered to nobody else.",
+        `A cycle is the plan's number of visits actually completed — four, two or one. A cancelled visit, on your side or ours, does not count: the cycle runs on to the next visit, and a replacement visit is added at the end of the series. If a cycle is not finished ${CYCLE_MAX_WEEKS} weeks after its first visit, we call you to agree on what comes next.`,
+        `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. A week before a series ends, we call you to confirm the next one.`,
+        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle. The first-hour-free offer does not apply to subscriptions.`,
       ],
     },
     {
@@ -421,13 +440,13 @@ export const en: Dict = {
         note: "For a household, or a fortnight in one go.",
       },
       {
-        name: "Monthly plan",
+        name: "Subscription",
         duration: "",
-        volume: "Regular visits, first call on time slots",
+        volume: "Regular visits, reserved time slots",
         note: "Rate guaranteed twelve months.",
       },
     ],
-    planFrom: "from {price} a month",
+    planFrom: "from {price} per cycle",
     button: "Put my session together",
     seeAll: "See the full price list",
     firstFree: "First hour free",
@@ -469,7 +488,7 @@ export const en: Dict = {
       },
       {
         q: "Can I cancel or reschedule?",
-        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us.`,
+        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us. For a subscriber, each visit can be cancelled or moved until 11:59 p.m. the day before.`,
       },
     ],
   },
@@ -606,6 +625,97 @@ export const en: Dict = {
     tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call +1 450 943 1217.`,
     notFound: "Booking not found. Check the link from your email.",
     rebook: "Book a new appointment",
+  },
+  subscribe: {
+    title: "Subscribe",
+    lede: "You choose your plan, your day and your time once. The visits then follow at the plan's rhythm, and every slot is kept for you.",
+    steps: ["Plan", "Address", "Time", "Confirmation"],
+    plan: {
+      title: "Which plan?",
+      hint: "A cycle is the plan's visits actually completed. It is paid at its first visit, on site.",
+      perCycle: "/ cycle",
+      visits: "{n} × {duration}",
+      noFirstHour: "The first-hour-free offer does not apply to subscriptions.",
+    },
+    address: {
+      title: "Where do we meet you?",
+      travelReduced: "Travel fee, subscriber rate: {fee} per visit, instead of {full}.",
+      travelZero: "For a subscriber, the travel fee for your area drops to zero.",
+      cycleTotal: "Total per cycle, fees included: {total}.",
+    },
+    slot: {
+      title: "Your first visit",
+      hint: "Choose the date and time of the first visit. The following ones fall on the same day, at the same time, {rhythm}.",
+      checking: "Checking the {n} dates of the series…",
+      free: "All {n} dates of the series are free.",
+      showDates: "Show the dates",
+      hideDates: "Hide the dates",
+      conflicts: "This slot does not hold for the whole series. These dates are a problem:",
+      reasons: { busy: "already booked", closed: "outside our hours", lead: "too soon", invalid: "invalid date" },
+      alternatives: "These slots are free for the whole series:",
+      noAlternative: `No other slot in the next two weeks holds for the whole series. Choose another time, or call us at ${PHONE}.`,
+      failed: "The check did not go through. Please try again in a moment.",
+    },
+    confirm: {
+      title: "Is everything right?",
+      plan: "Plan",
+      rhythm: "Rhythm",
+      first: "First visit",
+      series: "Visits reserved",
+      seriesValue: "{n} visits, until {last}",
+      cycle: "Plan, per cycle",
+      travel: "Travel fees for the cycle",
+      total: "Total per cycle",
+      payment: "The cycle is paid at its first visit, on site: cash, Interac e-transfer or card. Nothing is paid online.",
+      rule: "Each visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the link in your email. A cancelled visit does not count: it is added at the end of the series.",
+      consent: "I have read these terms. I understand that a cycle is the visits actually completed, and that it is paid at its first visit.",
+      submit: "Confirm the subscription",
+      submitting: "Confirming…",
+    },
+    success: {
+      title: "Your subscription is in place.",
+      body: "Your visits are reserved. The confirmation has just gone out by email, with the link to manage each visit.",
+      bodyNoEmail: "Your visits are reserved. The confirmation email could not be sent: note your reference and keep the link below.",
+      first: "First visit",
+      ref: "Reference",
+      manage: "Manage my visits",
+    },
+    errors: {
+      conflicts: "A date in the series has just been taken. Please choose another slot.",
+      tooMany: `A subscription was already taken with this email. Please call us at ${PHONE}.`,
+    },
+  },
+  subManage: {
+    title: "Your subscription",
+    status: { active: "Active", ended: "Ended" },
+    cycleLabel: "Current cycle",
+    cycleNow: "Cycle {c} — {d}/{n} visits done",
+    amount: "Amount per cycle",
+    payment: "The cycle is paid at its first visit, on site.",
+    rhythm: "Rhythm",
+    upcoming: "Your next visits",
+    rank: "Visit {i}/{n} · cycle {c}",
+    makeup: "Replacement",
+    cancelledTag: "Cancelled",
+    move: "Move",
+    cancel: "Cancel",
+    cancelConfirm: "Cancel this visit? It will not count towards your cycle, and a visit will be added at the end of the series.",
+    moveTitle: "Choose the new time",
+    moveConfirm: "Move this visit to {when}?",
+    keep: "Keep",
+    confirmMove: "Move",
+    tooLate: "The online deadline has passed (11:59 p.m. the day before). For this visit, please call us:",
+    rule: "Each visit can be cancelled or moved at no charge until 11:59 p.m. the day before.",
+    ended: "This subscription has ended.",
+    notFound: "Subscription not found. Please check the link in your email.",
+    replaced: "Visit cancelled. It is replaced on {when}.",
+    replacedNone: "Visit cancelled. We will call you to place it at the end of the series.",
+    moved: "Visit moved.",
+    done: "{n} visits already completed.",
+    errors: {
+      tooLate: "The deadline has passed. Please call us for any change.",
+      taken: "This slot has just been taken. Please choose another one.",
+    },
   },
   footer: {
     tagline: "Prestige in-home ironing",
@@ -744,16 +854,19 @@ export const en: Dict = {
       note: "These prices apply to a single piece added to a session already booked. Beyond a few pieces, a session costs less.",
     },
     plans: {
-      title: "Monthly plans",
+      title: "Subscriptions",
       lede: "A regular service, and an amount that comes down as the sessions add up.",
-      perMonth: "/ month",
+      perMonth: "/ cycle",
+      cycleNote: "A cycle is the plan's visits actually completed, roughly four weeks. It is paid at its first visit, on site.",
+      cta: "Subscribe",
       full: "Single sessions",
       save: "You save",
       perks: [
-        "First call on the time slots you want.",
-        "Flexible rescheduling when you travel or take holidays.",
+        "Your slots are kept for you: the same day, at the same time, all year.",
+        "A visit can be cancelled or moved at no charge until 11:59 p.m. the day before. It does not count, and is added at the end of the series.",
         "Light starch on collars and cuffs, included at no extra cost.",
-        "Rate guaranteed twelve months from sign-up.",
+        `Travel fee reduced by ${DISCOUNT} per visit.`,
+        `Rate guaranteed twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles.`,
       ],
     },
     terms: {
@@ -768,7 +881,7 @@ export const en: Dict = {
       travelZone: "Area",
       travelShort: "Under {hours}",
       travelLong: "{hours} or more",
-      travelNote: "The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit, subscribers included. Longueuil and the South Shore pay none.",
+      travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle. Longueuil and the South Shore pay none.`,
     },
     firstFreeLabel: "First session",
     cta: {

@@ -9,6 +9,8 @@ export type AdminBooking = {
   travelFeeCents: number; travelZone: string | null;
   /* Ce qui a suivi la réservation — ou ce qui a manqué. */
   emailSent: boolean; inCalendar: boolean;
+  /* Une visite d'abonnement : son montant se règle avec le cycle, pas ici. */
+  subscription: boolean;
   /* D'où vient ce client. Tout y est nul pour les rendez-vous pris avant
      que la provenance ne soit mesurée : « inconnu » n'est pas une erreur. */
   origin: {

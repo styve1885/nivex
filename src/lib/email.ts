@@ -479,3 +479,459 @@ export function contactAcknowledgement(d: ContactEmailData) {
 
   return { subject: a.subject, html: shell(inner, a.intro, d.businessEmail), text };
 }
+
+/* ============================================================
+   Abonnements
+   ============================================================ */
+
+export type SubscriptionEmailData = {
+  ref: string;
+  locale: "fr" | "en";
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  notes?: string | null;
+  /** Nom de la formule, dans la langue du client. */
+  planName: string;
+  perCycle: number;
+  everyWeeks: number;
+  minutesPerVisit: number;
+  /** Les visites posées, dans l'ordre : la première dit le jour et l'heure. */
+  visits: Date[];
+  planCents: number;
+  travelCents: number;
+  totalCents: number;
+  feePerVisitCents: number;
+  travelZone: string | null;
+  currency: string;
+  timezone: string;
+  manageUrl: string;
+  siteUrl: string;
+  businessPhone: string;
+  businessEmail: string;
+};
+
+/** Une visite précise, pour un rappel ou un changement. */
+export type VisitEmailData = SubscriptionEmailData & {
+  startsAt: Date;
+  cycle: number;
+  index: number;
+  /** Le cycle reste à régler et se paie à cette visite. */
+  paymentDue: boolean;
+};
+
+export type VisitChange =
+  | { kind: "cancelled"; replacement: Date | null }
+  | { kind: "moved"; from: Date };
+
+const S = {
+  fr: {
+    rhythm: (w: number) => w === 1 ? "chaque semaine" : w === 2 ? "aux deux semaines" : `toutes les ${w === 4 ? "quatre" : w} semaines`,
+    slot: (wd: string, hm: string) => `le ${wd}, à ${hm}`,
+    subject: (plan: string, ref: string) => `Votre abonnement ${plan} est confirmé · ${ref}`,
+    intro: "Votre abonnement est en place. Vos visites sont réservées dans notre agenda : personne d'autre ne peut prendre ces créneaux.",
+    plan: "Formule", rhythmLabel: "Rythme", first: "Première visite", series: "Visites réservées",
+    seriesValue: (n: number, last: string) => `${n} visites, jusqu'au ${last}`,
+    duration: "Durée d'une visite", where: "Adresse", ref: "Référence",
+    cycle: "Par cycle", cycleTravel: "Frais de déplacement du cycle", cycleTotal: "Total d'un cycle",
+    cycleNote: (n: number) => n === 1
+      ? "Un cycle correspond à une visite effectuée. Il se règle à cette visite, sur place : comptant, virement Interac ou carte."
+      : `Un cycle correspond à ${n} visites effectuées. Il se règle à la première visite du cycle, sur place : comptant, virement Interac ou carte. Une visite annulée ne compte pas : le cycle se prolonge jusqu'à la suivante.`,
+    travelNote: (fee: string) => `Les frais de déplacement de votre zone sont réduits pour les abonnés : ${fee} par visite.`,
+    arrival: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de chaque visite pour s'installer, sans frais.`,
+    rule: "Chaque visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, depuis le lien ci-dessous. Une visite annulée est ajoutée en fin de série. Passé ce délai, appelez-nous.",
+    manage: "Gérer mes visites",
+    upcoming: "Vos prochaines visites",
+    // Rappel
+    reminderSubject: (when: string) => `Rappel : votre visite NIVEX ${when}`,
+    reminderIntro: "Un mot pour vous rappeler votre visite de demain.",
+    reminderToday: "Un mot pour vous rappeler votre visite d'aujourd'hui.",
+    visit: "Visite", visitValue: (i: number, n: number, c: number) => `${i}/${n} du cycle ${c}`,
+    when: "Rendez-vous",
+    payment: "Paiement du cycle",
+    paymentNote: (c: number, total: string) => `Cette visite ouvre le cycle ${c} : son montant de ${total} se règle sur place, comptant, par virement Interac ou par carte.`,
+    stillTime: "Un empêchement ? Vous pouvez encore annuler ou déplacer cette visite jusqu'à 23 h 59 ce soir.",
+    tooLateNote: "Pour tout changement, appelez-nous.",
+    // Changements
+    cancelledSubject: (when: string) => `Visite annulée · ${when}`,
+    cancelledIntro: "Votre visite a bien été annulée. Elle ne compte pas dans votre cycle.",
+    replaced: (when: string) => `Elle est remplacée en fin de série, le ${when}.`,
+    notReplaced: "Nous vous appellerons pour la replacer en fin de série.",
+    movedSubject: (when: string) => `Visite déplacée · ${when}`,
+    movedIntro: "Votre visite a bien été déplacée. Le reste de votre série ne change pas.",
+    from: "Ancienne date", to: "Nouvelle date",
+    endedSubject: "Votre abonnement NIVEX prend fin",
+    endedIntro: "Votre abonnement prend fin. Les visites suivantes sont retirées de notre agenda :",
+    endedBye: "Merci de votre confiance. Au plaisir de vous revoir.",
+  },
+  en: {
+    rhythm: (w: number) => w === 1 ? "every week" : w === 2 ? "every other week" : `every ${w === 4 ? "four" : w} weeks`,
+    slot: (wd: string, hm: string) => `${wd}s at ${hm}`,
+    subject: (plan: string, ref: string) => `Your ${plan} subscription is confirmed · ${ref}`,
+    intro: "Your subscription is in place. Your visits are reserved in our calendar: nobody else can take these slots.",
+    plan: "Plan", rhythmLabel: "Rhythm", first: "First visit", series: "Visits reserved",
+    seriesValue: (n: number, last: string) => `${n} visits, until ${last}`,
+    duration: "Length of a visit", where: "Address", ref: "Reference",
+    cycle: "Per cycle", cycleTravel: "Travel fees for the cycle", cycleTotal: "Total per cycle",
+    cycleNote: (n: number) => n === 1
+      ? "A cycle is one completed visit. It is paid at that visit, on site: cash, Interac e-Transfer or card."
+      : `A cycle is ${n} completed visits. It is paid at the first visit of the cycle, on site: cash, Interac e-Transfer or card. A cancelled visit does not count: the cycle simply runs on to the next one.`,
+    travelNote: (fee: string) => `The travel fee for your area is reduced for subscribers: ${fee} per visit.`,
+    arrival: `Your presser arrives ${SETUP_MINUTES} minutes before each visit begins to set up, at no charge.`,
+    rule: "Each visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the link below. A cancelled visit is added at the end of the series. After that, please call us.",
+    manage: "Manage my visits",
+    upcoming: "Your next visits",
+    reminderSubject: (when: string) => `Reminder: your NIVEX visit ${when}`,
+    reminderIntro: "A short note to remind you of tomorrow's visit.",
+    reminderToday: "A short note to remind you of today's visit.",
+    visit: "Visit", visitValue: (i: number, n: number, c: number) => `${i}/${n} of cycle ${c}`,
+    when: "Appointment",
+    payment: "Payment for the cycle",
+    paymentNote: (c: number, total: string) => `This visit opens cycle ${c}: its amount of ${total} is paid on site, by cash, Interac e-Transfer or card.`,
+    stillTime: "Something came up? You can still cancel or move this visit until 11:59 p.m. tonight.",
+    tooLateNote: "For any change, please call us.",
+    cancelledSubject: (when: string) => `Visit cancelled · ${when}`,
+    cancelledIntro: "Your visit has been cancelled. It does not count towards your cycle.",
+    replaced: (when: string) => `It is replaced at the end of the series, on ${when}.`,
+    notReplaced: "We will call you to place it at the end of the series.",
+    movedSubject: (when: string) => `Visit moved · ${when}`,
+    movedIntro: "Your visit has been moved. The rest of your series stays as it is.",
+    from: "Previous date", to: "New date",
+    endedSubject: "Your NIVEX subscription is ending",
+    endedIntro: "Your subscription is ending. The following visits have been removed from our calendar:",
+    endedBye: "Thank you for your trust. We hope to see you again.",
+  },
+} as const;
+
+function weekdayName(d: Date, tz: string, locale: "fr" | "en"): string {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", { timeZone: tz, weekday: "long" }).format(d);
+}
+
+function timeOf(d: Date, tz: string, locale: "fr" | "en"): string {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: locale === "en",
+  }).format(d);
+}
+
+function dayOf(d: Date, tz: string, locale: "fr" | "en"): string {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
+    timeZone: tz, weekday: "long", day: "numeric", month: "long",
+  }).format(d);
+}
+
+/** « le vendredi, à 10 h 00 » — le créneau fixe d'une série. */
+export function slotPhrase(first: Date, tz: string, locale: "fr" | "en"): string {
+  return S[locale].slot(weekdayName(first, tz, locale), timeOf(first, tz, locale));
+}
+
+export function rhythmPhrase(everyWeeks: number, locale: "fr" | "en"): string {
+  return S[locale].rhythm(everyWeeks);
+}
+
+function cycleRowsHtml(d: SubscriptionEmailData): string {
+  const t = S[d.locale];
+  const m = (c: number) => esc(formatMoney(c, d.currency, d.locale));
+  if (d.travelCents <= 0) return row(t.cycle, `<strong>${m(d.planCents)}</strong>`);
+  return row(t.cycle, m(d.planCents))
+    + row(d.travelZone ? `${t.cycleTravel} (${d.travelZone})` : t.cycleTravel, m(d.travelCents))
+    + row(t.cycleTotal, `<strong>${m(d.totalCents)}</strong>`);
+}
+
+function cycleRowsText(d: SubscriptionEmailData): string[] {
+  const t = S[d.locale];
+  const m = (c: number) => formatMoney(c, d.currency, d.locale);
+  if (d.travelCents <= 0) return [`${t.cycle}: ${m(d.planCents)}`];
+  return [`${t.cycle}: ${m(d.planCents)}`, `${t.cycleTravel}: ${m(d.travelCents)}`, `${t.cycleTotal}: ${m(d.totalCents)}`];
+}
+
+function note(text: string): string {
+  return `<tr><td style="padding:20px 40px 0;">
+    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(text)}</p>
+  </td></tr>`;
+}
+
+function opening(name: string, intro: string, locale: "fr" | "en"): string {
+  return `<p style="margin:0 0 14px;font-size:16px;">${esc(T[locale].hi(name.split(" ")[0]))}</p>
+    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(intro)}</p>`;
+}
+
+/** La confirmation d'un abonnement, envoyée une seule fois pour toute la série. */
+export function subscriptionConfirmation(d: SubscriptionEmailData) {
+  const t = S[d.locale];
+  const first = d.visits[0];
+  const last = d.visits[d.visits.length - 1];
+  const slot = slotPhrase(first, d.timezone, d.locale);
+  const firstText = formatDateTime(first, d.timezone, d.locale);
+  const seriesText = t.seriesValue(d.visits.length, dayOf(last, d.timezone, d.locale));
+  const next = d.visits.slice(0, 6).map((v) => dayOf(v, d.timezone, d.locale));
+  const fee = formatMoney(d.feePerVisitCents, d.currency, d.locale);
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, t.intro, d.locale)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(t.plan, `<strong>${esc(d.planName)}</strong>`)}
+      ${row(t.rhythmLabel, esc(`${slot}, ${t.rhythm(d.everyWeeks)}`))}
+      ${row(t.first, `<strong style="font-size:16px;">${esc(firstText)}</strong>`)}
+      ${row(t.series, esc(seriesText))}
+      ${row(t.duration, esc(minutesToText(d.minutesPerVisit, d.locale)))}
+      ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
+      ${cycleRowsHtml(d)}
+      ${row(t.ref, `<code style="font-family:monospace;letter-spacing:0.06em;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  ${note(t.cycleNote(d.perCycle))}
+  ${d.feePerVisitCents > 0 ? note(t.travelNote(fee)) : ""}
+  ${note(t.arrival)}
+  <tr><td style="padding:24px 40px 0;font-family:Helvetica,Arial,sans-serif;">
+    <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:10px;">${esc(t.upcoming)}</div>
+    <p style="margin:0;font-size:14px;line-height:1.9;color:${MUTED};">${next.map(esc).join("<br>")}</p>
+  </td></tr>
+  <tr><td style="padding:28px 40px 34px;text-align:center;">${button(d.manageUrl, t.manage)}
+    <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};">${esc(t.rule)}</p>
+  </td></tr>`;
+
+  const text = [
+    T[d.locale].hi(d.clientName.split(" ")[0]), "", t.intro, "",
+    `${t.plan}: ${d.planName}`,
+    `${t.rhythmLabel}: ${slot}, ${t.rhythm(d.everyWeeks)}`,
+    `${t.first}: ${firstText}`,
+    `${t.series}: ${seriesText}`,
+    `${t.duration}: ${minutesToText(d.minutesPerVisit, d.locale)}`,
+    `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
+    ...cycleRowsText(d),
+    `${t.ref}: ${d.ref}`, "",
+    t.cycleNote(d.perCycle),
+    d.feePerVisitCents > 0 ? t.travelNote(fee) : "",
+    t.arrival, "",
+    `${t.upcoming}:`, ...next.map((x) => `  · ${x}`), "",
+    `${t.manage}: ${d.manageUrl}`, "", t.rule, "",
+    `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
+  ].filter((x) => x !== null).join("\n");
+
+  return { subject: t.subject(d.planName, d.ref), html: shell(inner, `${slot} — ${d.ref}`, d.businessEmail), text };
+}
+
+/** La fiche de l'artisan pour un nouvel abonnement. */
+export function subscriptionOwnerNotification(d: SubscriptionEmailData, byOwner = false) {
+  const first = d.visits[0];
+  const last = d.visits[d.visits.length - 1];
+  const fr = { ...d, locale: "fr" as const };
+  const slot = slotPhrase(first, d.timezone, "fr");
+  const maps = `https://maps.google.com/?q=${encodeURIComponent(`${d.address}, ${d.city}, QC ${d.postalCode}`)}`;
+  const intro = byOwner
+    ? "L'abonnement que vous venez d'entrer est en place, et ses visites sont dans votre agenda."
+    : "Un nouvel abonnement vient d'être pris sur le site. Ses visites sont dans votre agenda.";
+
+  const inner = `
+  <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:${MUTED};">${esc(intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row("Client", `<strong>${esc(d.clientName)}</strong>`)}
+      ${row("Téléphone", `<a href="tel:${esc(d.clientPhone.replace(/[^\d+]/g, ""))}" style="color:${GOLD};text-decoration:none;">${esc(d.clientPhone)}</a>`)}
+      ${row("Courriel", `<a href="mailto:${esc(d.clientEmail)}" style="color:${GOLD};text-decoration:none;">${esc(d.clientEmail)}</a>`)}
+      ${row("Adresse", `<a href="${esc(maps)}" style="color:${GOLD};text-decoration:none;">${esc(`${d.address}, ${d.city} ${d.postalCode}`)}</a>`)}
+      ${row("Formule", `<strong>${esc(d.planName)}</strong>`)}
+      ${row("Rythme", esc(`${slot}, ${S.fr.rhythm(d.everyWeeks)}`))}
+      ${row("Première visite", esc(formatDateTime(first, d.timezone, "fr")))}
+      ${row("Série", esc(S.fr.seriesValue(d.visits.length, dayOf(last, d.timezone, "fr"))))}
+      ${cycleRowsHtml(fr)}
+      ${d.notes ? row("Précisions du client", esc(d.notes)) : ""}
+      ${row("Référence", `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  <tr><td style="padding:26px 40px 34px;text-align:center;">${button(`${d.siteUrl}/admin`, "Ouvrir le tableau de bord")}</td></tr>`;
+
+  const text = [
+    intro, "",
+    `Client : ${d.clientName}`, `Téléphone : ${d.clientPhone}`, `Courriel : ${d.clientEmail}`,
+    `Adresse : ${d.address}, ${d.city} ${d.postalCode}`,
+    `Formule : ${d.planName}`, `Rythme : ${slot}, ${S.fr.rhythm(d.everyWeeks)}`,
+    `Première visite : ${formatDateTime(first, d.timezone, "fr")}`,
+    `Série : ${S.fr.seriesValue(d.visits.length, dayOf(last, d.timezone, "fr"))}`,
+    ...cycleRowsText(fr),
+    d.notes ? `Précisions du client : ${d.notes}` : "",
+    `Référence : ${d.ref}`, "", `${d.siteUrl}/admin`,
+  ].filter(Boolean).join("\n");
+
+  return {
+    subject: `${byOwner ? "Abonnement entré" : "Nouvel abonnement"} — ${d.clientName} · ${d.planName}`,
+    html: shell(inner, `${d.clientName} — ${d.planName}`, d.businessEmail),
+    text,
+  };
+}
+
+/**
+ * Le rappel de la veille.
+ *
+ * Celui de la première visite d'un cycle dit ce qui se paie, et combien : le
+ * client ne doit pas l'apprendre à la porte.
+ */
+export function visitReminder(d: VisitEmailData, today = false) {
+  const t = S[d.locale];
+  const when = formatDateTime(d.startsAt, d.timezone, d.locale);
+  const total = formatMoney(d.totalCents, d.currency, d.locale);
+  const shortWhen = today ? (d.locale === "en" ? "today" : "aujourd'hui") : (d.locale === "en" ? "tomorrow" : "demain");
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, today ? t.reminderToday : t.reminderIntro, d.locale)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(t.when, `<strong style="font-size:16px;">${esc(when)}</strong>`)}
+      ${row(t.plan, esc(d.planName))}
+      ${row(t.visit, esc(t.visitValue(d.index, d.perCycle, d.cycle)))}
+      ${row(t.duration, esc(minutesToText(d.minutesPerVisit, d.locale)))}
+      ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
+      ${d.paymentDue ? cycleRowsHtml(d) : ""}
+    </table>
+  </td></tr>
+  ${d.paymentDue ? note(t.paymentNote(d.cycle, total)) : ""}
+  ${note(t.arrival)}
+  <tr><td style="padding:28px 40px 34px;text-align:center;">${button(d.manageUrl, t.manage)}
+    <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};">${esc(today ? t.tooLateNote : t.stillTime)}</p>
+  </td></tr>`;
+
+  const text = [
+    T[d.locale].hi(d.clientName.split(" ")[0]), "", today ? t.reminderToday : t.reminderIntro, "",
+    `${t.when}: ${when}`, `${t.plan}: ${d.planName}`,
+    `${t.visit}: ${t.visitValue(d.index, d.perCycle, d.cycle)}`,
+    `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
+    ...(d.paymentDue ? ["", ...cycleRowsText(d), t.paymentNote(d.cycle, total)] : []),
+    "", t.arrival, "", `${t.manage}: ${d.manageUrl}`, today ? t.tooLateNote : t.stillTime, "",
+    `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
+  ].join("\n");
+
+  return { subject: t.reminderSubject(shortWhen), html: shell(inner, when, d.businessEmail), text };
+}
+
+/** Ce que reçoit le client quand une visite est annulée ou déplacée. */
+export function visitChanged(d: VisitEmailData, change: VisitChange) {
+  const t = S[d.locale];
+  const when = formatDateTime(d.startsAt, d.timezone, d.locale);
+  let rows: string;
+  let lines: string[];
+  let intro: string;
+  let subject: string;
+  if (change.kind === "cancelled") {
+    const repl = change.replacement ? formatDateTime(change.replacement, d.timezone, d.locale) : null;
+    intro = `${t.cancelledIntro} ${repl ? t.replaced(repl) : t.notReplaced}`;
+    subject = t.cancelledSubject(dayOf(d.startsAt, d.timezone, d.locale));
+    rows = row(t.when, `<span style="text-decoration:line-through;">${esc(when)}</span>`)
+      + (repl ? row(t.to, `<strong>${esc(repl)}</strong>`) : "");
+    lines = [`${t.when}: ${when}`, ...(repl ? [`${t.to}: ${repl}`] : [])];
+  } else {
+    const from = formatDateTime(change.from, d.timezone, d.locale);
+    intro = t.movedIntro;
+    subject = t.movedSubject(dayOf(d.startsAt, d.timezone, d.locale));
+    rows = row(t.from, `<span style="text-decoration:line-through;">${esc(from)}</span>`) + row(t.to, `<strong>${esc(when)}</strong>`);
+    lines = [`${t.from}: ${from}`, `${t.to}: ${when}`];
+  }
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, intro, d.locale)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(t.plan, esc(d.planName))}
+      ${rows}
+    </table>
+  </td></tr>
+  <tr><td style="padding:28px 40px 34px;text-align:center;">${button(d.manageUrl, t.manage)}</td></tr>`;
+
+  const text = [
+    T[d.locale].hi(d.clientName.split(" ")[0]), "", intro, "",
+    `${t.plan}: ${d.planName}`, ...lines, "", `${t.manage}: ${d.manageUrl}`, "",
+    `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
+  ].join("\n");
+
+  return { subject, html: shell(inner, intro, d.businessEmail), text };
+}
+
+/** L'artisan est prévenu de ce que le client a changé lui-même. */
+export function ownerVisitChanged(d: VisitEmailData, change: VisitChange) {
+  const when = formatDateTime(d.startsAt, d.timezone, "fr");
+  const lines = change.kind === "cancelled"
+    ? [
+        `${d.clientName} a annulé sa visite du ${when} (visite ${d.index}/${d.perCycle} du cycle ${d.cycle}).`,
+        change.replacement
+          ? `Une visite de remplacement est posée en fin de série : ${formatDateTime(change.replacement, d.timezone, "fr")}.`
+          : "Aucun créneau libre n'a été trouvé en fin de série : la visite est à replacer depuis l'onglet Abonnés.",
+      ]
+    : [
+        `${d.clientName} a déplacé une visite.`,
+        `Ancienne date : ${formatDateTime(change.from, d.timezone, "fr")}`,
+        `Nouvelle date : ${when}`,
+      ];
+
+  const inner = `
+  <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${lines.map((l) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${MUTED};">${esc(l)}</p>`).join("")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row("Formule", esc(d.planName))}
+      ${row("Téléphone", esc(d.clientPhone))}
+      ${row("Adresse", esc(`${d.address}, ${d.city} ${d.postalCode}`))}
+    </table>
+  </td></tr>
+  <tr><td style="padding:26px 40px 34px;text-align:center;">${button(`${d.siteUrl}/admin`, "Ouvrir le tableau de bord")}</td></tr>`;
+
+  return {
+    subject: `${change.kind === "cancelled" ? "Visite annulée" : "Visite déplacée"} — ${d.clientName} · ${d.planName}`,
+    html: shell(inner, lines[0], d.businessEmail),
+    text: [...lines, "", `Formule : ${d.planName}`, `Téléphone : ${d.clientPhone}`, "", `${d.siteUrl}/admin`].join("\n"),
+  };
+}
+
+/** La fin d'un abonnement, et les visites qu'elle retire. */
+export function subscriptionEnded(d: SubscriptionEmailData, removed: Date[]) {
+  const t = S[d.locale];
+  const list = removed.map((v) => formatDateTime(v, d.timezone, d.locale));
+  const inner = `
+  <tr><td style="padding:36px 40px 30px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, t.endedIntro, d.locale)}
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.9;color:${MUTED};text-decoration:line-through;">${list.map(esc).join("<br>")}</p>
+    <p style="margin:0;font-size:14px;color:${MUTED};">${esc(t.endedBye)}</p>
+  </td></tr>`;
+  const text = [T[d.locale].hi(d.clientName.split(" ")[0]), "", t.endedIntro, ...list.map((x) => `  · ${x}`), "", t.endedBye].join("\n");
+  return { subject: t.endedSubject, html: shell(inner, t.endedIntro, d.businessEmail), text };
+}
+
+/**
+ * Le courriel de l'artisan, une semaine avant la dernière visite d'une série.
+ *
+ * Après la première série : faut-il poser la seconde, au même tarif, ou
+ * quelque chose change-t-il ? Après la seconde : les douze mois se terminent,
+ * c'est le moment de proposer le renouvellement.
+ */
+export function seriesNotice(d: SubscriptionEmailData, o: { series: number; lastAt: Date; termEnds: boolean }) {
+  const last = formatDateTime(o.lastAt, d.timezone, "fr");
+  const lines = o.termEnds
+    ? [
+        `Les douze mois de l'abonnement de ${d.clientName} se terminent : sa dernière visite a lieu le ${last}.`,
+        "C'est le moment de lui proposer le renouvellement. Le tarif garanti s'arrête avec cette visite.",
+      ]
+    : [
+        `La série ${o.series} de l'abonnement de ${d.clientName} se termine : sa dernière visite a lieu le ${last}.`,
+        "La réservation est-elle confirmée pour la série suivante, au même tarif, ou y a-t-il un changement ? Confirmez avec le client, puis posez la série depuis l'onglet Abonnés.",
+      ];
+  const inner = `
+  <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${lines.map((l) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${MUTED};">${esc(l)}</p>`).join("")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row("Formule", esc(d.planName))}
+      ${row("Rythme", esc(`${slotPhrase(d.visits[0] ?? o.lastAt, d.timezone, "fr")}, ${S.fr.rhythm(d.everyWeeks)}`))}
+      ${row("Téléphone", `<a href="tel:${esc(d.clientPhone.replace(/[^\d+]/g, ""))}" style="color:${GOLD};text-decoration:none;">${esc(d.clientPhone)}</a>`)}
+      ${row("Courriel", esc(d.clientEmail))}
+      ${row("Référence", `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  <tr><td style="padding:26px 40px 34px;text-align:center;">${button(`${d.siteUrl}/admin`, "Ouvrir l'onglet Abonnés")}</td></tr>`;
+  return {
+    subject: o.termEnds
+      ? `Fin des douze mois — ${d.clientName} · ${d.planName}`
+      : `Fin de la série ${o.series} — ${d.clientName} · ${d.planName}`,
+    html: shell(inner, lines[0], d.businessEmail),
+    text: [...lines, "", `Formule : ${d.planName}`, `Téléphone : ${d.clientPhone}`, `Courriel : ${d.clientEmail}`, "", `${d.siteUrl}/admin`].join("\n"),
+  };
+}

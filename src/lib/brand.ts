@@ -17,6 +17,10 @@ export const FALLBACK_EMAIL = "styve1885@gmail.com";
  * renvoie au téléphone. Cette constante est la seule source : le garde-fou
  * `canSelfCancel`, les courriels, la foire aux questions et les conditions
  * d'utilisation la lisent tous ici. La changer les change tous ensemble.
+ *
+ * Elle ne vaut que pour les séances ponctuelles. Une visite d'abonnement
+ * s'annule ou se déplace jusqu'à 23 h 59 la veille : voir `changeDeadline`
+ * dans cycles.ts.
  */
 export const CANCEL_WINDOW_HOURS = 2;
 
@@ -65,3 +69,42 @@ export function contactEmail(settings?: Pick<Settings, "ownerEmail"> | null): st
 export function contactEmailHref(settings?: Pick<Settings, "ownerEmail"> | null): string {
   return `mailto:${contactEmail(settings)}`;
 }
+
+/* ============================ Abonnements ============================ */
+
+/**
+ * Une série d'abonnement compte six cycles, et douze mois en font deux.
+ *
+ * Un « mois » d'abonnement n'est pas un mois civil : c'est un cycle de
+ * visites réellement effectuées — quatre, deux ou une selon la formule. La
+ * série est posée d'un coup dans l'agenda ; la seconde l'est sur décision de
+ * l'artisan, prévenu `SERIES_NOTICE_DAYS` jours avant la dernière visite de
+ * la première. Le tarif tient pour les deux.
+ */
+export const SERIES_CYCLES = 6;
+export const TERM_SERIES = 2;
+
+/** Un cycle doit se terminer dans ce délai après sa première visite, sinon l'artisan est alerté. */
+export const CYCLE_MAX_WEEKS = 8;
+
+/** Le courriel de l'artisan part ce nombre de jours avant la dernière visite d'une série. */
+export const SERIES_NOTICE_DAYS = 7;
+
+/** L'alerte de renouvellement s'allume ce nombre de jours avant la fin des douze mois. */
+export const TERM_ALERT_DAYS = 30;
+
+/**
+ * Réduction des frais de déplacement pour un abonné, par visite, en cents.
+ *
+ * Elle porte sur les frais de la zone et de la durée de la visite, sans
+ * jamais les faire passer sous zéro : une adresse sans frais ne reçoit rien
+ * en retour.
+ */
+export const SUBSCRIBER_TRAVEL_DISCOUNT_CENTS = 500;
+
+/**
+ * Une visite annulée est remplacée en fin de série, au même jour et à la
+ * même heure. Si ce créneau est pris, on essaie les suivants du même
+ * rythme, jusqu'à ce nombre ; au-delà, l'artisan la replace à la main.
+ */
+export const MAKEUP_SEARCH_STEPS = 8;
