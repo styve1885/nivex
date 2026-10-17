@@ -35,33 +35,39 @@ console.log("\nLes vingt secteurs du profil Google");
 test("vingt secteurs, dans l'ordre de la fiche, répartis en A, B et C", () => {
   assert.deepEqual(sectorNames(P, "fr"), [
     "Longueuil", "Saint-Hubert", "Greenfield Park", "Saint-Lambert", "Brossard", "Boucherville",
-    "Saint-Bruno-de-Montarville", "Sainte-Julie", "Varennes", "Chambly", "La Prairie", "Candiac",
+    "Saint-Bruno-de-Montarville", "Sainte-Julie", "Varennes", "La Prairie", "Candiac",
     "L'Île-des-Sœurs", "Verdun", "Vieux-Montréal", "Westmount", "Outremont",
-    "Centre-ville de Montréal", "Le Plateau-Mont-Royal",
+    "Centre-ville de Montréal", "Le Plateau-Mont-Royal", "Chambly",
     "Saint-Jean-sur-Richelieu",
   ]);
   const parZone = (k) => P.sectors.filter((s) => s.zoneKey === k).length;
-  assert.equal(parZone("a"), 12);
-  assert.equal(parZone("b"), 7);
+  assert.equal(parZone("a"), 11);
+  assert.equal(parZone("b"), 8);
   assert.equal(parZone("c"), 1);
 });
 
 test("chaque préfixe tombe dans sa zone", () => {
   const attendu = {
     a: ["J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N", "J3Y", "J3Z", "J4T", "J4V", "J4P", "J4R", "J4S",
-        "J4W", "J4X", "J4Y", "J4Z", "J4B", "J3V", "J3E", "J3X", "J3L", "J5R"],
+        "J4W", "J4X", "J4Y", "J4Z", "J4B", "J3V", "J3E", "J3X", "J5R"],
     b: ["H3E", "H4G", "H4H", "H2Y", "H3Y", "H3Z", "H2V", "H3A", "H3B", "H3G", "H3H",
-        "H3C", "H2Z", "H2L", "H2X", "H2J", "H2T", "H2W", "H2H"],
+        "H3C", "H2Z", "H2L", "H2X", "H2J", "H2T", "H2W", "H2H", "J3L"],
     c: ["J2W", "J2X", "J2Y", "J3A", "J3B"],
   };
   for (const [zone, codes] of Object.entries(attendu)) {
     for (const code of codes) assert.equal(evaluateZone(`${code} 1A1`, COURT, P).zoneKey, zone, `${code} devrait être en zone ${zone.toUpperCase()}`);
   }
-  assert.equal(activePrefixes(P).length, 24 + 19 + 5, "aucun préfixe en trop, aucun oublié");
+  assert.equal(activePrefixes(P).length, 23 + 20 + 5, "aucun préfixe en trop, aucun oublié");
 });
 
 test("la grille par défaut ne pose aucun problème, et aucun préfixe dans deux zones", () => {
   assert.deepEqual(policyProblems(P), []);
+});
+
+test("J3L — Chambly, et Carignan avec elle — paie les frais de la zone B", () => {
+  assert.equal(evaluateZone("J3L 1A1", COURT, P).zoneKey, "b");
+  assert.equal(evaluateZone("J3L 1A1", COURT, P).feeCents, 1500);
+  assert.equal(evaluateZone("J3L 1A1", LONG, P).feeCents, 1000);
 });
 
 test("J5R, partagé par La Prairie et Candiac, reste en zone A", () => {
@@ -188,17 +194,23 @@ test("une zone créée prend ses propres tarifs", () => {
 
 test("un préfixe dans deux zones est refusé, en nommant les deux secteurs", () => {
   const p = clone(P);
-  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: true });
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "a", enabled: true });
   const pb = policyProblems(p);
   assert.equal(pb.length, 1);
-  assert.match(pb[0], /J3L est dans deux zones à la fois : Chambly \(Zone A\) et Carignan \(Zone B\)/);
+  assert.match(pb[0], /J3L est dans deux zones à la fois : Chambly \(Zone B\) et Carignan \(Zone A\)/);
 });
 
 test("le même conflit est toléré tant que l'un des deux secteurs est inactif", () => {
   const p = clone(P);
-  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: false });
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "a", enabled: false });
   assert.deepEqual(policyProblems(p), []);
-  assert.equal(evaluateZone("J3L 1A1", COURT, p).zoneKey, "a");
+  assert.equal(evaluateZone("J3L 1A1", COURT, p).zoneKey, "b");
+});
+
+test("Carignan peut s'ajouter en zone B, à côté de Chambly", () => {
+  const p = clone(P);
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: true });
+  assert.deepEqual(policyProblems(p), [], "même préfixe, même zone : permis");
 });
 
 test("préfixe mal formé, secteur sans nom, zone disparue : refusés", () => {
@@ -277,12 +289,12 @@ console.log("\nLe texte public, la liste pour Google, le tableau des frais");
 test("la phrase de la zone nomme les secteurs actifs, en français et en anglais", () => {
   const f = servedText(P, "fr", fr.zoneText);
   assert.ok(f.startsWith("Secteurs desservis : Longueuil, Saint-Hubert,"));
-  assert.ok(f.endsWith("Le Plateau-Mont-Royal et Saint-Jean-sur-Richelieu."));
+  assert.ok(f.endsWith("Le Plateau-Mont-Royal, Chambly et Saint-Jean-sur-Richelieu."));
   const e = servedText(P, "en", en.zoneText);
   assert.match(e, /^Areas served: Longueuil, /);
   assert.match(e, /Nuns' Island/);
   assert.match(e, /Downtown Montreal/);
-  assert.ok(e.endsWith("Plateau-Mont-Royal and Saint-Jean-sur-Richelieu."));
+  assert.ok(e.endsWith("Plateau-Mont-Royal, Chambly and Saint-Jean-sur-Richelieu."));
 });
 
 test("aucun point d'exclamation dans les textes générés", () => {
@@ -297,7 +309,8 @@ test("la liste pour Google : un secteur actif par ligne, dans l'ordre", () => {
   const l = googleList(P).split("\n");
   assert.equal(l.length, 20);
   assert.equal(l[0], "Longueuil");
-  assert.equal(l[11], "Candiac");
+  assert.equal(l[10], "Candiac");
+  assert.equal(l[18], "Chambly");
   assert.equal(l[19], "Saint-Jean-sur-Richelieu");
   const p = clone(P);
   p.sectors.find((s) => s.key === "candiac").enabled = false;
@@ -309,7 +322,8 @@ test("le tableau des frais montre chaque zone, ses secteurs et ses deux tarifs",
   const rows = feeTable(P, "fr", money);
   assert.deepEqual(rows.map((r) => r.zone), ["Zone A", "Zone B", "Zone C"]);
   assert.equal(rows[0].free, true);
-  assert.equal(rows[0].sectors.length, 12);
+  assert.equal(rows[0].sectors.length, 11);
+  assert.equal(rows[1].sectors.at(-1), "Chambly");
   assert.deepEqual({ short: rows[1].short, long: rows[1].long, threshold: rows[1].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
   assert.deepEqual(rows[2].sectors, ["Saint-Jean-sur-Richelieu"]);
   assert.equal(feeTable(P, "en", money)[1].threshold, "3 hours");
