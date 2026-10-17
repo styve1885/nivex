@@ -55,7 +55,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le téléphone reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous ; répondez STOP à l'un de ces textos pour ne plus en recevoir.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le téléphone reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous ; répondez STOP à l'un de ces textos pour ne plus en recevoir. Si vous répondez autrement, votre réponse est transmise au cellulaire de l'artisan ; le site ne la conserve pas.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",

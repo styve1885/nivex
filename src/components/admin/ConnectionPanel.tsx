@@ -220,6 +220,17 @@ export function ConnectionPanel({
             {smsTest.reason && <p className="mt-1 break-words">{smsTest.reason}</p>}
           </div>
         )}
+        {env.sms && (
+          <div className="mt-6 border-t border-gold-300/30 pt-5 text-[0.82rem] leading-relaxed text-ink-500">
+            <p className="text-ink-700">Les réponses de vos clients</p>
+            <p className="mt-1">
+              Pour qu&apos;une réponse à vos textos arrive sur votre cellulaire, ouvrez votre numéro dans la console
+              Twilio, section « Messaging », et réglez « A message comes in » sur « Webhook », méthode HTTP POST,
+              avec cette adresse :
+            </p>
+            <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/sms/incoming</code>
+          </div>
+        )}
       </section>
 
       {/* — Diagnostic — */}

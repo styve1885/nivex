@@ -3,8 +3,24 @@
 import { useState } from "react";
 import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
 import type { FeeZone } from "@/lib/travel";
+import { ServiceIcon } from "../Icons";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+
+/* Les pictogrammes disponibles pour une prestation : ceux que le site sait dessiner. */
+const ICON_CHOICES = [
+  { key: "shirt", label: "Chemise" },
+  { key: "dress", label: "Robe" },
+  { key: "suit", label: "Costume" },
+  { key: "badge", label: "Pantalon" },
+  { key: "linen", label: "Linge de maison" },
+  { key: "clock", label: "Ensemble" },
+];
+
+/* Les prestations du code reviennent d'elles-mêmes si on les retire de la
+   liste (mergeServices) : elles se désactivent plutôt. Celles ajoutées depuis
+   cet écran, elles, peuvent se retirer pour de bon. */
+const DEFAULT_KEYS = new Set(DEFAULT_SERVICES.map((d) => d.key));
 
 export function SettingsPanel({ initial }: { initial: Settings }) {
   const [s, setS] = useState<Settings>(initial);
@@ -23,6 +39,17 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
 
   function setService(key: string, next: Partial<ServiceItem>) {
     patch("services", s.services.map((x) => (x.key === key ? { ...x, ...next } : x)));
+  }
+
+  function addService() {
+    const key = `p-${Date.now().toString(36)}`;
+    patch("services", [...s.services, {
+      key, icon: "shirt", fr: "", en: "", minutesPerUnit: 10, unitFr: "pièce", unitEn: "piece", enabled: true,
+    }]);
+  }
+
+  function removeService(key: string) {
+    patch("services", s.services.filter((x) => x.key !== key));
   }
 
   function setZone(key: string, next: Partial<FeeZone>) {
@@ -84,6 +111,18 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
   }
 
   async function save() {
+    /* Une prestation sans nom ne peut pas s'afficher dans le tunnel. Le nom
+       anglais et l'unité anglaise reprennent le français s'ils sont vides. */
+    if (s.services.some((x) => !x.fr.trim())) {
+      setError("Donnez un nom en français à chaque prestation avant d'enregistrer.");
+      return;
+    }
+    const services = s.services.map((x) => ({
+      ...x,
+      fr: x.fr.trim(), en: x.en.trim() || x.fr.trim(),
+      unitFr: x.unitFr.trim() || "pièce", unitEn: x.unitEn.trim() || x.unitFr.trim() || "piece",
+    }));
+    setS((cur) => ({ ...cur, services }));
     setSaving(true);
     setError(null);
     try {
@@ -94,7 +133,7 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
           hourlyRate: s.hourlyRate, currency: s.currency, minMinutes: s.minMinutes,
           bufferMinutes: s.bufferMinutes, leadHours: s.leadHours, horizonDays: s.horizonDays,
           slotStep: s.slotStep, firstHourFree: s.firstHourFree, paused: s.paused,
-          hours: s.hours, services: s.services, serviceArea: s.serviceArea,
+          hours: s.hours, services, serviceArea: s.serviceArea,
           zonePolicy: s.zonePolicy,
           businessName: s.businessName, timezone: s.timezone,
         }),
@@ -102,8 +141,10 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setError(data.error === "invalid_input"
-          ? "Certaines valeurs sont invalides — vérifiez les heures d'ouverture."
-          : "L'enregistrement a échoué.");
+          ? "Certaines valeurs sont invalides — vérifiez les heures d'ouverture et les prestations."
+          : data.error === "duplicate_service_key"
+            ? "Deux prestations portent la même clé. Retirez la dernière ajoutée et recommencez."
+            : "L'enregistrement a échoué.");
         return;
       }
       setSaved(true);
@@ -219,21 +260,46 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
         )}
         <ul className="divide-y divide-gold-300/30">
           {s.services.map((x) => (
-            <li key={x.key} className="flex flex-wrap items-center gap-4 py-3.5">
-              <Toggle checked={x.enabled} onChange={(v) => setService(x.key, { enabled: v })} small />
-              <input value={x.fr} onChange={(e) => setService(x.key, { fr: e.target.value })}
-                className="field !w-auto min-w-[10rem] flex-1 !py-2 !px-3 text-sm" aria-label={`Nom français — ${x.key}`} />
-              <input value={x.en} onChange={(e) => setService(x.key, { en: e.target.value })}
-                className="field !w-auto min-w-[10rem] flex-1 !py-2 !px-3 text-sm text-ink-500" aria-label={`Nom anglais — ${x.key}`} />
-              <div className="flex items-center gap-2">
+            <li key={x.key} className="space-y-2.5 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Toggle checked={x.enabled} onChange={(v) => setService(x.key, { enabled: v })} small />
+                <ServiceIcon name={x.icon} className="h-5 w-5 flex-none text-gold-600" />
+                <input value={x.fr} onChange={(e) => setService(x.key, { fr: e.target.value })} placeholder="Nom (français)"
+                  className="field !w-auto min-w-[10rem] flex-1 !py-2 !px-3 text-sm" aria-label={`Nom français — ${x.key}`} />
+                <input value={x.en} onChange={(e) => setService(x.key, { en: e.target.value })} placeholder="Nom (anglais)"
+                  className="field !w-auto min-w-[10rem] flex-1 !py-2 !px-3 text-sm text-ink-500" aria-label={`Nom anglais — ${x.key}`} />
+              </div>
+              <div className="flex flex-wrap items-center gap-3 sm:pl-[3.25rem]">
                 <input type="number" min={1} max={600} value={x.minutesPerUnit}
-                  onChange={(e) => setService(x.key, { minutesPerUnit: Math.max(1, Number(e.target.value) || 1) })}
+                  onChange={(e) => setService(x.key, { minutesPerUnit: Math.max(1, Math.min(600, Number(e.target.value) || 1)) })}
                   className="field !w-20 !py-2 !px-3 text-center text-sm tabular-nums" aria-label={`Minutes par unité — ${x.key}`} />
-                <span className="text-[11px] text-ink-400">min / {x.unitFr}</span>
+                <span className="text-[11px] text-ink-400">min par</span>
+                <input value={x.unitFr} onChange={(e) => setService(x.key, { unitFr: e.target.value })} placeholder="unité"
+                  className="field !w-24 !py-2 !px-3 text-sm" aria-label={`Unité en français — ${x.key}`} />
+                <input value={x.unitEn} onChange={(e) => setService(x.key, { unitEn: e.target.value })} placeholder="unit"
+                  className="field !w-24 !py-2 !px-3 text-sm text-ink-500" aria-label={`Unité en anglais — ${x.key}`} />
+                <select value={x.icon} onChange={(e) => setService(x.key, { icon: e.target.value })}
+                  className="field !w-auto !py-2 !px-3 text-sm" aria-label={`Pictogramme — ${x.key}`}>
+                  {ICON_CHOICES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+                {!DEFAULT_KEYS.has(x.key) && (
+                  <button type="button" onClick={() => removeService(x.key)}
+                    className="text-[10px] uppercase tracking-[0.14em] text-ink-400 underline decoration-gold-300 underline-offset-4 hover:text-[#8E332C]">
+                    Retirer
+                  </button>
+                )}
               </div>
             </li>
           ))}
         </ul>
+        <button type="button" onClick={addService}
+          className="mt-4 border border-gold-400/70 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-gold-700 transition-colors hover:bg-linen-100">
+          Ajouter une prestation
+        </button>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
+          Une prestation ajoutée apparaît dans le formulaire de réservation et dans la cadence de la page Tarifs dès
+          l&apos;enregistrement. Celles d&apos;origine ne se retirent pas : désactivez-les avec l&apos;interrupteur.
+        </p>
       </Card>
 
       {/* — Texte de la zone desservie —

@@ -43,7 +43,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. Your phone also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. Your phone also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Any other reply is passed on to the artisan's mobile phone; the site does not keep it.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",

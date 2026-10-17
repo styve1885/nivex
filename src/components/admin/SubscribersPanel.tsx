@@ -146,7 +146,7 @@ function startsWithin(iso: string, ms: number): boolean {
   return new Date(iso).getTime() <= Date.now() + ms;
 }
 
-async function act(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; replacement?: string | null }> {
+async function act(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; replacement?: string | null; cents?: number }> {
   try {
     const res = await fetch("/api/admin/subscriptions", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -173,6 +173,7 @@ function SubscriptionCard({ s, when, onChange }: {
   const [renewConflicts, setRenewConflicts] = useState<Conflict[] | null>(null);
   const [confirming, setConfirming] = useState<"end" | "delete" | null>(null);
   const [place, setPlace] = useState({ date: "", time: "" });
+  const [fee, setFee] = useState(String(s.feePerVisitCents / 100));
   const ended = s.status === "ended";
 
   async function run(key: string, body: Record<string, unknown>, ok?: string) {
@@ -188,6 +189,7 @@ function SubscriptionCard({ s, when, onChange }: {
       setMsg(ok ?? null);
       setRenewConflicts(null);
       setConfirming(null);
+      if (typeof d.cents === "number") setFee(String(d.cents / 100));
     }
     await onChange();
   }
@@ -244,6 +246,36 @@ function SubscriptionCard({ s, when, onChange }: {
                 </button>
               )}
             </Line>
+            {!ended && (
+              <Line label="Frais par visite">
+                <span className="flex flex-wrap items-center gap-2">
+                  <input type="number" min={0} step={1} value={fee} onChange={(e) => setFee(e.target.value)}
+                    aria-label="Frais de déplacement par visite, en dollars"
+                    className="field !w-24 !py-1.5 !px-2 text-center text-sm tabular-nums" />
+                  <span className="text-[0.8rem] text-ink-400">$</span>
+                  <button type="button" disabled={busy === "fee" || !(Number(fee) >= 0)}
+                    onClick={() => run("fee", { action: "fee", id: s.id, cents: Math.round(Number(fee) * 100) }, "Frais enregistrés.")}
+                    className="border border-gold-400/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
+                    Enregistrer
+                  </button>
+                  {s.feePerVisitCents > 0 && (
+                    <button type="button" disabled={busy === "fee"}
+                      onClick={() => { setFee("0"); run("fee", { action: "fee", id: s.id, cents: 0 }, "Frais de déplacement offerts à cet abonné."); }}
+                      className="text-[10px] uppercase tracking-[0.14em] text-ink-500 underline decoration-gold-300 underline-offset-4 disabled:opacity-40">
+                      Mettre à 0 $
+                    </button>
+                  )}
+                  <button type="button" disabled={busy === "fee"}
+                    onClick={() => run("fee", { action: "fee", id: s.id, cents: "zone" }, "Frais de la zone rétablis.")}
+                    className="text-[10px] uppercase tracking-[0.14em] text-ink-400 underline decoration-gold-300 underline-offset-4 disabled:opacity-40">
+                    Frais de la zone
+                  </button>
+                </span>
+                <span className="mt-1 block text-[0.74rem] text-ink-400">
+                  S&apos;applique au cycle en cours s&apos;il n&apos;est pas encore payé, et aux suivants.
+                </span>
+              </Line>
+            )}
             <Line label="Fin des 12 mois">
               {s.termEndsAt ? when(s.termEndsAt, false) : "—"}
               <span className="ml-2 text-[0.76rem] text-ink-400">série {s.latestSeries} posée</span>

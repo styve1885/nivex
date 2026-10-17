@@ -19,7 +19,7 @@ import { cleanOrigin, hydrate, occupiedBlock, type Booking } from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
 import {
-  canSubscriberChange, cycleAmount, gridDate, gridDates, gridFrom, gridIndexAfter, quoteCycle,
+  canSubscriberChange, cycleAmount, gridDate, subscriberFeeCents, gridDates, gridFrom, gridIndexAfter, quoteCycle,
   seriesConflicts, seriesOfCycle, seriesSpanEnd, startOffset, viewSubscription, visitsToEndOfSeries,
   type Grid, type SeriesConflict, type SubscriptionView, type VisitNumber,
 } from "./cycles";
@@ -847,6 +847,37 @@ export async function markDone(visitId: string, done: boolean): Promise<void> {
   } else {
     await sql()`UPDATE nivex_bookings SET done_at = NULL WHERE id = ${visitId} AND subscription_id IS NOT NULL`;
   }
+}
+
+/**
+ * Les frais de déplacement d'un abonné, réglés à la main par l'artisan.
+ *
+ * Un geste commercial — un voisin, un client fidèle — ou le retour aux frais
+ * de sa zone. Le montant figé à la souscription est remplacé pour les cycles
+ * à venir et le cycle en cours s'il n'est pas encore réglé ; les rangs de
+ * l'agenda, qui citent le montant à encaisser, sont remis à jour.
+ */
+export async function setTravelFee(subId: string, fee: number | "zone", host?: string | null): Promise<number> {
+  const settings = await getSettings();
+  const full = await findSubscription(subId);
+  if (!full) throw new SubscriptionError("not_found");
+
+  let cents: number;
+  if (fee === "zone") {
+    const verdict = evaluateZone(full.sub.postalCode, full.sub.minutesPerVisit, settings.zonePolicy);
+    cents = subscriberFeeCents(verdict.feeCents);
+  } else {
+    cents = Math.max(0, Math.min(50_000, Math.round(fee)));
+  }
+
+  await sql()`UPDATE nivex_subscriptions SET travel_fee_cents = ${cents} WHERE id = ${subId}`;
+  const at = await ownerAccessToken().catch(() => null);
+  if (at) {
+    const after = (await findSubscription(subId))!;
+    await renumberCalendar(after, at, settings, siteOrigin(host));
+  }
+  await logEvent("subscription_fee_set", { ref: full.sub.ref, from: full.sub.feePerVisitCents, to: cents });
+  return cents;
 }
 
 /** « Paiement reçu » pour un cycle, ou son retrait en cas d'erreur de saisie. */

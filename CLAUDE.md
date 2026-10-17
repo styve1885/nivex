@@ -61,6 +61,10 @@ Les prestations et les réglages vivent **en base**, et la base l'emporte
 sur les valeurs par défaut du code. Changer `DEFAULT_SERVICES` ne suffit
 donc pas en production : il faut aussi enregistrer depuis `/admin`.
 
+L'artisan peut **ajouter des prestations** depuis Réglages (clé `p-…`) et les
+retirer. Celles du code, elles, ne se retirent pas : `mergeServices` les
+ramènerait au prochain chargement ; elles se désactivent.
+
 ## Quelques faits que le texte doit respecter
 
 - Une séance dure **au minimum deux heures**. Il n'existe pas de séance
@@ -158,7 +162,9 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   moins `SUBSCRIBER_TRAVEL_DISCOUNT_CENTS`, jamais sous zéro, multipliés par
   les visites du cycle. Le tout se paie à la première visite du cycle.
   Une visite d'abonné vaut `estimate_cents = 0` ; jamais de première heure
-  offerte.
+  offerte. L'artisan peut changer à la main les frais par visite d'un abonné
+  (0 $, un autre montant, ou retour aux frais de sa zone) depuis l'onglet
+  Abonnés : `setTravelFee`.
 - **Délai : 23 h 59 la veille** (`changeDeadline`), lu en heure de Montréal.
   Les séances ponctuelles gardent `CANCEL_WINDOW_HOURS`.
 - **Agenda** : un événement récurrent par série (RRULE), sans invité ; chaque
@@ -180,6 +186,12 @@ Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
 échouer une réservation, et un compte Google débranché ne l'empêche pas de
 partir. Le rappel par texto se note dans `sms_reminded_at`, à part du
 courriel (`reminder_sent_at`). Une séance ponctuelle n'a que le texto.
+
+Les **réponses des clients** arrivent sur `/api/sms/incoming` (réglage « A
+message comes in » du numéro chez Twilio). La signature `X-Twilio-Signature`
+est vérifiée, le nom du client retrouvé par son numéro, et une instruction
+TwiML fait suivre le message au cellulaire de l'artisan. Rien n'est
+conservé : ni le texte, ni le numéro.
 
 ## Zones et frais de déplacement
 

@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 
-const { toE164, sendSms, smsConfigured, smsWhen, SMS, ownerSmsNumber } = await import("../src/lib/sms.ts");
+const { toE164, sendSms, smsConfigured, smsWhen, SMS, ownerSmsNumber, twilioSignature, twilioSignatureValid, twimlForward, forwardedReply } = await import("../src/lib/sms.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { SETUP_MINUTES } = await import("../src/lib/brand.ts");
 
@@ -111,6 +111,39 @@ await test("avec les clés, le texto part vers Twilio au bon format", async () =
     globalThis.fetch = real;
     delete process.env.TWILIO_ACCOUNT_SID;
   }
+});
+
+await test("la signature suit l'exemple publié par Twilio, au caractère près", () => {
+  const params = { CallSid: "CA1234567890ABCDE", Caller: "+12349013030", Digits: "1234", From: "+12349013030", To: "+18005551212" };
+  assert.equal(twilioSignature("https://mycompany.com/myapp.php?foo=1&bar=2", params, "12345"), "0/KCTR6DLpKmkAf8muzZqo1nDgQ=");
+});
+
+await test("une requête signée par Twilio est reconnue, une requête trafiquée ne l'est pas", () => {
+  const url = "https://nivexrepassage.ca/api/sms/incoming";
+  const params = { From: "+14505550222", To: "+14503676231", Body: "Merci, à mardi", NumMedia: "0" };
+  const sig = twilioSignature(url, params, "jeton");
+  assert.equal(twilioSignatureValid([url], params, sig, "jeton"), true);
+  /* L'ordre d'arrivée des champs ne compte pas : Twilio les trie. */
+  const shuffled = { Body: params.Body, NumMedia: "0", To: params.To, From: params.From };
+  assert.equal(twilioSignatureValid([url], shuffled, sig, "jeton"), true);
+  assert.equal(twilioSignatureValid([url], { ...params, Body: "Autre chose" }, sig, "jeton"), false);
+  assert.equal(twilioSignatureValid([url], params, sig, "autre-jeton"), false);
+  assert.equal(twilioSignatureValid(["https://autre.ca/api/sms/incoming"], params, sig, "jeton"), false);
+  assert.equal(twilioSignatureValid(["https://autre.ca/x", url], params, sig, "jeton"), true);
+  assert.equal(twilioSignatureValid([url], params, null, "jeton"), false);
+});
+
+await test("la réponse d'un client part vers l'artisan, avec son nom et son numéro", () => {
+  const m = forwardedReply({ from: "+14505550222", name: "Marc Essai", body: "Je serai en retard de 10 minutes", media: 0 });
+  assert.equal(m, "NIVEX — réponse de Marc Essai (450 555-0222) : Je serai en retard de 10 minutes");
+  assert.match(forwardedReply({ from: "+14505550222", name: null, body: "Oui", media: 1 }), /^NIVEX — réponse de 450 555-0222 : Oui \[1 pièce jointe/);
+  assert.match(forwardedReply({ from: "+14505550222", name: "Marc", body: "STOP", media: 0 }), /ne recevra plus de textos/);
+  assert.equal(forwardedReply({ from: "+14505550222", name: "Marc", body: "x".repeat(3000), media: 0 }).length < 1100, true);
+});
+
+await test("l'instruction TwiML échappe le texte du client", () => {
+  const x = twimlForward("+14509431217", "Bonjour <b> & \"merci\"");
+  assert.equal(x, '<?xml version="1.0" encoding="UTF-8"?><Response><Message to="+14509431217">Bonjour &lt;b&gt; &amp; &quot;merci&quot;</Message></Response>');
 });
 
 console.log(`\n${n} réussis, 0 échoués\n`);

@@ -9,7 +9,7 @@ import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
   amountOf, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerInstant,
-  placeMakeup, previewSeries, renewSeries, resendSubscription, setPaid, SubscriptionError,
+  placeMakeup, previewSeries, renewSeries, resendSubscription, setPaid, setTravelFee, SubscriptionError,
   type SubscriptionFull,
 } from "@/lib/subscriptions";
 
@@ -88,6 +88,7 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create"), input: OwnerSubscriptionInput }),
   z.object({ action: z.literal("done"), visitId: Id, done: z.boolean() }),
   z.object({ action: z.literal("paid"), id: Id, cycle: z.number().int().min(1).max(100), paid: z.boolean() }),
+  z.object({ action: z.literal("fee"), id: Id, cents: z.union([z.number().int().min(0).max(50_000), z.literal("zone")]) }),
   z.object({ action: z.literal("cancel"), visitId: Id }),
   z.object({ action: z.literal("move"), visitId: Id, ...When }),
   z.object({ action: z.literal("place"), id: Id, ...When }),
@@ -136,6 +137,10 @@ export async function POST(req: NextRequest) {
       case "paid":
         await setPaid(a.id, a.cycle, a.paid);
         return NextResponse.json({ ok: true });
+      case "fee": {
+        const cents = await setTravelFee(a.id, a.cents, host);
+        return NextResponse.json({ ok: true, cents });
+      }
       case "cancel": {
         const v = await findById(a.visitId);
         if (!v?.subscriptionId) throw new SubscriptionError("not_found");
