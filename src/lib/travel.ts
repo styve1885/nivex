@@ -84,8 +84,6 @@ export const DEFAULT_ZONE_POLICY: ZonePolicy = {
     sector("saint-bruno", "Saint-Bruno-de-Montarville", "Saint-Bruno-de-Montarville", "a", ["J3V"]),
     sector("sainte-julie", "Sainte-Julie", "Sainte-Julie", "a", ["J3E"]),
     sector("varennes", "Varennes", "Varennes", "a", ["J3X"]),
-    sector("la-prairie", "La Prairie", "La Prairie", "a", ["J5R"]),
-    sector("candiac", "Candiac", "Candiac", "a", ["J5R"]),
     sector("ile-des-soeurs", "L'Île-des-Sœurs", "Nuns' Island", "b", ["H3E"]),
     sector("verdun", "Verdun", "Verdun", "b", ["H4G", "H4H"]),
     sector("vieux-montreal", "Vieux-Montréal", "Old Montreal", "b", ["H2Y"]),
@@ -94,9 +92,12 @@ export const DEFAULT_ZONE_POLICY: ZonePolicy = {
     sector("centre-ville", "Centre-ville de Montréal", "Downtown Montreal", "b",
       ["H3A", "H3B", "H3G", "H3H", "H3C", "H2Z", "H2L", "H2X"]),
     sector("plateau", "Le Plateau-Mont-Royal", "Plateau-Mont-Royal", "b", ["H2J", "H2T", "H2W", "H2H"]),
-    /* J3L couvre aussi Carignan : les deux villes paient donc les frais de la
-       zone B, le code postal ne permettant pas de les séparer. */
+    /* J3L couvre aussi Carignan, et J5R à la fois Candiac et La Prairie : le
+       code postal ne sépare pas ces villes, qui paient donc ensemble les frais
+       de la zone B. La grille suit celle réglée en production le 17 octobre. */
     sector("chambly", "Chambly", "Chambly", "b", ["J3L"]),
+    sector("candiac", "Candiac", "Candiac", "b", ["J5R"]),
+    sector("la-prairie", "La Prairie", "La Prairie", "b", ["J5R"]),
     sector("saint-jean", "Saint-Jean-sur-Richelieu", "Saint-Jean-sur-Richelieu", "c", ["J2W", "J2X", "J2Y", "J3A", "J3B"]),
   ],
 };

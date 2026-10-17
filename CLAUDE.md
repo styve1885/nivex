@@ -260,7 +260,7 @@ tout cela. **Elle et le code doivent rester d'accord** : si vous changez
 ce qui est collecté ou la durée de conservation, changez-la aussi, et la
 date dans `LEGAL_UPDATED`.
 
-## Trois pièges qui ont déjà coûté cher
+## Quatre pièges qui ont déjà coûté cher
 
 1. **`saveConnection` préserve les colonnes jsonb par `COALESCE`.** Une
    valeur enregistrée ne bouge plus d'elle-même. Changer une valeur par
@@ -272,6 +272,14 @@ date dans `LEGAL_UPDATED`.
 3. **Le mode démonstration** (`NIVEX_DEMO=1`) a un double verrou : la
    variable **et** `VERCEL_ENV !== "production"`. Gardez ce verrou sur
    toute variable d'essai que vous ajouteriez.
+4. **Les déploiements d'essai de Vercel écrivent dans la base de
+   production.** Une branche poussée est construite et servie avec la même
+   `DATABASE_URL` : son `bootstrap()` s'exécute contre la vraie base,
+   avant toute fusion. Le 17 octobre 2026, la bascule des zones s'est
+   ainsi faite depuis la première version de la branche, et la correction
+   poussée ensuite n'a rien changé, puisqu'une grille migrée n'est plus
+   touchée. Une migration de données doit donc être juste dès le premier
+   envoi, ou se rattraper depuis `/admin`.
 
 ## Variables d'environnement
 
