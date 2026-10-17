@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { logEvent } from "./db";
 import { PHONE, SETUP_MINUTES } from "./brand";
 
@@ -134,3 +135,65 @@ export const SMS = {
     moved: (name: string, from: string, to: string) => `NIVEX — ${name} a déplacé sa visite du ${from} au ${to}.`,
   },
 };
+
+/* ============================ Les réponses des clients ============================ */
+
+/**
+ * La signature que Twilio pose sur chaque requête qu'il nous envoie.
+ *
+ * HMAC-SHA1 du jeton d'authentification, sur l'adresse exacte appelée suivie
+ * de chaque paramètre du formulaire, clé puis valeur, triés par clé ; le tout
+ * en base64. Sans elle, n'importe qui pourrait faire parvenir des « réponses »
+ * au téléphone de l'artisan en appelant la route à la main.
+ */
+export function twilioSignature(url: string, params: Record<string, string>, token: string): string {
+  const data = url + Object.keys(params).sort().map((k) => k + params[k]).join("");
+  return createHmac("sha1", token).update(data, "utf8").digest("base64");
+}
+
+export function twilioSignatureValid(
+  urls: string[], params: Record<string, string>, signature: string | null, token: string,
+): boolean {
+  if (!signature || !token) return false;
+  const got = Buffer.from(signature);
+  return urls.some((u) => {
+    const want = Buffer.from(twilioSignature(u, params, token));
+    return want.length === got.length && timingSafeEqual(want, got);
+  });
+}
+
+function xml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
+}
+
+/** Une réponse TwiML vide : Twilio n'envoie rien. */
+export const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+
+/** Une réponse TwiML qui fait partir un texto vers un autre numéro que l'expéditeur. */
+export function twimlForward(to: string, body: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message to="${xml(to)}">${xml(body)}</Message></Response>`;
+}
+
+/** Les mots qui désabonnent chez Twilio : l'artisan doit savoir que ce client n'en recevra plus. */
+const OPT_OUT = /^\s*(stop|stopall|unsubscribe|cancel|end|quit|arret|arrêt)\s*$/i;
+
+/** « +1 450 555 0222 » — lisible sur un téléphone. */
+function readable(e164: string): string {
+  const d = e164.replace(/\D/g, "").slice(-10);
+  return d.length === 10 ? `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}` : e164;
+}
+
+/**
+ * Le texto que reçoit l'artisan quand un client répond.
+ *
+ * Le nom quand on le connaît, le numéro toujours — c'est lui qu'on rappelle.
+ * Le message est tronqué au-delà de mille caractères : un texto en plusieurs
+ * tranches se paie à la tranche.
+ */
+export function forwardedReply(o: { from: string; name: string | null; body: string; media: number }): string {
+  const who = o.name ? `${o.name} (${readable(o.from)})` : readable(o.from);
+  const text = o.body.trim().slice(0, 1000) || "(message vide)";
+  const media = o.media > 0 ? ` [${o.media} pièce${o.media > 1 ? "s" : ""} jointe${o.media > 1 ? "s" : ""} — à voir dans la console Twilio]` : "";
+  const stop = OPT_OUT.test(o.body) ? " — ce client ne recevra plus de textos" : "";
+  return `NIVEX — réponse de ${who} : ${text}${media}${stop}`;
+}
