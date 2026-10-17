@@ -222,6 +222,88 @@ export async function deleteEvent(accessToken: string, calendarId: string, event
   }
 }
 
+/* ============================ Séries ============================ */
+
+/**
+ * Un événement récurrent, pour une série d'abonnement.
+ *
+ * Aucun invité : chaque retouche d'une occurrence — un numéro de visite qui
+ * change, une visite déplacée — enverrait sinon un courriel de Google au
+ * client. Il reçoit les nôtres. L'heure de départ porte le fuseau : c'est
+ * lui qui garde 10 h à 10 h de part et d'autre du changement d'heure.
+ */
+export async function createRecurringEvent(
+  accessToken: string,
+  e: Omit<EventInput, "attendeeEmail" | "attendeeName"> & { rrule: string },
+): Promise<{ id: string }> {
+  return api(
+    "events.insert",
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calendarId)}/events?sendUpdates=none`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        summary: e.summary,
+        description: e.description,
+        location: e.location,
+        start: { dateTime: e.start, timeZone: e.timeZone },
+        end: { dateTime: e.end, timeZone: e.timeZone },
+        recurrence: [e.rrule],
+        reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 120 }] },
+        source: { title: "NIVEX", url: siteOrigin() },
+        transparency: "opaque",
+      }),
+    },
+    accessToken,
+  );
+}
+
+export type Instance = { id: string; originalStart: string };
+
+/** Les occurrences d'un événement récurrent, avec leur heure d'origine. */
+export async function listInstances(accessToken: string, calendarId: string, eventId: string): Promise<Instance[]> {
+  const out: Instance[] = [];
+  let page: string | undefined;
+  do {
+    const data = await api<{
+      items?: { id: string; originalStartTime?: { dateTime?: string } }[];
+      nextPageToken?: string;
+    }>(
+      "events.instances",
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}/instances` +
+        `?maxResults=250${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`,
+      { method: "GET" }, accessToken,
+    );
+    for (const i of data.items ?? []) {
+      if (i.originalStartTime?.dateTime) out.push({ id: i.id, originalStart: i.originalStartTime.dateTime });
+    }
+    page = data.nextPageToken;
+  } while (page);
+  return out;
+}
+
+/**
+ * Retouche d'un événement ou d'une seule occurrence d'une série.
+ *
+ * Sur une occurrence, Google en fait une exception : le reste de la série ne
+ * bouge pas. C'est ainsi que chaque visite porte son propre rang, « 3/4 ».
+ */
+export async function patchEvent(
+  accessToken: string, calendarId: string, eventId: string,
+  p: { summary?: string; description?: string; start?: string; end?: string; timeZone?: string },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (p.summary !== undefined) body.summary = p.summary;
+  if (p.description !== undefined) body.description = p.description;
+  if (p.start && p.timeZone) body.start = { dateTime: p.start, timeZone: p.timeZone };
+  if (p.end && p.timeZone) body.end = { dateTime: p.end, timeZone: p.timeZone };
+  await api(
+    "events.patch",
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`,
+    { method: "PATCH", body: JSON.stringify(body) },
+    accessToken,
+  );
+}
+
 /* ============================ Gmail ============================ */
 
 function encodeHeader(v: string): string {

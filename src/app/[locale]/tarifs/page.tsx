@@ -303,11 +303,16 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                     {t.tarifs.plans.full} : {formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
                     {formatMoney(full - price, s.currency, locale)}
                   </p>
+                  <Link href={`/${locale}/abonnement?formule=${p.key}`}
+                    className="mt-auto self-start pt-4 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
+                    {t.tarifs.plans.cta}
+                  </Link>
                 </div>
               );
             })}
           </div>
-          <ul className="mt-10 grid gap-2.5">
+          <p className="mt-6 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">{t.tarifs.plans.cycleNote}</p>
+          <ul className="mt-8 grid gap-2.5">
             {t.tarifs.plans.perks.map((perk) => (
               <li key={perk} className="relative pl-6 text-[0.88rem] font-light text-ink-500">
                 <span aria-hidden="true" className="absolute left-0 top-1 text-[0.7rem] text-gold-500">◇</span>

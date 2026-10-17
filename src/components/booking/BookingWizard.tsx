@@ -625,7 +625,7 @@ function EstimateBar({ t, visible, durationText, money, firstFree }: {
  * visible mais éteint : voir que le dimanche ne se travaille pas vaut
  * mieux que de le chercher.
  */
-function SlotPicker({ t, days, today, value, onPick, onShift, exclude, className = "" }: {
+export function SlotPicker({ t, days, today, value, onPick, onShift, exclude, className = "" }: {
   t: Dict;
   days: DaySlots[];
   today: string;
@@ -745,7 +745,7 @@ function shiftKey(key: string, days: number): string {
   return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`;
 }
 
-function Field({ label, value, onChange, error, onBlur, type = "text", placeholder, autoComplete }: {
+export function Field({ label, value, onChange, error, onBlur, type = "text", placeholder, autoComplete }: {
   label: string; value: string; onChange: (v: string) => void; error?: string | null;
   onBlur?: () => void; type?: string; placeholder?: string; autoComplete?: string;
 }) {
@@ -763,7 +763,7 @@ function Field({ label, value, onChange, error, onBlur, type = "text", placehold
   );
 }
 
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="grid gap-1 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
       <dt className="text-[10px] uppercase tracking-[0.18em] text-ink-400">{label}</dt>

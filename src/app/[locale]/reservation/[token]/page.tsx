@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { canSelfCancel, findByManageToken } from "@/lib/bookings";
+import { findSubscription } from "@/lib/subscriptions";
 import { formatDateTime, formatMoney, minutesToText } from "@/lib/time";
 import { Mark } from "@/components/Logo";
 import { CancelButton } from "@/components/booking/CancelButton";
@@ -32,6 +33,13 @@ export default async function ManagePage({
         <Link href={`/${locale}/reserver`} className="btn mt-9">{t.manage.rebook}</Link>
       </div>
     );
+  }
+
+  /* Une visite d'abonnement se gère avec sa série : même délai, mêmes
+     gestes, et le rang de chaque visite sous les yeux. */
+  if (b.subscriptionId) {
+    const full = await findSubscription(b.subscriptionId).catch(() => null);
+    if (full) redirect(`/${locale}/abonnement/${full.sub.manageToken}`);
   }
 
   const cancelled = b.status === "cancelled";
@@ -78,7 +86,7 @@ export default async function ManagePage({
             </>
           ) : past ? (
             <Link href={`/${locale}/reserver`} className="btn">{t.manage.rebook}</Link>
-          ) : canSelfCancel(b) ? (
+          ) : canSelfCancel(b, settings.timezone) ? (
             <CancelButton token={token} t={t} />
           ) : (
             <p className="text-[0.9rem] leading-relaxed text-ink-500">{t.manage.tooLate}</p>

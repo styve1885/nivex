@@ -89,20 +89,22 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/bookings.ts` | La création d'un rendez-vous — c'est **lui** qui engage la maison |
 | `lib/travel.ts` | Les zones desservies et les frais de déplacement |
 | `lib/pricing.ts` | La grille publiée : blocs, forfaits, abonnements |
+| `lib/cycles.ts` | Le calendrier d'un abonnement, en fonctions pures : dates, rang des visites, montant d'un cycle, délai de la veille |
+| `lib/subscriptions.ts` | Les abonnements en base, dans l'agenda et par courriel ; la tâche quotidienne |
 | `lib/attribution.ts` | D'où vient un client, et la question qu'on lui pose |
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
-`nivex_messages`, `nivex_visits`, `nivex_events`. Le schéma se pose tout
+`nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 **idempotent** : il s'exécute à chaque instance froide.
 
 ### L'espace artisan
 
-`/admin`, derrière une session Google. Cinq onglets : Rendez-vous,
-Messages, Visites, Réglages, Connexion. Presque tout ce qui est
+`/admin`, derrière une session Google. Six onglets : Rendez-vous,
+Abonnés, Messages, Visites, Réglages, Connexion. Presque tout ce qui est
 commercial s'y règle — tarifs, horaire, prestations, zones et frais,
 texte de la zone desservie.
 
@@ -129,6 +131,42 @@ Les gardes posées là, et pourquoi :
 - Seule la **mise en pause** ferme vraiment les réservations. Un compte
   Google injoignable ne doit pas fermer la maison : le rendez-vous
   s'écrit en base, l'agenda et les courriels suivent dès qu'ils peuvent.
+
+## Les abonnements
+
+Un « mois » d'abonnement n'est pas un mois civil : c'est un **cycle de
+visites effectuées** — 4 (Exécutif, Grande Famille), 2 (Confort) ou 1
+(Essentiel). Le client choisit une seule fois la formule, puis la date et
+l'heure de la première visite ; les suivantes tombent le même jour, à la même
+heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
+
+- **Une série = six cycles, douze mois = deux séries.** La première est posée
+  d'un coup, toutes ses dates vérifiées avant la confirmation. La seconde est
+  posée par l'artisan depuis l'onglet Abonnés, après le courriel qu'il reçoit
+  `SERIES_NOTICE_DAYS` jours avant la dernière visite de la première.
+- **Chaque visite est une ligne de `nivex_bookings`**, reliée par
+  `subscription_id`. La contrainte d'exclusion la protège comme une séance.
+  Rien de ce qui se calcule n'est stocké : rang, cycle en cours, fin des
+  douze mois sortent de `viewSubscription`.
+- **Le compteur avance par le bouton « visite effectuée »** (`done_at`), pas
+  par l'heure. Une visite annulée ne compte pas : le cycle se prolonge, les
+  rangs suivants se recalculent, et une visite de remplacement est posée sur
+  la grille après la toute dernière date de la série.
+- **Le montant d'un cycle et les frais sont figés à la souscription** (tarif
+  garanti douze mois). Les frais : ceux de la zone pour la durée d'une visite,
+  moins `SUBSCRIBER_TRAVEL_DISCOUNT_CENTS`, jamais sous zéro, multipliés par
+  les visites du cycle. Le tout se paie à la première visite du cycle.
+  Une visite d'abonné vaut `estimate_cents = 0` ; jamais de première heure
+  offerte.
+- **Délai : 23 h 59 la veille** (`changeDeadline`), lu en heure de Montréal.
+  Les séances ponctuelles gardent `CANCEL_WINDOW_HOURS`.
+- **Agenda** : un événement récurrent par série (RRULE), sans invité ; chaque
+  occurrence est retouchée pour porter son rang (« 3/4 »). Une visite annulée
+  supprime son occurrence ; un remplacement est un événement simple.
+- **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
+  rappel de la veille, qui annonce le paiement à la première visite d'un
+  cycle, et courriel de fin de série à l'artisan. Chaque envoi est noté en
+  base : un second passage ne renvoie rien.
 
 ## Zones et frais de déplacement
 
@@ -192,7 +230,8 @@ date dans `LEGAL_UPDATED`.
 
 `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `ENCRYPTION_KEY` (32 octets, chiffre le jeton Google en AES-256-GCM),
-`SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL`. Facultatives :
+`SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET` (ouvre la tâche
+quotidienne des abonnements). Facultatives :
 `ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
 `.env.example`.
 
@@ -205,9 +244,10 @@ ajoutez pas une neuvième. Ne lisez pas sa sortie avec `| tail -1` — la
 dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 
-Quatre fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
+Cinq fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements), `booking` (courriels, durées), `provenance` (zone
-desservie, journal, provenance), `travel` (zones et frais). Plus un
+desservie, journal, provenance), `travel` (zones et frais), `subscription`
+(grille des dates, rang des visites, montants, délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 
 Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :

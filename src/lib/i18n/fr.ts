@@ -1,4 +1,10 @@
-import { CANCEL_WINDOW_HOURS, PHONE } from "../brand";
+import {
+  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, PHONE, SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+} from "../brand";
+import { formatMoney } from "../time";
+
+/* La réduction des abonnés sur les frais de route, écrite depuis la constante. */
+const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "fr");
 
 /** Un document légal : des sections de prose, chacune pouvant se clore sur une liste. */
 export type LegalSection = { title: string; body: string[]; list?: string[] };
@@ -33,6 +39,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
+        "Abonnement — les mêmes renseignements qu'une réservation, plus la formule choisie, le jour et l'heure de vos visites, les visites effectuées et les cycles réglés.",
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
         "Mesure de fréquentation — le nombre de pages vues, la page regardée, le site d'où vous arrivez, votre pays et le type d'appareil. Ces données sont agrégées : elles disent combien de personnes sont passées, jamais lesquelles. Aucun témoin n'est déposé et aucun identifiant ne vous suit d'une visite à l'autre.",
@@ -48,7 +55,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre — et, pour un abonné, à rappeler chaque visite la veille.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -88,6 +95,7 @@ const privacy: LegalDoc = {
       body: [],
       list: [
         "Un rendez-vous et ce qui l'accompagne : trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre.",
+        "Un abonnement : trois ans après sa dernière visite, pour la même raison.",
         "Un message du formulaire de contact : deux ans, ou jusqu'à ce que vous en demandiez la suppression.",
         "Le journal technique : douze mois.",
         "Le journal des visites : douze mois, après quoi les entrées sont supprimées d'elles-mêmes.",
@@ -101,7 +109,7 @@ const privacy: LegalDoc = {
         "Le site n'est servi qu'en HTTPS : ce que vous écrivez est chiffré en transit.",
         "Le jeton qui relie le site au compte Google de l'artisan est chiffré en AES-256-GCM avant d'entrer en base.",
         "L'espace artisan exige une authentification Google, et la toute première connexion exige en plus un code d'installation.",
-        "Le lien « Gérer ma réservation » contient un jeton aléatoire propre à votre rendez-vous. Il ne donne accès qu'à celui-là, et à rien d'autre.",
+        "Le lien « Gérer ma réservation » contient un jeton aléatoire propre à votre rendez-vous. Il ne donne accès qu'à celui-là, et à rien d'autre. Le lien « Gérer mes visites » d'un abonnement fonctionne de la même manière, pour les seules visites de cet abonnement.",
       ],
     },
     {
@@ -196,14 +204,25 @@ const terms: LegalDoc = {
       title: "Le paiement",
       body: [
         "À la fin de la séance, sur place : comptant, virement Interac ou carte. Aucun prépaiement n'est demandé au moment de réserver, et le site ne recueille aucune donnée bancaire.",
+        "Un abonnement fait exception sur un seul point : chaque cycle se règle à sa première visite, sur place, par les mêmes moyens. Rien n'est jamais payé en ligne.",
       ],
     },
     {
       title: "Annuler ou déplacer",
       body: [
         "Librement, jusqu'à {cancel} avant le rendez-vous, depuis le lien personnel reçu par courriel, ou par téléphone au {phone}. Rien à payer, rien à justifier.",
+        "Une visite d'abonnement s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, de la même façon, sans toucher au reste de la série.",
         "Passé ce délai, appelez-nous au {phone} : nous ferons au mieux.",
         "S'il nous faut annuler de notre côté — maladie, panne de matériel, route impraticable —, vous êtes prévenu dès que nous le savons et vous ne devez rien.",
+      ],
+    },
+    {
+      title: "Les abonnements",
+      body: [
+        "Un abonnement réserve vos visites au même jour et à la même heure, au rythme de la formule : chaque semaine, aux deux semaines ou toutes les quatre semaines. Ces créneaux ne sont proposés à personne d'autre.",
+        `Un cycle correspond au nombre de visites de la formule réellement effectuées — quatre, deux ou une. Une visite annulée, de votre côté ou du nôtre, ne compte pas : le cycle se prolonge jusqu'à la visite suivante, et une visite de remplacement est ajoutée en fin de série. Un cycle qui n'est pas terminé ${CYCLE_MAX_WEEKS} semaines après sa première visite nous amène à vous appeler pour convenir de la suite.`,
+        `Le montant d'un cycle est fixé à la souscription et garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles. Il se règle à la première visite du cycle, sur place. Une semaine avant la fin d'une série, nous vous appelons pour confirmer la suivante.`,
+        `Les frais de déplacement de votre zone, s'il y en a, sont réduits de ${DISCOUNT} par visite pour un abonné, sans jamais descendre sous zéro, et se règlent avec le cycle. L'offre « première heure offerte » ne s'applique pas aux abonnements.`,
       ],
     },
     {
@@ -433,13 +452,13 @@ export const fr = {
         note: "Pour une maisonnée, ou deux semaines d'un coup.",
       },
       {
-        name: "Abonnement mensuel",
+        name: "Abonnement",
         duration: "",
-        volume: "Visites régulières, créneaux prioritaires",
+        volume: "Visites régulières, créneaux réservés",
         note: "Tarif garanti douze mois.",
       },
     ],
-    planFrom: "à partir de {price} par mois",
+    planFrom: "à partir de {price} par cycle",
     button: "Composer ma séance",
     seeAll: "Voir la grille complète",
     firstFree: "Première heure offerte",
@@ -481,7 +500,7 @@ export const fr = {
       },
       {
         q: "Puis-je annuler ou déplacer mon rendez-vous ?",
-        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler.`,
+        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler. Pour un abonné, chaque visite s'annule ou se déplace jusqu'à 23 h 59 la veille.`,
       },
     ],
   },
@@ -618,6 +637,97 @@ export const fr = {
     tooLate: `Ce rendez-vous a lieu dans moins de ${CANCEL_WINDOW_HOURS} h. Appelez-nous au +1 450 943 1217.`,
     notFound: "Réservation introuvable. Vérifiez le lien reçu par courriel.",
     rebook: "Prendre un nouveau rendez-vous",
+  },
+  subscribe: {
+    title: "S'abonner",
+    lede: "Vous choisissez une seule fois votre formule, votre jour et votre heure. Les visites se suivent ensuite au rythme de la formule, et chaque créneau vous est réservé.",
+    steps: ["Formule", "Adresse", "Créneau", "Confirmation"],
+    plan: {
+      title: "Quelle formule ?",
+      hint: "Un cycle correspond aux visites de la formule réellement effectuées. Il se règle à sa première visite, sur place.",
+      perCycle: "/ cycle",
+      visits: "{n} × {duration}",
+      noFirstHour: "L'offre « première heure offerte » ne s'applique pas aux abonnements.",
+    },
+    address: {
+      title: "Où vous rejoignons-nous ?",
+      travelReduced: "Frais de déplacement, tarif abonné : {fee} par visite, au lieu de {full}.",
+      travelZero: "Pour un abonné, les frais de déplacement de votre zone tombent à zéro.",
+      cycleTotal: "Total d'un cycle, frais compris : {total}.",
+    },
+    slot: {
+      title: "Votre première visite",
+      hint: "Choisissez la date et l'heure de la première visite. Les suivantes tomberont le même jour, à la même heure, {rhythm}.",
+      checking: "Vérification des {n} dates de la série…",
+      free: "Les {n} dates de la série sont libres.",
+      showDates: "Voir les dates",
+      hideDates: "Masquer les dates",
+      conflicts: "Ce créneau ne tient pas sur toute la série. Ces dates posent problème :",
+      reasons: { busy: "déjà réservée", closed: "hors de notre horaire", lead: "trop proche", invalid: "date invalide" },
+      alternatives: "Ces créneaux sont libres sur toute la série :",
+      noAlternative: `Aucun autre créneau des deux semaines suivantes ne tient sur toute la série. Choisissez une autre heure, ou appelez-nous au ${PHONE}.`,
+      failed: "La vérification n'a pas abouti. Réessayez dans un instant.",
+    },
+    confirm: {
+      title: "Tout est exact ?",
+      plan: "Formule",
+      rhythm: "Rythme",
+      first: "Première visite",
+      series: "Visites réservées",
+      seriesValue: "{n} visites, jusqu'au {last}",
+      cycle: "Formule, par cycle",
+      travel: "Frais de déplacement du cycle",
+      total: "Total d'un cycle",
+      payment: "Le cycle se règle à sa première visite, sur place : comptant, virement Interac ou carte. Rien n'est payé en ligne.",
+      rule: "Chaque visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, depuis le lien reçu par courriel. Une visite annulée ne compte pas : elle est ajoutée en fin de série.",
+      consent: "J'ai lu ces modalités. Je comprends qu'un cycle correspond aux visites effectuées, et qu'il se règle à sa première visite.",
+      submit: "Confirmer l'abonnement",
+      submitting: "Confirmation en cours…",
+    },
+    success: {
+      title: "Votre abonnement est en place.",
+      body: "Vos visites sont réservées. La confirmation vient de partir par courriel, avec le lien pour gérer chaque visite.",
+      bodyNoEmail: "Vos visites sont réservées. Le courriel de confirmation n'a pas pu partir : notez votre référence et gardez le lien ci-dessous.",
+      first: "Première visite",
+      ref: "Référence",
+      manage: "Gérer mes visites",
+    },
+    errors: {
+      conflicts: "Une date de la série vient d'être prise. Choisissez un autre créneau.",
+      tooMany: `Un abonnement vient déjà d'être pris avec ce courriel. Appelez-nous au ${PHONE}.`,
+    },
+  },
+  subManage: {
+    title: "Votre abonnement",
+    status: { active: "En cours", ended: "Terminé" },
+    cycleLabel: "Cycle en cours",
+    cycleNow: "Cycle {c} — {d}/{n} visites faites",
+    amount: "Montant d'un cycle",
+    payment: "Le cycle se règle à sa première visite, sur place.",
+    rhythm: "Rythme",
+    upcoming: "Vos prochaines visites",
+    rank: "Visite {i}/{n} · cycle {c}",
+    makeup: "Remplacement",
+    cancelledTag: "Annulée",
+    move: "Déplacer",
+    cancel: "Annuler",
+    cancelConfirm: "Annuler cette visite ? Elle ne comptera pas dans votre cycle, et une visite sera ajoutée en fin de série.",
+    moveTitle: "Choisissez la nouvelle heure",
+    moveConfirm: "Déplacer cette visite au {when} ?",
+    keep: "Garder",
+    confirmMove: "Déplacer",
+    tooLate: "Le délai en ligne est passé (23 h 59 la veille). Pour cette visite, appelez-nous :",
+    rule: "Chaque visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille.",
+    ended: "Cet abonnement a pris fin.",
+    notFound: "Abonnement introuvable. Vérifiez le lien reçu par courriel.",
+    replaced: "Visite annulée. Elle est remplacée le {when}.",
+    replacedNone: "Visite annulée. Nous vous appellerons pour la replacer en fin de série.",
+    moved: "Visite déplacée.",
+    done: "{n} visites déjà effectuées.",
+    errors: {
+      tooLate: "Le délai est passé. Appelez-nous pour toute modification.",
+      taken: "Ce créneau vient d'être pris. Choisissez-en un autre.",
+    },
   },
   footer: {
     tagline: "Repassage à domicile de prestige",
@@ -756,16 +866,19 @@ export const fr = {
       note: "Ces prix valent pour une pièce isolée, ajoutée à une séance déjà réservée. Au-delà de quelques pièces, une séance revient moins cher.",
     },
     plans: {
-      title: "Abonnements mensuels",
+      title: "Abonnements",
       lede: "Un service régulier, et un montant qui baisse à mesure que les séances s'ajoutent.",
-      perMonth: "/ mois",
+      perMonth: "/ cycle",
+      cycleNote: "Un cycle correspond aux visites de la formule réellement effectuées, soit environ quatre semaines. Il se règle à sa première visite, sur place.",
+      cta: "S'abonner",
       full: "Séances à l'unité",
       save: "Vous économisez",
       perks: [
-        "Priorité absolue sur vos plages horaires.",
-        "Report flexible en cas de déplacement ou de vacances.",
+        "Vos créneaux vous sont réservés : le même jour, à la même heure, toute l'année.",
+        "Une visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille. Elle ne compte pas, et s'ajoute en fin de série.",
         "Amidon léger sur cols et poignets, inclus sans supplément.",
-        "Tarif garanti douze mois à compter de la souscription.",
+        `Frais de déplacement réduits de ${DISCOUNT} par visite.`,
+        `Tarif garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles.`,
       ],
     },
     terms: {
@@ -780,7 +893,7 @@ export const fr = {
       travelZone: "Zone",
       travelShort: "Moins de {hours}",
       travelLong: "{hours} ou plus",
-      travelNote: "Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite, abonnés compris. Longueuil et la Rive-Sud n'en paient aucun.",
+      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite ; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle. Longueuil et la Rive-Sud n'en paient aucun.`,
     },
     firstFreeLabel: "Première séance",
     cta: {

@@ -8,6 +8,7 @@ import { bookable, evaluateZone } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
+import { canSubscriberChange } from "./cycles";
 import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX, SETUP_MINUTES } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
@@ -63,6 +64,9 @@ export type Booking = {
   createdAt: Date; cancelledAt: Date | null;
   /* D'où vient ce client — vide pour les rendez-vous pris avant la mesure. */
   origin: BookingOrigin;
+  /* Une visite d'abonnement : vide pour une séance ponctuelle. */
+  subscriptionId: string | null; seriesNo: number | null; makeup: boolean;
+  doneAt: Date | null; reminderSentAt: Date | null; googleSeriesId: string | null;
 };
 
 /**
@@ -86,7 +90,7 @@ export type BookingOrigin = {
 
 type Row = Record<string, unknown>;
 
-function hydrate(r: Row): Booking {
+export function hydrate(r: Row): Booking {
   return {
     id: r.id as string, ref: r.ref as string, manageToken: r.manage_token as string,
     locale: (r.locale as "fr" | "en") ?? "fr", status: r.status as string,
@@ -113,6 +117,12 @@ function hydrate(r: Row): Booking {
       firstSeenAt: r.first_seen_at ? new Date(r.first_seen_at as string) : null,
       visits: r.visit_count == null ? null : Number(r.visit_count),
     },
+    subscriptionId: (r.subscription_id as string) ?? null,
+    seriesNo: r.series_no == null ? null : Number(r.series_no),
+    makeup: r.makeup === true,
+    doneAt: r.done_at ? new Date(r.done_at as string) : null,
+    reminderSentAt: r.reminder_sent_at ? new Date(r.reminder_sent_at as string) : null,
+    googleSeriesId: (r.google_series_id as string) ?? null,
   };
 }
 
@@ -270,7 +280,7 @@ export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start:
  * étiquetée. Une provenance absente n'est pas une erreur — un visiteur qui
  * refuse le stockage de son navigateur doit pouvoir réserver comme un autre.
  */
-function cleanOrigin(input: BookingInputType): {
+export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "attribution">): {
   heardFrom: string | null; source: string | null; medium: string | null;
   campaign: string | null; referrer: string | null; landing: string | null;
   firstSeenAt: string | null; visits: number | null;
@@ -417,6 +427,13 @@ async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promi
 export async function resendBooking(b: Booking, host?: string | null): Promise<{
   emailSent: boolean; calendarAdded: boolean; error: string | null;
 }> {
+  /* Une visite d'abonnement appartient à une série : la rattraper seule
+     créerait un second événement à côté de son occurrence. On rattrape la
+     série entière. */
+  if (b.subscriptionId) {
+    const { resendSubscription } = await import("./subscriptions");
+    return resendSubscription(b.subscriptionId, host);
+  }
   const settings = await getSettings();
   const origin = siteOrigin(host);
 
@@ -496,7 +513,14 @@ export async function listBookings(opts: { scope?: "upcoming" | "past" | "all"; 
   } else if (opts.scope === "all") {
     rows = (await sql()`SELECT * FROM nivex_bookings ORDER BY starts_at DESC LIMIT ${limit}`) as Row[];
   } else {
-    rows = (await sql()`SELECT * FROM nivex_bookings WHERE starts_at >= ${now} ORDER BY starts_at ASC LIMIT ${limit}`) as Row[];
+    /* Une série d'abonnement pose six mois de visites d'un coup : quatre
+       abonnés suffiraient à remplir la liste. Elle montre donc les trois
+       prochaines semaines de chacun ; l'onglet Abonnés montre le reste. */
+    rows = (await sql()`
+      SELECT * FROM nivex_bookings
+      WHERE starts_at >= ${now}
+        AND (subscription_id IS NULL OR starts_at < now() + interval '21 days')
+      ORDER BY starts_at ASC LIMIT ${limit}`) as Row[];
   }
   return rows.map(hydrate);
 }
@@ -515,16 +539,33 @@ export async function stats() {
       count(DISTINCT lower(client_email)) FILTER (WHERE status <> 'cancelled')                     AS clients
     FROM nivex_bookings`) as Row[];
   const r = rows[0] ?? {};
+
+  /* Une visite d'abonnement vaut zéro en base : le cycle se paie d'un coup,
+     à sa première visite. Les revenus du mois comptent donc les cycles
+     encaissés ce mois-ci, à la date où l'artisan a noté le paiement. */
+  const paid = (await sql()`
+    SELECT coalesce(sum(s.cycle_cents + s.travel_fee_cents * s.visits_per_cycle), 0) AS cents
+    FROM nivex_subscriptions s, jsonb_each_text(s.paid_cycles) p
+    WHERE p.value::timestamptz >= date_trunc('month', now())`.catch(() => [{ cents: 0 }])) as Row[];
+
   return {
     upcoming: Number(r.upcoming ?? 0), thisMonth: Number(r.this_month ?? 0),
     cancelled: Number(r.cancelled ?? 0), total: Number(r.total ?? 0),
-    monthCents: Number(r.month_cents ?? 0), clients: Number(r.clients ?? 0),
+    monthCents: Number(r.month_cents ?? 0) + Number(paid[0]?.cents ?? 0), clients: Number(r.clients ?? 0),
   };
 }
 
 /* ============================ Annulation ============================ */
 
 export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise<void> {
+  /* Une visite d'abonnement ne s'annule pas comme une séance : elle sort du
+     compte du cycle, une visite la remplace en fin de série, et l'agenda
+     perd une occurrence plutôt qu'un événement. */
+  if (b.subscriptionId) {
+    const { cancelVisit } = await import("./subscriptions");
+    await cancelVisit(b, by);
+    return;
+  }
   const settings = await getSettings();
   await ensureSchema();
   await sql()`UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now() WHERE id = ${b.id}`;
@@ -560,10 +601,16 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
   await logEvent("booking_cancelled", { ref: b.ref, by });
 }
 
-/** Le client peut-il encore annuler lui-même ? */
-export function canSelfCancel(b: Booking): boolean {
-  return b.status === "confirmed"
-    && b.startsAt.getTime() - Date.now() > CANCEL_WINDOW_HOURS * 3600_000;
+/**
+ * Le client peut-il encore annuler lui-même ?
+ *
+ * Deux règles : une séance ponctuelle jusqu'à `CANCEL_WINDOW_HOURS` avant,
+ * une visite d'abonnement jusqu'à 23 h 59 la veille, à l'heure de Montréal.
+ */
+export function canSelfCancel(b: Booking, tz = "America/Toronto"): boolean {
+  if (b.status !== "confirmed") return false;
+  if (b.subscriptionId) return !b.doneAt && canSubscriberChange(b.startsAt, tz);
+  return b.startsAt.getTime() - Date.now() > CANCEL_WINDOW_HOURS * 3600_000;
 }
 
 export { formatDateTime, inServiceArea };

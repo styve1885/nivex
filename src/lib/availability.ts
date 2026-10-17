@@ -112,8 +112,11 @@ export async function loadBusy(opts: {
   settings: Settings;
   timeMin: Date;
   timeMax: Date;
+  /** Une réservation à ne pas compter : celle qu'on est en train de déplacer. */
+  excludeId?: string;
 }): Promise<Interval[]> {
   const { accessToken, settings, timeMin, timeMax } = opts;
+  const excludeId = opts.excludeId ?? "00000000-0000-0000-0000-000000000000";
 
   const [gcal, rows] = await Promise.all([
     accessToken
@@ -124,6 +127,7 @@ export async function loadBusy(opts: {
       .then(() => sql()`
         SELECT starts_at, ends_at FROM nivex_bookings
         WHERE status IN ('confirmed','pending')
+          AND id <> ${excludeId}
           AND ends_at   > ${timeMin.toISOString()}
           AND starts_at < ${timeMax.toISOString()}`)
       .catch(() => [] as Record<string, unknown>[]),
@@ -144,27 +148,47 @@ export async function loadBusy(opts: {
 
 /** Le créneau demandé est-il encore réellement libre ? Contrôle final avant écriture. */
 export function slotIsFree(startISO: string, durationMinutes: number, busy: Interval[], s: Settings, now = new Date()): boolean {
-  const start = new Date(startISO).getTime();
-  if (!Number.isFinite(start)) return false;
-  if (start < now.getTime() + s.leadHours * 3600_000 - 60_000) return false;
+  return slotProblem(new Date(startISO).getTime(), durationMinutes, busy, s, now) === null;
+}
+
+/**
+ * Pourquoi un créneau ne convient pas — ou `null` s'il convient.
+ *
+ * Même contrôle que `slotIsFree`, mais il dit lequel a échoué : une série
+ * d'abonnement affiche ses dates en conflit, et « déjà pris » n'appelle pas
+ * la même réponse que « jour fermé ». Le délai de prévenance peut être
+ * levé : il protège la maison d'un rendez-vous pris trop tard, et n'a pas de
+ * sens pour la vingtième date d'une série, ni pour l'artisan qui place
+ * lui-même une visite.
+ */
+export type SlotProblem = "invalid" | "lead" | "closed" | "busy";
+
+export function slotProblem(
+  start: number, durationMinutes: number, busy: Interval[], s: Settings,
+  now = new Date(), opts: { checkLead?: boolean } = {},
+): SlotProblem | null {
+  if (!Number.isFinite(start)) return "invalid";
+  if ((opts.checkLead ?? true) && start < now.getTime() + s.leadHours * 3600_000 - 60_000) return "lead";
 
   const candidate = { start, end: start + durationMinutes * 60_000 };
-  const blocked = merge(busy.map((b) => ({
-    start: b.start - s.bufferMinutes * 60_000,
-    end: b.end + s.bufferMinutes * 60_000,
-  })));
-  if (blocked.some((b) => overlaps(candidate, b))) return false;
 
   // Doit tenir dans les heures d'ouverture du jour.
   const key = dateKey(new Date(start), s.timezone);
   const rule = s.hours.find((h) => h.day === weekdayOfKey(key));
-  if (!rule?.enabled) return false;
+  if (!rule?.enabled) return "closed";
 
   const ymd = parseDateKey(key);
   const openMs  = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.open) / 60),  minute: parseHM(rule.open) % 60 },  s.timezone).getTime();
   const closeMs = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.close) / 60), minute: parseHM(rule.close) % 60 }, s.timezone).getTime();
+  if (start < openMs || candidate.end > closeMs) return "closed";
 
-  return start >= openMs && candidate.end <= closeMs;
+  const blocked = merge(busy.map((b) => ({
+    start: b.start - s.bufferMinutes * 60_000,
+    end: b.end + s.bufferMinutes * 60_000,
+  })));
+  if (blocked.some((b) => overlaps(candidate, b))) return "busy";
+
+  return null;
 }
 
 /** Durée estimée à partir du panier, arrondie au pas de créneau et bornée au minimum. */
@@ -185,4 +209,31 @@ export function estimateMinutes(
 export function estimateCents(minutes: number, s: Settings, firstFree: boolean): number {
   const billable = firstFree ? Math.max(0, minutes - 60) : minutes;
   return Math.round((billable / 60) * s.hourlyRate);
+}
+
+/**
+ * Les occupations sur une longue période — les six mois d'une série.
+ *
+ * L'agenda Google est interrogé par tranches de deux mois : une requête de
+ * disponibilité sur une demi-année n'est pas garantie, et une tranche qui
+ * échoue ne doit pas effacer les autres. La base, elle, répond d'un coup,
+ * et c'est elle qui a le dernier mot à l'écriture.
+ */
+export async function loadBusyRange(opts: {
+  accessToken: string | null;
+  settings: Settings;
+  timeMin: Date;
+  timeMax: Date;
+  excludeId?: string;
+}): Promise<Interval[]> {
+  const chunk = 60 * 24 * 3600_000;
+  const parts: Promise<Interval[]>[] = [];
+  for (let t = opts.timeMin.getTime(); t < opts.timeMax.getTime(); t += chunk) {
+    parts.push(loadBusy({
+      ...opts,
+      timeMin: new Date(t),
+      timeMax: new Date(Math.min(t + chunk, opts.timeMax.getTime())),
+    }).catch(() => []));
+  }
+  return merge((await Promise.all(parts)).flat());
 }

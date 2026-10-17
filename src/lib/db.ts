@@ -280,6 +280,69 @@ async function bootstrap() {
 
   await q`CREATE INDEX IF NOT EXISTS nivex_visits_created_idx ON nivex_visits (created_at DESC)`;
   await q`CREATE INDEX IF NOT EXISTS nivex_visits_source_idx  ON nivex_visits (source)`;
+
+  /*
+   * Abonnements.
+   *
+   * Un abonnement ne porte que ce qui ne se déduit pas : la formule telle
+   * qu'elle était à la souscription, le montant du cycle et les frais par
+   * visite figés ce jour-là — le tarif est garanti douze mois, une hausse du
+   * taux horaire ne doit pas les toucher —, la grille des dates et les
+   * paiements reçus. Le cycle en cours, le rang d'une visite, la fin des
+   * douze mois se recalculent à partir des visites (cycles.ts).
+   *
+   * Chaque visite reste une ligne de nivex_bookings : la contrainte de
+   * non-chevauchement la protège comme n'importe quel rendez-vous, et le
+   * moteur de créneaux la voit sans rien savoir des abonnements.
+   */
+  await q`
+    CREATE TABLE IF NOT EXISTS nivex_subscriptions (
+      id                uuid PRIMARY KEY,
+      ref               text UNIQUE NOT NULL,
+      manage_token      text UNIQUE NOT NULL,
+      locale            text        NOT NULL DEFAULT 'fr',
+      status            text        NOT NULL DEFAULT 'active',
+      plan_key          text        NOT NULL,
+      plan_name         text        NOT NULL,
+      visits_per_cycle  integer     NOT NULL,
+      every_weeks       integer     NOT NULL,
+      minutes_per_visit integer     NOT NULL,
+      grid_anchor       text        NOT NULL,
+      grid_hm           text        NOT NULL,
+      client_name       text        NOT NULL,
+      client_email      text        NOT NULL,
+      client_phone      text        NOT NULL,
+      address           text        NOT NULL,
+      city              text        NOT NULL,
+      postal_code       text        NOT NULL,
+      notes             text,
+      cycle_cents       integer     NOT NULL,
+      travel_fee_cents  integer     NOT NULL DEFAULT 0,
+      travel_zone       text,
+      currency          text        NOT NULL DEFAULT 'CAD',
+      start_cycle       integer     NOT NULL DEFAULT 1,
+      start_done        integer     NOT NULL DEFAULT 0,
+      paid_cycles       jsonb       NOT NULL DEFAULT '{}'::jsonb,
+      pending_makeups   integer     NOT NULL DEFAULT 0,
+      notice_series     integer     NOT NULL DEFAULT 0,
+      created_by        text        NOT NULL DEFAULT 'client',
+      created_at        timestamptz NOT NULL DEFAULT now(),
+      ended_at          timestamptz
+    )`;
+
+  await q`CREATE INDEX IF NOT EXISTS nivex_subscriptions_email_idx ON nivex_subscriptions (lower(client_email))`;
+
+  /* Le lien entre une visite et son abonnement. Facultatif : une séance
+   * ponctuelle n'en a pas, et toutes celles d'avant n'en avaient pas.
+   * `done_at` est posé par le bouton « visite effectuée » — c'est lui qui
+   * fait avancer le compteur du cycle, pas l'heure qui passe. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS subscription_id  uuid`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS series_no        integer`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS makeup           boolean NOT NULL DEFAULT false`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS done_at          timestamptz`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS google_series_id text`;
+  await q`CREATE INDEX IF NOT EXISTS nivex_bookings_subscription_idx ON nivex_bookings (subscription_id) WHERE subscription_id IS NOT NULL`;
 }
 
 export async function logEvent(kind: string, detail?: unknown) {

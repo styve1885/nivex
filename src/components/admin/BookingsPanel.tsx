@@ -132,9 +132,13 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
         )}
         {/* Le montant replié dit le total, frais compris : c'est la somme que
             l'artisan encaissera, et la seule qu'il cherche d'un coup d'œil. */}
-        <span className="hidden text-[0.85rem] tabular-nums text-ink-600 sm:block">
-          {money(b.estimateCents + b.travelFeeCents, b.currency)}
-        </span>
+        {b.subscription ? (
+          <span className="hidden text-[10px] uppercase tracking-[0.14em] text-gold-700 sm:block">Abonnement</span>
+        ) : (
+          <span className="hidden text-[0.85rem] tabular-nums text-ink-600 sm:block">
+            {money(b.estimateCents + b.travelFeeCents, b.currency)}
+          </span>
+        )}
         <span aria-hidden="true" className={`text-gold-500 transition-transform duration-500 ${open ? "rotate-180" : ""}`}>⌄</span>
       </button>
 
@@ -147,10 +151,14 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             <Line label="Adresse"><a href={maps} target="_blank" rel="noopener noreferrer" className="text-gold-700 hover:underline">{b.address}, {b.city} {b.postalCode}</a></Line>
             <Line label="Prestations">{b.items.map((i) => `${i.label} × ${i.qty}`).join(" · ")}</Line>
             {b.notes && <Line label="Précisions"><span className="italic">{b.notes}</span></Line>}
+            {b.subscription ? (
+              <Line label="Montant">Réglé avec le cycle — voir l&apos;onglet Abonnés.</Line>
+            ) : (
             <Line label="Estimation">
               {money(b.estimateCents, b.currency)}
               {b.firstHourFree && <span className="ml-2 text-[10px] uppercase tracking-wider text-gold-600">1re heure offerte</span>}
             </Line>
+            )}
             {b.travelFeeCents > 0 && (
               <>
                 <Line label="Frais de déplacement">
@@ -212,7 +220,11 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                     Annuler ce rendez-vous
                   </button>
                 )}
-                <p className="mt-2 text-[11px] text-ink-400">Le client et l&apos;agenda sont prévenus automatiquement.</p>
+                <p className="mt-2 text-[11px] text-ink-400">
+                {b.subscription
+                  ? "Le client et l'agenda sont prévenus, et une visite est ajoutée en fin de série."
+                  : "Le client et l'agenda sont prévenus automatiquement."}
+              </p>
               </div>
             )}
           </div>
