@@ -32,7 +32,7 @@ export function Dashboard({
   upcoming: AdminBooking[];
   past: AdminBooking[];
   stats: AdminStats;
-  env: { database: boolean; google: boolean; origin: string };
+  env: { database: boolean; google: boolean; sms: boolean; origin: string };
   link: GoogleLink;
   flash: { connected: boolean; missingScopes: string[] };
 }) {

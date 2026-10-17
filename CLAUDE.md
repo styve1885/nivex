@@ -94,6 +94,7 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/attribution.ts` | D'où vient un client, et la question qu'on lui pose |
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
+| `lib/sms.ts` | Les textos par Twilio, et leurs messages |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
@@ -168,6 +169,18 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   cycle, et courriel de fin de série à l'artisan. Chaque envoi est noté en
   base : un second passage ne renvoie rien.
 
+## Les textos
+
+Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client reçoit la confirmation
+(séance ou abonnement), le rappel de la veille, et toute annulation ou tout
+déplacement ; l'artisan, chaque nouvelle réservation et ce que le client
+annule ou déplace lui-même, sur `SMS_OWNER_TO` ou, à défaut, `PHONE`.
+
+Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
+échouer une réservation, et un compte Google débranché ne l'empêche pas de
+partir. Le rappel par texto se note dans `sms_reminded_at`, à part du
+courriel (`reminder_sent_at`). Une séance ponctuelle n'a que le texto.
+
 ## Zones et frais de déplacement
 
 Trois zones, reconnues aux trois premiers caractères du code postal, dans
@@ -231,7 +244,8 @@ date dans `LEGAL_UPDATED`.
 `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `ENCRYPTION_KEY` (32 octets, chiffre le jeton Google en AES-256-GCM),
 `SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET` (ouvre la tâche
-quotidienne des abonnements). Facultatives :
+quotidienne des abonnements), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+`TWILIO_FROM` (les textos). Facultatives : `SMS_OWNER_TO`,
 `ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
 `.env.example`.
 

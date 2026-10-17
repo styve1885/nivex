@@ -6,6 +6,7 @@ import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { HEARD_FROM_FR } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
+import { smsConfigured } from "@/lib/sms";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export default async function AdminPage({
       env={{
         database: isDbConfigured(),
         google: googleConfigured(),
+        sms: smsConfigured(),
         origin: siteOrigin(),
       }}
       link={link}
