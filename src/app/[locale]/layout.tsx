@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { getDict, isLocale, locales } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
+import { metaDescription } from "@/lib/seo";
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -12,16 +13,21 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
+  /* La description nomme les premiers secteurs de la Rive-Sud, puis
+     Montréal : une phrase écrite à la main finirait par nommer un secteur
+     fermé. */
+  const description = metaDescription(t, (await getSettings()).zonePolicy, locale === "en" ? "en" : "fr");
+
   return {
     title: { default: t.meta.title, template: "%s · NIVEX" },
-    description: t.meta.description,
+    description,
     alternates: {
       canonical: `/${locale}`,
       languages: { "fr-CA": "/fr", "en-CA": "/en", "x-default": "/fr" },
     },
     openGraph: {
       title: t.meta.title,
-      description: t.meta.description,
+      description,
       locale: locale === "en" ? "en_CA" : "fr_CA",
       url: `/${locale}`,
       // Déclarée ici, et pas seulement à la racine : ce bloc-ci remplace

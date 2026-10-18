@@ -27,7 +27,16 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
       </div>
 
       <div className="relative mx-auto w-full max-w-5xl px-8 text-center sm:px-14">
-        <p className="eyebrow animate-fade" style={{ animationDelay: "80ms" }}>{t.hero.eyebrow}</p>
+        {/* Un nom de lieu ne se coupe pas à son trait d'union : chaque segment
+            reste d'un bloc, et c'est entre eux que la ligne se replie. */}
+        <p className="eyebrow animate-fade" style={{ animationDelay: "80ms" }}>
+          {t.hero.eyebrow.split(" · ").map((part, i) => (
+            <span key={part}>
+              {i > 0 && " · "}
+              <span className="whitespace-nowrap">{part}</span>
+            </span>
+          ))}
+        </p>
 
         <div className="mt-9 flex justify-center animate-rise" style={{ animationDelay: "160ms" }}>
           <Lockup className="h-28 w-auto sm:h-36" priority />
@@ -44,8 +53,15 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
           <span className="text-[10px]">◆</span>
         </div>
 
-        <p className="mx-auto mt-8 max-w-xl text-[0.98rem] font-light leading-[1.85] text-ink-500 animate-rise sm:text-base"
-          style={{ animationDelay: "600ms" }}>
+        {/* Ce que fait la maison, dit sans détour : c'est la phrase que reprend
+            quiconque résume le site, moteur ou assistant compris. */}
+        <p className="mx-auto mt-8 max-w-xl text-[1.02rem] leading-[1.75] text-ink-700 animate-rise sm:text-[1.08rem]"
+          style={{ animationDelay: "560ms" }}>
+          {t.hero.onSite}
+        </p>
+
+        <p className="mx-auto mt-5 max-w-xl text-[0.98rem] font-light leading-[1.85] text-ink-500 animate-rise sm:text-base"
+          style={{ animationDelay: "640ms" }}>
           {t.hero.lede}
         </p>
 

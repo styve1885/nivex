@@ -75,10 +75,15 @@ export const DEFAULT_ZONE_POLICY: ZonePolicy = {
     { key: "c", nameFr: "Zone C", nameEn: "Zone C", shortFeeCents: 2500, longFeeCents: 2000, thresholdMinutes: 180 },
   ],
   sectors: [
-    sector("longueuil", "Longueuil", "Longueuil", "a", ["J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N"]),
-    sector("saint-hubert", "Saint-Hubert", "Saint-Hubert", "a", ["J3Y", "J3Z", "J4T"]),
-    sector("greenfield-park", "Greenfield Park", "Greenfield Park", "a", ["J4V"]),
+    /* Saint-Lambert d'abord, toujours : c'est le secteur que la maison met en
+       avant. Vieux-Longueuil et Longueuil partagent leurs préfixes, dans la
+       même zone : le premier nomme l'arrondissement qu'on cherche, le second
+       la ville. */
     sector("saint-lambert", "Saint-Lambert", "Saint-Lambert", "a", ["J4P", "J4R", "J4S"]),
+    sector("vieux-longueuil", "Vieux-Longueuil", "Vieux-Longueuil", "a", ["J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N"]),
+    sector("longueuil", "Longueuil", "Longueuil", "a", ["J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N"]),
+    sector("greenfield-park", "Greenfield Park", "Greenfield Park", "a", ["J4V"]),
+    sector("saint-hubert", "Saint-Hubert", "Saint-Hubert", "a", ["J3Y", "J3Z", "J4T"]),
     sector("brossard", "Brossard", "Brossard", "a", ["J4W", "J4X", "J4Y", "J4Z"]),
     sector("boucherville", "Boucherville", "Boucherville", "a", ["J4B"]),
     sector("saint-bruno", "Saint-Bruno-de-Montarville", "Saint-Bruno-de-Montarville", "a", ["J3V"]),
@@ -213,9 +218,43 @@ export function joinList(names: string[], locale: "fr" | "en"): string {
   return `${names.slice(0, -1).join(", ")} ${locale === "en" ? "and" : "et"} ${last}`;
 }
 
-/** Les noms des secteurs actifs, dans l'ordre. */
+/**
+ * Un secteur de l'île de Montréal.
+ *
+ * Reconnu à ses préfixes, pas à son nom ni à sa zone : une zone peut mêler
+ * Verdun et Chambly, et un nom se retouche. Les codes postaux de l'île
+ * commencent par H ; Laval aussi, mais par H7, et Laval n'est pas Montréal.
+ */
+export function isMontrealSector(s: Sector): boolean {
+  return s.prefixes.length > 0 && s.prefixes.every((p) => p.startsWith("H") && !p.startsWith("H7"));
+}
+
+/**
+ * Les secteurs actifs, la Rive-Sud et les environs d'abord, Montréal ensuite.
+ *
+ * Dans chaque groupe, l'ordre est celui de l'onglet « Zones et frais ». Les
+ * deux groupes ne se mélangent pas : une liste qui intercale Verdun entre
+ * Brossard et Chambly ne se lit pas, ni par un client ni par un moteur.
+ */
+export function sectorsByRegion(policy: ZonePolicy): { south: Sector[]; montreal: Sector[] } {
+  const actifs = activeSectors(policy);
+  return {
+    south: actifs.filter((s) => !isMontrealSector(s)),
+    montreal: actifs.filter(isMontrealSector),
+  };
+}
+
+const nameOf = (s: Sector, locale: "fr" | "en") => (locale === "en" ? s.nameEn || s.nameFr : s.nameFr);
+
+/** Les noms des secteurs actifs : Rive-Sud et environs, puis Montréal. */
 export function sectorNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
-  return activeSectors(policy).map((s) => (locale === "en" ? s.nameEn || s.nameFr : s.nameFr));
+  const { south, montreal } = sectorsByRegion(policy);
+  return [...south, ...montreal].map((s) => nameOf(s, locale));
+}
+
+/** Les noms des quartiers de Montréal desservis, dans l'ordre. */
+export function montrealNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
+  return sectorsByRegion(policy).montreal.map((s) => nameOf(s, locale));
 }
 
 /**
@@ -228,10 +267,41 @@ export function sectorNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
 export function servedText(
   policy: ZonePolicy,
   locale: "fr" | "en",
-  tpl: { served: string; none: string },
+  tpl: { served: string; montreal: string; none: string },
 ): string {
-  const names = sectorNames(policy, locale);
-  return names.length === 0 ? tpl.none : tpl.served.replace("{list}", joinList(names, locale));
+  const { south, montreal } = sectorsByRegion(policy);
+  const parts = [
+    south.length ? tpl.served.replace("{list}", joinList(south.map((s) => nameOf(s, locale)), locale)) : "",
+    montreal.length ? tpl.montreal.replace("{list}", joinList(montreal.map((s) => nameOf(s, locale)), locale)) : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" ") : tpl.none;
+}
+
+/**
+ * Les frais des quartiers de Montréal, zone par zone.
+ *
+ * Pour la page Montréal : les mêmes montants que le tableau de la page
+ * Tarifs, restreints aux zones qui contiennent un quartier de l'île, avec les
+ * quartiers concernés. Rien n'y est récité.
+ */
+export function montrealFees(
+  policy: ZonePolicy,
+  locale: "fr" | "en",
+  money: (cents: number) => string,
+): FeeRow[] {
+  const { montreal } = sectorsByRegion(policy);
+  return policy.zones
+    .map((z) => ({ z, sectors: montreal.filter((s) => s.zoneKey === z.key) }))
+    .filter(({ sectors }) => sectors.length > 0)
+    .map(({ z, sectors }) => ({
+      key: z.key,
+      zone: locale === "en" ? z.nameEn || z.nameFr : z.nameFr,
+      sectors: sectors.map((s) => nameOf(s, locale)),
+      free: z.shortFeeCents === 0 && z.longFeeCents === 0,
+      short: money(z.shortFeeCents),
+      long: money(z.longFeeCents),
+      threshold: thresholdText(z.thresholdMinutes, locale),
+    }));
 }
 
 /** Ce que l'artisan colle dans sa fiche Google : un secteur actif par ligne, dans l'ordre. */

@@ -13,7 +13,7 @@ import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
 import { Faq } from "@/components/home/Faq";
 import { faqFill } from "@/components/home/faq-fill";
-import { sectorNames } from "@/lib/travel";
+import { faqJsonLd, localBusinessJsonLd } from "@/lib/seo";
 import { Contact } from "@/components/home/Contact";
 import { ClosingCta } from "@/components/home/ClosingCta";
 
@@ -26,36 +26,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const t = getDict(locale);
   const settings = await getSettings();
 
-  /* Données structurées : pour que Google comprenne le commerce. */
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "HomeAndConstructionBusiness",
-    name: "NIVEX",
-    description: t.meta.description,
-    slogan: t.brand.tagline,
-    telephone: "+14509431217",
-    email: contactEmail(settings),
-    priceRange: "$$",
-    areaServed: sectorNames(settings.zonePolicy, locale).map((name) => ({ "@type": "Place", name })),
-    address: { "@type": "PostalAddress", addressRegion: "QC", addressCountry: "CA", addressLocality: "Longueuil" },
-    openingHoursSpecification: settings.hours.filter((h) => h.enabled).map((h) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][h.day],
-      opens: h.open, closes: h.close,
-    })),
-    makesOffer: t.services.items.map((s) => ({
-      "@type": "Offer", itemOffered: { "@type": "Service", name: s.name, description: s.body },
-    })),
-  };
-
-  const faqLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: t.faq.items.map((f) => ({
-      "@type": "Question", name: f.q,
-      acceptedAnswer: { "@type": "Answer", text: faqFill(f.a, t, settings, locale) },
-    })),
-  };
+  /* Données structurées : la fiche du commerce, et la foire aux questions
+     telle qu'elle s'affiche. */
+  const jsonLd = localBusinessJsonLd(t, settings, locale);
+  const faqLd = faqJsonLd(t.faq.items.map((f) => ({ q: f.q, a: faqFill(f.a, t, settings, locale) })));
 
   return (
     <>

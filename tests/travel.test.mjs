@@ -13,9 +13,13 @@ import assert from "node:assert/strict";
 const {
   evaluateZone, zoneFor, bookable, feeTable, postalHead, servedText, googleList, sectorNames,
   activePrefixes, thresholdText, policyProblems, describeChanges, orderedSectors, joinList,
+  isMontrealSector, montrealNames, montrealFees, sectorsByRegion,
   DEFAULT_ZONE_POLICY,
 } = await import("../src/lib/travel.ts");
 const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd } = await import("../src/lib/seo.ts");
+const { default: robots } = await import("../src/app/robots.ts");
+const { default: sitemap } = await import("../src/app/sitemap.ts");
 const { estimateCents } = await import("../src/lib/availability.ts");
 const { ownerNotification, clientConfirmation } = await import("../src/lib/email.ts");
 const { fr } = await import("../src/lib/i18n/fr.ts");
@@ -30,18 +34,18 @@ const P = DEFAULT_ZONE_POLICY;
 const COURT = 120;   // 2 h
 const LONG = 180;    // 3 h pile
 
-console.log("\nLes vingt secteurs du profil Google");
+console.log("\nLes secteurs, Rive-Sud d'abord, Montréal ensuite");
 
-test("vingt secteurs, dans l'ordre de la fiche, répartis en A, B et C", () => {
+test("vingt et un secteurs : Saint-Lambert en tête, puis la Rive-Sud, puis Montréal", () => {
   assert.deepEqual(sectorNames(P, "fr"), [
-    "Longueuil", "Saint-Hubert", "Greenfield Park", "Saint-Lambert", "Brossard", "Boucherville",
-    "Saint-Bruno-de-Montarville", "Sainte-Julie", "Varennes",
+    "Saint-Lambert", "Vieux-Longueuil", "Longueuil", "Greenfield Park", "Saint-Hubert",
+    "Brossard", "Boucherville", "Saint-Bruno-de-Montarville", "Sainte-Julie", "Varennes",
+    "Chambly", "Candiac", "La Prairie", "Saint-Jean-sur-Richelieu",
     "L'Île-des-Sœurs", "Verdun", "Vieux-Montréal", "Westmount", "Outremont",
-    "Centre-ville de Montréal", "Le Plateau-Mont-Royal", "Chambly", "Candiac", "La Prairie",
-    "Saint-Jean-sur-Richelieu",
+    "Centre-ville de Montréal", "Le Plateau-Mont-Royal",
   ]);
   const parZone = (k) => P.sectors.filter((s) => s.zoneKey === k).length;
-  assert.equal(parZone("a"), 9);
+  assert.equal(parZone("a"), 10);
   assert.equal(parZone("b"), 10);
   assert.equal(parZone("c"), 1);
 });
@@ -288,15 +292,24 @@ test("des montants ou un seuil absurdes retombent sur des valeurs sûres", () =>
 
 console.log("\nLe texte public, la liste pour Google, le tableau des frais");
 
-test("la phrase de la zone nomme les secteurs actifs, en français et en anglais", () => {
+test("la phrase de la zone : la Rive-Sud, puis Montréal, en français et en anglais", () => {
   const f = servedText(P, "fr", fr.zoneText);
-  assert.ok(f.startsWith("Secteurs desservis : Longueuil, Saint-Hubert,"));
-  assert.ok(f.endsWith("Le Plateau-Mont-Royal, Chambly, Candiac, La Prairie et Saint-Jean-sur-Richelieu."));
+  assert.ok(f.startsWith("Secteurs desservis : Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert, Brossard,"));
+  assert.ok(f.includes("La Prairie et Saint-Jean-sur-Richelieu. À Montréal : L'Île-des-Sœurs, Verdun,"));
+  assert.ok(f.endsWith("Centre-ville de Montréal et Le Plateau-Mont-Royal."));
   const e = servedText(P, "en", en.zoneText);
-  assert.match(e, /^Areas served: Longueuil, /);
-  assert.match(e, /Nuns' Island/);
-  assert.match(e, /Downtown Montreal/);
-  assert.ok(e.endsWith("Plateau-Mont-Royal, Chambly, Candiac, La Prairie and Saint-Jean-sur-Richelieu."));
+  assert.match(e, /^Areas served: Saint-Lambert, Vieux-Longueuil, /);
+  assert.ok(e.includes("La Prairie and Saint-Jean-sur-Richelieu. In Montreal: Nuns' Island, Verdun, Old Montreal,"));
+  assert.ok(e.endsWith("Downtown Montreal and Plateau-Mont-Royal."));
+});
+
+test("sans quartier de Montréal, la phrase s'arrête à la Rive-Sud ; sans Rive-Sud, elle ne dit que Montréal", () => {
+  const p = clone(P);
+  for (const x of p.sectors) if (isMontrealSector(x)) x.enabled = false;
+  assert.doesNotMatch(servedText(p, "fr", fr.zoneText), /Montréal :/);
+  const q = clone(P);
+  for (const x of q.sectors) if (!isMontrealSector(x)) x.enabled = false;
+  assert.match(servedText(q, "fr", fr.zoneText), /^À Montréal : L'Île-des-Sœurs/);
 });
 
 test("aucun point d'exclamation dans les textes générés", () => {
@@ -309,15 +322,14 @@ test("aucun point d'exclamation dans les textes générés", () => {
 
 test("la liste pour Google : un secteur actif par ligne, dans l'ordre", () => {
   const l = googleList(P).split("\n");
-  assert.equal(l.length, 20);
-  assert.equal(l[0], "Longueuil");
-  assert.equal(l[16], "Chambly");
-  assert.equal(l[17], "Candiac");
-  assert.equal(l[18], "La Prairie");
-  assert.equal(l[19], "Saint-Jean-sur-Richelieu");
+  assert.equal(l.length, 21);
+  assert.deepEqual(l.slice(0, 5), ["Saint-Lambert", "Vieux-Longueuil", "Longueuil", "Greenfield Park", "Saint-Hubert"]);
+  assert.equal(l[13], "Saint-Jean-sur-Richelieu");
+  assert.equal(l[14], "L'Île-des-Sœurs", "Montréal vient après la Rive-Sud");
+  assert.equal(l[20], "Le Plateau-Mont-Royal");
   const p = clone(P);
   p.sectors.find((s) => s.key === "candiac").enabled = false;
-  assert.equal(googleList(p).split("\n").length, 19, "un secteur inactif n'y figure pas");
+  assert.equal(googleList(p).split("\n").length, 20, "un secteur inactif n'y figure pas");
 });
 
 test("le tableau des frais montre chaque zone, ses secteurs et ses deux tarifs", () => {
@@ -325,7 +337,8 @@ test("le tableau des frais montre chaque zone, ses secteurs et ses deux tarifs",
   const rows = feeTable(P, "fr", money);
   assert.deepEqual(rows.map((r) => r.zone), ["Zone A", "Zone B", "Zone C"]);
   assert.equal(rows[0].free, true);
-  assert.equal(rows[0].sectors.length, 9);
+  assert.equal(rows[0].sectors.length, 10);
+  assert.deepEqual(rows[0].sectors.slice(0, 5), ["Saint-Lambert", "Vieux-Longueuil", "Longueuil", "Greenfield Park", "Saint-Hubert"]);
   assert.deepEqual(rows[1].sectors.slice(-3), ["Chambly", "Candiac", "La Prairie"]);
   assert.deepEqual({ short: rows[1].short, long: rows[1].long, threshold: rows[1].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
   assert.deepEqual(rows[2].sectors, ["Saint-Jean-sur-Richelieu"]);
@@ -339,6 +352,100 @@ test("le seuil s'écrit comme on le dit", () => {
   assert.equal(thresholdText(180, "en"), "3 hours");
   assert.equal(joinList(["A", "B", "C"], "fr"), "A, B et C");
   assert.equal(joinList(["A", "B"], "en"), "A and B");
+});
+
+console.log("\nMontréal");
+
+test("un quartier de Montréal se reconnaît à ses préfixes en H, Laval à part", () => {
+  const s = (prefixes) => ({ key: "x", nameFr: "x", nameEn: "", prefixes, zoneKey: "b", enabled: true });
+  assert.equal(isMontrealSector(s(["H3E"])), true);
+  assert.equal(isMontrealSector(s(["H4G", "H4H"])), true);
+  assert.equal(isMontrealSector(s(["J4K"])), false);
+  assert.equal(isMontrealSector(s(["H7A"])), false, "Laval n'est pas Montréal");
+  assert.equal(isMontrealSector(s([])), false);
+});
+
+test("les quartiers de Montréal : les sept secteurs de l'île, et eux seuls", () => {
+  assert.deepEqual(montrealNames(P, "fr"), [
+    "L'Île-des-Sœurs", "Verdun", "Vieux-Montréal", "Westmount", "Outremont", "Centre-ville de Montréal", "Le Plateau-Mont-Royal",
+  ]);
+  assert.equal(montrealNames(P, "en")[0], "Nuns' Island");
+  assert.equal(sectorsByRegion(P).south.some(isMontrealSector), false);
+});
+
+test("les frais de Montréal : ceux de la zone B, sans Chambly ni Candiac", () => {
+  const money = (c) => `${Math.round(c / 100)} $`;
+  const rows = montrealFees(P, "fr", money);
+  assert.equal(rows.length, 1);
+  assert.deepEqual({ short: rows[0].short, long: rows[0].long, threshold: rows[0].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
+  assert.ok(!rows[0].sectors.includes("Chambly"));
+  const p = clone(P);
+  p.sectors.find((x) => x.key === "verdun").zoneKey = "c";
+  assert.equal(montrealFees(p, "fr", money).length, 2, "deux zones, deux lignes");
+});
+
+console.log("\nCe que lisent les moteurs et les assistants");
+
+test("le numéro s'écrit +1 450 943-1217", () => {
+  assert.equal(phoneDisplay(), "+1 450 943-1217");
+});
+
+test("la description de l'accueil nomme Saint-Lambert d'abord, puis Montréal", () => {
+  assert.equal(metaDescription(fr, P, "fr").split(".")[0],
+    "Repassage à domicile à Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert et Montréal");
+  assert.match(metaDescription(en, P, "en"), /^In-home ironing in Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert and Montreal\./);
+  assert.doesNotMatch(metaDescription(fr, P, "fr"), /\{|!/);
+});
+
+test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avant Montréal", () => {
+  const ld = localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr");
+  assert.equal(ld["@type"], "LocalBusiness");
+  assert.equal(ld.name, "NIVEX");
+  assert.equal(ld.telephone, "+1 450 943-1217");
+  assert.match(ld.url, /\/fr$/);
+  assert.equal(flat(ld.priceRange), "50 $ / h");
+  assert.equal(ld.makesOffer[0].priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
+  assert.equal(ld.makesOffer[0].eligibleQuantity.minValue, 2, "deux heures au minimum");
+  const lieux = ld.areaServed.map((x) => x.name);
+  assert.equal(lieux[0], "Saint-Lambert");
+  assert.equal(lieux.length, 21);
+  const premierMontreal = ld.areaServed.findIndex((x) => x.address.addressLocality === "Montréal");
+  assert.equal(lieux[premierMontreal], "L'Île-des-Sœurs");
+  assert.ok(ld.areaServed.slice(premierMontreal).every((x) => x.address.addressLocality === "Montréal"), "Montréal en dernier, d'un bloc");
+});
+
+test("la foire aux questions structurée reprend le texte affiché", () => {
+  const ld = faqJsonLd([{ q: "Q ?", a: "R." }]);
+  assert.equal(ld["@type"], "FAQPage");
+  assert.equal(ld.mainEntity[0].acceptedAnswer.text, "R.");
+});
+
+test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", () => {
+  const r = robots();
+  const agents = r.rules.map((x) => x.userAgent);
+  for (const bot of ["Googlebot", "Bingbot", "OAI-SearchBot", "PerplexityBot", "Claude-SearchBot", "*"]) {
+    const rule = r.rules.find((x) => x.userAgent === bot);
+    assert.ok(rule, `${bot} devrait être nommé`);
+    assert.equal(rule.allow, "/");
+    assert.ok(rule.disallow.includes("/admin") && rule.disallow.includes("/api/"), `${bot} ne doit pas lire l'espace artisan`);
+  }
+  assert.equal(agents.length, 6);
+});
+
+test("le plan du site contient la page Montréal, en français et en anglais", () => {
+  const urls = sitemap().map((x) => x.url);
+  assert.ok(urls.some((u) => u.endsWith("/fr/montreal")));
+  assert.ok(urls.some((u) => u.endsWith("/en/montreal")));
+});
+
+test("les nouveaux textes : aucun point d'exclamation, et le français a son anglais", () => {
+  const textes = [fr.hero.onSite, en.hero.onSite, fr.faq.items[0].q, fr.faq.items[0].a, en.faq.items[0].q, en.faq.items[0].a,
+    ...Object.values(fr.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v])),
+    ...Object.values(en.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v]))];
+  for (const t of textes) assert.doesNotMatch(t, /!/, t);
+  assert.equal(fr.faq.items[0].q, "Est-ce que vous ramassez les vêtements ?");
+  assert.equal(fr.montreal.metaTitle, "Repassage à domicile à Montréal — NIVEX");
+  assert.equal(fr.meta.title, "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX");
 });
 
 console.log("\nL'historique");

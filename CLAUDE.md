@@ -99,6 +99,7 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
+| `lib/seo.ts` | Ce que lisent les moteurs et les assistants : description de l'accueil, fiche LocalBusiness, FAQ structurée |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
@@ -196,8 +197,8 @@ conservé : ni le texte, ni le numéro.
 
 ## Zones et frais de déplacement
 
-Deux étages, dans `lib/travel.ts`. Des **secteurs** (Longueuil, Verdun,
-Candiac… vingt, ceux du profil Google), chacun reconnu aux trois premiers
+Deux étages, dans `lib/travel.ts`. Des **secteurs** (Saint-Lambert, Verdun,
+Candiac… une vingtaine, ceux du profil Google), chacun reconnu aux trois premiers
 caractères du code postal, rattachés à des **zones** (A, B, C) qui portent
 les deux tarifs et leur propre seuil. Un code hors de tout secteur actif ne
 peut pas réserver en ligne : le client est invité à appeler.
@@ -215,6 +216,16 @@ peut pas réserver en ligne : le client est invité à appeler.
   conditions, FAQ, données structurées), le tableau des frais et la liste
   « Copier pour Google » s'écrivent depuis les secteurs actifs. Aucune
   phrase de zone ne s'écrit à la main.
+- **La Rive-Sud d'abord, Montréal ensuite.** Un secteur dont tous les
+  préfixes commencent par H (sauf H7, Laval) est un quartier de Montréal
+  (`isMontrealSector`), quelle que soit sa zone. Partout où les secteurs
+  sont nommés — texte de zone, description de l'accueil, `areaServed`,
+  liste pour Google —, les autres viennent en premier, dans l'ordre de
+  l'onglet, puis ceux de l'île. Saint-Lambert ouvre la liste : c'est le
+  secteur que la maison met en avant, et l'ordre se tient depuis l'onglet.
+- La page `/montreal` liste les quartiers de l'île et leurs frais
+  (`montrealFees`), avec la durée minimale et le tarif de la page Tarifs.
+  Rien n'y est écrit à la main.
 - L'ancienne colonne `service_area` n'est plus lue du tout. Elle reste en
   base, sans effet.
 - La bascule vers les secteurs est écrite une fois par `bootstrap()` : toute
@@ -232,6 +243,20 @@ dans **leur propre colonne**, jamais fondus dans l'estimation :
 
 Le seuil du tarif réduit est **atteint, non dépassé** : trois heures tout
 rond paient déjà le tarif réduit.
+
+## Moteurs de recherche et assistants
+
+La fiche `LocalBusiness` (`lib/seo.ts`) est la même sur l'accueil et sur la
+page Montréal : nom, téléphone, site, taux horaire et durée minimale lus des
+réglages, secteurs dans `areaServed` (Rive-Sud, puis Montréal, un quartier
+de l'île portant Montréal comme localité). La description de l'accueil
+nomme les cinq premiers secteurs de la Rive-Sud, puis Montréal.
+
+`robots.txt` nomme Googlebot, Bingbot, OAI-SearchBot, PerplexityBot et
+Claude-SearchBot. Un robot qui trouve son nom ignore le groupe `*` : chaque
+groupe répète donc les mêmes interdits (espace artisan, API, liens
+personnels de réservation et d'abonnement). Toute page publique ajoutée va
+dans `sitemap.ts`.
 
 ## Mesure d'audience, et la Loi 25
 
@@ -309,7 +334,8 @@ pas.
 Cinq fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements), `booking` (courriels, durées), `provenance` (zone
 desservie, journal, provenance), `travel` (secteurs, zones, frais,
-conflits de préfixes, historique), `subscription`
+conflits de préfixes, historique, Montréal, fiche LocalBusiness, robots,
+plan du site), `subscription`
 (grille des dates, rang des visites, montants, délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 

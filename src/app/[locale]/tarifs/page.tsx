@@ -333,6 +333,10 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
               {servedText(s.zonePolicy, locale, t.zoneText)}
             </p>
+            <Link href={`/${locale}/montreal`}
+              className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+              {t.montreal.link}
+            </Link>
             <ZoneChecker t={t} locale={locale} className="mt-6" />
           </div>
 
