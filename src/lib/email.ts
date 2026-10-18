@@ -1,5 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS, SETUP_MINUTES } from "./brand";
+import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, SETUP_MINUTES } from "./brand";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -51,7 +51,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-function shell(inner: string, preheader: string, contact = "styve1885@gmail.com"): string {
+function shell(inner: string, preheader: string, contact = CONTACT_EMAIL): string {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light only"><title>NIVEX</title></head>

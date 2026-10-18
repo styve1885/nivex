@@ -18,13 +18,13 @@ import { servedText } from "@/lib/travel";
  */
 
 /** Date de dernière révision des deux documents. */
-export const LEGAL_UPDATED = "2026-10-17";
+export const LEGAL_UPDATED = "2026-10-18";
 
 function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   const days = locale === "en" ? "days" : "jours";
   const hours = locale === "en" ? "hours" : "heures";
   return {
-    email: contactEmail(s),
+    email: contactEmail(),
     phone: PHONE,
     neq: NEQ,
     // Le nom du site, tel qu'on le prononce : sans le protocole, et sans le
@@ -43,10 +43,10 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
 const LINK = "underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-700";
 
 /** Découpe le texte sur les accolades, et rend joignables celles qui le sont. */
-function fill(text: string, v: Record<string, string>, s: Settings): React.ReactNode[] {
+function fill(text: string, v: Record<string, string>): React.ReactNode[] {
   return text.split(/(\{[a-z]+\})/g).map((part, i) => {
     if (part === "{email}") {
-      return <a key={i} href={contactEmailHref(s)} className={LINK}>{v.email}</a>;
+      return <a key={i} href={contactEmailHref()} className={LINK}>{v.email}</a>;
     }
     if (part === "{phone}") {
       return <a key={i} href={PHONE_HREF} className={LINK}>{v.phone}</a>;
@@ -84,7 +84,7 @@ export function LegalDocument({
             {doc.title}
           </h1>
           <p className="mt-7 text-[1.02rem] font-light leading-[1.9] text-ink-600">
-            {fill(doc.lede, v, settings)}
+            {fill(doc.lede, v)}
           </p>
           <p className="mt-8 text-[11px] uppercase tracking-[0.22em] text-ink-500">
             {t.legal.updatedLabel} — <time dateTime={LEGAL_UPDATED}>{updated}</time>
@@ -119,7 +119,7 @@ export function LegalDocument({
 
               {section.body.map((paragraph, j) => (
                 <p key={j} className="mt-5 text-[0.95rem] font-light leading-[1.95] text-ink-600">
-                  {fill(paragraph, v, settings)}
+                  {fill(paragraph, v)}
                 </p>
               ))}
 
@@ -127,7 +127,7 @@ export function LegalDocument({
                 <ul className="mt-6 space-y-4 border-l border-gold-300/60 pl-6">
                   {section.list.map((item, j) => (
                     <li key={j} className="text-[0.95rem] font-light leading-[1.9] text-ink-600">
-                      {fill(item, v, settings)}
+                      {fill(item, v)}
                     </li>
                   ))}
                 </ul>

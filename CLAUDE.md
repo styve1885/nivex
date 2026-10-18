@@ -100,7 +100,7 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : description de l'accueil, fiche LocalBusiness, FAQ structurée |
-| `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance |
+| `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
@@ -114,6 +114,15 @@ seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 Abonnés, Messages, Visites, Réglages, Zones et frais, Connexion. Presque
 tout ce qui est commercial s'y règle — tarifs, horaire, prestations,
 secteurs, zones et frais.
+
+### Les adresses courriel
+
+Le site affiche partout `contact@nivexrepassage.ca` (`CONTACT_EMAIL`) : pied
+de page, Contact, documents légaux, fiche LocalBusiness, adresse de réponse
+des courriels aux clients. Cette adresse ne reçoit rien elle-même : ImprovMX
+la renvoie vers le Gmail de l'artisan (enregistrements MX et SPF dans la zone
+DNS d'OVH, où le domaine est acheté). Les courriels partent toujours du compte
+Google branché ; les avis internes vont à `REQUEST_INBOX`.
 
 ## Le tunnel de réservation
 

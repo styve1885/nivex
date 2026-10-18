@@ -47,7 +47,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <BeforeAfterBanner t={t} />
       <Pricing t={t} locale={locale} settings={settings} />
       <Faq t={t} settings={settings} locale={locale} />
-      <Contact t={t} locale={locale} businessEmail={contactEmail(settings)} settings={settings} />
+      <Contact t={t} locale={locale} businessEmail={contactEmail()} settings={settings} />
       <ClosingCta t={t} locale={locale} />
     </>
   );

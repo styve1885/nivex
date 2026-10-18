@@ -63,19 +63,20 @@ const privacy: LegalDoc = {
     {
       title: "Who else has access",
       body: [
-        "Four providers, each for one precise task, and none of them may use any of it for their own ends.",
+        "Five providers, each for one precise task, and none of them may use any of it for their own ends.",
       ],
       list: [
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
         "Twilio — carries the confirmation and reminder text messages. It receives your phone number and the text of the message, nothing else.",
+        "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
     {
       title: "Outside Quebec",
       body: [
-        "The site, the database, the Google services and Twilio are hosted in the United States. Your information therefore leaves Quebec to be kept there, and is subject to the law of the host country — which may, in certain cases, allow its authorities to reach it.",
+        "The site, the database, the Google services and Twilio are hosted in the United States, and ImprovMX forwards emails from abroad. Your information therefore leaves Quebec to be kept there, and is subject to the law of the host country — which may, in certain cases, allow its authorities to reach it.",
         "We chose providers contractually bound to protection comparable to what is required here, and we entrust them with nothing beyond what is necessary. By booking or writing to us through the site, you consent to this communication outside Quebec. If that troubles you, call us and we will arrange the appointment by voice.",
       ],
     },
@@ -295,8 +296,8 @@ export const en: Dict = {
     values: "Gentle, delicate, elegant",
     phone: "+1 450 943 1217",
     phoneHref: "tel:+14509431217",
-    email: "styve1885@gmail.com",
-    emailHref: "mailto:styve1885@gmail.com",
+    email: "contact@nivexrepassage.ca",
+    emailHref: "mailto:contact@nivexrepassage.ca",
     region: "Saint-Lambert · Longueuil · Montreal",
   },
   hero: {

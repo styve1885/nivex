@@ -402,6 +402,7 @@ test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avan
   assert.equal(ld["@type"], "LocalBusiness");
   assert.equal(ld.name, "NIVEX");
   assert.equal(ld.telephone, "+1 450 943-1217");
+  assert.equal(ld.email, "contact@nivexrepassage.ca", "le courriel du domaine, pas le Gmail");
   assert.match(ld.url, /\/fr$/);
   assert.equal(flat(ld.priceRange), "50 $ / h");
   assert.equal(ld.makesOffer[0].priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
