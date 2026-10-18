@@ -121,6 +121,7 @@ export const SubscriptionInput = z.object({
   /* La provenance, acceptée telle quelle puis nettoyée champ par champ :
      voir BookingInput. Elle ne doit jamais faire échouer un abonnement. */
   heardFrom: z.unknown().optional(),
+  referredBy: z.unknown().optional(),
   attribution: z.unknown().optional(),
 });
 export type SubscriptionInputType = z.infer<typeof SubscriptionInput>;
@@ -373,6 +374,8 @@ async function insertSubscription(p: {
     landing_page: i === 0 ? prov?.landing ?? null : null,
     first_seen_at: i === 0 ? prov?.firstSeenAt ?? null : null,
     visit_count: i === 0 ? prov?.visits ?? null : null,
+    referral: i === 0 ? prov?.referral ?? null : null,
+    referred_by: i === 0 ? prov?.referredBy ?? null : null,
   }));
   const paid = p.paidCurrent ? { [String(p.startCycle)]: new Date().toISOString() } : {};
 
@@ -403,7 +406,7 @@ async function insertSubscription(p: {
           duration_minutes, estimate_cents, currency, first_hour_free,
           travel_fee_cents, travel_zone, subscription_id, series_no,
           heard_from, utm_source, utm_medium, utm_campaign,
-          referrer, landing_page, first_seen_at, visit_count
+          referrer, landing_page, first_seen_at, visit_count, referral, referred_by
         )
         SELECT
           r.ref, r.manage_token, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
@@ -412,11 +415,12 @@ async function insertSubscription(p: {
           ${plan.minutesPerVisit}, 0, ${settings.currency}, false,
           0, ${verdict.labelFr}, ${id}::uuid, ${p.series},
           r.heard_from, r.utm_source, r.utm_medium, r.utm_campaign,
-          r.referrer, r.landing_page, r.first_seen_at, r.visit_count
+          r.referrer, r.landing_page, r.first_seen_at, r.visit_count, r.referral, r.referred_by
         FROM jsonb_to_recordset(${JSON.stringify(visits)}::jsonb) AS r(
           ref text, manage_token text, starts_at timestamptz, ends_at timestamptz,
           heard_from text, utm_source text, utm_medium text, utm_campaign text,
-          referrer text, landing_page text, first_seen_at timestamptz, visit_count integer
+          referrer text, landing_page text, first_seen_at timestamptz, visit_count integer,
+          referral text, referred_by text
         )`,
     ]);
   } catch (e) {

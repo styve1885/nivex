@@ -2,7 +2,10 @@ import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
 import { getSettings, type Settings } from "./settings";
-import { clip, HEARD_FROM_FR, isHeardFrom, referrerHost, type HeardFrom } from "./attribution";
+import {
+  bookingGroup, clip, heardFromText, isHeardFrom, isStoredHeardFrom, referrerHost, refName,
+  type SourceGroup, type StoredHeardFrom,
+} from "./attribution";
 import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
@@ -35,6 +38,9 @@ export const BookingInput = z.object({
      n'a pas demandées. C'est `isHeardFrom` qui tranche plus bas ; ici on se
      contente d'accepter une chaîne, pour la raison dite juste après. */
   heardFrom: z.unknown().optional(),
+  /* « Qui vous a recommandé ? » — gardé seulement avec la réponse
+     « La recommandation d'un proche ». */
+  referredBy: z.unknown().optional(),
 
   /* Provenance relevée par le navigateur à la première visite. Elle arrive
      avec le formulaire et pas avant : tant que la personne n'a rien demandé,
@@ -79,7 +85,11 @@ export type Booking = {
  * étiquetée ne dit pas pourquoi la personne a cliqué.
  */
 export type BookingOrigin = {
-  heardFrom: HeardFrom | null;
+  heardFrom: StoredHeardFrom | null;
+  /** Le nom écrit sous « Qui vous a recommandé ? ». */
+  referredBy: string | null;
+  /** Le prénom du lien de recommandation suivi (?ref=). */
+  referral: string | null;
   source: string | null;
   medium: string | null;
   campaign: string | null;
@@ -109,7 +119,9 @@ export function hydrate(r: Row): Booking {
     createdAt: new Date(r.created_at as string),
     cancelledAt: r.cancelled_at ? new Date(r.cancelled_at as string) : null,
     origin: {
-      heardFrom: isHeardFrom(r.heard_from) ? r.heard_from : null,
+      heardFrom: isStoredHeardFrom(r.heard_from) ? r.heard_from : null,
+      referredBy: (r.referred_by as string) ?? null,
+      referral: (r.referral as string) ?? null,
       source: (r.utm_source as string) ?? null,
       medium: (r.utm_medium as string) ?? null,
       campaign: (r.utm_campaign as string) ?? null,
@@ -205,7 +217,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         duration_minutes, estimate_cents, currency, first_hour_free,
         travel_fee_cents, travel_zone,
         heard_from, utm_source, utm_medium, utm_campaign,
-        referrer, landing_page, first_seen_at, visit_count
+        referrer, landing_page, first_seen_at, visit_count, referral, referred_by
       ) VALUES (
         ${ref}, ${manageToken}, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
@@ -213,7 +225,8 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
         ${verdict.feeCents}, ${verdict.labelFr},
         ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
-        ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits}
+        ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits},
+        ${provenance.referral}, ${provenance.referredBy}
       ) RETURNING *`) as Row[];
   } catch (e) {
     const msg = String((e as Error).message ?? e);
@@ -290,8 +303,9 @@ export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start:
  * étiquetée. Une provenance absente n'est pas une erreur — un visiteur qui
  * refuse le stockage de son navigateur doit pouvoir réserver comme un autre.
  */
-export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "attribution">): {
-  heardFrom: string | null; source: string | null; medium: string | null;
+export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referredBy" | "attribution">): {
+  heardFrom: string | null; referredBy: string | null; referral: string | null;
+  source: string | null; medium: string | null;
   campaign: string | null; referrer: string | null; landing: string | null;
   firstSeenAt: string | null; visits: number | null;
 } {
@@ -320,8 +334,17 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "attribu
     }
   }
 
+  const heardFrom = isHeardFrom(input.heardFrom) ? input.heardFrom : null;
+  /* Un nom écrit à la main : sans retour à la ligne ni caractère de
+     contrôle, et seulement sous la réponse à laquelle il appartient. */
+  const referredBy = heardFrom === "recommandation"
+    ? clip(typeof input.referredBy === "string" ? input.referredBy.replace(/\p{Cc}+/gu, " ") : null, 80)
+    : null;
+
   return {
-    heardFrom: isHeardFrom(input.heardFrom) ? input.heardFrom : null,
+    heardFrom,
+    referredBy,
+    referral: refName(a.ref),
     source: clip(a.source, 120) ?? referrerHost(referrer),
     medium: clip(a.medium, 120),
     campaign: clip(a.campaign, 200),
@@ -354,9 +377,8 @@ function eventDescription(b: Booking, origin: string, tz: string): string {
     );
   }
   if (b.notes) lines.push("", `Précisions du client : ${b.notes}`);
-  if (b.origin.heardFrom) {
-    lines.push("", `Nous a connus par : ${HEARD_FROM_FR[b.origin.heardFrom]}`);
-  }
+  const heard = heardFromText(b.origin);
+  if (heard) lines.push("", `Nous a connus par : ${heard}`);
   lines.push("", `Référence : ${b.ref}`, `Tableau de bord : ${origin}/admin`);
   return lines.join("\n");
 }
@@ -375,7 +397,7 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     /* Seule la notification de l'artisan s'en sert ; le gabarit du client
        ignore ce champ. */
     origin: {
-      heardFromLabel: b.origin.heardFrom ? HEARD_FROM_FR[b.origin.heardFrom] : null,
+      heardFromLabel: heardFromText(b.origin),
       source: b.origin.source,
       campaign: b.origin.campaign,
       firstSeenAt: b.origin.firstSeenAt,
@@ -563,6 +585,40 @@ export async function stats() {
     cancelled: Number(r.cancelled ?? 0), total: Number(r.total ?? 0),
     monthCents: Number(r.month_cents ?? 0) + Number(paid[0]?.cents ?? 0), clients: Number(r.clients ?? 0),
   };
+}
+
+/**
+ * D'où viennent les clients : une ligne par séance ponctuelle prise en ligne,
+ * séances annulées exclues, et une par abonnement pris en ligne — la
+ * provenance d'un abonnement vit sur sa toute première visite. Les abonnés
+ * entrés à la main par l'artisan ne sont pas des arrivées du site.
+ */
+export async function bookingSources(): Promise<{ createdAt: Date; group: SourceGroup }[]> {
+  await ensureSchema();
+  const rows = (await sql()`
+    SELECT b.created_at, b.heard_from, b.referral, b.utm_source, b.referrer
+    FROM nivex_bookings b
+    WHERE b.subscription_id IS NULL AND b.status <> 'cancelled'
+    UNION ALL
+    SELECT s.created_at, f.heard_from, f.referral, f.utm_source, f.referrer
+    FROM nivex_subscriptions s
+    LEFT JOIN LATERAL (
+      SELECT x.heard_from, x.referral, x.utm_source, x.referrer
+      FROM nivex_bookings x
+      WHERE x.subscription_id = s.id
+      ORDER BY x.series_no, x.starts_at
+      LIMIT 1
+    ) f ON true
+    WHERE s.created_by = 'client'`) as Row[];
+  return rows.map((r) => ({
+    createdAt: new Date(r.created_at as string),
+    group: bookingGroup({
+      heardFrom: isStoredHeardFrom(r.heard_from) ? r.heard_from : null,
+      referral: (r.referral as string) ?? null,
+      source: (r.utm_source as string) ?? null,
+      referrer: (r.referrer as string) ?? null,
+    }),
+  }));
 }
 
 /* ============================ Annulation ============================ */

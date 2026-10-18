@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowIcon, CheckIcon } from "../Icons";
-import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
+import type { HeardFrom } from "@/lib/attribution";
 import type { ZoneStatus } from "@/lib/travel";
-import { readAttribution } from "../SiteMeasurement";
+import { arrivalHint, readAttribution } from "../SiteMeasurement";
+import { HeardFromField } from "./HeardFromField";
 import { Stepper } from "./Stepper";
 import { Field, Row, SlotPicker } from "./BookingWizard";
 import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal } from "./Stepper.helpers";
@@ -79,7 +80,11 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
   const [notes, setNotes] = useState("");
-  const [heardFrom, setHeardFrom] = useState<HeardFrom | "">("");
+  /* Pré-remplie comme dans le tunnel de réservation ; la question n'apparaît
+     qu'à la deuxième étape. */
+  const [hint] = useState(arrivalHint);
+  const [heardFrom, setHeardFrom] = useState<HeardFrom | "">(hint.heardFrom);
+  const [referredBy, setReferredBy] = useState(hint.referredBy);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [heldTravel, setHeldTravel] = useState<{ key: string; data: TravelAnswer | null } | null>(null);
 
@@ -216,6 +221,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
           notes: notes.trim() || undefined,
           consent: true, hp,
           heardFrom: heardFrom || undefined,
+          referredBy: heardFrom === "recommandation" ? referredBy.trim() || undefined : undefined,
           attribution: readAttribution(),
         }),
       });
@@ -388,14 +394,8 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                 placeholder={t.booking.step1.notesPlaceholder} className="field resize-none" />
             </div>
 
-            <div className="mt-8 border-t border-gold-300/40 pt-7">
-              <label className="label" htmlFor="sub-heard">{t.booking.step2.heardFrom}</label>
-              <select id="sub-heard" value={heardFrom} className="field"
-                onChange={(e) => setHeardFrom(e.target.value as HeardFrom | "")}>
-                <option value="">{t.booking.step2.heardFromEmpty}</option>
-                {HEARD_FROM.map((k) => <option key={k} value={k}>{t.booking.step2.heardFromOptions[k]}</option>)}
-              </select>
-            </div>
+            <HeardFromField t={t} id="sub-heard" value={heardFrom} onChange={setHeardFrom}
+              referredBy={referredBy} onReferredBy={setReferredBy} />
 
             <input type="text" name="company" value={hp} onChange={(e) => setHp(e.target.value)}
               tabIndex={-1} autoComplete="off" aria-hidden="true"

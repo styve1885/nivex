@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { Analytics } from "@vercel/analytics/next";
 import {
-  ATTRIBUTION_KEY, EMPTY_ATTRIBUTION, OPT_OUT_KEY,
-  clip, type Attribution,
+  ARRIVAL_KEY, ATTRIBUTION_KEY, EMPTY_ATTRIBUTION, OPT_OUT_KEY,
+  clip, heardFromHint, isPrivatePath, refName, type Attribution, type HeardFrom,
 } from "@/lib/attribution";
 
 /**
@@ -27,7 +27,9 @@ import {
  *
  * Deux exclusions valent pour les trois : les pages de l'espace artisan ne
  * se comptent jamais, et un appareil porteur du marqueur de retrait n'envoie
- * plus rien du tout.
+ * plus rien du tout. Le marqueur se pose de lui-même quand l'artisan ouvre
+ * son espace, ou par le lien personnel de la page « ne pas compter » ; et le
+ * serveur écarte de son côté toute visite qui porte la session de l'artisan.
  */
 
 /* Le site n'est pas une application hors ligne : un navigateur en navigation
@@ -55,18 +57,29 @@ export function isOptedOut(): boolean {
   return read("local", OPT_OUT_KEY) === "1";
 }
 
+/* Ce qui affiche le marqueur et ce qui le pose sont deux rendus du même
+   état. L'événement les tient d'accord dans cet onglet ; `storage` ne se
+   déclenche que pour les autres. */
+const OPT_OUT_EVENT = "nivex:optout";
+
 export function setOptedOut(on: boolean): void {
   try {
     if (on) window.localStorage.setItem(OPT_OUT_KEY, "1");
     else window.localStorage.removeItem(OPT_OUT_KEY);
   } catch {
-    /* ignoré — le bouton le signalera lui-même */
+    /* ignoré — l'affichage, qui relit le marqueur, le signalera lui-même */
   }
+  window.dispatchEvent(new Event(OPT_OUT_EVENT));
 }
 
-/** Les pages de l'espace artisan, qui ne se comptent jamais. */
-function isAdmin(path: string): boolean {
-  return /^\/admin(\/|$)/.test(path);
+/** Pour `useSyncExternalStore` : prévient quand le marqueur change. */
+export function subscribeOptOut(onChange: () => void): () => void {
+  window.addEventListener(OPT_OUT_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(OPT_OUT_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
 }
 
 /* ====================== Provenance ====================== */
@@ -90,6 +103,7 @@ export function readAttribution(): Attribution {
       medium: clip(o.medium, 60),
       campaign: clip(o.campaign, 120),
       referrer: clip(o.referrer, 400),
+      ref: refName(o.ref),
       landing: clip(o.landing, 300),
       firstSeen: clip(o.firstSeen, 40),
       visits: Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 10_000) : 1,
@@ -99,28 +113,70 @@ export function readAttribution(): Attribution {
   }
 }
 
+/** La provenance d'une arrivée : le lien suivi, ou le site d'où l'on vient. */
+type Arrival = {
+  source: string | null; medium: string | null; campaign: string | null;
+  ref: string | null; referrer: string | null;
+};
+
+const isDirect = (a: Pick<Arrival, "source" | "ref" | "referrer">) => !a.source && !a.ref && !a.referrer;
+
+/**
+ * L'arrivée de la session en cours, retenue à sa première page.
+ *
+ * Toutes les pages lues ensuite lui sont rapportées. Le second élément dit
+ * si la session commence à l'instant. Un référent qui est le site lui-même
+ * — un onglet ouvert depuis une de nos pages — ne dit rien d'une arrivée.
+ */
+function arrival(): [Arrival, boolean] {
+  const held = read("session", ARRIVAL_KEY);
+  if (held) {
+    try {
+      const o = JSON.parse(held) as Record<string, unknown>;
+      return [{
+        source: clip(o.source, 60), medium: clip(o.medium, 60), campaign: clip(o.campaign, 120),
+        ref: refName(o.ref), referrer: clip(o.referrer, 400),
+      }, false];
+    } catch {
+      /* une valeur abîmée se remplace comme une absence */
+    }
+  }
+
+  const p = new URLSearchParams(window.location.search);
+  let referrer = clip(document.referrer, 400);
+  try {
+    if (referrer && new URL(referrer).host === window.location.host) referrer = null;
+  } catch {
+    referrer = null;
+  }
+  const a: Arrival = {
+    source: clip(p.get("utm_source"), 60),
+    medium: clip(p.get("utm_medium"), 60),
+    campaign: clip(p.get("utm_campaign"), 120),
+    ref: refName(p.get("ref")),
+    referrer,
+  };
+  write("session", ARRIVAL_KEY, JSON.stringify(a));
+  return [a, true];
+}
+
 /**
  * Retient la toute première visite, puis compte les suivantes.
  *
  * « Première » au sens strict : une campagne ultérieure n'écrase pas la
  * précédente. Ce qu'on cherche à savoir, c'est quelle carte ou quelle
- * publication a amené la personne la première fois.
+ * publication a amené la personne la première fois. Une seule exception :
+ * une première visite directe ne dit rien, et la première provenance connue
+ * prend sa place — sans quoi un lien de recommandation reçu après un premier
+ * passage ne compterait jamais.
  *
  * Le compteur, lui, avance d'une unité par session et non par page vue :
  * lire trois pages d'affilée est une visite, pas trois.
  */
-function rememberOrigin(path: string): void {
-  const existing = read("local", ATTRIBUTION_KEY);
-  const sameSession = read("session", "nivex.seen") === "1";
-  write("session", "nivex.seen", "1");
-
-  if (!existing) {
-    const p = new URLSearchParams(window.location.search);
+function rememberOrigin(path: string, a: Arrival, fresh: boolean): void {
+  if (!read("local", ATTRIBUTION_KEY)) {
     const first: Attribution = {
-      source: clip(p.get("utm_source"), 60),
-      medium: clip(p.get("utm_medium"), 60),
-      campaign: clip(p.get("utm_campaign"), 120),
-      referrer: clip(document.referrer, 400),
+      ...a,
       landing: clip(path, 300),
       firstSeen: new Date().toISOString(),
       visits: 1,
@@ -129,9 +185,25 @@ function rememberOrigin(path: string): void {
     return;
   }
 
-  if (sameSession) return;
+  if (!fresh) return;
   const cur = readAttribution();
-  write("local", ATTRIBUTION_KEY, JSON.stringify({ ...cur, visits: cur.visits + 1 }));
+  const known = isDirect(cur) && !isDirect(a) ? { ...a, landing: clip(path, 300) } : {};
+  write("local", ATTRIBUTION_KEY, JSON.stringify({ ...cur, ...known, visits: cur.visits + 1 }));
+}
+
+/**
+ * La réponse que l'arrivée laisse deviner à « Comment avez-vous connu
+ * NIVEX ? » : un lien de recommandation, ou une carte de porte-à-porte. La
+ * provenance retenue d'abord ; l'adresse de la page ensuite, pour qui arrive
+ * tout droit sur le formulaire.
+ */
+export function arrivalHint(): { heardFrom: HeardFrom | ""; referredBy: string } {
+  if (typeof window === "undefined") return { heardFrom: "", referredBy: "" };
+  const kept = readAttribution();
+  const p = new URLSearchParams(window.location.search);
+  const here = { source: clip(p.get("utm_source"), 60), ref: refName(p.get("ref")) };
+  const from = heardFromHint(kept) ? kept : here;
+  return { heardFrom: heardFromHint(from) ?? "", referredBy: from.ref ?? "" };
 }
 
 /* ====================== Le composant ====================== */
@@ -150,25 +222,32 @@ export function SiteMeasurement() {
   const dernier = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isAdmin(path) || isOptedOut()) return;
+    if (isPrivatePath(path) || isOptedOut()) return;
     if (dernier.current === path) return;
     dernier.current = path;
 
-    rememberOrigin(path);
+    const [a, fresh] = arrival();
+    rememberOrigin(path, a, fresh);
 
     /* Le journal part sans qu'on attende la réponse, et `keepalive` lui
        permet d'arriver même si le visiteur quitte la page dans la seconde.
-       Un échec ne se remonte pas : personne n'a rien à y faire. */
-    const p = new URLSearchParams(window.location.search);
+       Un échec ne se remonte pas : personne n'a rien à y faire.
+
+       Le fuseau de l'horloge et le drapeau des navigateurs pilotés servent
+       au serveur à reconnaître un robot ; il les lit, puis les oublie. */
+    let tz: string | null = null;
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null; } catch { /* sans fuseau */ }
     fetch("/api/visit", {
       method: "POST",
       headers: { "content-type": "application/json" },
       keepalive: true,
       body: JSON.stringify({
         path,
-        source: p.get("utm_source"),
-        referrer: document.referrer || null,
+        source: a.source, medium: a.medium, campaign: a.campaign, ref: a.ref,
+        referrer: a.referrer,
         locale: path.split("/")[1] === "en" ? "en" : "fr",
+        webdriver: navigator.webdriver === true,
+        tz,
       }),
     }).catch(() => {});
   }, [path]);
@@ -181,7 +260,7 @@ export function SiteMeasurement() {
            `null` annule l'envoi. */
         try {
           const u = new URL(event.url);
-          if (isAdmin(u.pathname)) return null;
+          if (isPrivatePath(u.pathname)) return null;
         } catch {
           /* une URL illisible ne doit pas empêcher la mesure ordinaire */
         }

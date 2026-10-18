@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/settings";
 import { listBookings, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
-import { HEARD_FROM_FR } from "@/lib/attribution";
+import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
 import { smsConfigured } from "@/lib/sms";
 
@@ -48,7 +48,8 @@ export default async function AdminPage({
       subscription: Boolean(b.subscriptionId),
       origin: {
         heardFrom: b.origin.heardFrom,
-        heardFromLabel: b.origin.heardFrom ? HEARD_FROM_FR[b.origin.heardFrom] : null,
+        heardFromLabel: heardFromText(b.origin),
+        referral: b.origin.referral,
         source: b.origin.source,
         campaign: b.origin.campaign,
         referrer: b.origin.referrer,

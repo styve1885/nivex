@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { recordVisit } from "@/lib/visits";
 import { clip } from "@/lib/attribution";
+import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ ok: true }, { status: 202 });
 
+  /* L'artisan connecté ne compte jamais, quel que soit l'appareil : son
+     témoin de session part avec l'appel, et il suffit. Le marqueur du
+     navigateur fait le reste là où il ne s'est jamais connecté. */
+  if (await getSession().catch(() => null)) return NextResponse.json({ ok: true }, { status: 202 });
+
   const path = clip(body.path, 300);
   if (!path || !path.startsWith("/")) return NextResponse.json({ ok: true }, { status: 202 });
 
@@ -29,8 +35,13 @@ export async function POST(req: NextRequest) {
     {
       path,
       utmSource: clip(body.source, 60),
+      utmMedium: clip(body.medium, 60),
+      utmCampaign: clip(body.campaign, 120),
+      ref: clip(body.ref, 60),
       referrer: clip(body.referrer, 400),
       locale: clip(body.locale, 8),
+      webdriver: body.webdriver,
+      timeZone: clip(body.tz, 60),
     },
     {
       userAgent: h.get("user-agent"),

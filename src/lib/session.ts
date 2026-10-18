@@ -1,5 +1,7 @@
+import { createHmac } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { safeEqual } from "./crypto";
 
 const COOKIE = "nivex_session";
 const STATE_COOKIE = "nivex_oauth_state";
@@ -89,4 +91,25 @@ export async function requireOwner(): Promise<Session | null> {
   const s = await getSettings();
   if (!s.ownerEmail) return session;                       // pas encore revendiqué
   return s.ownerEmail.toLowerCase() === session.email.toLowerCase() ? session : null;
+}
+
+/* — Le lien « ne pas compter » — */
+
+/**
+ * La clé du lien personnel qui retire un navigateur du décompte des visites.
+ *
+ * Elle se déduit du secret de session, et ne se stocke donc nulle part :
+ * changer `SESSION_SECRET` change la clé, et les anciens liens cessent
+ * d'ouvrir la page. Les navigateurs déjà retirés le restent — leur marqueur
+ * vit chez eux.
+ */
+export function optOutKey(): string | null {
+  const s = process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY;
+  if (!s) return null;
+  return createHmac("sha256", s).update("nivex:ne-pas-compter").digest("base64url").slice(0, 22);
+}
+
+export function isOptOutKey(candidate: unknown): boolean {
+  const key = optOutKey();
+  return Boolean(key) && typeof candidate === "string" && safeEqual(candidate, key!);
 }
