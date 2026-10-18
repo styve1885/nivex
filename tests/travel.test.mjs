@@ -429,6 +429,8 @@ test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", (
     assert.ok(rule, `${bot} devrait être nommé`);
     assert.equal(rule.allow, "/");
     assert.ok(rule.disallow.includes("/admin") && rule.disallow.includes("/api/"), `${bot} ne doit pas lire l'espace artisan`);
+    assert.ok(rule.disallow.includes("/fr/ne-pas-compter") && rule.disallow.includes("/en/ne-pas-compter"),
+      `${bot} ne doit pas lire la page de retrait`);
   }
   assert.equal(agents.length, 6);
 });

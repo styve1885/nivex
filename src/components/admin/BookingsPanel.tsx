@@ -244,7 +244,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
  */
 function Origin({ origin, tz }: { origin: AdminBooking["origin"]; tz: string }) {
   const source = [origin.source, origin.campaign].filter(Boolean).join(" · ");
-  const known = origin.heardFromLabel || source || origin.firstSeenAt || origin.visits;
+  const known = origin.heardFromLabel || origin.referral || source || origin.firstSeenAt || origin.visits;
   if (!known) return null;
 
   return (
@@ -252,6 +252,7 @@ function Origin({ origin, tz }: { origin: AdminBooking["origin"]; tz: string }) 
       <p className="mb-3 text-[9px] uppercase tracking-[0.2em] text-gold-600">Provenance</p>
       <div className="space-y-3">
         {origin.heardFromLabel && <Line label="Nous a connus par">{origin.heardFromLabel}</Line>}
+        {origin.referral && <Line label="Lien de recommandation">{origin.referral}</Line>}
         {source && (
           <Line label="Source">
             {source}

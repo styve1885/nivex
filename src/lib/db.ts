@@ -1,6 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { SETUP_MINUTES } from "./brand";
 import { DEFAULT_ZONE_POLICY } from "./travel";
+import { DATACENTER_CITIES } from "./attribution";
 
 /**
  * Neon (Postgres) via HTTP. Une seule connexion logique par instance
@@ -233,6 +234,10 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS landing_page   text`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS first_seen_at  timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS visit_count    integer`;
+  /* Le prénom du lien de recommandation suivi, et le nom que la personne
+     écrit elle-même sous « Qui vous a recommandé ? ». */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS referral       text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS referred_by    text`;
 
   /* Frais de déplacement.
    *
@@ -311,6 +316,30 @@ async function bootstrap() {
 
   await q`CREATE INDEX IF NOT EXISTS nivex_visits_created_idx ON nivex_visits (created_at DESC)`;
   await q`CREATE INDEX IF NOT EXISTS nivex_visits_source_idx  ON nivex_visits (source)`;
+
+  /* Le reste de l'étiquette de campagne, le prénom d'un lien de
+     recommandation, et le motif qui fait d'une visite celle d'un robot. Les
+     visites d'avant n'ont rien de tout cela : elles se lisent sans campagne,
+     sans recommandation, et humaines. */
+  await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS medium   text`;
+  await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS campaign text`;
+  await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS referral text`;
+  await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS robot    text`;
+
+  /* Les visites venues d'un centre de données avant que le journal ne sache
+     les reconnaître. La règle est celle de `isDatacenterVisit`, que les
+     nouvelles visites suivent dès leur écriture ; une ligne déjà marquée
+     n'est plus retenue, et un second passage ne change rien. Un échec ne
+     ferme pas la maison : ce n'est qu'un marquage. */
+  try {
+    await q`
+      UPDATE nivex_visits SET robot = 'centre'
+      WHERE robot IS NULL AND upper(country) = 'US' AND source = 'direct'
+        AND referral IS NULL AND device = 'ordinateur'
+        AND lower(city) = ANY(${[...DATACENTER_CITIES]}::text[])`;
+  } catch (e) {
+    console.warn("[nivex] visites de centres de données non marquées :", (e as Error).message);
+  }
 
   /*
    * Abonnements.

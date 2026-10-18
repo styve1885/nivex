@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Mark, Wordmark } from "../Logo";
+import { setOptedOut } from "../SiteMeasurement";
 import { BookingsPanel } from "./BookingsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ConnectionPanel } from "./ConnectionPanel";
@@ -44,6 +45,10 @@ export function Dashboard({
   const broken = settings.connected && !link.usable;
   const [tab, setTab] = useState<Tab>(broken ? "connection" : settings.connected ? "bookings" : "connection");
   const [dismissed, setDismissed] = useState(false);
+
+  /* Un navigateur où l'artisan ouvre son espace est le sien : ses passages
+     sur le site ne se comptent plus, ni au journal, ni chez l'hébergeur. */
+  useEffect(() => { setOptedOut(true); }, []);
 
   const unsent = [...upcoming, ...past].filter((b) => b.status !== "cancelled" && !b.emailSent);
   const firstName = (session.name ?? session.email).split(" ")[0];

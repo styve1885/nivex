@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
-import { HEARD_FROM, type HeardFrom } from "@/lib/attribution";
+import type { HeardFrom } from "@/lib/attribution";
 import type { ZoneStatus } from "@/lib/travel";
-import { readAttribution } from "../SiteMeasurement";
+import { arrivalHint, readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
+import { HeardFromField } from "./HeardFromField";
 import { EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 
@@ -58,7 +59,13 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
-  const [heardFrom, setHeardFrom] = useState<HeardFrom | "">("");
+  /* Pré-remplie quand l'arrivée le dit — un lien de recommandation, une
+     carte de porte-à-porte. La question ne s'affiche qu'à la deuxième étape :
+     lire le navigateur dès la création ne peut pas contredire le rendu du
+     serveur. */
+  const [hint] = useState(arrivalHint);
+  const [heardFrom, setHeardFrom] = useState<HeardFrom | "">(hint.heardFrom);
+  const [referredBy, setReferredBy] = useState(hint.referredBy);
 
   /* Le verdict de déplacement vient du serveur : lui seul connaît l'adresse
      de départ et peut interroger les horaires. Le navigateur ne fait que
@@ -238,6 +245,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
              lue au dernier instant, pour que le compteur de visites reflète
              bien l'état du navigateur au moment d'envoyer. */
           heardFrom: heardFrom || undefined,
+          referredBy: heardFrom === "recommandation" ? referredBy.trim() || undefined : undefined,
           attribution: readAttribution(),
         }),
       });
@@ -460,19 +468,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               </div>
             )}
 
-            {/* « Comment nous avez-vous connus ? » — facultatif, et c'est le
-                seul endroit du site où une carte remise en main propre peut
-                se faire connaître. Aucune mesure automatique ne la verra. */}
-            <div className="mt-8 border-t border-gold-300/40 pt-7">
-              <label className="label" htmlFor="heard">{t.booking.step2.heardFrom}</label>
-              <select id="heard" value={heardFrom} className="field"
-                onChange={(e) => setHeardFrom(e.target.value as HeardFrom | "")}>
-                <option value="">{t.booking.step2.heardFromEmpty}</option>
-                {HEARD_FROM.map((k) => (
-                  <option key={k} value={k}>{t.booking.step2.heardFromOptions[k]}</option>
-                ))}
-              </select>
-            </div>
+            <HeardFromField t={t} id="heard" value={heardFrom} onChange={setHeardFrom}
+              referredBy={referredBy} onReferredBy={setReferredBy} />
 
             {/* pot de miel */}
             <input type="text" name="company" value={hp} onChange={(e) => setHp(e.target.value)}
@@ -535,7 +532,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
               {comment.trim() && <Row label={t.booking.step3.comment} value={comment.trim()} />}
               {heardFrom && (
-                <Row label={t.booking.step2.heardFrom} value={t.booking.step2.heardFromOptions[heardFrom]} />
+                <Row label={t.booking.step2.heardFrom}
+                  value={t.booking.step2.heardFromOptions[heardFrom]
+                    + (heardFrom === "recommandation" && referredBy.trim() ? ` (${referredBy.trim()})` : "")} />
               )}
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeApplied : undefined} />

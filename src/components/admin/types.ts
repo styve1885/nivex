@@ -16,6 +16,8 @@ export type AdminBooking = {
   origin: {
     heardFrom: string | null;
     heardFromLabel: string | null;
+    /** Le prénom du lien de recommandation suivi (?ref=). */
+    referral: string | null;
     source: string | null;
     campaign: string | null;
     referrer: string | null;

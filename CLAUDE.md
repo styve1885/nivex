@@ -95,7 +95,7 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/pricing.ts` | La grille publiée : blocs, forfaits, abonnements |
 | `lib/cycles.ts` | Le calendrier d'un abonnement, en fonctions pures : dates, rang des visites, montant d'un cycle, délai de la veille |
 | `lib/subscriptions.ts` | Les abonnements en base, dans l'agenda et par courriel ; la tâche quotidienne |
-| `lib/attribution.ts` | D'où vient un client, et la question qu'on lui pose |
+| `lib/attribution.ts` | D'où vient un client, la question qu'on lui pose, les familles de sources, les robots |
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
@@ -280,9 +280,39 @@ La frontière à tenir, et elle court dans tout le code :
   personne. Elle reste donc dans le `localStorage` du visiteur et n'en
   sort qu'au moment où il réserve.
 
-Trois exclusions : les pages `/admin` ne se comptent jamais, un appareil
-porteur du marqueur de retrait n'envoie plus rien, et `beforeSend` filtre
-aussi la mesure de l'hébergeur.
+L'artisan ne compte jamais, quel que soit l'appareil :
+
+- `/api/visit` écarte toute visite qui porte sa session (`getSession`) ;
+- chaque navigateur où il ouvre `/admin` reçoit le marqueur de retrait
+  (`nivex.optout`), que lisent le journal **et** `beforeSend`, la mesure de
+  l'hébergeur ;
+- les navigateurs où il ne se connecte jamais (ceux de Facebook et
+  d'Instagram en tête) s'ouvrent une fois sur son lien personnel
+  `/fr/ne-pas-compter?cle=…`, affiché dans l'onglet Visites. La clé se
+  déduit de `SESSION_SECRET` (`optOutKey`) ; sans elle, la page est un 404.
+  Elle n'est jamais comptée (`isPrivatePath`), ni indexée, et `robots.txt`
+  l'écarte.
+
+Les **familles de sources** (`groupOfSource`) rangent la colonne `source`,
+étiquette `utm_source` ou domaine référent : Facebook, Instagram, LinkedIn,
+IA, Google, Porte-à-porte, Recommandation, Direct pour tout le reste. Un
+lien `?ref=prénom` l'emporte sur tout (`refName` le met au propre). La
+provenance de l'arrivée vaut pour toute la session (`nivex.arrival`, dans
+`sessionStorage`) : la deuxième page a perdu son `?utm_source=`. Une
+réservation se range d'abord au lien de recommandation, puis à la réponse
+« Comment avez-vous connu NIVEX ? », puis au navigateur (`bookingGroup`).
+
+Les **liens courts** des imprimés — `/carte`, `/depliant`, `/lettre` —
+sont des redirections temporaires de `next.config.ts` vers `/fr` avec
+`utm_source=porte-a-porte`. Les codes QR imprimés pointent dessus : ne les
+renommez jamais.
+
+Les **robots** restent en base, marqués dans `robot`, et l'onglet les écarte
+par défaut. `robotReason` lit l'agent, `navigator.webdriver` et le fuseau
+de l'horloge, puis les oublie ; le centre de données se reconnaît aux
+colonnes gardées (américain, direct, ordinateur, ville de
+`DATACENTER_CITIES`). `bootstrap()` marque aussi les anciennes visites qui
+répondent à cette dernière règle.
 
 **Rien de ce qui touche à la provenance ne doit pouvoir faire échouer une
 réservation.** Un référent à rallonge, un compteur abîmé par une
@@ -342,7 +372,8 @@ pas.
 
 Cinq fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements), `booking` (courriels, durées), `provenance` (zone
-desservie, journal, provenance), `travel` (secteurs, zones, frais,
+desservie, journal, provenance, familles de sources, robots, bilan),
+`travel` (secteurs, zones, frais,
 conflits de préfixes, historique, Montréal, fiche LocalBusiness, robots,
 plan du site), `subscription`
 (grille des dates, rang des visites, montants, délai de la veille). Plus un
