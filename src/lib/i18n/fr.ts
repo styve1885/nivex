@@ -285,9 +285,12 @@ export const fr = {
   code: "fr",
   htmlLang: "fr-CA",
   meta: {
-    title: "NIVEX — Repassage à domicile de prestige | Longueuil & Rive-Sud",
+    service: "Repassage à domicile",
+    title: "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX",
+    /* {places} : les premiers secteurs de la Rive-Sud, dans l'ordre de
+       l'onglet « Zones et frais », puis Montréal s'il est desservi. */
     description:
-      "Un artisan du repassage se déplace chez vous, avec son matériel professionnel. Chemises, robes délicates, costumes, linge de maison. Longueuil et la Rive-Sud. Première heure offerte.",
+      "Repassage à domicile à {places}. Nous repassons vos vêtements et votre literie sur place, chez vous : pas de collecte, pas de livraison. Première heure offerte.",
     ogAlt: "NIVEX — Repassage à domicile de prestige",
   },
   nav: {
@@ -308,12 +311,14 @@ export const fr = {
     phoneHref: "tel:+14509431217",
     email: "styve1885@gmail.com",
     emailHref: "mailto:styve1885@gmail.com",
-    region: "Longueuil · Rive-Sud · Montréal",
+    region: "Saint-Lambert · Longueuil · Montréal",
   },
   hero: {
-    eyebrow: "Service à domicile · Longueuil",
+    eyebrow: "Repassage à domicile · Saint-Lambert · Longueuil",
     titleTop: "Offrez à votre garde-robe",
     titleBottom: "le soin qu'elle mérite.",
+    onSite:
+      "Nous repassons vos vêtements et votre literie sur place, chez vous. Pas de collecte, pas de livraison : rien ne quitte votre domicile.",
     lede:
       "Un artisan se déplace chez vous, avec sa presse et sa vapeur de haute précision. Vous ne déplacez rien, vous ne pliez rien. Vous ouvrez votre penderie, et tout y est droit.",
     ctaPrimary: "Réserver une séance",
@@ -476,6 +481,10 @@ export const fr = {
     title: "Ce qu'on nous demande.",
     items: [
       {
+        q: "Est-ce que vous ramassez les vêtements ?",
+        a: "Non. Tout est repassé sur place, chez vous, avec notre matériel professionnel.",
+      },
+      {
         q: "Faut-il fournir la planche et le fer ?",
         a: "Non. Votre artisan arrive avec l'ensemble du matériel professionnel : table active, générateur de vapeur, pattemouilles, cintres. Nous avons seulement besoin d'une prise électrique et d'environ deux mètres carrés.",
       },
@@ -514,7 +523,45 @@ export const fr = {
   /* La phrase de la zone desservie, remplie depuis les secteurs actifs. */
   zoneText: {
     served: "Secteurs desservis : {list}.",
+    montreal: "À Montréal : {list}.",
     none: "La réservation en ligne est fermée pour tous les secteurs en ce moment. Appelez-nous.",
+  },
+  /* La page Montréal. Les montants, la durée minimale et les délais y sont
+     remplis depuis les réglages, comme sur la page Tarifs. */
+  montreal: {
+    metaTitle: "Repassage à domicile à Montréal — NIVEX",
+    eyebrow: "Montréal",
+    title: "Repassage à domicile à Montréal",
+    lede:
+      "NIVEX repasse vos vêtements et votre literie sur place, chez vous, à Montréal. Pas de collecte, pas de livraison : rien ne quitte votre domicile.",
+    areasTitle: "Quartiers desservis",
+    areasLede: "L'artisan se déplace dans ces quartiers avec tout son matériel. Entrez votre code postal pour vérifier votre adresse et connaître les frais.",
+    none: `Aucun quartier de Montréal n'est ouvert à la réservation en ligne pour le moment. Appelez-nous au ${PHONE}.`,
+    conditionsTitle: "Conditions à Montréal",
+    conditionsLede: "Les mêmes que sur la page {link}, tirées des mêmes réglages.",
+    rate: "Tarif",
+    rateValue: "{rate} de l'heure, soit {entry} pour une séance de {min}.",
+    minimum: "Durée minimale",
+    minimumValue: "Une séance dure au moins {min}. L'artisan arrive {setup} minutes avant pour s'installer, sans frais : le temps réservé est entièrement du repassage.",
+    travel: "Frais de déplacement",
+    travelNote: "Par visite, en plus du prix de la séance. L'offre « première heure offerte » ne les couvre pas et ne les réduit pas.",
+    faqTitle: "Questions sur Montréal",
+    faq: [
+      {
+        q: "Dans quel délai puis-je obtenir un rendez-vous ?",
+        a: "Les créneaux en ligne s'ouvrent à partir de {lead} à l'avance, et jusqu'à {horizon}. Vous choisissez votre heure dans le formulaire, et la confirmation part aussitôt par courriel.",
+      },
+      {
+        q: "Combien coûtent les frais de déplacement à Montréal ?",
+        a: "{fees} Ils s'appliquent à chaque visite, s'ajoutent au prix de la séance et ne sont jamais couverts par la première heure offerte.",
+      },
+      {
+        q: "Que dois-je fournir ?",
+        a: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre : table active, générateur de vapeur, pattemouilles et cintres arrivent avec l'artisan. Précisez dans la réservation l'accès à l'immeuble et le stationnement.",
+      },
+    ],
+    link: "Repassage à domicile à Montréal : quartiers desservis et conditions",
+    cta: "Réserver une séance",
   },
   zoneCheck: {
     label: "Votre code postal",

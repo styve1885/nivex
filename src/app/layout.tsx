@@ -12,11 +12,12 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin()),
   title: "NIVEX — Repassage à domicile de prestige",
   description:
-    "Un artisan du repassage se déplace chez vous, avec son matériel professionnel. Longueuil, Rive-Sud et Montérégie. Première heure offerte.",
+    "Repassage à domicile à Saint-Lambert, Longueuil, sur la Rive-Sud et à Montréal. Un artisan repasse vos vêtements et votre literie sur place, chez vous. Première heure offerte.",
   applicationName: "NIVEX",
   authors: [{ name: "NIVEX" }],
   keywords: [
-    "repassage à domicile", "repassage Longueuil", "repassage Rive-Sud", "service de repassage Montérégie",
+    "repassage à domicile", "repassage Saint-Lambert", "repassage Longueuil", "repassage Rive-Sud",
+    "repassage à domicile Montréal", "service de repassage Montérégie",
     "pressage chemises", "ironing service Quebec", "linge de maison", "NIVEX",
   ],
   openGraph: {

@@ -273,9 +273,10 @@ export const en: Dict = {
   code: "en",
   htmlLang: "en-CA",
   meta: {
-    title: "NIVEX — Prestige In-Home Ironing | Longueuil & the South Shore",
+    service: "In-home ironing",
+    title: "In-home ironing in Saint-Lambert and Longueuil — NIVEX",
     description:
-      "A master presser comes to your home with professional equipment. Shirts, delicate garments, suits, household linen. Longueuil and the South Shore. First hour on the house.",
+      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery. First hour on the house.",
     ogAlt: "NIVEX — Prestige in-home ironing",
   },
   nav: {
@@ -296,12 +297,14 @@ export const en: Dict = {
     phoneHref: "tel:+14509431217",
     email: "styve1885@gmail.com",
     emailHref: "mailto:styve1885@gmail.com",
-    region: "Longueuil · South Shore · Montreal",
+    region: "Saint-Lambert · Longueuil · Montreal",
   },
   hero: {
-    eyebrow: "In-home service · Longueuil",
+    eyebrow: "In-home ironing · Saint-Lambert · Longueuil",
     titleTop: "Give your wardrobe",
     titleBottom: "the care it deserves.",
+    onSite:
+      "We iron your clothes and bed linen on site, in your home. No pickup, no delivery: nothing leaves your home.",
     lede:
       "A craftsman comes to you, press and high-precision steam in hand. You carry nothing, you fold nothing. You open your closet, and everything hangs straight.",
     ctaPrimary: "Book a session",
@@ -464,6 +467,10 @@ export const en: Dict = {
     title: "What people ask us.",
     items: [
       {
+        q: "Do you pick up the clothes?",
+        a: "No. Everything is ironed on site, in your home, with our professional equipment.",
+      },
+      {
         q: "Do I need to provide a board and iron?",
         a: "No. Your craftsman arrives with the full professional kit: active pressing table, steam generator, pressing cloths, hangers. All we need is a power outlet and roughly two square metres.",
       },
@@ -501,7 +508,43 @@ export const en: Dict = {
   },
   zoneText: {
     served: "Areas served: {list}.",
+    montreal: "In Montreal: {list}.",
     none: "Online booking is closed for every area at the moment. Call us.",
+  },
+  montreal: {
+    metaTitle: "In-home ironing in Montreal — NIVEX",
+    eyebrow: "Montreal",
+    title: "In-home ironing in Montreal",
+    lede:
+      "NIVEX irons your clothes and bed linen on site, in your home, in Montreal. No pickup, no delivery: nothing leaves your home.",
+    areasTitle: "Neighbourhoods served",
+    areasLede: "The craftsman travels to these neighbourhoods with all his equipment. Enter your postal code to check your address and see the travel fee.",
+    none: `No Montreal neighbourhood is open to online booking at the moment. Call us at ${PHONE}.`,
+    conditionsTitle: "Terms in Montreal",
+    conditionsLede: "The same as on the {link} page, drawn from the same settings.",
+    rate: "Rate",
+    rateValue: "{rate} per hour, that is {entry} for a {min} session.",
+    minimum: "Minimum length",
+    minimumValue: "A session lasts at least {min}. The craftsman arrives {setup} minutes early to set up, at no charge: the time you book is all ironing.",
+    travel: "Travel fee",
+    travelNote: "Per visit, on top of the session price. The first-hour-free offer does not cover it and does not reduce it.",
+    faqTitle: "Questions about Montreal",
+    faq: [
+      {
+        q: "How soon can I get an appointment?",
+        a: "Online slots open from {lead} ahead, and up to {horizon} out. You choose your time in the form, and the confirmation goes out by email straight away.",
+      },
+      {
+        q: "How much is the travel fee in Montreal?",
+        a: "{fees} It applies to every visit, is added to the session price and is never covered by the first hour on the house.",
+      },
+      {
+        q: "What do I need to provide?",
+        a: "An electrical outlet and about two square metres of clear space. Nothing else: the active board, steam generator, pressing cloths and hangers arrive with the craftsman. Mention building access and parking in your booking.",
+      },
+    ],
+    link: "In-home ironing in Montreal: neighbourhoods served and terms",
+    cta: "Book a session",
   },
   zoneCheck: {
     label: "Your postal code",

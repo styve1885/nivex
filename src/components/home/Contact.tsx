@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Reveal } from "../Reveal";
 import { Photo } from "../Photo";
 import { CheckIcon, ArrowIcon } from "../Icons";
@@ -224,6 +225,10 @@ export function Contact({ t, locale, businessEmail, settings }: {
               <p className="text-[0.85rem] font-light leading-[1.9] text-ink-500">
                 {servedText(settings.zonePolicy, locale, t.zoneText)}
               </p>
+              <Link href={`/${locale}/montreal`}
+                className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+                {t.montreal.link}
+              </Link>
 
               <ZoneChecker t={t} locale={locale} className="mt-6" />
             </div>
