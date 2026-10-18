@@ -272,14 +272,20 @@ date dans `LEGAL_UPDATED`.
 3. **Le mode démonstration** (`NIVEX_DEMO=1`) a un double verrou : la
    variable **et** `VERCEL_ENV !== "production"`. Gardez ce verrou sur
    toute variable d'essai que vous ajouteriez.
-4. **Les déploiements d'essai de Vercel écrivent dans la base de
-   production.** Une branche poussée est construite et servie avec la même
-   `DATABASE_URL` : son `bootstrap()` s'exécute contre la vraie base,
-   avant toute fusion. Le 17 octobre 2026, la bascule des zones s'est
-   ainsi faite depuis la première version de la branche, et la correction
-   poussée ensuite n'a rien changé, puisqu'une grille migrée n'est plus
-   touchée. Une migration de données doit donc être juste dès le premier
-   envoi, ou se rattraper depuis `/admin`.
+4. **Les déploiements d'essai de Vercel ont longtemps écrit dans la base
+   de production.** Une branche poussée était construite avec la même
+   `DATABASE_URL`, et son `bootstrap()` s'exécutait contre la vraie base,
+   avant toute fusion. Le 17 octobre 2026, la bascule des zones s'est ainsi
+   faite depuis la première version de la branche, et la correction poussée
+   ensuite n'a rien changé, puisqu'une grille migrée n'est plus touchée.
+   Depuis le 18 octobre, l'intégration Neon de Vercel crée une branche de
+   base par déploiement d'essai (« Create Database Branch For Deployment » :
+   Preview coché, Production décoché). Chaque version d'essai travaille sur
+   une copie prise au déploiement ; la production ne reçoit que ce qui est
+   fusionné. La copie garde la connexion Google et les clés Twilio : une
+   réservation faite en essai peut encore écrire dans l'agenda, envoyer un
+   courriel ou un texto. Une migration de données doit toujours être juste
+   dès la fusion, ou se rattraper depuis `/admin`.
 
 ## Variables d'environnement
 
