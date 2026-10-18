@@ -629,7 +629,7 @@ function emailBase(full: SubscriptionFull, s: Settings, origin: string, visits?:
     feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone,
     currency: sub.currency, timezone: s.timezone,
     manageUrl: `${origin}/${sub.locale}/abonnement/${sub.manageToken}`,
-    siteUrl: origin, businessPhone: PHONE, businessEmail: contactEmail(s),
+    siteUrl: origin, businessPhone: PHONE, businessEmail: contactEmail(),
   };
 }
 
@@ -646,7 +646,7 @@ async function send(at: string, s: Settings, to: { email: string; name?: string 
   try {
     await sendGmail(at, {
       to: to.email, toName: to.name, subject: m.subject, html: m.html, text: m.text,
-      fromName: s.businessName || "NIVEX", replyTo: replyTo ?? contactEmail(s),
+      fromName: s.businessName || "NIVEX", replyTo: replyTo ?? contactEmail(),
     });
     return true;
   } catch (e) {

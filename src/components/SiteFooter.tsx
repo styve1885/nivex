@@ -38,7 +38,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
             <h3 className="mb-5 text-[10px] uppercase tracking-[0.26em] text-gold-400">{t.nav.contact}</h3>
             <ul className="space-y-3 text-sm text-linen-300/85">
               <li><a href={t.brand.phoneHref} className="transition-colors hover:text-gold-300">{t.brand.phone}</a></li>
-              <li><a href={contactEmailHref(settings)} className="break-all transition-colors hover:text-gold-300">{contactEmail(settings)}</a></li>
+              <li><a href={contactEmailHref()} className="break-all transition-colors hover:text-gold-300">{contactEmail()}</a></li>
               <li className="pt-2 text-linen-300/60">{t.brand.region}</li>
             </ul>
           </div>

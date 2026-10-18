@@ -72,7 +72,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     url: `${origin}/${lang}`,
     image: `${origin}/opengraph-image.jpg`,
     telephone: phoneDisplay(),
-    email: contactEmail(s),
+    email: contactEmail(),
     priceRange: `${formatMoney(s.hourlyRate, s.currency, lang)} / h`,
     currenciesAccepted: s.currency,
     address: { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" },

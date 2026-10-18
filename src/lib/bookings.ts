@@ -371,7 +371,7 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
-    businessEmail: contactEmail(s),
+    businessEmail: contactEmail(),
     /* Seule la notification de l'artisan s'en sert ; le gabarit du client
        ignore ce champ. */
     origin: {
@@ -412,7 +412,7 @@ async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promi
   /* Deux destinataires, deux envois distincts : la boîte de la maison doit
      recevoir sa fiche de mission même si l'adresse du client rebondit. */
   const [toClient, toOwner] = await Promise.allSettled([
-    sendGmail(at, { to: b.clientEmail, toName: b.clientName, subject: client.subject, html: client.html, text: client.text, fromName, replyTo: contactEmail(s) }),
+    sendGmail(at, { to: b.clientEmail, toName: b.clientName, subject: client.subject, html: client.html, text: client.text, fromName, replyTo: contactEmail() }),
     sendGmail(at, { to: REQUEST_INBOX, subject: owner.subject, html: owner.html, text: owner.text, fromName, replyTo: b.clientEmail }),
   ]);
 
@@ -599,7 +599,7 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
       // Le client est prévenu dans tous les cas.
       sendGmail(at, {
         to: b.clientEmail, toName: b.clientName, subject: cc.subject,
-        html: cc.html, text: cc.text, fromName, replyTo: settings.ownerEmail ?? undefined,
+        html: cc.html, text: cc.text, fromName, replyTo: contactEmail(),
       }),
       // L'artisan, seulement quand l'annulation ne vient pas de lui.
       settings.ownerEmail && by === "client"

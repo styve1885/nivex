@@ -75,19 +75,20 @@ const privacy: LegalDoc = {
     {
       title: "Qui d'autre y a accès",
       body: [
-        "Quatre fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
+        "Cinq fournisseurs, chacun pour une tâche précise, et aucun n'a le droit de s'en servir à ses propres fins.",
       ],
       list: [
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
         "Twilio — achemine les textos de confirmation et de rappel. Il reçoit votre numéro de téléphone et le texte du message, rien d'autre.",
+        "ImprovMX — fait suivre vers la boîte de votre artisan les courriels que vous écrivez à notre adresse du domaine.",
       ],
     },
     {
       title: "Hors du Québec",
       body: [
-        "Le site, la base de données, les services Google et Twilio sont hébergés aux États-Unis. Vos renseignements sortent donc du Québec pour y être conservés, et ils y sont soumis au droit du pays d'accueil — lequel peut, dans certains cas, permettre à ses autorités d'y accéder.",
+        "Le site, la base de données, les services Google et Twilio sont hébergés aux États-Unis, et ImprovMX fait suivre les courriels depuis l'étranger. Vos renseignements sortent donc du Québec pour y être conservés, et ils y sont soumis au droit du pays d'accueil — lequel peut, dans certains cas, permettre à ses autorités d'y accéder.",
         "Nous avons retenu des fournisseurs tenus contractuellement à des mesures de protection comparables à celles exigées ici, et nous ne leur confions que ce qui est nécessaire. En réservant ou en nous écrivant par le site, vous consentez à cette communication hors Québec. Si elle vous gêne, appelez-nous : nous conviendrons du rendez-vous de vive voix.",
       ],
     },
@@ -309,8 +310,8 @@ export const fr = {
     values: "Doux, délicat et élégant",
     phone: "+1 450 943 1217",
     phoneHref: "tel:+14509431217",
-    email: "styve1885@gmail.com",
-    emailHref: "mailto:styve1885@gmail.com",
+    email: "contact@nivexrepassage.ca",
+    emailHref: "mailto:contact@nivexrepassage.ca",
     region: "Saint-Lambert · Longueuil · Montréal",
   },
   hero: {

@@ -3,6 +3,7 @@ import { ensureSchema, sql, logEvent, isDbConfigured } from "./db";
 import { getSettings } from "./settings";
 import { ownerAccessToken, sendGmail, siteOrigin } from "./google";
 import { contactNotification, contactAcknowledgement } from "./email";
+import { contactEmail } from "./brand";
 
 export const ContactInput = z.object({
   locale: z.enum(["fr", "en"]).default("fr"),
@@ -81,7 +82,7 @@ export async function submitContact(input: ContactInputType): Promise<{ stored: 
   if (at && settings.ownerEmail) {
     const origin = siteOrigin();
     const owner = contactNotification({ ...input, siteUrl: origin });
-    const ack = contactAcknowledgement({ ...input, siteUrl: origin, businessEmail: settings.ownerEmail });
+    const ack = contactAcknowledgement({ ...input, siteUrl: origin, businessEmail: contactEmail() });
     const fromName = settings.businessName || "NIVEX";
 
     const [toOwner] = await Promise.allSettled([
@@ -92,7 +93,7 @@ export async function submitContact(input: ContactInputType): Promise<{ stored: 
       // Accusé de réception : la personne sait que son message est parti.
       sendGmail(at, {
         to: input.email, toName: input.name, subject: ack.subject, html: ack.html, text: ack.text,
-        fromName, replyTo: settings.ownerEmail,
+        fromName, replyTo: contactEmail(),
       }),
     ]);
 
