@@ -18,9 +18,14 @@ import { servedText } from "@/lib/travel";
  */
 
 /** Date de dernière révision des deux documents. */
-export const LEGAL_UPDATED = "2026-10-18";
+export const LEGAL_UPDATED = "2026-10-19";
 
-function values(locale: "fr" | "en", s: Settings): Record<string, string> {
+/*
+ * Les noms d'accolades ne portent que des lettres : `fill` ne reconnaît rien
+ * d'autre. Un « {rate2} » est ainsi resté tel quel dans l'article sur le
+ * prix, faute d'être reconnu ; un test relit désormais chaque document.
+ */
+export function legalValues(locale: "fr" | "en", s: Settings): Record<string, string> {
   const days = locale === "en" ? "days" : "jours";
   const hours = locale === "en" ? "hours" : "heures";
   return {
@@ -32,7 +37,9 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
     site: siteOrigin().replace(/^https?:\/\//, "").replace(/^www\./, ""),
     zone: servedText(s.zonePolicy, locale, getDict(locale).zoneText),
     rate: formatMoney(s.hourlyRate, s.currency, locale),
-    rate2: formatMoney(s.hourlyRate * 2, s.currency, locale),
+    // Le prix de la séance la plus courte : la durée minimale réglée, celle
+    // que dit {min} et que le moteur facture au moins, au taux en vigueur.
+    entry: formatMoney(Math.round((s.minMinutes / 60) * s.hourlyRate), s.currency, locale),
     min: minutesToText(s.minMinutes, locale),
     lead: `${s.leadHours} ${hours}`,
     cancel: `${CANCEL_WINDOW_HOURS} ${hours}`,
@@ -40,10 +47,19 @@ function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   };
 }
 
+/**
+ * Les sections en vigueur. Celle de la première heure offerte disparaît
+ * quand l'artisan retire l'offre : des conditions qui la promettent encore
+ * engageraient la maison sur ce que le tunnel ne donne plus.
+ */
+export function legalSections(doc: LegalDoc, s: Settings): LegalDoc["sections"] {
+  return doc.sections.filter((section) => !section.offer || s.firstHourFree);
+}
+
 const LINK = "underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-700";
 
 /** Découpe le texte sur les accolades, et rend joignables celles qui le sont. */
-function fill(text: string, v: Record<string, string>): React.ReactNode[] {
+export function fill(text: string, v: Record<string, string>): React.ReactNode[] {
   return text.split(/(\{[a-z]+\})/g).map((part, i) => {
     if (part === "{email}") {
       return <a key={i} href={contactEmailHref()} className={LINK}>{v.email}</a>;
@@ -70,7 +86,8 @@ export function LegalDocument({
   settings: Settings;
   related: { href: string; label: string };
 }) {
-  const v = values(locale, settings);
+  const v = legalValues(locale, settings);
+  const sections = legalSections(doc, settings);
   const updated = new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
     timeZone: "UTC", day: "numeric", month: "long", year: "numeric",
   }).format(new Date(`${LEGAL_UPDATED}T12:00:00Z`));
@@ -96,7 +113,7 @@ export function LegalDocument({
         <nav className="paper mt-12 px-7 py-8 sm:px-9" aria-labelledby="sommaire">
           <h2 id="sommaire" className="eyebrow">{t.legal.summary}</h2>
           <ol className="mt-5 space-y-2.5">
-            {doc.sections.map((section, i) => (
+            {sections.map((section, i) => (
               <li key={section.title} className="flex gap-4 text-[0.92rem] font-light leading-snug">
                 <span aria-hidden="true" className="w-6 flex-none tabular-nums text-gold-600">
                   {String(i + 1).padStart(2, "0")}
@@ -108,7 +125,7 @@ export function LegalDocument({
         </nav>
 
         <div className="mt-20 space-y-16">
-          {doc.sections.map((section, i) => (
+          {sections.map((section, i) => (
             <section key={section.title} id={slug(i)} className="scroll-mt-28">
               <h2 className="font-display text-[1.6rem] font-normal leading-snug text-ink-800 sm:text-[1.8rem]">
                 <span aria-hidden="true" className="mr-4 text-[0.95rem] tabular-nums text-gold-600">

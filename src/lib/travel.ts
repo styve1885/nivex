@@ -252,6 +252,15 @@ export function sectorNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
   return [...south, ...montreal].map((s) => nameOf(s, locale));
 }
 
+/**
+ * Les régions qui ont au moins un secteur actif — la Rive-Sud, puis
+ * Montréal —, pour les phrases trop courtes pour nommer chaque secteur.
+ */
+export function servedRegions(policy: ZonePolicy, labels: { south: string; montreal: string }): string[] {
+  const { south, montreal } = sectorsByRegion(policy);
+  return [...(south.length ? [labels.south] : []), ...(montreal.length ? [labels.montreal] : [])];
+}
+
 /** Les noms des quartiers de Montréal desservis, dans l'ordre. */
 export function montrealNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
   return sectorsByRegion(policy).montreal.map((s) => nameOf(s, locale));
@@ -335,7 +344,8 @@ export function thresholdText(minutes: number, locale: "fr" | "en"): string {
  * finiraient par contredire ce que le tunnel facture. Chaque zone y figure
  * avec ses secteurs, celles sans frais comprises : c'est là qu'un client
  * apprend qu'il n'en paie aucun. Une zone sans secteur actif n'apprend rien
- * et reste hors du tableau.
+ * et reste hors du tableau. Dans chaque zone, la Rive-Sud vient d'abord et
+ * les quartiers de l'île ensuite, comme dans toute liste de secteurs.
  */
 export type FeeRow = {
   key: string;
@@ -352,7 +362,8 @@ export function feeTable(
   locale: "fr" | "en",
   money: (cents: number) => string,
 ): FeeRow[] {
-  const actifs = activeSectors(policy);
+  const { south, montreal } = sectorsByRegion(policy);
+  const actifs = [...south, ...montreal];
   return policy.zones
     .map((z) => ({ z, sectors: actifs.filter((s) => s.zoneKey === z.key) }))
     .filter(({ sectors }) => sectors.length > 0)

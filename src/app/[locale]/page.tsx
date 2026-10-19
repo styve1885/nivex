@@ -36,10 +36,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
 
-      <Hero t={t} locale={locale} />
+      <Hero t={t} locale={locale} settings={settings} />
       <Marquee t={t} />
       <Story t={t} />
-      <Services t={t} settings={settings} />
+      <Services t={t} locale={locale} settings={settings} />
       <Gallery t={t} />
       <Protocol t={t} />
       <HowItWorks t={t} />
@@ -48,7 +48,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <Pricing t={t} locale={locale} settings={settings} />
       <Faq t={t} settings={settings} locale={locale} />
       <Contact t={t} locale={locale} businessEmail={contactEmail()} settings={settings} />
-      <ClosingCta t={t} locale={locale} />
+      <ClosingCta t={t} locale={locale} settings={settings} />
     </>
   );
 }

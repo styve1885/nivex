@@ -1,6 +1,7 @@
 import { Reveal } from "../Reveal";
 import { ServiceIcon } from "../Icons";
 import { perHour } from "@/lib/pricing";
+import { joinList, servedRegions } from "@/lib/travel";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
@@ -11,12 +12,19 @@ import type { Settings } from "@/lib/settings";
  * réglées par l'artisan, comme celle de la page Tarifs. Le site promet de
  * tenir le volume annoncé — il ne peut donc pas l'annoncer d'un côté et le
  * calculer de l'autre.
+ *
+ * Une prestation désactivée dans les réglages perd sa carte : le tunnel ne
+ * la propose plus, la vitrine non plus. La dernière carte, qui ne vend pas
+ * une prestation mais la façon de faire, nomme les régions desservies,
+ * déduites des secteurs actifs comme partout ailleurs.
  */
-export function Services({ t, settings }: { t: Dict; settings: Settings }) {
+export function Services({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   const cadence = (key: string) => {
     const svc = settings.services.find((x) => x.key === key && x.enabled);
     return svc ? String(perHour(svc.minutesPerUnit)) : "";
   };
+  const zone = joinList(servedRegions(settings.zonePolicy, t.services.regions), locale);
+  const items = t.services.items.filter((s) => !s.detail.includes("{qty}") || cadence(s.serviceKey) !== "");
 
   return (
     <section id="prestations" className="scroll-mt-24 bg-linen-50 py-28 sm:py-36">
@@ -30,7 +38,7 @@ export function Services({ t, settings }: { t: Dict; settings: Settings }) {
         </Reveal>
 
         <div className="mt-20 grid gap-px overflow-hidden border border-gold-300/40 bg-gold-300/30 sm:grid-cols-2 lg:grid-cols-3">
-          {t.services.items.map((s, i) => (
+          {items.map((s, i) => (
             <Reveal key={s.name} as="article" delay={i * 70}
               className="group relative bg-linen-50 p-9 transition-colors duration-700 hover:bg-linen-100">
               <span aria-hidden="true"
@@ -40,7 +48,7 @@ export function Services({ t, settings }: { t: Dict; settings: Settings }) {
               <h3 className="mt-6 font-display text-[1.45rem] font-normal text-ink-800">{s.name}</h3>
               <p className="mt-3 text-[0.9rem] font-light leading-[1.9] text-ink-500">{s.body}</p>
               <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-gold-600">
-                {s.detail.replace("{qty}", cadence(s.serviceKey))}
+                {s.detail.replace("{qty}", cadence(s.serviceKey)).replace("{zone}", zone)}
               </p>
             </Reveal>
           ))}

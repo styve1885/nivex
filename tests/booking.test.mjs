@@ -15,7 +15,9 @@ const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { REQUEST_INBOX, PHONE, SETUP_MINUTES } = await import("../src/lib/brand.ts");
 const { occupiedBlock } = await import("../src/lib/bookings.ts");
-const { perHour } = await import("../src/lib/pricing.ts");
+const { perHour, cadenceText, bookableOffers, BLOCKS, BUNDLES } = await import("../src/lib/pricing.ts");
+const { faqFill } = await import("../src/components/home/faq-fill.ts");
+const { fr } = await import("../src/lib/i18n/fr.ts");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -183,6 +185,32 @@ test("la cadence annoncée découle des minutes du moteur", () => {
   for (const svc of FALLBACK_SETTINGS.services) {
     assert.equal(perHour(svc.minutesPerUnit), attendu[svc.key], `${svc.key} : cadence horaire`);
   }
+});
+
+test("une pièce de plus d'une heure s'annonce par son temps, pas par « 1 à l'heure »", () => {
+  assert.equal(cadenceText(8, "chemise", "fr"), "7");
+  assert.equal(cadenceText(60, "pièce", "fr"), "1");
+  assert.equal(cadenceText(90, "robe", "fr"), "1 h 30 / robe");
+  assert.equal(cadenceText(120, "", "en"), "2 hours");
+});
+
+test("la grille ne propose aucune séance plus courte que la durée minimale", () => {
+  const cles = (offres) => offres.map((o) => o.key);
+  assert.deepEqual(cles(bookableOffers(BLOCKS, settings)), ["decouverte", "famille", "prestige"]);
+  assert.deepEqual(cles(bookableOffers(BLOCKS, { ...settings, minMinutes: 180 })), ["famille", "prestige"]);
+  assert.ok(bookableOffers(BUNDLES, { ...settings, minMinutes: 180 }).every((o) => o.minutes >= 180));
+  assert.equal(bookableOffers(BUNDLES, settings).length, BUNDLES.length, "au minimum de deux heures, tout reste");
+});
+
+test("la foire aux questions cite la cadence des chemises, sans trou si elles sont désactivées", () => {
+  const reponse = fr.faq.items.find((x) => x.a.includes("{cadence}")).a;
+  const avec = faqFill(reponse, fr, settings, "fr");
+  assert.match(avec, /^Comptez environ 7 chemises par heure, ou 5 à 7 pièces mixtes\./);
+  assert.doesNotMatch(avec, /ajuster/, "le client ne choisit pas une durée : il change les quantités");
+  const sansChemises = { ...settings, services: settings.services.map((x) => (x.key === "shirt" ? { ...x, enabled: false } : x)) };
+  const sans = faqFill(reponse, fr, sansChemises, "fr");
+  assert.match(sans, /^Comptez environ 5 à 7 pièces mixtes par heure\./);
+  assert.doesNotMatch(sans, /chemises|\{| {2}/);
 });
 
 test("les forfaits tiennent dans leur durée, au nouveau rythme", () => {

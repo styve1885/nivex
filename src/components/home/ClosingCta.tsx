@@ -2,8 +2,13 @@ import Link from "next/link";
 import { Reveal } from "../Reveal";
 import { ArrowIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
+import type { Settings } from "@/lib/settings";
 
-export function ClosingCta({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
+export function ClosingCta({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
+  /* Le bandeau final ne promet la première heure que tant que l'artisan
+     l'offre : sinon il invite simplement à réserver. */
+  const offer = settings.firstHourFree;
+
   return (
     <section className="relative overflow-hidden bg-linen-200 py-28 sm:py-36">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -14,12 +19,14 @@ export function ClosingCta({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
 
       <Reveal className="relative mx-auto max-w-2xl px-8 text-center">
         <h2 className="font-display text-4xl font-light leading-tight text-ink-800 sm:text-[3.2rem]">
-          {t.cta.title}
+          {offer ? t.cta.title : t.cta.titlePlain}
         </h2>
         <p className="mx-auto mt-6 max-w-md text-[0.97rem] font-light leading-[1.95] text-ink-500">{t.cta.body}</p>
-        <p className="mx-auto mt-4 max-w-md text-[0.8rem] font-light leading-[1.75] text-ink-500">
-          {t.pricing.firstFreeConditions}
-        </p>
+        {offer && (
+          <p className="mx-auto mt-4 max-w-md text-[0.8rem] font-light leading-[1.75] text-ink-500">
+            {t.pricing.firstFreeConditions}
+          </p>
+        )}
 
         <div className="mt-10 flex flex-col items-center gap-5">
           <Link href={`/${locale}/reserver`} className="btn w-full sm:w-auto">

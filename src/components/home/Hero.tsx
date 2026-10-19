@@ -2,8 +2,9 @@ import Link from "next/link";
 import { Lockup } from "../Logo";
 import { ArrowIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
+import type { Settings } from "@/lib/settings";
 
-export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
+export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   return (
     <section className="relative flex min-h-[100svh] items-center overflow-hidden pt-28 pb-20">
       {/* — Fond : lin chaud, deux halos d'or, trame textile — */}
@@ -73,16 +74,19 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
           <Link href="#histoire" className="btn btn-ghost w-full sm:w-auto">{t.hero.ctaSecondary}</Link>
         </div>
 
-        {/* Bandeau de l'offre — repris du cintre de porte */}
-        <div className="mx-auto mt-12 max-w-md border border-gold-400/60 px-7 py-4 animate-fade"
-          style={{ animationDelay: "860ms" }}>
-          <p className="text-[11px] uppercase leading-relaxed tracking-[0.16em] text-gold-700">
-            {t.hero.offer}
-          </p>
-          <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-500">
-            {t.pricing.firstFreeConditions}
-          </p>
-        </div>
+        {/* Bandeau de l'offre — repris du cintre de porte. Il suit le réglage
+            de l'artisan, comme la grille : une offre retirée ne s'annonce plus. */}
+        {settings.firstHourFree && (
+          <div className="mx-auto mt-12 max-w-md border border-gold-400/60 px-7 py-4 animate-fade"
+            style={{ animationDelay: "860ms" }}>
+            <p className="text-[11px] uppercase leading-relaxed tracking-[0.16em] text-gold-700">
+              {t.hero.offer}
+            </p>
+            <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-500">
+              {t.pricing.firstFreeConditions}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 animate-fade"

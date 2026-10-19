@@ -1,29 +1,38 @@
 import {
-  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, PHONE, SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
+  SERIES_NOTICE_DAYS, SETUP_MINUTES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
-import { formatMoney } from "../time";
+import { formatMoney, minutesToText } from "../time";
 
 /* La réduction des abonnés sur les frais de route, écrite depuis la constante. */
 const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "fr");
+/* La durée qui ouvre droit à la première heure offerte, depuis la constante
+   que le moteur applique. */
+const FIRST_FREE_MIN = minutesToText(FIRST_FREE_MIN_MINUTES, "fr");
 
-/** Un document légal : des sections de prose, chacune pouvant se clore sur une liste. */
-export type LegalSection = { title: string; body: string[]; list?: string[] };
+/**
+ * Un document légal : des sections de prose, chacune pouvant se clore sur une liste.
+ * `offer` marque une section qui ne vaut que tant que la première heure est
+ * offerte : elle disparaît avec l'offre.
+ */
+export type LegalSection = { title: string; body: string[]; list?: string[]; offer?: boolean };
 export type LegalDoc = { eyebrow: string; title: string; lede: string; sections: LegalSection[] };
 
 /*
  * Politique de confidentialité et conditions d'utilisation.
  *
  * Les accolades sont des substitutions, remplies à l'affichage par
- * `LegalDocument` à partir des réglages en vigueur : {email}, {phone},
- * {site}, {zone}, {rate}, {min}, {lead}, {horizon}. Écrire un taux
- * ou un délai en toutes lettres ici, c'est écrire un texte qui mentira le jour
- * où Styve le changera depuis son espace.
+ * `LegalDocument` à partir des réglages en vigueur : {email}, {phone}, {neq},
+ * {site}, {zone}, {rate}, {entry}, {min}, {lead}, {cancel}, {horizon}. Leur
+ * nom ne porte que des lettres. Écrire un taux ou un délai en toutes lettres
+ * ici, c'est écrire un texte qui mentira le jour où Styve le changera depuis
+ * son espace.
  */
 const privacy: LegalDoc = {
   eyebrow: "Vie privée",
   title: "Ce que nous savons de vous.",
   lede:
-    "NIVEX recueille de quoi vous joindre et de quoi vous trouver. Rien d'autre. Aucune de ces informations ne se revend, ne se loue, ni ne se troque. Voici le détail, sans détour.",
+    "NIVEX recueille de quoi vous joindre, de quoi vous trouver et de quoi préparer votre séance, et compte ses visites sans savoir qui les fait. Aucune de ces informations ne se revend, ne se loue, ni ne se troque. Voici le détail, sans détour.",
   sections: [
     {
       title: "Qui répond de vos renseignements",
@@ -35,7 +44,7 @@ const privacy: LegalDoc = {
     {
       title: "Ce que nous recueillons",
       body: [
-        "Uniquement ce que vous nous donnez vous-même, au moment où vous le donnez. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
+        "Ce que vous nous donnez vous-même, au moment où vous le donnez, et quelques mesures techniques, décrites une à une ci-dessous. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
       ],
       list: [
         "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
@@ -117,7 +126,7 @@ const privacy: LegalDoc = {
     {
       title: "Témoins de connexion",
       body: [
-        "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun. Le comptage des visites se fait sans témoin : rien n'est écrit dans votre navigateur, et rien ne vous reconnaît lors d'un prochain passage.",
+        "Ce site ne dépose aucun témoin publicitaire, aucun témoin de mesure d'audience, aucun bouton de réseau social. Un visiteur ordinaire n'en reçoit aucun. Le comptage des visites se fait sans témoin ni identifiant : le journal envoyé au serveur ne permet pas de reconnaître un visiteur d'un passage à l'autre. Ce que votre navigateur garde pour lui-même est décrit plus bas.",
         "Deux témoins existent, et ils ne concernent que l'artisan : celui qui maintient sa session ouverte dans son espace, et un témoin temporaire qui protège sa connexion Google contre la fraude. Tous deux expirent d'eux-mêmes.",
         "Les polices de caractères sont servies depuis notre propre domaine : afficher cette page n'appelle aucun serveur tiers.",
         "Votre navigateur retient en revanche deux choses pour lui-même, dans son espace de stockage local : la provenance décrite plus haut, qui ne nous parvient que si vous réservez, et, le temps de votre session, la provenance de votre arrivée, qui sert à rapporter chaque page lue à la même source et à ne compter qu'une visite pour plusieurs pages lues ; celle-ci s'efface quand l'onglet se ferme. Ni l'une ni l'autre n'est un identifiant, aucune n'est lisible par un autre site, et vider les données de navigation les efface.",
@@ -191,15 +200,16 @@ const terms: LegalDoc = {
     {
       title: "Le prix",
       body: [
-        "Une séance dure au minimum {min} et se facture {rate2}. Au-delà, chaque heure entamée s'ajoute au même rythme, soit {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "Une séance dure au minimum {min} et se facture {entry}. Au-delà, chaque heure entamée s'ajoute au même rythme, soit {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
         "L'estimation affichée pendant la réservation est indicative : elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
         "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
       ],
     },
     {
       title: "La première heure offerte",
+      offer: true,
       body: [
-        "Pour une première réservation, la première heure de repassage est offerte et déduite automatiquement de l'estimation. Une seule fois par adresse courriel. Elle ne s'échange pas contre de l'argent et ne se cumule avec aucune autre offre.",
+        `Pour une première réservation de ${FIRST_FREE_MIN} ou plus, la première heure de repassage est offerte et déduite automatiquement de l'estimation. Une seule fois par adresse courriel. Elle ne s'échange pas contre de l'argent et ne se cumule avec aucune autre offre.`,
       ],
     },
     {
@@ -212,8 +222,8 @@ const terms: LegalDoc = {
     {
       title: "Annuler ou déplacer",
       body: [
-        "Librement, jusqu'à {cancel} avant le rendez-vous, depuis le lien personnel reçu par courriel, ou par téléphone au {phone}. Rien à payer, rien à justifier.",
-        "Une visite d'abonnement s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, de la même façon, sans toucher au reste de la série.",
+        "Une séance s'annule librement jusqu'à {cancel} avant le rendez-vous, depuis le lien personnel reçu par courriel ou par téléphone au {phone}. Pour la déplacer, appelez-nous dans le même délai : nous convenons ensemble d'une autre heure. Rien à payer, rien à justifier.",
+        "Une visite d'abonnement s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, depuis le lien personnel ou par téléphone, sans toucher au reste de la série.",
         "Passé ce délai, appelez-nous au {phone} : nous ferons au mieux.",
         "S'il nous faut annuler de notre côté — maladie, panne de matériel, route impraticable —, vous êtes prévenu dès que nous le savons et vous ne devez rien.",
       ],
@@ -223,7 +233,7 @@ const terms: LegalDoc = {
       body: [
         "Un abonnement réserve vos visites au même jour et à la même heure, au rythme de la formule : chaque semaine, aux deux semaines ou toutes les quatre semaines. Ces créneaux ne sont proposés à personne d'autre.",
         `Un cycle correspond au nombre de visites de la formule réellement effectuées — quatre, deux ou une. Une visite annulée, de votre côté ou du nôtre, ne compte pas : le cycle se prolonge jusqu'à la visite suivante, et une visite de remplacement est ajoutée en fin de série. Un cycle qui n'est pas terminé ${CYCLE_MAX_WEEKS} semaines après sa première visite nous amène à vous appeler pour convenir de la suite.`,
-        `Le montant d'un cycle est fixé à la souscription et garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles. Il se règle à la première visite du cycle, sur place. Une semaine avant la fin d'une série, nous vous appelons pour confirmer la suivante.`,
+        `Le montant d'un cycle est fixé à la souscription et garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles. Il se règle à la première visite du cycle, sur place. Nous vous appelons ${SERIES_NOTICE_DAYS} jours avant la fin d'une série pour confirmer la suivante.`,
         `Les frais de déplacement de votre zone, s'il y en a, sont réduits de ${DISCOUNT} par visite pour un abonné, sans jamais descendre sous zéro, et se règlent avec le cycle. L'offre « première heure offerte » ne s'applique pas aux abonnements.`,
       ],
     },
@@ -289,9 +299,11 @@ export const fr = {
     service: "Repassage à domicile",
     title: "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX",
     /* {places} : les premiers secteurs de la Rive-Sud, dans l'ordre de
-       l'onglet « Zones et frais », puis Montréal s'il est desservi. */
+       l'onglet « Zones et frais », puis Montréal s'il est desservi. L'offre
+       ne s'y ajoute que tant que l'artisan la propose. */
     description:
-      "Repassage à domicile à {places}. Nous repassons vos vêtements et votre literie sur place, chez vous : pas de collecte, pas de livraison. Première heure offerte.",
+      "Repassage à domicile à {places}. Nous repassons vos vêtements et votre literie sur place, chez vous : pas de collecte, pas de livraison.",
+    offer: "Première heure offerte.",
     ogAlt: "NIVEX — Repassage à domicile de prestige",
   },
   nav: {
@@ -308,11 +320,10 @@ export const fr = {
     name: "NIVEX",
     tagline: "Repassage à domicile de prestige",
     values: "Doux, délicat et élégant",
-    phone: "+1 450 943 1217",
-    phoneHref: "tel:+14509431217",
+    phone: PHONE,
+    phoneHref: PHONE_HREF,
     email: "contact@nivexrepassage.ca",
     emailHref: "mailto:contact@nivexrepassage.ca",
-    region: "Saint-Lambert · Longueuil · Montréal",
   },
   hero: {
     eyebrow: "Repassage à domicile · Saint-Lambert · Longueuil",
@@ -366,8 +377,9 @@ export const fr = {
     ],
     signature: "Styve",
     signatureRole: "Artisan du repassage, fondateur de NIVEX",
+    /* Les guillemets font partie de la citation : chaque langue a les siens. */
     quote:
-      "Le luxe, ce n'est pas d'avoir beaucoup de vêtements. C'est que chacun soit prêt à être porté.",
+      "« Le luxe, ce n'est pas d'avoir beaucoup de vêtements. C'est que chacun soit prêt à être porté. »",
   },
   services: {
     eyebrow: "Les prestations",
@@ -379,7 +391,7 @@ export const fr = {
         icon: "shirt",
         serviceKey: "shirt",
         name: "Chemises impeccables",
-        body: "Col, empiècement, poignets, corps, manches. Dans cet ordre, toujours. Repassées sur cintre de bois, prêtes à porter.",
+        body: "Col, empiècement, poignets, manches, corps. Dans cet ordre, toujours. Repassées sur cintre de bois, prêtes à porter.",
         detail: "≈ {qty} chemises par heure",
       },
       {
@@ -415,9 +427,12 @@ export const fr = {
         serviceKey: "trousers",
         name: "Tout se fait chez vous",
         body: "Rien ne quitte votre domicile. Votre artisan vient avec sa table, sa vapeur et ses cintres, travaille devant vous, et range avant de partir.",
-        detail: "Rive-Sud, Saint-Jean et plusieurs quartiers de Montréal",
+        detail: "{zone}",
       },
     ],
+    /* {zone} : les régions qui ont au moins un secteur actif, dans l'ordre
+       de la maison — la Rive-Sud, puis Montréal. */
+    regions: { south: "Rive-Sud", montreal: "Montréal" },
   },
   how: {
     eyebrow: "Le déroulement",
@@ -436,7 +451,7 @@ export const fr = {
       {
         n: "3",
         title: "Rencontrez",
-        body: "Votre artisan arrive un quart d'heure avant l'heure convenue pour s'installer, puis repasse le temps que vous avez réservé. Vous récupérez une garde-robe prête à porter, sur cintres.",
+        body: `Votre artisan arrive ${SETUP_MINUTES} minutes avant l'heure convenue pour s'installer, puis repasse le temps que vous avez réservé. Vous récupérez une garde-robe prête à porter, sur cintres.`,
       },
     ],
   },
@@ -445,22 +460,21 @@ export const fr = {
     title: "Au résultat, pas à la minute.",
     lede:
       "Vous choisissez les pièces à traiter, nous venons avec tout le matériel. Le montant est confirmé sur place avant de commencer.",
+    /* Les durées des deux séances ne s'écrivent pas ici : elles suivent la
+       durée minimale réglée, comme leurs montants (voir Pricing). */
     offers: [
       {
         name: "Séance semaine",
-        duration: "deux heures",
         volume: "10 à 15 pièces — la garde-robe complète de votre semaine",
         note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
       },
       {
         name: "Séance famille",
-        duration: "trois heures",
         volume: "15 à 22 pièces — chemises, pantalons, uniformes scolaires",
         note: "Pour une maisonnée, ou deux semaines d'un coup.",
       },
       {
         name: "Abonnement",
-        duration: "",
         volume: "Visites régulières, créneaux réservés",
         note: "Tarif garanti douze mois.",
       },
@@ -470,7 +484,7 @@ export const fr = {
     seeAll: "Voir la grille complète",
     firstFree: "Première heure offerte",
     firstFreeConditions:
-      "Sur toute première réservation de deux heures ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.",
+      `Sur toute première réservation de ${FIRST_FREE_MIN} ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.`,
     note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
   },
   testimonials: {
@@ -480,6 +494,10 @@ export const fr = {
   faq: {
     eyebrow: "Questions",
     title: "Ce qu'on nous demande.",
+    /* {cadence} : celle des chemises, lue des réglages, ou la seule moyenne
+       d'un panier mixte quand les chemises sont désactivées. */
+    cadence: "Comptez environ {shirts} chemises par heure, ou 5 à 7 pièces mixtes.",
+    cadenceMixed: "Comptez environ 5 à 7 pièces mixtes par heure.",
     items: [
       {
         q: "Est-ce que vous ramassez les vêtements ?",
@@ -491,11 +509,11 @@ export const fr = {
       },
       {
         q: "Combien de temps prévoir ?",
-        a: "Comptez environ {shirts} chemises par heure, ou 5 à 7 pièces mixtes. Lors de la réservation, l'estimateur vous propose une durée selon ce que vous sélectionnez — vous pouvez toujours l'ajuster.",
+        a: "{cadence} Lors de la réservation, l'estimateur calcule la durée d'après les quantités choisies ; pour la modifier, changez les quantités.",
       },
       {
         q: "Dois-je être présent pendant la séance ?",
-        a: "Idéalement pour l'accueil et le départ. Entre les deux, vous vaquez à vos occupations. Certains clients partent travailler après nous avoir ouvert : cela se convient d'avance.",
+        a: "Idéalement pour l'accueil et le départ. Entre les deux, vous vaquez à vos occupations. Certains clients partent travailler après nous avoir ouvert : il suffit d'en convenir d'avance.",
       },
       {
         q: "Et les pièces fragiles ?",
@@ -511,12 +529,14 @@ export const fr = {
       },
       {
         q: "Puis-je annuler ou déplacer mon rendez-vous ?",
-        a: `Oui, librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous. Le courriel de confirmation contient un lien personnel qui vous permet de tout gérer sans nous appeler. Pour un abonné, chaque visite s'annule ou se déplace jusqu'à 23 h 59 la veille.`,
+        a: `Oui. Une séance s'annule librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous, depuis le lien personnel du courriel de confirmation, sans nous appeler. Pour la déplacer, appelez-nous au ${PHONE} dans le même délai. Pour un abonné, chaque visite s'annule ou se déplace en ligne jusqu'à 23 h 59 la veille.`,
       },
     ],
   },
   cta: {
     title: "Votre première heure est offerte.",
+    /* Le même bandeau, quand l'artisan ne propose pas l'offre. */
+    titlePlain: "Réservez votre séance.",
     body: "Choisissez un créneau. La confirmation part par courriel, avec l'invitation pour votre agenda.",
     button: "Réserver maintenant",
     or: "ou appelez le",
@@ -546,6 +566,8 @@ export const fr = {
     minimumValue: "Une séance dure au moins {min}. L'artisan arrive {setup} minutes avant pour s'installer, sans frais : le temps réservé est entièrement du repassage.",
     travel: "Frais de déplacement",
     travelNote: "Par visite, en plus du prix de la séance. L'offre « première heure offerte » ne les couvre pas et ne les réduit pas.",
+    /* La réponse sur les frais ({fees}), quand aucun quartier desservi n'en a. */
+    feesFree: "Rien : les quartiers de Montréal desservis n'ont pas de frais de déplacement.",
     faqTitle: "Questions sur Montréal",
     faq: [
       {
@@ -634,7 +656,7 @@ export const fr = {
       evening: "Soirée",
       timezone: "Fuseau : heure de l'Est (Montréal).",
       setup:
-        "Votre repasseur arrive 15 minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.",
+        `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
       comment: "Commentaire libre (facultatif)",
       commentPlaceholder: "Une contrainte d'horaire, une heure à éviter, un accès particulier…",
     },
@@ -688,7 +710,7 @@ export const fr = {
     cancel: "Annuler la réservation",
     cancelConfirm: "Annuler définitivement ce rendez-vous ?",
     cancelled: "Votre réservation a été annulée. Votre artisan en a été informé.",
-    tooLate: `Ce rendez-vous a lieu dans moins de ${CANCEL_WINDOW_HOURS} h. Appelez-nous au +1 450 943 1217.`,
+    tooLate: `Ce rendez-vous a lieu dans moins de ${CANCEL_WINDOW_HOURS} h. Appelez-nous au ${PHONE}.`,
     notFound: "Réservation introuvable. Vérifiez le lien reçu par courriel.",
     rebook: "Prendre un nouveau rendez-vous",
   },
@@ -846,7 +868,7 @@ export const fr = {
       short: "Quelques mots de plus, s'il vous plaît",
       rate: "Vous venez de nous écrire. Laissez-nous quelques minutes pour vous répondre.",
       unavailable:
-        "L'envoi ne fonctionne pas pour l'instant. Appelez-nous au +1 450 943 1217 — nous décrochons.",
+        `L'envoi ne fonctionne pas pour l'instant. Appelez-nous au ${PHONE} — nous décrochons.`,
       generic: "L'envoi a échoué. Réessayez, ou appelez-nous directement.",
     },
   },
@@ -862,8 +884,12 @@ export const fr = {
     title: "Ce qu'une séance chez vous représente.",
     lede:
       "Nous ne vendons pas « du repassage » : nous vendons une cadence mesurée, la même d'une séance à l'autre. Voici ce qu'elle vaut, ce qu'elle traite, et ce qui la sépare d'un coup de main.",
-    headline: "La séance de deux heures — {price}",
-    visitNote: "minimum {min} par déplacement · déplacement inclus",
+    /* {min} : la plus courte séance proposée, celle que coûte {price}. */
+    headline: "La séance de {min} — {price}",
+    /* {travel} : inclus seulement si aucune zone desservie n'a de frais. */
+    visitNote: "minimum {min} par déplacement · {travel}",
+    travelIncluded: "déplacement inclus",
+    travelVaries: "frais de déplacement selon le secteur",
     cadence: {
       title: "Notre cadence, heure par heure",
       lede:

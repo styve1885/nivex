@@ -1,5 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, SETUP_MINUTES } from "./brand";
+import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, PHONE, PHONE_HREF, SETUP_MINUTES } from "./brand";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -67,7 +67,7 @@ function shell(inner: string, preheader: string, contact = CONTACT_EMAIL): strin
   ${inner}
   <tr><td style="padding:26px 40px 34px;border-top:1px solid #F0E6D2;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};line-height:1.8;">
     NIVEX · Longueuil &amp; Rive-Sud<br>
-    <a href="tel:+14509431217" style="color:${GOLD};text-decoration:none;">+1 450 943 1217</a> &nbsp;·&nbsp;
+    <a href="${PHONE_HREF}" style="color:${GOLD};text-decoration:none;">${esc(PHONE)}</a> &nbsp;·&nbsp;
     <a href="mailto:${esc(contact)}" style="color:${GOLD};text-decoration:none;">${esc(contact)}</a>
   </td></tr>
 </table>
@@ -107,7 +107,7 @@ const T = {
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
-    cancelNote: `Vous pouvez annuler ou déplacer librement jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous.`,
+    cancelNote: `Vous pouvez annuler en ligne jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous. Pour le déplacer, appelez-nous au ${PHONE}.`,
     // Annulation
     cancelSubject: (ref: string) => `Séance NIVEX annulée · ${ref}`,
     cancelIntro: "Votre séance a bien été annulée. Aucun montant ne vous sera facturé.",
@@ -140,7 +140,7 @@ const T = {
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
-    cancelNote: `You may cancel or reschedule freely up to ${CANCEL_WINDOW_HOURS} h before the appointment.`,
+    cancelNote: `You may cancel online up to ${CANCEL_WINDOW_HOURS} h before the appointment. To move it, call us at ${PHONE}.`,
     cancelSubject: (ref: string) => `NIVEX session cancelled · ${ref}`,
     cancelIntro: "Your session has been cancelled. Nothing will be charged.",
     cancelCta: "Book a new appointment",
@@ -459,7 +459,7 @@ export function contactAcknowledgement(d: ContactEmailData) {
     </div>
     <p style="margin:24px 0 4px;font-size:13px;color:${MUTED};">
       <strong style="color:${INK};">${esc(a.urgent)}</strong> ${esc(a.urgentBody)}
-      <a href="tel:+14509431217" style="color:${GOLD};text-decoration:none;">+1 450 943 1217</a>
+      <a href="${PHONE_HREF}" style="color:${GOLD};text-decoration:none;">${esc(PHONE)}</a>
     </p>
   </td></tr>
   <tr><td style="padding:22px 40px 34px;text-align:center;">
@@ -472,7 +472,7 @@ export function contactAcknowledgement(d: ContactEmailData) {
   const text = [
     a.hi(d.name.split(" ")[0]), "", a.intro, "",
     `${a.yours} :`, d.body, "",
-    `${a.urgent} ${a.urgentBody} +1 450 943 1217`, "",
+    `${a.urgent} ${a.urgentBody} ${PHONE}`, "",
     `${a.cta} : ${d.siteUrl}/${d.locale}/reserver`, "",
     a.signoff, a.team,
   ].join("\n");

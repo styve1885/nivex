@@ -1,17 +1,20 @@
 import type { Dict, LegalDoc } from "./fr";
 import {
-  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, PHONE, SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
+  SERIES_NOTICE_DAYS, SETUP_MINUTES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
-import { formatMoney } from "../time";
+import { formatMoney, minutesToText } from "../time";
 
 /* The subscriber reduction on travel fees, written from the constant. */
 const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "en");
+/* The length that qualifies for the free first hour, from the constant the engine applies. */
+const FIRST_FREE_MIN = minutesToText(FIRST_FREE_MIN_MINUTES, "en");
 
 const privacy: LegalDoc = {
   eyebrow: "Privacy",
   title: "What we know about you.",
   lede:
-    "NIVEX collects enough to reach you and enough to find you. Nothing else. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
+    "NIVEX collects enough to reach you, to find you and to prepare your session, and counts its visits without knowing who makes them. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
   sections: [
     {
       title: "Who answers for your information",
@@ -23,7 +26,7 @@ const privacy: LegalDoc = {
     {
       title: "What we collect",
       body: [
-        "Only what you hand us yourself, at the moment you hand it over. This site follows no one around and buys data from no one.",
+        "What you hand us yourself, at the moment you hand it over, and a few technical measurements, each described below. This site follows no one around and buys data from no one.",
       ],
       list: [
         "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
@@ -105,7 +108,7 @@ const privacy: LegalDoc = {
     {
       title: "Cookies",
       body: [
-        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting happens without a cookie: nothing is written into your browser, and nothing recognises you on a later visit.",
+        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting uses neither a cookie nor an identifier: the log sent to the server cannot recognise a visitor from one visit to the next. What your browser keeps for itself is described below.",
         "Two cookies exist, and they concern the artisan only: the one that keeps his session open in his own area, and a temporary one that protects his Google sign-in against fraud. Both expire on their own.",
         "Typefaces are served from our own domain: displaying this page calls no third-party server.",
         "Your browser does, however, keep two things for itself, in its local storage: the origin described above, which reaches us only if you book, and, for the length of your session, where you arrived from, which serves to relate every page read to the same source and to count one visit rather than one per page read; it is erased when the tab closes. Neither is an identifier, neither is readable by another site, and clearing your browsing data erases both.",
@@ -179,15 +182,16 @@ const terms: LegalDoc = {
     {
       title: "The price",
       body: [
-        "A session lasts {min} at the least and is billed {rate2}. Beyond that, each hour begun is added at the same pace, {rate} per hour. Applicable taxes, if any, are added to that amount.",
+        "A session lasts {min} at the least and is billed {entry}. Beyond that, each hour begun is added at the same pace, {rate} per hour. Applicable taxes, if any, are added to that amount.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
     },
     {
       title: "The first hour, on us",
+      offer: true,
       body: [
-        "On a first booking, the first hour of ironing is offered and deducted from the estimate automatically. Once per email address. It cannot be exchanged for money, and it does not stack with any other offer.",
+        `On a first booking of ${FIRST_FREE_MIN} or more, the first hour of ironing is offered and deducted from the estimate automatically. Once per email address. It cannot be exchanged for money, and it does not stack with any other offer.`,
       ],
     },
     {
@@ -200,8 +204,8 @@ const terms: LegalDoc = {
     {
       title: "Cancelling or moving",
       body: [
-        "Freely, up to {cancel} before the appointment, from the personal link you received by email, or by phone at {phone}. Nothing to pay, nothing to justify.",
-        "A subscription visit can be cancelled or moved at no charge until 11:59 p.m. the day before, in the same way, without touching the rest of the series.",
+        "A session can be cancelled freely up to {cancel} before the appointment, from the personal link you received by email or by phone at {phone}. To move it, call us within the same window and we will agree on another time together. Nothing to pay, nothing to justify.",
+        "A subscription visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the personal link or by phone, without touching the rest of the series.",
         "Past that, call us at {phone}: we will do our best.",
         "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
       ],
@@ -211,7 +215,7 @@ const terms: LegalDoc = {
       body: [
         "A subscription reserves your visits on the same day and at the same time, at the plan's rhythm: every week, every other week or every four weeks. Those slots are offered to nobody else.",
         `A cycle is the plan's number of visits actually completed — four, two or one. A cancelled visit, on your side or ours, does not count: the cycle runs on to the next visit, and a replacement visit is added at the end of the series. If a cycle is not finished ${CYCLE_MAX_WEEKS} weeks after its first visit, we call you to agree on what comes next.`,
-        `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. A week before a series ends, we call you to confirm the next one.`,
+        `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. We call you ${SERIES_NOTICE_DAYS} days before a series ends to confirm the next one.`,
         `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle. The first-hour-free offer does not apply to subscriptions.`,
       ],
     },
@@ -277,7 +281,8 @@ export const en: Dict = {
     service: "In-home ironing",
     title: "In-home ironing in Saint-Lambert and Longueuil — NIVEX",
     description:
-      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery. First hour on the house.",
+      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery.",
+    offer: "First hour on the house.",
     ogAlt: "NIVEX — Prestige in-home ironing",
   },
   nav: {
@@ -294,11 +299,10 @@ export const en: Dict = {
     name: "NIVEX",
     tagline: "Prestige in-home ironing",
     values: "Gentle, delicate, elegant",
-    phone: "+1 450 943 1217",
-    phoneHref: "tel:+14509431217",
+    phone: PHONE,
+    phoneHref: PHONE_HREF,
     email: "contact@nivexrepassage.ca",
     emailHref: "mailto:contact@nivexrepassage.ca",
-    region: "Saint-Lambert · Longueuil · Montreal",
   },
   hero: {
     eyebrow: "In-home ironing · Saint-Lambert · Longueuil",
@@ -353,7 +357,7 @@ export const en: Dict = {
     signature: "Styve",
     signatureRole: "Master presser, founder of NIVEX",
     quote:
-      "Luxury isn't owning many clothes. It's that every one of them is ready to wear.",
+      "“Luxury isn't owning many clothes. It's that every one of them is ready to wear.”",
   },
   services: {
     eyebrow: "Services",
@@ -365,7 +369,7 @@ export const en: Dict = {
         icon: "shirt",
         serviceKey: "shirt",
         name: "Immaculate shirts",
-        body: "Collar, yoke, cuffs, body, sleeves. In that order, always. Pressed on a wooden hanger, ready to wear.",
+        body: "Collar, yoke, cuffs, sleeves, body. In that order, always. Pressed on a wooden hanger, ready to wear.",
         detail: "≈ {qty} shirts an hour",
       },
       {
@@ -401,9 +405,10 @@ export const en: Dict = {
         serviceKey: "trousers",
         name: "Everything happens at your home",
         body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
-        detail: "South Shore, Saint-Jean and several Montreal neighbourhoods",
+        detail: "{zone}",
       },
     ],
+    regions: { south: "South Shore", montreal: "Montreal" },
   },
   how: {
     eyebrow: "How it works",
@@ -422,7 +427,7 @@ export const en: Dict = {
       {
         n: "3",
         title: "Meet",
-        body: "Your craftsman arrives a quarter of an hour before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.",
+        body: `Your craftsman arrives ${SETUP_MINUTES} minutes before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.`,
       },
     ],
   },
@@ -434,19 +439,16 @@ export const en: Dict = {
     offers: [
       {
         name: "Week session",
-        duration: "two hours",
         volume: "10 to 15 pieces — your whole week's wardrobe",
         note: "The most requested format, and the shortest visit we make.",
       },
       {
         name: "Family session",
-        duration: "three hours",
         volume: "15 to 22 pieces — shirts, trousers, school uniforms",
         note: "For a household, or a fortnight in one go.",
       },
       {
         name: "Subscription",
-        duration: "",
         volume: "Regular visits, reserved time slots",
         note: "Rate guaranteed twelve months.",
       },
@@ -456,7 +458,7 @@ export const en: Dict = {
     seeAll: "See the full price list",
     firstFree: "First hour free",
     firstFreeConditions:
-      "On any first booking of two hours or more. One use per customer. Not applicable to monthly plans or single pieces.",
+      `On any first booking of ${FIRST_FREE_MIN} or more. One use per customer. Not applicable to subscriptions or single pieces.`,
     note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
   },
   testimonials: {
@@ -466,6 +468,8 @@ export const en: Dict = {
   faq: {
     eyebrow: "Questions",
     title: "What people ask us.",
+    cadence: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces.",
+    cadenceMixed: "Figure about 5 to 7 mixed pieces per hour.",
     items: [
       {
         q: "Do you pick up the clothes?",
@@ -477,7 +481,7 @@ export const en: Dict = {
       },
       {
         q: "How much time should I plan for?",
-        a: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces. During booking, the estimator suggests a duration based on what you select — you can always adjust it.",
+        a: "{cadence} During booking, the estimator works out the duration from the quantities you choose; to change it, change the quantities.",
       },
       {
         q: "Do I have to be there during the session?",
@@ -497,12 +501,13 @@ export const en: Dict = {
       },
       {
         q: "Can I cancel or reschedule?",
-        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us. For a subscriber, each visit can be cancelled or moved until 11:59 p.m. the day before.`,
+        a: `Yes. A session can be cancelled freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment, from the personal link in your confirmation email, without calling us. To move it, call us at ${PHONE} within the same window. For a subscriber, each visit can be cancelled or moved online until 11:59 p.m. the day before.`,
       },
     ],
   },
   cta: {
     title: "Your first hour is on us.",
+    titlePlain: "Book your session.",
     body: "Pick a slot. The confirmation goes out by email, with the invitation for your calendar.",
     button: "Book now",
     or: "or call",
@@ -529,6 +534,7 @@ export const en: Dict = {
     minimumValue: "A session lasts at least {min}. The craftsman arrives {setup} minutes early to set up, at no charge: the time you book is all ironing.",
     travel: "Travel fee",
     travelNote: "Per visit, on top of the session price. The first-hour-free offer does not cover it and does not reduce it.",
+    feesFree: "Nothing: the Montreal neighbourhoods we serve have no travel fee.",
     faqTitle: "Questions about Montreal",
     faq: [
       {
@@ -617,7 +623,7 @@ export const en: Dict = {
       evening: "Evening",
       timezone: "Timezone: Eastern (Montreal).",
       setup:
-        "Your presser arrives 15 minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.",
+        `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
       comment: "Anything to add? (optional)",
       commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
     },
@@ -671,7 +677,7 @@ export const en: Dict = {
     cancel: "Cancel this booking",
     cancelConfirm: "Permanently cancel this appointment?",
     cancelled: "Your booking has been cancelled. Your craftsman has been notified.",
-    tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call +1 450 943 1217.`,
+    tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call ${PHONE}.`,
     notFound: "Booking not found. Check the link from your email.",
     rebook: "Book a new appointment",
   },
@@ -829,7 +835,7 @@ export const en: Dict = {
       short: "A few more words, please",
       rate: "You just wrote to us. Give us a few minutes to reply.",
       unavailable:
-        "Sending isn't working right now. Call +1 450 943 1217 — we pick up.",
+        `Sending isn't working right now. Call ${PHONE} — we pick up.`,
       generic: "Sending failed. Try again, or call us directly.",
     },
   },
@@ -845,8 +851,10 @@ export const en: Dict = {
     title: "What a session at your place amounts to.",
     lede:
       "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
-    headline: "The two-hour session — {price}",
-    visitNote: "minimum {min} per visit · travel included",
+    headline: "A session of {min} — {price}",
+    visitNote: "minimum {min} per visit · {travel}",
+    travelIncluded: "travel included",
+    travelVaries: "travel fee depends on your area",
     cadence: {
       title: "Our pace, hour by hour",
       lede:
