@@ -26,9 +26,10 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Rattrapage : renvoie la confirmation et inscrit le rendez-vous à
- * l'agenda s'il y manque. Sert après une rupture du lien avec Google,
- * quand des réservations sont passées sans que personne ne soit prévenu.
+ * Rattrapage : envoie la confirmation si elle n'est jamais partie, et
+ * inscrit le rendez-vous à l'agenda s'il y manque. Sert après une rupture
+ * du lien avec Google, quand des réservations sont passées sans que
+ * personne ne soit prévenu. Réussi seulement si les deux tiennent.
  */
 export async function POST(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest) {
   if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
   const result = await resendBooking(booking, req.headers.get("host"));
-  return NextResponse.json({ ok: result.emailSent, ...result });
+  const ok = result.emailSent && (result.calendarAdded || booking.status === "cancelled");
+  return NextResponse.json({ ok, ...result });
 }
 
 /** Annulation par l'artisan. */

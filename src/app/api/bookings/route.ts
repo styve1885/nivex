@@ -4,6 +4,7 @@ import { ensureSchema, sql } from "@/lib/db";
 import { demoSettings, isDemo } from "@/lib/demo";
 import { estimateCents, estimateMinutes } from "@/lib/availability";
 import { bookingRef, token } from "@/lib/crypto";
+import { SettingsUnavailableError } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,12 +41,15 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
   }
 
-  // Garde-fou : pas plus de 3 réservations par courriel et par heure.
+  /* Garde-fou : pas plus de 3 réservations par courriel et par heure. Les
+     visites d'un abonnement n'y comptent pas — une série en pose jusqu'à
+     vingt-quatre d'un coup, et /api/subscriptions a sa propre limite. */
   try {
     await ensureSchema();
     const recent = (await sql()`
       SELECT count(*)::int AS n FROM nivex_bookings
-      WHERE lower(client_email) = ${parsed.data.email} AND created_at > now() - interval '1 hour'`) as { n: number }[];
+      WHERE lower(client_email) = ${parsed.data.email} AND subscription_id IS NULL
+        AND created_at > now() - interval '1 hour'`) as { n: number }[];
     if ((recent[0]?.n ?? 0) >= 3) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
@@ -78,6 +82,10 @@ export async function POST(req: NextRequest) {
           : e.code === "out_of_area" || e.code === "unknown_service" ? 422
             : 503;
       return NextResponse.json({ ok: false, error: e.code }, { status });
+    }
+    /* Réglages illisibles : on ne réserve pas sur des valeurs par défaut. */
+    if (e instanceof SettingsUnavailableError) {
+      return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
     }
     console.error("[nivex] booking failed:", e);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });

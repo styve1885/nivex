@@ -170,6 +170,10 @@ async function bootstrap() {
         )
       $fn$`;
 
+    /* Seule la garde déjà posée se tait. Tout autre refus — des rendez-vous
+       déjà trop serrés, en tête — remonte jusqu'au `catch` ci-dessous et s'y
+       consigne : avalé dans la base, il laissait la garde absente sans que
+       rien ne le dise, et retentée en vain à chaque démarrage. */
     await q`
       DO $$ BEGIN
         ALTER TABLE nivex_bookings
@@ -177,7 +181,8 @@ async function bootstrap() {
           EXCLUDE USING gist (nivex_occupied(starts_at, ends_at) WITH &&)
           WHERE (status IN ('confirmed', 'pending'));
       EXCEPTION
-        WHEN OTHERS THEN NULL;
+        WHEN duplicate_object THEN NULL;
+        WHEN duplicate_table  THEN NULL;
       END $$`;
   } catch (e) {
     /* Une base sans droit de créer des fonctions, une version de Postgres
