@@ -90,8 +90,9 @@ export type VisitContext = {
 };
 
 /**
- * Les pages de l'espace artisan, et celle qui retire un navigateur du
- * décompte, ne se comptent jamais.
+ * Les pages de l'espace artisan, celle qui retire un navigateur du décompte
+ * et les liens personnels de réservation et d'abonnement, dont l'adresse
+ * porte un jeton, ne se comptent jamais.
  *
  * Le filtre vit ici, du côté serveur, et non seulement dans le navigateur :
  * un appel bricolé à la main ne doit pas pouvoir polluer la mesure.

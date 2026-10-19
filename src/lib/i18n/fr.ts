@@ -43,7 +43,7 @@ const privacy: LegalDoc = {
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site : une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
         "Mesure de fréquentation — le nombre de pages vues, la page regardée, le site d'où vous arrivez, votre pays et le type d'appareil. Ces données sont agrégées : elles disent combien de personnes sont passées, jamais lesquelles. Aucun témoin n'est déposé et aucun identifiant ne vous suit d'une visite à l'autre.",
-        "Journal des visites — pour chaque page affichée : la date et l'heure, la page, le site ou la campagne d'où vous êtes arrivé au début de votre visite, le prénom inscrit dans le lien de recommandation si vous en avez suivi un, le type d'appareil, et la ville approximative que notre hébergeur déduit du réseau. Votre adresse IP n'y est jamais inscrite : elle sert à deviner la ville, puis elle est oubliée avec la requête. Pour écarter les robots, le serveur regarde aussi le nom que se donne votre navigateur, s'il est piloté par un programme et le fuseau de son horloge ; il n'en garde rien, sinon la mention « robot » quand c'en est un. Aucun identifiant ne relie deux lignes entre elles — deux de vos visites y figurent comme deux inconnus. Les pages de l'espace réservé à l'artisan ne sont jamais comptées, ni les visites de l'artisan lui-même.",
+        "Journal des visites — pour chaque page affichée : la date et l'heure, la page et sa langue, le site ou la campagne d'où vous êtes arrivé au début de votre visite, avec l'adresse de provenance telle que votre navigateur la transmet, le prénom inscrit dans le lien de recommandation si vous en avez suivi un, le type d'appareil, et la ville approximative, avec sa région et son pays, que notre hébergeur déduit du réseau. Votre adresse IP n'y est jamais inscrite : elle sert à deviner la ville, puis elle est oubliée avec la requête. Pour écarter les robots, le serveur regarde aussi le nom que se donne votre navigateur, s'il est piloté par un programme et le fuseau de son horloge ; il n'en garde rien, sinon la mention « robot » quand c'en est un. Aucun identifiant ne relie deux lignes entre elles — deux de vos visites y figurent comme deux inconnus. Les pages de l'espace réservé à l'artisan ne sont jamais comptées, ni les liens personnels « Gérer ma réservation » et « Gérer mes visites », ni les visites de l'artisan lui-même.",
         "Provenance d'une réservation — à votre première visite, votre navigateur retient pour lui seul l'étiquette de campagne du lien suivi, le prénom inscrit dans un lien de recommandation, le site d'où vous veniez, la page d'arrivée, la date de cette première visite et le nombre de fois que vous êtes revenu. Ces informations restent dans votre navigateur et n'en sortent que si vous réservez : elles accompagnent alors votre réservation, pour que nous sachions quel moyen vous a fait connaître la maison. Si vous ne réservez pas, nous n'en savons rien, et vider les données de votre navigateur les efface.",
         "Comment vous nous avez connus — la réponse que vous donnez, si vous le souhaitez, à la question facultative du formulaire de réservation, et le nom de la personne qui vous a recommandé si vous choisissez de l'écrire. Une visite à votre porte ou une carte remise en main propre ne laissent aucune trace technique : cette réponse est le seul moyen de le savoir. Elle est proposée d'avance quand vous arrivez par un lien de recommandation ou par le code d'une carte, et vous restez libre de la changer ou de l'effacer.",
       ],
@@ -335,6 +335,8 @@ export const fr = {
     "Uniformes scolaires & professionnels",
     "Tout se fait chez vous",
   ],
+  /* Le ruban défile sans fin : un bouton doit pouvoir l'arrêter. */
+  marqueeControl: { pause: "Arrêter le défilement", play: "Reprendre le défilement" },
   story: {
     eyebrow: "L'histoire",
     title: "Le blanc, comme au premier jour.",
@@ -992,6 +994,8 @@ export const fr = {
       travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite ; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
     },
     firstFreeLabel: "Première séance",
+    /* Lu seulement par les lecteurs d'écran, devant le prix barré. */
+    insteadOf: "au lieu de",
     cta: {
       title: "Composez votre séance.",
       body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et confirme l'heure que vous choisissez.",

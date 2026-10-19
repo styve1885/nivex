@@ -35,8 +35,10 @@ function Price({ o, s, t, locale }: { o: Offer; s: Settings; t: Dict; locale: "f
       <span className="font-display text-[1.35rem] text-gold-700">
         {formatMoney(firstTimeCents(o, s), s.currency, locale)}
       </span>
+      {/* Le trait ne se lit pas : un lecteur d'écran entendrait deux prix
+          côte à côte. « au lieu de » dit lequel ne vaut plus. */}
       <span className="text-[0.72rem] text-ink-400">
-        <span className="line-through">{full}</span> · {t.tarifs.firstFreeLabel}
+        <span className="sr-only">{t.tarifs.insteadOf} </span><s>{full}</s> · {t.tarifs.firstFreeLabel}
       </span>
     </span>
   );

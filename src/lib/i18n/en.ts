@@ -31,7 +31,7 @@ const privacy: LegalDoc = {
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
         "Audience measurement — the number of page views, which page was viewed, the site you arrived from, your country and your device type. This data is aggregated: it says how many people came by, never which ones. No cookie is set and no identifier follows you from one visit to the next.",
-        "Visit log — for each page displayed: the date and time, the page, the site or campaign you arrived from at the start of your visit, the first name in the referral link if you followed one, the device type, and the approximate city our host infers from the network. Your IP address is never written down: it serves to infer the city, then it is forgotten along with the request. To set robots aside, the server also looks at the name your browser gives itself, whether it is driven by a program, and the time zone of its clock; it keeps none of it, except the mention “robot” when it is one. No identifier ties two entries together — two of your visits appear there as two strangers. Pages in the craftsman's own area are never counted, nor are the craftsman's own visits.",
+        "Visit log — for each page displayed: the date and time, the page and its language, the site or campaign you arrived from at the start of your visit, with the referring address as your browser sends it, the first name in the referral link if you followed one, the device type, and the approximate city, with its region and country, that our host infers from the network. Your IP address is never written down: it serves to infer the city, then it is forgotten along with the request. To set robots aside, the server also looks at the name your browser gives itself, whether it is driven by a program, and the time zone of its clock; it keeps none of it, except the mention “robot” when it is one. No identifier ties two entries together — two of your visits appear there as two strangers. Pages in the craftsman's own area are never counted, nor are the personal “Manage my booking” and “Manage my visits” links, nor the craftsman's own visits.",
         "Where a booking came from — on your first visit, your browser keeps to itself the campaign tag of the link you followed, the first name in a referral link, the site you came from, the page you landed on, the date of that first visit, and the number of times you came back. This stays in your browser and leaves it only if you book: it then travels with your booking, so that we know which means made the house known to you. If you do not book, we know none of it, and clearing your browser data erases it.",
         "How you heard about us — the answer you give, if you wish to, to the optional question in the booking form, and the name of the person who recommended us if you choose to write it. A visit at your door or a card handed to you in person leaves no technical trace: that answer is the only way to know. It is suggested in advance when you arrive through a referral link or a card's code, and you remain free to change or clear it.",
       ],
@@ -321,6 +321,7 @@ export const en: Dict = {
     "School & work uniforms",
     "Everything happens at your home",
   ],
+  marqueeControl: { pause: "Pause scrolling", play: "Resume scrolling" },
   story: {
     eyebrow: "The story",
     title: "White, the way it was on day one.",
@@ -967,6 +968,7 @@ export const en: Dict = {
       travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
     },
     firstFreeLabel: "First session",
+    insteadOf: "instead of",
     cta: {
       title: "Put your session together.",
       body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and confirms the hour you pick.",

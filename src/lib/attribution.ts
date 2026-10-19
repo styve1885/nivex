@@ -370,11 +370,27 @@ export function robotReason(v: {
 /* ============================ Pages jamais comptées ============================ */
 
 /**
- * L'espace artisan, et la page qui retire un navigateur du décompte. Le même
- * filtre vaut dans le navigateur, devant l'hébergeur et au serveur.
+ * Les liens personnels « Gérer ma réservation » et « Gérer mes visites ».
+ * Leur dernier segment est le jeton qui donne la main sur un rendez-vous :
+ * c'est une clé. Le motif est écrit pour se lire aussi bien en JavaScript
+ * que dans Postgres, qui s'en sert pour effacer du journal les lignes
+ * entrées avant ce filtre. La page d'abonnement elle-même, sans jeton, n'y
+ * répond pas.
+ */
+export const PERSONAL_PATH = "^/(fr|en)/(reservation|abonnement)/[^/?#]";
+const PERSONAL = new RegExp(PERSONAL_PATH);
+
+/**
+ * L'espace artisan, la page qui retire un navigateur du décompte, et les
+ * liens personnels. Écrit dans le journal ou envoyé à l'hébergeur, un jeton
+ * relierait des lignes dites anonymes à une personne, et ces pages ne disent
+ * rien de la manière dont la maison se fait connaître. Le même filtre vaut
+ * dans le navigateur, devant l'hébergeur et au serveur.
  */
 export function isPrivatePath(path: string): boolean {
-  return /^\/admin(\/|$)/.test(path) || /^\/(fr|en)\/ne-pas-compter(\/|$)/.test(path);
+  return /^\/admin(\/|$)/.test(path)
+    || /^\/(fr|en)\/ne-pas-compter(\/|$)/.test(path)
+    || PERSONAL.test(path);
 }
 
 /** Catégorie d'appareil, assez grossière pour ne distinguer personne. */

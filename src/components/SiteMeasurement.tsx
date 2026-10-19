@@ -25,11 +25,13 @@ import {
  *
  *  3. La mesure de fréquentation de l'hébergeur, filtrée par `beforeSend`.
  *
- * Deux exclusions valent pour les trois : les pages de l'espace artisan ne
- * se comptent jamais, et un appareil porteur du marqueur de retrait n'envoie
- * plus rien du tout. Le marqueur se pose de lui-même quand l'artisan ouvre
- * son espace, ou par le lien personnel de la page « ne pas compter » ; et le
- * serveur écarte de son côté toute visite qui porte la session de l'artisan.
+ * Deux exclusions valent pour les trois : les pages privées ne se comptent
+ * jamais — l'espace artisan, la page « ne pas compter », et les liens
+ * personnels de réservation et d'abonnement, dont l'adresse porte un jeton —,
+ * et un appareil porteur du marqueur de retrait n'envoie plus rien du tout.
+ * Le marqueur se pose de lui-même quand l'artisan ouvre son espace, ou par
+ * le lien personnel de la page « ne pas compter » ; et le serveur écarte de
+ * son côté toute visite qui porte la session de l'artisan.
  */
 
 /* Le site n'est pas une application hors ligne : un navigateur en navigation
@@ -256,8 +258,8 @@ export function SiteMeasurement() {
     <Analytics
       beforeSend={(event) => {
         /* Le dernier filet avant l'hébergeur : ni l'espace artisan, ni un
-           appareil retiré du décompte ne doivent lui parvenir. Renvoyer
-           `null` annule l'envoi. */
+           lien personnel et son jeton, ni un appareil retiré du décompte ne
+           doivent lui parvenir. Renvoyer `null` annule l'envoi. */
         try {
           const u = new URL(event.url);
           if (isPrivatePath(u.pathname)) return null;
