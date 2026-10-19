@@ -6,6 +6,7 @@ import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettings, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, servedText } from "@/lib/travel";
+import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
@@ -20,14 +21,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.tarifs.eyebrow,
-    description: t.tarifs.lede,
-    alternates: {
-      canonical: `/${locale}/tarifs`,
-      languages: { "fr-CA": "/fr/tarifs", "en-CA": "/en/tarifs" },
-    },
-  };
+  return pageMeta(t, locale, "/tarifs", t.tarifs.eyebrow, t.tarifs.lede);
 }
 
 /** Le prix d'une offre : plein, et la première séance à côté si l'heure est offerte. */
@@ -337,7 +331,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
               {t.montreal.link}
             </Link>
-            <ZoneChecker t={t} locale={locale} className="mt-6" />
+            <ZoneChecker t={{ brand: t.brand, zoneCheck: t.zoneCheck }} locale={locale} className="mt-6" />
           </div>
 
           <dl className="mt-10 border-t border-gold-300/40">

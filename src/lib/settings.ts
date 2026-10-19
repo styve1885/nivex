@@ -4,18 +4,12 @@ import {
   DEFAULT_ZONE_POLICY, POLICY_VERSION, PREFIX_RE, describeChanges,
   type Sector, type Zone, type ZonePolicy,
 } from "./travel";
+import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "./services";
 
-export type DayHours = { day: number; enabled: boolean; open: string; close: string };
-export type ServiceItem = {
-  key: string;
-  icon: string;
-  fr: string;
-  en: string;
-  minutesPerUnit: number;
-  unitFr: string;
-  unitEn: string;
-  enabled: boolean;
-};
+/* Les prestations du code et la forme d'un horaire vivent dans `services.ts`,
+   qui n'importe rien : un composant client peut les lire sans emporter la
+   base dans le navigateur. Elles restent lisibles d'ici. */
+export { DEFAULT_SERVICES, type DayHours, type ServiceItem };
 
 export type Settings = {
   ownerEmail: string | null;
@@ -60,25 +54,6 @@ export const DEFAULT_HOURS: DayHours[] = [
   { day: 4, enabled: true,  open: "07:00", close: "22:00" },
   { day: 5, enabled: true,  open: "07:00", close: "22:00" },
   { day: 6, enabled: true,  open: "07:00", close: "22:00" }, // samedi
-];
-
-/**
- * Temps de traitement par pièce, marge de conversation et d'imprévus
- * comprise. Ces minutes ne servent pas qu'au devis : la capacité horaire
- * annoncée sur la page Tarifs en découle (`perHour`), et le site promet de
- * tenir le volume annoncé. Les gonfler d'optimisme revient donc à promettre
- * ce qu'on ne tiendra pas.
- *
- * Valeurs relevées au chronomètre sur séance réelle, septembre 2026.
- */
-export const DEFAULT_SERVICES: ServiceItem[] = [
-  { key: "shirt",    icon: "shirt",  fr: "Chemises",              en: "Shirts",              minutesPerUnit: 8,  unitFr: "chemise",  unitEn: "shirt",   enabled: true },
-  { key: "delicate", icon: "dress",  fr: "Robes & délicats",      en: "Dresses & delicates", minutesPerUnit: 15, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "suit",     icon: "suit",   fr: "Costumes & vestes",     en: "Suits & jackets",     minutesPerUnit: 19, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "trousers", icon: "badge",  fr: "Pantalons & jupes",     en: "Trousers & skirts",   minutesPerUnit: 9,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "linen",    icon: "linen",  fr: "Draps simple et 2 places", en: "Single & double sheets", minutesPerUnit: 7,  unitFr: "drap",     unitEn: "sheet", enabled: true },
-  { key: "linen-xl", icon: "linen",  fr: "Draps queen et 3 places",  en: "Queen & king sheets",    minutesPerUnit: 10, unitFr: "drap",     unitEn: "sheet", enabled: true },
-  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",     en: "Uniforms (set)",         minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",   enabled: true },
 ];
 
 export const FALLBACK_SETTINGS: Settings = {

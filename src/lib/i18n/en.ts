@@ -682,6 +682,12 @@ export const en: Dict = {
     refused: "This browser refuses to keep the marker, most likely because it is in private browsing. Open the link in an ordinary window.",
     back: "Back to the home page",
   },
+  notFound: {
+    metaTitle: "Page not found",
+    title: "This page has been folded away.",
+    body: "It does not exist, or no longer does. Let us return to something neatly pressed.",
+    home: "Back to the home page",
+  },
   subscribe: {
     title: "Subscribe",
     lede: "You choose your plan, your day and your time once. The visits then follow at the plan's rhythm, and every slot is kept for you.",

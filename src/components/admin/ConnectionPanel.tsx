@@ -124,6 +124,8 @@ export function ConnectionPanel({
               Vous n&apos;avez pas accordé : {missingScopes.map((s) => s.split("/").pop()).join(", ")}.
               Sans elles, {missingScopes.some((s) => s.includes("gmail")) ? "les courriels de confirmation" : "la lecture de l'agenda"} ne fonctionneront pas.
             </p>
+            {/* Le détour OAuth quitte l'application : une navigation pleine page. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/api/auth/google" className="mt-3 inline-block underline underline-offset-4">Réautoriser</a>
           </div>
         )}

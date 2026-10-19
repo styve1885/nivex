@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { servedText } from "@/lib/travel";
+import { pageMeta } from "@/lib/seo";
 import { BookingWizard, type WizardConfig } from "@/components/booking/BookingWizard";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +11,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.booking.title,
-    description: t.booking.lede,
-    alternates: { canonical: `/${locale}/reserver`, languages: { "fr-CA": "/fr/reserver", "en-CA": "/en/reserver" } },
-  };
+  return pageMeta(t, locale, "/reserver", t.booking.title, t.booking.lede);
 }
 
 export default async function BookPage({ params }: { params: Promise<{ locale: string }> }) {

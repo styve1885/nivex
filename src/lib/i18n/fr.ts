@@ -699,6 +699,14 @@ export const fr = {
     refused: "Ce navigateur refuse de garder le marqueur, sans doute parce qu'il est en navigation privée. Ouvrez le lien dans une fenêtre ordinaire.",
     back: "Retour à l'accueil",
   },
+  /* La page d'une adresse qui ne mène nulle part : faute de frappe, vieux
+     lien partagé, code QR mal recopié. */
+  notFound: {
+    metaTitle: "Page introuvable",
+    title: "Cette page a pris le pli.",
+    body: "Elle n'existe pas, ou plus. Revenons à quelque chose de bien repassé.",
+    home: "Retour à l'accueil",
+  },
   subscribe: {
     title: "S'abonner",
     lede: "Vous choisissez une seule fois votre formule, votre jour et votre heure. Les visites se suivent ensuite au rythme de la formule, et chaque créneau vous est réservé.",
