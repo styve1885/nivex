@@ -20,7 +20,7 @@ def blend(fg, bg, alpha):
     return "#%02X%02X%02X" % tuple(round(alpha * x + (1 - alpha) * y) for x, y in zip(a, b))
 
 LINEN_50, LINEN_100, LINEN_200 = "#FEFDFB", "#FBF8F2", "#F5F0E6"
-INK_400, INK_500, INK_600, INK_700, INK_800, INK_900 = "#8A8378", "#6B6459", "#4A443B", "#2F2A23", "#1F1B16", "#14110D"
+INK_400, INK_500, INK_600, INK_700, INK_800, INK_900 = "#726B5F", "#6B6459", "#4A443B", "#2F2A23", "#1F1B16", "#14110D"
 GOLD_400, GOLD_500, GOLD_600, GOLD_700 = "#C4A76A", "#A7864B", "#866836", "#7A5E31"
 LINEN_300 = "#ECE4D5"
 CONTROL = "#9E7F47"   # bordure des champs de formulaire
@@ -33,7 +33,10 @@ pairs = [
     ("surtitre or (gold-600 / linen-50)",           GOLD_600, LINEN_50,  4.5),
     ("détail or (gold-600 / linen-50)",             GOLD_600, LINEN_50,  4.5),
     ("encadré offre (gold-700 / linen-100)",        GOLD_700, LINEN_100, 4.5),
-    ("texte secondaire (ink-400 / linen-100)",      INK_400,  LINEN_100, 3.0),
+    # Le texte secondaire est du petit texte, souvent sous 12 px : 4,5:1, et
+    # sur le lin-200, le fond le plus sombre (la fin du dégradé des cartes).
+    # Qui passe là passe sur le lin-100 et le lin-50.
+    ("texte secondaire (ink-400 / linen-200)",      INK_400,  LINEN_200, 4.5),
     ("bouton sombre (linen-100 / ink-800)",         LINEN_100, INK_800,  4.5),
     ("section sombre : titre (linen-100 / ink-900)", LINEN_100, INK_900, 4.5),
     ("section sombre : corps 65 % (linen-300 / ink-900)",
@@ -43,9 +46,11 @@ pairs = [
     ("pied de page : liens (gold-400 / ink-900)",   GOLD_400, INK_900,  4.5),
     ("pied de page : corps 85 % (linen-300 / ink-900)",
         blend(LINEN_300, INK_900, 0.85), INK_900, 4.5),
-    ("pied de page : mentions 45 % (linen-300 / ink-900)",
-        blend(LINEN_300, INK_900, 0.45), INK_900, 3.0),
+    ("pied de page : mentions 60 % (linen-300 / ink-900)",
+        blend(LINEN_300, INK_900, 0.60), INK_900, 4.5),
     ("protocole : surtitre (gold-400 / ink-900)",   GOLD_400, INK_900,  4.5),
+    # Le reflet du titre d'accueil (.gold-sheen) va du gold-700 au gold-600 :
+    # son point le plus clair est cette paire-ci.
     ("surtitre or sur lin-200 (gold-600 / linen-200)", GOLD_600, LINEN_200, 4.5),
     ("corps sur lin-200 (ink-500 / linen-200)",     INK_500,  LINEN_200, 4.5),
     ("pages légales : corps (ink-600 / linen-100)", INK_600,  LINEN_100, 4.5),

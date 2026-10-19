@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { SETUP_MINUTES } from "./brand";
 import { DEFAULT_ZONE_POLICY } from "./travel";
-import { DATACENTER_CITIES } from "./attribution";
+import { DATACENTER_CITIES, PERSONAL_PATH } from "./attribution";
 
 /**
  * Neon (Postgres) via HTTP. Une seule connexion logique par instance
@@ -170,6 +170,10 @@ async function bootstrap() {
         )
       $fn$`;
 
+    /* Seule la garde déjà posée se tait. Tout autre refus — des rendez-vous
+       déjà trop serrés, en tête — remonte jusqu'au `catch` ci-dessous et s'y
+       consigne : avalé dans la base, il laissait la garde absente sans que
+       rien ne le dise, et retentée en vain à chaque démarrage. */
     await q`
       DO $$ BEGIN
         ALTER TABLE nivex_bookings
@@ -177,7 +181,8 @@ async function bootstrap() {
           EXCLUDE USING gist (nivex_occupied(starts_at, ends_at) WITH &&)
           WHERE (status IN ('confirmed', 'pending'));
       EXCEPTION
-        WHEN OTHERS THEN NULL;
+        WHEN duplicate_object THEN NULL;
+        WHEN duplicate_table  THEN NULL;
       END $$`;
   } catch (e) {
     /* Une base sans droit de créer des fonctions, une version de Postgres
@@ -341,6 +346,22 @@ async function bootstrap() {
     console.warn("[nivex] visites de centres de données non marquées :", (e as Error).message);
   }
 
+  /* Les liens personnels de réservation et d'abonnement se comptaient avant
+     que le journal ne les écarte (`isPrivatePath`), et leur adresse porte le
+     jeton du rendez-vous. Ces lignes s'effacent ; il n'en entre plus, et un
+     second passage ne trouve rien. Un échec ne ferme pas la maison. */
+  try {
+    await q`DELETE FROM nivex_visits WHERE path ~ ${PERSONAL_PATH}::text`;
+    /* Le même jeton a pu entrer par le référent : du 15 au 18 octobre 2026, la
+       mesure envoyait le référent brut, et une page du site ouverte depuis un
+       lien personnel le gardait. Seul le référent s'efface, la visite reste. */
+    await q`
+      UPDATE nivex_visits SET referrer = NULL
+      WHERE referrer ~ ${`^https?://[^/]+${PERSONAL_PATH.slice(1)}`}::text`;
+  } catch (e) {
+    console.warn("[nivex] liens personnels non effacés du journal :", (e as Error).message);
+  }
+
   /*
    * Abonnements.
    *
@@ -391,6 +412,11 @@ async function bootstrap() {
     )`;
 
   await q`CREATE INDEX IF NOT EXISTS nivex_subscriptions_email_idx ON nivex_subscriptions (lower(client_email))`;
+
+  /* Le montant encaissé de chaque cycle, noté avec le paiement : des frais
+     changés ensuite ne réécrivent pas un cycle déjà reçu. Les cycles payés
+     avant n'en ont pas, et se lisent au montant du jour. */
+  await q`ALTER TABLE nivex_subscriptions ADD COLUMN IF NOT EXISTS paid_amounts jsonb NOT NULL DEFAULT '{}'::jsonb`;
 
   /* Le lien entre une visite et son abonnement. Facultatif : une séance
    * ponctuelle n'en a pas, et toutes celles d'avant n'en avaient pas.

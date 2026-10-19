@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { Reveal } from "../Reveal";
 import { CheckIcon, ArrowIcon } from "../Icons";
-import { formatMoney } from "@/lib/time";
-import { cheapestPlanCents } from "@/lib/pricing";
+import { formatMoney, minutesToText } from "@/lib/time";
+import { blockPieces, cheapestPlanCents } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
 /**
  * La vitrine tarifaire.
  *
- * On y vend une séance, jamais un taux : le montant se lit « la séance de
- * deux heures — 100 $ », et la durée n'apparaît que comme repère de
- * déroulement.
+ * On y vend une séance, jamais un taux : le montant se lit « 2 heures —
+ * 100 $ », et la durée n'apparaît que comme repère de déroulement.
  *
  * La plus courte séance annoncée est la durée minimale d'un déplacement,
  * telle que réglée par l'artisan : la vitrine ne peut donc pas proposer
@@ -23,8 +22,16 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
   const money = (cents: number) => formatMoney(cents, settings.currency, locale);
 
   /* La première séance dure le minimum réglé — jamais moins —, la deuxième
-     une heure de plus. Le prix de chacune en découle. */
+     une heure de plus. Leur durée et leur prix en découlent ensemble : une
+     durée écrite à la main resterait à deux heures quand le prix, lui,
+     suivrait le minimum. L'abonnement n'affiche que son prix. */
   const shortest = Math.max(settings.minMinutes, 120);
+  const durations = [minutesToText(shortest, locale), minutesToText(shortest + 60, locale), ""];
+  /* Le volume suit la durée, lu sur la grille de la page Tarifs ; sans bloc
+     de cette durée, la carte n'avance pas de chiffre. */
+  const pieces = [blockPieces(shortest, locale), blockPieces(shortest + 60, locale), null];
+  const volume = (text: string, i: number) =>
+    pieces[i] ? `${pieces[i]} — ${text}` : text.charAt(0).toUpperCase() + text.slice(1);
   const amounts = [
     money(Math.round((shortest / 60) * settings.hourlyRate)),
     money(Math.round(((shortest + 60) / 60) * settings.hourlyRate)),
@@ -50,10 +57,10 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
               <p className="text-[10px] uppercase tracking-[0.24em] text-gold-700">{offer.name}</p>
 
               <p className="mt-4 font-display text-[1.6rem] font-light leading-tight text-ink-800">
-                {offer.duration ? `${offer.duration} — ${amounts[i]}` : amounts[i]}
+                {durations[i] ? `${durations[i]} — ${amounts[i]}` : amounts[i]}
               </p>
 
-              <p className="mt-4 text-[0.9rem] font-light leading-[1.8] text-ink-600">{offer.volume}</p>
+              <p className="mt-4 text-[0.9rem] font-light leading-[1.8] text-ink-600">{volume(offer.volume, i)}</p>
               <p className="mt-auto pt-5 text-[0.8rem] font-light leading-[1.7] text-ink-400">{offer.note}</p>
             </Reveal>
           ))}

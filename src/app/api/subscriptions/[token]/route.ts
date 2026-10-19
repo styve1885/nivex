@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { cancelVisit, findSubscriptionByToken, moveVisit, SubscriptionError } from "@/lib/subscriptions";
+import {
+  cancelVisit, claimClientChange, findSubscriptionByToken, moveVisit, releaseClientChange, SubscriptionError,
+} from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +20,9 @@ const Body = z.discriminatedUnion("action", [
  *
  * Le jeton de l'abonnement ouvre ses visites, et seulement elles : une
  * visite d'un autre abonnement est introuvable ici. Le délai — 23 h 59 la
- * veille — est vérifié par subscriptions.ts, pas par la page.
+ * veille — est vérifié par subscriptions.ts, pas par la page. Le nombre de
+ * changements en vingt-quatre heures aussi : chacun part en courriels et en
+ * textos.
  */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { token } = await ctx.params;
@@ -30,6 +34,12 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (full.sub.status !== "active") return NextResponse.json({ ok: false, error: "ended" }, { status: 409 });
   const visit = full.visits.find((v) => v.id === parsed.data.visitId);
   if (!visit) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+  /* Une visite déjà annulée ne change plus : rien à compter, rien à envoyer. */
+  if (parsed.data.action === "cancel" && visit.status === "cancelled") {
+    return NextResponse.json({ ok: true, replacement: null });
+  }
+  const claim = await claimClientChange(full, visit);
+  if (!claim.allowed) return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
 
   try {
     if (parsed.data.action === "cancel") {
@@ -37,8 +47,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ ok: true, replacement: replacement?.startsAt.toISOString() ?? null });
     }
     const moved = await moveVisit(visit, new Date(parsed.data.startsAt), "client", req.headers.get("host"));
+    /* La même heure : rien n'a bougé, le changement n'est pas compté. */
+    if (moved.startsAt.getTime() === visit.startsAt.getTime()) await releaseClientChange(claim.id);
     return NextResponse.json({ ok: true, startsAt: moved.startsAt.toISOString() });
   } catch (e) {
+    await releaseClientChange(claim.id);
     if (e instanceof SubscriptionError) {
       return NextResponse.json({ ok: false, error: e.code }, { status: e.code === "too_late" || e.code === "slot_taken" || e.code === "invalid_slot" ? 409 : 422 });
     }

@@ -32,6 +32,14 @@ export const CANCEL_WINDOW_HOURS = 2;
  * l'offre est mentionnée ; c'est ici qu'elle est appliquée.
  */
 export const FIRST_FREE_MIN_MINUTES = 120;
+
+/**
+ * La séance la plus courte que la maison vend : deux heures. Il n'existe pas
+ * de séance d'une heure. Les réglages ne descendent pas en dessous, à
+ * l'enregistrement comme à la lecture ; sinon le moteur aurait accepté une
+ * séance d'une heure que la vitrine, elle, ne montre jamais.
+ */
+export const MIN_SESSION_MINUTES = 120;
 /** Numéro d'entreprise du Québec, au registraire des entreprises. */
 export const NEQ = "2282362666";
 

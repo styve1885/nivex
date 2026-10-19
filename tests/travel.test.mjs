@@ -13,9 +13,11 @@ import assert from "node:assert/strict";
 const {
   evaluateZone, zoneFor, bookable, feeTable, postalHead, servedText, googleList, sectorNames,
   activePrefixes, thresholdText, policyProblems, describeChanges, orderedSectors, joinList,
-  isMontrealSector, montrealNames, montrealFees, sectorsByRegion,
+  isMontrealSector, montrealNames, montrealFees, sectorsByRegion, servedRegions,
   DEFAULT_ZONE_POLICY,
 } = await import("../src/lib/travel.ts");
+const { legalValues, legalSections, fill } = await import("../src/components/LegalDocument.tsx");
+const { openingLine } = await import("../src/components/home/opening-line.ts");
 const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd } = await import("../src/lib/seo.ts");
 const { default: robots } = await import("../src/app/robots.ts");
@@ -236,6 +238,67 @@ test("plus aucun secteur actif : refusé, sinon plus personne ne réserve", () =
   assert.match(policyProblems(p).join("\n"), /Au moins un secteur doit rester actif/);
 });
 
+/* Les bornes que le serveur refuse se signalent pendant la saisie, en
+   nommant le secteur ou la zone : un refus en bloc, à l'enregistrement, ne
+   disait pas où chercher. */
+const { POLICY_LIMITS } = await import("../src/lib/travel.ts");
+
+test("les bornes du serveur se signalent pendant la saisie, avec le nom en cause", () => {
+  assert.deepEqual(policyProblems(P), [], "la grille par défaut les respecte");
+
+  const p = clone(P);
+  const lettres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const trop = Array.from({ length: POLICY_LIMITS.prefixesPerSector + 1 }, (_, i) => `H${Math.floor(i / 26)}${lettres[i % 26]}`);
+  p.sectors.push({ key: "ile", nameFr: "Île de Montréal", nameEn: "", prefixes: trop, zoneKey: "b", enabled: false });
+  assert.deepEqual(policyProblems(p), ["Île de Montréal : 61 préfixes, pour 60 au plus. Répartissez-les entre plusieurs secteurs."]);
+
+  const q = clone(P);
+  q.zones[1].longFeeCents = POLICY_LIMITS.feeCents + 1;
+  q.sectors[0].nameEn = "x".repeat(POLICY_LIMITS.nameLength + 1);
+  const pb = policyProblems(q).join("\n");
+  assert.match(pb, /Zone B : les frais vont de 0 à 500 \$ par visite/);
+  assert.match(pb, /Saint-Lambert : un nom compte 80 caractères au plus/);
+});
+
+test("un nom anglais laissé vide suit le français, jusque dans le tunnel", () => {
+  const p = clone(P);
+  p.zones[1].nameFr = "Zone Montréal";
+  p.zones[1].nameEn = "";
+  p.sectors.find((s) => s.key === "verdun").nameEn = "";
+  assert.equal(evaluateZone("H4G 1A1", COURT, p).labelEn, "Zone Montréal", "le libellé anglais des frais");
+  assert.ok(sectorNames(p, "en").includes("Verdun"));
+  assert.equal(feeTable(p, "en", (c) => `$${c / 100}`)[1].zone, "Zone Montréal");
+});
+
+/* Ce que l'artisan tape dans l'onglet : virgule ou point, et rien de deviné.
+   Un champ numérique réécrit à chaque touche changeait « 12,50 » en 130 $. */
+const { parseDollars, parseHours, dollarsText, hoursText } = await import("../src/components/admin/inputs.ts");
+
+test("les montants se lisent comme on les tape, au cent près", () => {
+  assert.equal(parseDollars("12,50"), 1250);
+  assert.equal(parseDollars("12.5"), 1250);
+  assert.equal(parseDollars("12 $"), 1200);
+  assert.equal(parseDollars("12,"), 1200, "une saisie en cours reste lisible");
+  assert.equal(parseDollars(""), 0, "un champ vidé vaut zéro, comme avant");
+  assert.equal(parseDollars("12,505"), null, "trois décimales ne se devinent pas");
+  assert.equal(parseDollars("abc"), null);
+  assert.equal(parseDollars("-5"), null);
+  for (const c of [0, 1500, 1250, 99, POLICY_LIMITS.feeCents]) assert.equal(parseDollars(dollarsText(c)), c);
+  assert.equal(dollarsText(1250), "12,50");
+});
+
+test("les seuils se lisent en heures, décimales ou « 2 h 30 »", () => {
+  assert.equal(parseHours("3"), 180);
+  assert.equal(parseHours("2,5"), 150);
+  assert.equal(parseHours("2.5"), 150, "et non 5 h");
+  assert.equal(parseHours("2 h 30"), 150);
+  assert.equal(parseHours("2:30"), 150);
+  assert.equal(parseHours("2."), 120, "une saisie en cours reste lisible");
+  assert.equal(parseHours(""), null, "un seuil vide ne vaut pas zéro");
+  assert.equal(parseHours("2 h 75"), null);
+  for (const m of [30, 150, 180, 135, 960]) assert.equal(parseHours(hoursText(m)), m);
+});
+
 test("l'ordre suit les zones, puis le tableau", () => {
   const p = clone(P);
   const sj = p.sectors.pop();
@@ -293,7 +356,7 @@ test("des montants ou un seuil absurdes retombent sur des valeurs sûres", () =>
 console.log("\nLe texte public, la liste pour Google, le tableau des frais");
 
 test("la phrase de la zone : la Rive-Sud, puis Montréal, en français et en anglais", () => {
-  const f = servedText(P, "fr", fr.zoneText);
+  const f = flat(servedText(P, "fr", fr.zoneText));
   assert.ok(f.startsWith("Secteurs desservis : Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert, Brossard,"));
   assert.ok(f.includes("La Prairie et Saint-Jean-sur-Richelieu. À Montréal : L'Île-des-Sœurs, Verdun,"));
   assert.ok(f.endsWith("Centre-ville de Montréal et Le Plateau-Mont-Royal."));
@@ -306,10 +369,10 @@ test("la phrase de la zone : la Rive-Sud, puis Montréal, en français et en ang
 test("sans quartier de Montréal, la phrase s'arrête à la Rive-Sud ; sans Rive-Sud, elle ne dit que Montréal", () => {
   const p = clone(P);
   for (const x of p.sectors) if (isMontrealSector(x)) x.enabled = false;
-  assert.doesNotMatch(servedText(p, "fr", fr.zoneText), /Montréal :/);
+  assert.doesNotMatch(flat(servedText(p, "fr", fr.zoneText)), /Montréal :/);
   const q = clone(P);
   for (const x of q.sectors) if (!isMontrealSector(x)) x.enabled = false;
-  assert.match(servedText(q, "fr", fr.zoneText), /^À Montréal : L'Île-des-Sœurs/);
+  assert.match(flat(servedText(q, "fr", fr.zoneText)), /^À Montréal : L'Île-des-Sœurs/);
 });
 
 test("aucun point d'exclamation dans les textes générés", () => {
@@ -339,7 +402,9 @@ test("le tableau des frais montre chaque zone, ses secteurs et ses deux tarifs",
   assert.equal(rows[0].free, true);
   assert.equal(rows[0].sectors.length, 10);
   assert.deepEqual(rows[0].sectors.slice(0, 5), ["Saint-Lambert", "Vieux-Longueuil", "Longueuil", "Greenfield Park", "Saint-Hubert"]);
-  assert.deepEqual(rows[1].sectors.slice(-3), ["Chambly", "Candiac", "La Prairie"]);
+  assert.deepEqual(rows[1].sectors.slice(0, 3), ["Chambly", "Candiac", "La Prairie"], "la Rive-Sud d'abord, dans la zone aussi");
+  assert.equal(rows[1].sectors.at(-1), "Le Plateau-Mont-Royal", "les quartiers de l'île ensuite");
+  assert.equal(rows[1].sectors.length, 10);
   assert.deepEqual({ short: rows[1].short, long: rows[1].long, threshold: rows[1].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
   assert.deepEqual(rows[2].sectors, ["Saint-Jean-sur-Richelieu"]);
   assert.equal(feeTable(P, "en", money)[1].threshold, "3 hours");
@@ -421,6 +486,42 @@ test("la foire aux questions structurée reprend le texte affiché", () => {
   assert.equal(ld.mainEntity[0].acceptedAnswer.text, "R.");
 });
 
+const { pageMeta, notFoundMeta, siteMetadata, siteViewport } = await import("../src/lib/seo.ts");
+
+test("chaque page a sa carte de partage : son adresse, ses deux langues, son titre complet", () => {
+  const m = pageMeta(en, "en", "/tarifs", en.tarifs.eyebrow, en.tarifs.lede);
+  assert.equal(m.title, en.tarifs.eyebrow, "le gabarit de la racine ajoute « · NIVEX » au <title>");
+  assert.equal(m.alternates.canonical, "/en/tarifs");
+  assert.deepEqual(m.alternates.languages, { "fr-CA": "/fr/tarifs", "en-CA": "/en/tarifs", "x-default": "/fr/tarifs" });
+  assert.equal(m.openGraph.url, "/en/tarifs", "og:url est la page partagée, pas l'accueil");
+  assert.equal(m.openGraph.type, "website");
+  assert.equal(m.openGraph.siteName, "NIVEX");
+  assert.equal(m.openGraph.title, `${en.tarifs.eyebrow} · NIVEX`, "la carte reçoit le titre complet");
+  assert.equal(m.openGraph.description, en.tarifs.lede);
+  assert.equal(m.openGraph.locale, "en_CA");
+  assert.deepEqual(m.openGraph.alternateLocale, ["fr_CA"]);
+  assert.equal(m.openGraph.images[0].url, "/opengraph-image.jpg", "l'image ne se perd pas avec le bloc");
+  assert.equal(m.twitter, undefined, "la carte Twitter de la racine survit si personne ne la redéclare");
+
+  const mtl = pageMeta(fr, "fr", "/montreal", { absolute: fr.montreal.metaTitle }, fr.montreal.lede);
+  assert.equal(mtl.openGraph.title, fr.montreal.metaTitle, "un titre absolu reste tel quel");
+  assert.deepEqual(mtl.openGraph.alternateLocale, ["en_CA"]);
+  assert.equal(pageMeta(fr, "de", "", "x", "y").alternates.canonical, "/fr", "une langue inconnue retombe sur le français");
+});
+
+test("la page introuvable : un titre dans chaque langue, sans adresse canonique ni point d'exclamation", () => {
+  assert.deepEqual(notFoundMeta(fr), { title: "Page introuvable", alternates: {} });
+  assert.deepEqual(notFoundMeta(en), { title: "Page not found", alternates: {} });
+  assert.deepEqual(Object.keys(en.notFound), Object.keys(fr.notFound));
+  for (const t of [fr, en]) for (const v of Object.values(t.notFound)) assert.doesNotMatch(v, /!/, v);
+});
+
+test("l'en-tête commun aux deux racines : clair seulement, et sans « index, follow »", () => {
+  assert.equal(siteViewport.colorScheme, "only light", "« light » seul laisserait Chrome inverser les couleurs");
+  assert.ok(siteMetadata.metadataBase instanceof URL);
+  assert.equal(siteMetadata.robots, undefined, "il contredisait le noindex des pages 404");
+});
+
 test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", () => {
   const r = robots();
   const agents = r.rules.map((x) => x.userAgent);
@@ -446,9 +547,94 @@ test("les nouveaux textes : aucun point d'exclamation, et le français a son ang
     ...Object.values(fr.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v])),
     ...Object.values(en.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v]))];
   for (const t of textes) assert.doesNotMatch(t, /!/, t);
-  assert.equal(fr.faq.items[0].q, "Est-ce que vous ramassez les vêtements ?");
+  assert.equal(flat(fr.faq.items[0].q), "Est-ce que vous ramassez les vêtements ?");
   assert.equal(fr.montreal.metaTitle, "Repassage à domicile à Montréal — NIVEX");
   assert.equal(fr.meta.title, "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX");
+});
+
+test("le français garde ses espaces insécables : avant : ; ? et dans les guillemets", () => {
+  /* Une espace ordinaire laisse le navigateur rejeter un « ? » seul en début
+     de ligne, au téléphone surtout. Le dictionnaire les écrit en échappements. */
+  const chaines = [];
+  const lire = (v) => (typeof v === "string" ? chaines.push(v) : v && typeof v === "object" && Object.values(v).forEach(lire));
+  lire(fr);
+  assert.deepEqual(chaines.filter((s) => / [:;?!»]|« /.test(s)), []);
+  assert.ok(chaines.length > 300, "tout le dictionnaire est relu");
+});
+
+console.log("\nCe que la vitrine écrit depuis les réglages");
+
+test("la description n'annonce la première heure que si l'artisan l'offre", () => {
+  assert.match(metaDescription(fr, P, "fr", true), /pas de livraison\. Première heure offerte\.$/);
+  assert.match(metaDescription(en, P, "en", true), /no delivery\. First hour on the house\.$/);
+  assert.doesNotMatch(metaDescription(fr, P, "fr", false), /offerte/);
+  assert.doesNotMatch(metaDescription(en, P, "en", false), /on the house/);
+  assert.match(localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr").description, /Première heure offerte\.$/);
+  assert.doesNotMatch(localBusinessJsonLd(fr, { ...FALLBACK_SETTINGS, firstHourFree: false }, "fr").description, /offerte/);
+});
+
+test("les conditions ne nomment l'offre, pour l'écarter des abonnements, que si elle existe", () => {
+  const abonnements = (s) => fr.legal.terms.sections.find((x) => x.title === "Les abonnements").body
+    .map((p) => fill(p, legalValues("fr", s)).map((x) => (typeof x === "string" ? x : "·")).join("")).join(" ");
+  assert.match(abonnements(FALLBACK_SETTINGS), /ne s'applique pas aux abonnements/);
+  assert.doesNotMatch(abonnements({ ...FALLBACK_SETTINGS, firstHourFree: false }), /première heure/);
+});
+
+test("les documents légaux : aucune accolade ne reste, en français comme en anglais", () => {
+  const reglages = [FALLBACK_SETTINGS, { ...FALLBACK_SETTINGS, firstHourFree: false, minMinutes: 180 }];
+  for (const [locale, d] of [["fr", fr], ["en", en]]) {
+    for (const s of reglages) {
+      const v = legalValues(locale, s);
+      for (const doc of [d.legal.privacy, d.legal.terms]) {
+        for (const section of legalSections(doc, s)) {
+          for (const p of [...section.body, ...(section.list ?? [])]) {
+            const texte = fill(p, v).map((x) => (typeof x === "string" ? x : "·")).join("");
+            assert.doesNotMatch(texte, /[{}]/, `${locale} : ${texte.slice(0, 90)}`);
+          }
+        }
+      }
+    }
+  }
+});
+
+test("le prix des conditions suit la durée minimale réglée", () => {
+  const article = (d) => d.legal.terms.sections.flatMap((x) => x.body).find((p) => p.includes("{entry}"));
+  const prix = (s, d = fr, locale = "fr") => flat(fill(article(d), legalValues(locale, s)).join(""));
+  assert.match(prix(FALLBACK_SETTINGS), /au minimum 2 heures et se facture 100 \$\./);
+  assert.match(prix({ ...FALLBACK_SETTINGS, minMinutes: 180 }), /au minimum 3 heures et se facture 150 \$\./);
+  assert.match(prix(FALLBACK_SETTINGS, en, "en"), /2 hours at the least and is billed \$100\./);
+});
+
+test("la section de la première heure offerte disparaît avec l'offre", () => {
+  const sans = { ...FALLBACK_SETTINGS, firstHourFree: false };
+  const titres = (doc, s) => legalSections(doc, s).map((x) => x.title);
+  assert.ok(titres(fr.legal.terms, FALLBACK_SETTINGS).includes("La première heure offerte"));
+  assert.ok(!titres(fr.legal.terms, sans).includes("La première heure offerte"));
+  assert.equal(titres(fr.legal.terms, sans).length, fr.legal.terms.sections.length - 1);
+  assert.equal(titres(en.legal.terms, sans).length, titres(fr.legal.terms, sans).length, "l'anglais suit le français");
+  assert.equal(titres(fr.legal.privacy, sans).length, fr.legal.privacy.sections.length, "la confidentialité n'en dépend pas");
+});
+
+test("la dernière carte des prestations nomme les régions desservies", () => {
+  assert.deepEqual(servedRegions(P, fr.services.regions), ["Rive-Sud", "Montréal"]);
+  const p = clone(P);
+  for (const s of p.sectors) if (isMontrealSector(s)) s.enabled = false;
+  assert.deepEqual(servedRegions(p, fr.services.regions), ["Rive-Sud"], "sans quartier de l'île, Montréal se tait");
+  assert.deepEqual(servedRegions(P, en.services.regions), ["South Shore", "Montreal"]);
+});
+
+test("l'horaire du bloc Contact garde ses heures, et la semaine commence le lundi", () => {
+  const ligne = (hours, locale = "fr", d = fr) => flat(openingLine(d, { ...FALLBACK_SETTINGS, hours }, locale));
+  const H = FALLBACK_SETTINGS.hours;
+  assert.equal(ligne(H), "7 h – 22 h, du lundi au samedi");
+  assert.equal(ligne(H, "en", en), "7 a.m. – 10 p.m., Monday to Saturday");
+  const samediCourt = H.map((h) => (h.day === 6 ? { ...h, open: "09:00", close: "17:00" } : h));
+  assert.equal(ligne(samediCourt), "7 h – 22 h, du lundi au vendredi ; 9 h – 17 h, samedi");
+  assert.equal(ligne(samediCourt, "en", en), "7 a.m. – 10 p.m., Monday to Friday; 9 a.m. – 5 p.m., Saturday");
+  assert.equal(ligne(H.map((h) => ({ ...h, enabled: h.day !== 1 }))), "7 h – 22 h, du mardi au dimanche");
+  assert.equal(ligne(H.map((h) => ({ ...h, enabled: [5, 6, 0].includes(h.day) }))), "7 h – 22 h, du vendredi au dimanche");
+  assert.equal(ligne(H.map((h) => ({ ...h, enabled: [1, 3, 5].includes(h.day) }))), "7 h – 22 h, lundi, mercredi, vendredi");
+  assert.equal(ligne(H.map((h) => ({ ...h, enabled: false }))), "");
 });
 
 console.log("\nL'historique");

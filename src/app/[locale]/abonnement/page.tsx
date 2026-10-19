@@ -3,21 +3,20 @@ import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { servedText } from "@/lib/travel";
+import { pageMeta } from "@/lib/seo";
 import { PLANS, planCents, planFullCents } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
 import { SubscriptionWizard, type SubscriptionConfig } from "@/components/booking/SubscriptionWizard";
+import { PausedNotice } from "@/components/booking/PausedNotice";
+import { LEGAL_UPDATED } from "@/components/LegalDocument";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.subscribe.title,
-    description: t.subscribe.lede,
-    alternates: { canonical: `/${locale}/abonnement`, languages: { "fr-CA": "/fr/abonnement", "en-CA": "/en/abonnement" } },
-  };
+  return pageMeta(t, locale, "/abonnement", t.subscribe.title, t.subscribe.lede);
 }
 
 export default async function SubscribePage({
@@ -32,6 +31,16 @@ export default async function SubscribePage({
 
   const t = getDict(locale);
   const s = await getSettings();
+
+  /* La pause ferme aussi les abonnements : dit dès l'arrivée, comme sur la
+     page de réservation. */
+  if (s.paused) {
+    return (
+      <div className="bg-linen-100 pt-24">
+        <PausedNotice t={t} locale={locale} title={t.subscribe.title} />
+      </div>
+    );
+  }
 
   /* Les montants viennent des réglages en vigueur : la page Tarifs et ce
      parcours lisent la même fonction, et la création la relit encore. */
@@ -51,9 +60,11 @@ export default async function SubscribePage({
     currency: s.currency,
     timezone: s.timezone,
     discountCents: SUBSCRIBER_TRAVEL_DISCOUNT_CENTS,
+    firstHourFree: s.firstHourFree,
     seriesCycles: SERIES_CYCLES,
     initialPlan: sp.formule ?? null,
     areaText: servedText(s.zonePolicy, locale, t.zoneText),
+    legalUpdated: LEGAL_UPDATED,
   };
 
   return (

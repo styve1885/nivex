@@ -4,12 +4,14 @@ import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { contactEmail, contactEmailHref } from "@/lib/brand";
 import { servedText } from "@/lib/travel";
+import { WEEK } from "./home/opening-line";
 
 export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   const year = new Date().getFullYear();
   const home = `/${locale}`;
 
-  const openDays = settings.hours.filter((h) => h.enabled);
+  /* Du lundi au dimanche, comme la ligne du bloc Contact. */
+  const openDays = WEEK.flatMap((day) => settings.hours.filter((h) => h.day === day && h.enabled));
   const grouped = openDays.map((h) => ({
     label: t.daysShort[h.day],
     range: `${h.open} – ${h.close}`,
@@ -30,7 +32,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
             <Wordmark as="div" className="text-2xl text-linen-100" />
             <p className="mt-3 text-[10px] uppercase tracking-[0.28em] text-gold-400">{t.footer.tagline}</p>
             <p className="mt-6 max-w-xs font-display text-lg italic leading-relaxed text-linen-300/80">
-              “{t.story.quote}”
+              {t.story.quote}
             </p>
           </div>
 
@@ -39,7 +41,6 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
             <ul className="space-y-3 text-sm text-linen-300/85">
               <li><a href={t.brand.phoneHref} className="transition-colors hover:text-gold-300">{t.brand.phone}</a></li>
               <li><a href={contactEmailHref()} className="break-all transition-colors hover:text-gold-300">{contactEmail()}</a></li>
-              <li className="pt-2 text-linen-300/60">{t.brand.region}</li>
             </ul>
           </div>
 
@@ -67,7 +68,7 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
           </div>
         </div>
 
-        <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-linen-200/10 pt-8 text-[11px] text-linen-300/45 sm:flex-row">
+        <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-linen-200/10 pt-8 text-[11px] text-linen-300/60 sm:flex-row">
           <p>© {year} NIVEX. {t.footer.rights}.</p>
           <p className="hidden items-center gap-2 lg:flex">
             <span className="text-gold-400/70">◆</span> {t.footer.craft}

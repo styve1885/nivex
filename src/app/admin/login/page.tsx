@@ -20,6 +20,21 @@ const MESSAGES: Record<string, string> = {
   access_denied: "Vous avez refusé l'autorisation. Sans elle, les réservations en ligne ne peuvent pas fonctionner.",
 };
 
+/**
+ * Le message d'une erreur inconnue.
+ *
+ * `?error=` vient de l'adresse : n'importe qui peut forger un lien vers
+ * cette page avec le texte de son choix — « appelez le 1-900… » — et le
+ * voir affiché comme une alerte officielle. Seul un code d'OAuth, en
+ * minuscules et soulignés (`invalid_scope`, `org_internal`…), est repris :
+ * c'est lui qui dit quoi corriger dans la console Google.
+ */
+function unknownError(error: string): string {
+  return /^[a-z_]{1,40}$/.test(error)
+    ? `La connexion a échoué (code ${error}). Réessayez.`
+    : "La connexion a échoué. Réessayez.";
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -50,14 +65,16 @@ export default async function LoginPage({
             {settings.ownerEmail ? "Bon retour." : "Branchez votre compte Google."}
           </h1>
           <p className="mt-3 text-[0.88rem] font-light leading-[1.85] text-ink-500">
+            {/* Jamais l'adresse elle-même : cette page est publique, et le
+                compte Google qui tient l'agenda et Gmail n'a pas à s'y lire. */}
             {settings.ownerEmail
-              ? `Connectez-vous avec ${settings.ownerEmail} pour retrouver votre tableau de bord.`
+              ? "Connectez-vous avec le compte Google de la maison pour retrouver votre tableau de bord."
               : "Une seule étape : autorisez NIVEX à lire vos disponibilités dans Google Agenda et à envoyer les confirmations depuis votre Gmail. Vos identifiants ne transitent jamais par ce site."}
           </p>
 
           {error && (
             <p role="alert" className="mt-6 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.82rem] leading-relaxed text-[#8E332C]">
-              {MESSAGES[error] ?? `Erreur : ${error}`}
+              {Object.hasOwn(MESSAGES, error) ? MESSAGES[error] : unknownError(error)}
             </p>
           )}
 
@@ -98,6 +115,8 @@ export default async function LoginPage({
         </div>
 
         <p className="mt-8 text-center text-[11px] text-ink-400">
+          {/* La vitrine est une autre racine : la page se recharge de toute façon. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/fr" className="transition-colors hover:text-gold-600">← Retour au site</a>
         </p>
       </div>

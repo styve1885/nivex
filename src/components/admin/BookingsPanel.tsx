@@ -38,7 +38,7 @@ export function BookingsPanel({
 
       <div className="mt-10 flex items-center gap-6 border-b border-gold-300/40">
         {(["upcoming", "past"] as const).map((k) => (
-          <button key={k} onClick={() => setTab(k)}
+          <button key={k} onClick={() => setTab(k)} aria-pressed={tab === k}
             className={`relative pb-3 text-[11px] uppercase tracking-[0.18em] transition-colors ${
               tab === k ? "text-ink-800" : "text-ink-400 hover:text-ink-600"
             }`}>
@@ -76,12 +76,16 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   const [confirming, setConfirming] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState<{ ok: boolean; error: string | null } | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const router = useRouter();
   const cancelled = b.status === "cancelled";
 
   /* Une réservation prise pendant une rupture du lien avec Google existe,
      mais personne n'en a été averti. Elle se rattrape. */
   const silent = !cancelled && (!b.emailSent || !b.inCalendar);
+  /* Seul l'agenda manque : le rattrapage n'envoie aucun courriel. Une visite
+     d'abonnement se rattrape avec sa série, confirmation comprise. */
+  const calendarOnly = b.emailSent && !b.inCalendar && !b.subscription;
 
   async function resend() {
     setResending(true);
@@ -98,14 +102,28 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
     }
   }
 
+  /* Une annulation qui échoue le dit : la carte qui reste en place, sans un
+     mot, laissait croire que le client avait été prévenu. */
   async function cancel() {
     setBusy(true);
+    setCancelError(null);
     try {
-      await fetch(`/api/admin/bookings?id=${b.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/bookings?id=${b.id}`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) {
+        setCancelError(res.status === 401
+          ? "Votre session a expiré. Reconnectez-vous, puis recommencez."
+          : d.error === "done"
+            ? "Cette visite est déjà marquée effectuée. Retirez la mention depuis l'onglet Abonnés pour pouvoir l'annuler."
+            : "L'annulation n'a pas abouti. Réessayez dans un instant.");
+        return;
+      }
+      setConfirming(false);
       router.refresh();
+    } catch {
+      setCancelError("Le site n'a pas répondu. Réessayez.");
     } finally {
       setBusy(false);
-      setConfirming(false);
     }
   }
 
@@ -125,7 +143,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
           </p>
         </div>
         {silent && (
-          <span title="Ni courriel ni agenda" aria-label="Confirmation non envoyée"
+          <span title={!b.emailSent && !b.inCalendar ? "Ni courriel ni agenda" : !b.emailSent ? "Courriel non parti" : "Absent de l'agenda"}
+            aria-label={b.emailSent ? "Absent de l'agenda" : "Confirmation non envoyée"}
             className="flex-none border border-[#B4453C]/50 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
             Muet
           </span>
@@ -187,11 +206,11 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                 </p>
                 <button type="button" onClick={resend} disabled={resending}
                   className="mt-3 border border-[#B4453C]/50 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-[#8E332C] transition-colors hover:bg-[#B4453C]/10 disabled:opacity-40">
-                  {resending ? "Envoi en cours…" : "Renvoyer la confirmation"}
+                  {resending ? "Envoi en cours…" : calendarOnly ? "Inscrire à l'agenda" : "Renvoyer la confirmation"}
                 </button>
                 {resent?.ok && (
                   <p className="mt-3 text-[0.82rem] text-gold-700">
-                    C&apos;est parti. Le client a reçu sa confirmation.
+                    {calendarOnly ? "Le rendez-vous est inscrit à votre agenda." : "C'est parti. Le client a reçu sa confirmation."}
                   </p>
                 )}
                 {resent && !resent.ok && (
@@ -202,7 +221,13 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               </div>
             )}
 
-            {canCancel && !cancelled && (
+            {canCancel && !cancelled && b.done && (
+              <p className="pt-2 text-[11px] text-ink-400">
+                Visite marquée effectuée : pour l&apos;annuler, retirez d&apos;abord la mention depuis l&apos;onglet Abonnés.
+              </p>
+            )}
+
+            {canCancel && !cancelled && !b.done && (
               <div className="pt-2">
                 {confirming ? (
                   <div className="flex items-center gap-3">
@@ -210,7 +235,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                       className="border border-[#B4453C]/50 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-[#8E332C] transition-colors hover:bg-[#B4453C]/5 disabled:opacity-40">
                       {busy ? "Annulation…" : "Confirmer l'annulation"}
                     </button>
-                    <button onClick={() => setConfirming(false)} className="text-[10px] uppercase tracking-[0.16em] text-ink-400 hover:text-ink-700">
+                    <button onClick={() => { setConfirming(false); setCancelError(null); }}
+                      className="text-[10px] uppercase tracking-[0.16em] text-ink-400 hover:text-ink-700">
                       Garder
                     </button>
                   </div>
@@ -219,6 +245,9 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                     className="text-[10px] uppercase tracking-[0.16em] text-ink-400 underline decoration-gold-300 underline-offset-4 transition-colors hover:text-[#8E332C]">
                     Annuler ce rendez-vous
                   </button>
+                )}
+                {cancelError && (
+                  <p role="alert" className="mt-3 text-[0.82rem] leading-relaxed text-[#8E332C]">{cancelError}</p>
                 )}
                 <p className="mt-2 text-[11px] text-ink-400">
                 {b.subscription

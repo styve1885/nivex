@@ -29,15 +29,22 @@ export async function GET(req: NextRequest) {
   const r = sp.get("robots");
   const robots: RobotFilter = r === "only" || r === "all" ? r : "hide";
 
-  const [digest, bookings] = await Promise.all([
-    visitDigest().catch(() => []),
-    bookingSources().catch(() => []),
-  ]);
+  /* Une base qui ne répond pas n'est pas un journal vide : l'onglet doit
+     dire « lecture impossible », pas « aucune visite ». */
+  let digest: Awaited<ReturnType<typeof visitDigest>>;
+  let bookings: Awaited<ReturnType<typeof bookingSources>>;
+  let visits: Awaited<ReturnType<typeof listVisits>>;
+  try {
+    [digest, bookings] = await Promise.all([visitDigest(), bookingSources()]);
+    visits = await listVisits({
+      days: period, group, robots, limit: 400,
+      sources: group ? sourcesOf(digest, group) : [],
+    });
+  } catch (e) {
+    console.error("[nivex] journal des visites illisible :", e);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
   const summary = digestSummary(digest, period, robots, group);
-  const visits = await listVisits({
-    days: period, group, robots, limit: 400,
-    sources: group ? sourcesOf(digest, group) : [],
-  }).catch(() => []);
 
   /* Le bilan : pages vues sans les robots, réservations, par famille et par
      période. Les réservations se comptent à la date où elles ont été prises. */

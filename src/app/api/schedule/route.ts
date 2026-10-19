@@ -34,7 +34,11 @@ export async function GET(req: NextRequest) {
     duration = estimateMinutes(items, settings);
   }
   if (!Number.isFinite(duration) || duration <= 0) duration = settings.minMinutes;
-  duration = Math.min(Math.max(duration, settings.minMinutes), 12 * 60);
+  /* Aucun plafond : la grille se calcule pour la durée que la réservation
+     facturera. Plafonnée à douze heures, elle offrait à un très grand panier
+     des heures que createBooking refusait ensuite, une à une. Une durée plus
+     longue qu'une journée d'ouverture ne trouve simplement aucun créneau. */
+  duration = Math.max(duration, settings.minMinutes);
 
   const today = dateKey(new Date(), settings.timezone);
   let from = url.searchParams.get("from") ?? today;

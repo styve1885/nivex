@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ContactInput, ContactError, submitContact } from "@/lib/messages";
 import { isDemo } from "@/lib/demo";
+import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,15 +16,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Pot de miel : succès silencieux, le robot n'apprend rien.
-  if (parsed.data.hp) return NextResponse.json({ ok: true }, { status: 200 });
+  /* Pot de miel : le robot reçoit l'invitation à appeler. Une vraie personne
+     dont le navigateur aurait rempli ce champ à son insu croirait sinon son
+     message reçu, alors qu'il n'est enregistré nulle part. */
+  if (parsed.data.hp) {
+    await logEvent("honeypot", { form: "contact" });
+    return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
+  }
 
   // Démonstration locale : on confirme sans rien enregistrer ni envoyer.
-  if (isDemo()) return NextResponse.json({ ok: true, demo: true, sent: false }, { status: 201 });
+  if (isDemo()) return NextResponse.json({ ok: true, demo: true, sent: false, acked: false }, { status: 201 });
 
   try {
-    const { sent } = await submitContact(parsed.data);
-    return NextResponse.json({ ok: true, sent }, { status: 201 });
+    const { sent, acked } = await submitContact(parsed.data);
+    return NextResponse.json({ ok: true, sent, acked }, { status: 201 });
   } catch (e) {
     if (e instanceof ContactError) {
       return NextResponse.json({ ok: false, error: e.code }, { status: e.code === "rate_limited" ? 429 : 503 });

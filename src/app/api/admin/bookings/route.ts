@@ -26,9 +26,10 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Rattrapage : renvoie la confirmation et inscrit le rendez-vous à
- * l'agenda s'il y manque. Sert après une rupture du lien avec Google,
- * quand des réservations sont passées sans que personne ne soit prévenu.
+ * Rattrapage : envoie la confirmation si elle n'est jamais partie, et
+ * inscrit le rendez-vous à l'agenda s'il y manque. Sert après une rupture
+ * du lien avec Google, quand des réservations sont passées sans que
+ * personne ne soit prévenu. Réussi seulement si les deux tiennent.
  */
 export async function POST(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest) {
   if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
   const result = await resendBooking(booking, req.headers.get("host"));
-  return NextResponse.json({ ok: result.emailSent, ...result });
+  const ok = result.emailSent && (result.calendarAdded || booking.status === "cancelled");
+  return NextResponse.json({ ok, ...result });
 }
 
 /** Annulation par l'artisan. */
@@ -58,6 +60,17 @@ export async function DELETE(req: NextRequest) {
   if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   if (booking.status === "cancelled") return NextResponse.json({ ok: true, alreadyCancelled: true });
 
-  await cancelBooking(booking, "owner");
+  try {
+    await cancelBooking(booking, "owner");
+  } catch (e) {
+    /* Une visite d'abonné déjà marquée effectuée ne s'annule pas
+       (SubscriptionError « done ») : l'onglet doit pouvoir dire pourquoi,
+       plutôt que de recevoir une erreur nue. */
+    if ((e as Error)?.name === "SubscriptionError") {
+      return NextResponse.json({ ok: false, error: (e as { code?: string }).code ?? "invalid" }, { status: 409 });
+    }
+    console.error("[nivex] annulation par l'artisan impossible :", e);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

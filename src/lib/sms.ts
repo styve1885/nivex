@@ -25,12 +25,35 @@ export function smsConfigured(): boolean {
  * Le formulaire accepte « 450 943-1217 », « (450) 943 1217 » ou « +1 450… » :
  * on garde les chiffres, on retire l'indicatif 1 s'il y est, et il doit en
  * rester dix. Ce qui ne s'y ramène pas n'est pas un numéro où écrire.
+ * Qu'il soit canadien se vérifie à part, au moment d'écrire.
  */
 export function toE164(phone: string | null | undefined): string | null {
   const d = (phone ?? "").replace(/\D/g, "");
   const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
   if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(ten)) return null;
   return `+1${ten}`;
+}
+
+/**
+ * Les indicatifs régionaux du Canada.
+ *
+ * Le plan nord-américain mêle au Canada les États-Unis et une vingtaine de
+ * pays des Caraïbes (876 Jamaïque, 809 République dominicaine…), que Twilio
+ * facture au tarif international. Écrire à n'importe quel « +1 » saisi dans
+ * un formulaire public, c'est laisser un fraudeur faire partir des textos à
+ * nos frais : on n'écrit donc qu'aux numéros canadiens. Un client dont le
+ * numéro vient d'ailleurs réserve comme les autres, et garde ses courriels.
+ */
+const CANADA = new Set([
+  "204", "226", "236", "249", "250", "257", "263", "289", "306", "343", "354", "365", "367", "368",
+  "382", "403", "416", "418", "428", "431", "437", "438", "450", "460", "468", "474", "506", "514",
+  "519", "548", "579", "581", "584", "587", "604", "613", "639", "647", "672", "683", "705", "709",
+  "742", "753", "778", "780", "782", "807", "819", "825", "867", "873", "879", "902", "905", "942",
+]);
+
+/** Un numéro canadien, au format E.164 : le seul où l'on écrit. */
+export function isCanadianNumber(e164: string): boolean {
+  return /^\+1\d{10}$/.test(e164) && CANADA.has(e164.slice(2, 5));
 }
 
 /** Le numéro où l'artisan reçoit ses textos. */
@@ -49,6 +72,13 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
     await logEvent("sms_skipped", { ref, reason: "invalid_number" });
     return false;
   }
+  /* Hors du Canada, le texto ne part pas, et rien d'autre ne change : la
+     réservation tient, le courriel part. Seul l'indicatif est noté — il dit
+     d'où venait le numéro sans dire à qui il appartient. */
+  if (!isCanadianNumber(number)) {
+    await logEvent("sms_skipped", { ref, reason: "not_canadian", area: number.slice(2, 5) });
+    return false;
+  }
   const sid = process.env.TWILIO_ACCOUNT_SID!;
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
@@ -60,10 +90,11 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
       body: new URLSearchParams({ To: number, From: process.env.TWILIO_FROM!, Body: body }),
     });
     if (!res.ok) {
-      /* Twilio rend un code et un message lisibles (numéro non vérifié en
-         compte d'essai, destinataire désabonné par STOP…) : on les garde. */
-      const detail = (await res.text()).slice(0, 300);
-      await logEvent("sms_failed", { ref, status: res.status, detail });
+      /* Twilio rend un code (21608 : numéro non vérifié en compte d'essai,
+         21610 : destinataire désabonné par STOP…) et un message qui cite
+         souvent le numéro. Le journal garde le code, pas le message. */
+      const code = await res.json().then((j) => Number(j?.code) || null).catch(() => null);
+      await logEvent("sms_failed", { ref, status: res.status, code });
       return false;
     }
     await logEvent("sms_sent", { ref });
@@ -85,31 +116,42 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
 
 type Locale = "fr" | "en";
 
-/** « mardi 20 octobre, 14 h 00 » / « Tuesday, October 20, 2:00 p.m. » */
+/** « mardi 20 octobre à 9 h 00 » / « Tuesday, October 20 at 9:00 a.m. » */
 export function smsWhen(d: Date, tz: string, locale: Locale): string {
   return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
     timeZone: tz, weekday: "long", day: "numeric", month: "long",
-    hour: "2-digit", minute: "2-digit", hour12: locale === "en",
+    hour: "numeric", minute: "2-digit", hour12: locale === "en",
   }).format(d);
 }
 
+/*
+ * Comment ne plus en recevoir. Dit une fois, dans la confirmation : les
+ * opérateurs l'attendent, et le répéter à chaque texto ferait payer une
+ * tranche de plus.
+ */
+const STOP_LINE = { fr: " Répondez STOP pour ne plus recevoir de textos.", en: " Reply STOP to opt out." } as const;
+
+/* Une phrase qui finit sur une heure anglaise (« 2:00 p.m. ») a déjà son
+   point : on n'en ajoute pas un second. */
+const period = (s: string) => (s.endsWith(".") ? s : `${s}.`);
+
 export const SMS = {
   /** Une séance ponctuelle vient d'être réservée. */
-  bookingConfirmed: (l: Locale, when: string, url: string) => l === "en"
+  bookingConfirmed: (l: Locale, when: string, url: string) => (l === "en"
     ? `NIVEX: your session on ${when} is confirmed. Manage it: ${url}`
-    : `NIVEX : votre séance du ${when} est confirmée. Gérer : ${url}`,
+    : `NIVEX : votre séance du ${when} est confirmée. Gérer : ${url}`) + STOP_LINE[l],
 
   /** Un abonnement vient d'être posé. */
-  subscriptionConfirmed: (l: Locale, plan: string, when: string, rhythm: string, url: string) => l === "en"
+  subscriptionConfirmed: (l: Locale, plan: string, when: string, rhythm: string, url: string) => (l === "en"
     ? `NIVEX: your ${plan} subscription is in place. First visit ${when}, then ${rhythm}. Manage: ${url}`
-    : `NIVEX : votre abonnement ${plan} est en place. Première visite le ${when}, puis ${rhythm}. Gérer : ${url}`,
+    : `NIVEX : votre abonnement ${plan} est en place. Première visite le ${when}, puis ${rhythm}. Gérer : ${url}`) + STOP_LINE[l],
 
   /** Le rappel de la veille. Le montant n'y figure qu'à la première visite d'un cycle à régler. */
   reminder: (l: Locale, when: string, today: boolean, payment: string | null) => {
     const day = today ? (l === "en" ? "today" : "aujourd'hui") : (l === "en" ? "tomorrow" : "demain");
     const pay = payment ? (l === "en" ? ` Payment for the cycle at this visit: ${payment}.` : ` Paiement du cycle à cette visite : ${payment}.`) : "";
     return l === "en"
-      ? `NIVEX: reminder, your visit is ${day}, ${when}. We arrive ${SETUP_MINUTES} minutes early to set up.${pay}`
+      ? `NIVEX: reminder, your visit is ${day}, ${period(when)} We arrive ${SETUP_MINUTES} minutes early to set up.${pay}`
       : `NIVEX : rappel, votre visite a lieu ${day}, ${when}. Nous arrivons ${SETUP_MINUTES} minutes avant pour nous installer.${pay}`;
   },
 
@@ -120,21 +162,62 @@ export const SMS = {
 
   /** Une visite d'abonnement annulée, avec son remplacement s'il y en a un. */
   visitCancelled: (l: Locale, when: string, replacement: string | null) => l === "en"
-    ? `NIVEX: your visit on ${when} is cancelled.${replacement ? ` It is replaced on ${replacement}.` : ""}`
+    ? `NIVEX: your visit on ${when} is cancelled.${replacement ? ` It is replaced on ${period(replacement)}` : ""}`
     : `NIVEX : votre visite du ${when} est annulée.${replacement ? ` Elle est remplacée le ${replacement}.` : ""}`,
 
   visitMoved: (l: Locale, from: string, to: string) => l === "en"
-    ? `NIVEX: your visit on ${from} is moved to ${to}.`
+    ? `NIVEX: your visit on ${from} is moved to ${period(to)}`
     : `NIVEX : votre visite du ${from} est déplacée au ${to}.`,
 
-  /** Pour l'artisan. */
+  /** Une visite de remplacement posée à la main par l'artisan. */
+  visitPlaced: (l: Locale, when: string) => l === "en"
+    ? `NIVEX: your replacement visit is booked for ${period(when)}`
+    : `NIVEX : votre visite de remplacement est posée le ${when}.`,
+
+  /** La série suivante d'un abonnement, posée par l'artisan. */
+  seriesRenewed: (l: Locale, when: string, rhythm: string, url: string) => l === "en"
+    ? `NIVEX: your subscription continues. Next series: first visit ${when}, then ${rhythm}. Manage: ${url}`
+    : `NIVEX : votre abonnement se poursuit. Série suivante : première visite le ${when}, puis ${rhythm}. Gérer : ${url}`,
+
+  /** Un abonnement qui prend fin, et les visites à venir qu'il retire. */
+  subscriptionEnded: (l: Locale, count: number) => l === "en"
+    ? `NIVEX: your subscription is ending. ${count === 1 ? "Your upcoming visit is cancelled." : `Your ${count} upcoming visits are cancelled.`}`
+    : `NIVEX : votre abonnement prend fin. ${count === 1 ? "Votre visite à venir est annulée." : `Vos ${count} visites à venir sont annulées.`}`,
+
+  /** Pour l'artisan. Sans tiret cadratin, et ramenés à l'alphabet des
+      textos (`toGsm7`) : un seul caractère hors de cet alphabet — le û
+      d'« août », le ç de François — ferait passer tout le message en
+      Unicode, payé deux tranches. */
   owner: {
-    newBooking: (name: string, when: string, city: string) => `NIVEX — nouvelle séance : ${name}, ${when}, ${city}.`,
-    newSubscription: (name: string, plan: string, when: string) => `NIVEX — nouvel abonnement ${plan} : ${name}, première visite le ${when}.`,
-    cancelled: (name: string, when: string) => `NIVEX — ${name} a annulé sa visite du ${when}.`,
-    moved: (name: string, from: string, to: string) => `NIVEX — ${name} a déplacé sa visite du ${from} au ${to}.`,
+    newBooking: (name: string, when: string, city: string) => toGsm7(`NIVEX : nouvelle séance, ${name}, ${when}, ${city}.`),
+    newSubscription: (name: string, plan: string, when: string) => toGsm7(`NIVEX : nouvel abonnement ${plan}, ${name}, première visite le ${when}.`),
+    cancelled: (name: string, when: string) => toGsm7(`NIVEX : ${name} a annulé sa visite du ${when}.`),
+    moved: (name: string, from: string, to: string) => toGsm7(`NIVEX : ${name} a déplacé sa visite du ${from} au ${to}.`),
   },
 };
+
+/* L'alphabet des textos (GSM 03.38, table de base). */
+const GSM7 = new Set("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà");
+const TYPOGRAPHY: Record<string, string> = {
+  "’": "'", "‘": "'", "«": "\"", "»": "\"", "“": "\"", "”": "\"", "–": "-", "—": "-", "…": "...",
+  "\u00a0": " ", "\u202f": " ", "œ": "oe", "Œ": "OE",
+};
+
+/**
+ * Ramène un texte à l'alphabet des textos : ce qui en sort perd son accent
+ * (û devient u, ç devient c), le reste garde le sien (é, è, à, ù). Pour les
+ * textos de l'artisan seulement ; ceux du client gardent leur orthographe.
+ * Un texte qui ne s'y ramène pas entièrement — un nom en caractères
+ * chinois — reste tel quel : mieux vaut deux tranches qu'un nom illisible.
+ */
+export function toGsm7(s: string): string {
+  const out = [...s].map((c) => {
+    if (GSM7.has(c)) return c;
+    if (TYPOGRAPHY[c] !== undefined) return TYPOGRAPHY[c];
+    return c.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }).join("");
+  return [...out].every((c) => GSM7.has(c)) ? out : s;
+}
 
 /* ============================ Les réponses des clients ============================ */
 
@@ -169,13 +252,33 @@ function xml(s: string): string {
 /** Une réponse TwiML vide : Twilio n'envoie rien. */
 export const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
-/** Une réponse TwiML qui fait partir un texto vers un autre numéro que l'expéditeur. */
-export function twimlForward(to: string, body: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message to="${xml(to)}">${xml(body)}</Message></Response>`;
+/**
+ * Une réponse TwiML qui fait partir un texto vers un autre numéro que
+ * l'expéditeur — et, s'il y a lieu, un second vers l'expéditeur lui-même.
+ */
+export function twimlForward(to: string, body: string, reply?: string | null): string {
+  const back = reply ? `<Message>${xml(reply)}</Message>` : "";
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message to="${xml(to)}">${xml(body)}</Message>${back}</Response>`;
 }
 
-/** Les mots qui désabonnent chez Twilio : l'artisan doit savoir que ce client n'en recevra plus. */
-const OPT_OUT = /^\s*(stop|stopall|unsubscribe|cancel|end|quit|arret|arrêt)\s*$/i;
+/**
+ * Les mots qui désabonnent chez Twilio, sur un numéro ordinaire : l'artisan
+ * doit savoir que ce client n'en recevra plus. Ce sont des mots anglais
+ * seulement : le français n'y figure pas sans un service de messagerie réglé
+ * exprès, et nos textos partent d'un simple numéro.
+ */
+const OPT_OUT = /^\s*(stop|stopall|unsubscribe|cancel|end|quit|revoke|optout)\s*$/i;
+
+/** « Arrêt », « ARRÊTER »… : la demande est claire, mais Twilio ne la comprend pas. */
+const OPT_OUT_FR = /^\s*arr[eê]te?r?\s*\.?\s*$/i;
+
+/**
+ * Ce qu'on répond au client qui écrit « ARRÊT » : le mot qui le désabonne
+ * vraiment. On ne prétend pas l'avoir fait à sa place.
+ */
+export function stopHint(body: string): string | null {
+  return OPT_OUT_FR.test(body) ? "NIVEX : pour ne plus recevoir de textos, répondez STOP." : null;
+}
 
 /** « +1 450 555 0222 » — lisible sur un téléphone. */
 function readable(e164: string): string {
@@ -188,12 +291,15 @@ function readable(e164: string): string {
  *
  * Le nom quand on le connaît, le numéro toujours — c'est lui qu'on rappelle.
  * Le message est tronqué au-delà de mille caractères : un texto en plusieurs
- * tranches se paie à la tranche.
+ * tranches se paie à la tranche. `hinted` dit qu'on vient de répondre au
+ * client d'écrire STOP : il reste inscrit, et l'artisan doit le savoir.
  */
-export function forwardedReply(o: { from: string; name: string | null; body: string; media: number }): string {
+export function forwardedReply(o: { from: string; name: string | null; body: string; media: number; hinted?: boolean }): string {
   const who = o.name ? `${o.name} (${readable(o.from)})` : readable(o.from);
   const text = o.body.trim().slice(0, 1000) || "(message vide)";
-  const media = o.media > 0 ? ` [${o.media} pièce${o.media > 1 ? "s" : ""} jointe${o.media > 1 ? "s" : ""} — à voir dans la console Twilio]` : "";
-  const stop = OPT_OUT.test(o.body) ? " — ce client ne recevra plus de textos" : "";
-  return `NIVEX — réponse de ${who} : ${text}${media}${stop}`;
+  const media = o.media > 0 ? ` [${o.media} pièce${o.media > 1 ? "s" : ""} jointe${o.media > 1 ? "s" : ""}, à voir dans la console Twilio]` : "";
+  const stop = OPT_OUT.test(o.body) ? " (ce client ne recevra plus de textos)"
+    : o.hinted ? " (toujours inscrit : on lui a répondu d'écrire STOP)"
+    : "";
+  return `NIVEX : réponse de ${who} : ${text}${media}${stop}`;
 }

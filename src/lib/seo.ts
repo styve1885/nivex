@@ -1,3 +1,4 @@
+import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
 import type { Settings } from "./settings";
 import { PHONE, contactEmail } from "./brand";
@@ -18,6 +19,97 @@ type Lang = "fr" | "en";
 
 const nameOf = (s: Sector, lang: Lang) => (lang === "en" ? s.nameEn || s.nameFr : s.nameFr);
 
+/* ========================== L'en-tête des pages ========================== */
+
+/**
+ * Ce que portent toutes les pages, vitrine et espace artisan. Le site a deux
+ * racines, app/[locale]/layout.tsx et app/admin/layout.tsx, et chacune le
+ * reprend d'ici : rien ne doit différer de l'une à l'autre.
+ *
+ * Même origine que le plan de site et le robots.txt. `siteOrigin()` ignore
+ * une variable vide — `??` ne le faisait pas, et une valeur vide posée dans
+ * l'hébergeur faisait échouer la compilation sur `new URL("")`.
+ */
+export const siteMetadata: Metadata = {
+  metadataBase: new URL(siteOrigin()),
+  applicationName: "NIVEX",
+  authors: [{ name: "NIVEX" }],
+  keywords: [
+    "repassage à domicile", "repassage Saint-Lambert", "repassage Longueuil", "repassage Rive-Sud",
+    "repassage à domicile Montréal", "service de repassage Montérégie",
+    "pressage chemises", "ironing service Quebec", "linge de maison", "NIVEX",
+  ],
+  twitter: { card: "summary_large_image" },
+};
+
+/**
+ * L'affichage, le même sous les deux racines. « only light » est la seule
+ * formulation qui empêche Chrome d'inverser lui-même les couleurs d'un
+ * téléphone en mode sombre ; `light` ne suffit pas.
+ */
+export const siteViewport: Viewport = {
+  colorScheme: "only light",
+  themeColor: "#FBF8F2",
+  width: "device-width",
+  initialScale: 1,
+};
+
+/** Le titre d'une page de la vitrine : son nom, puis la maison. */
+export const TITLE_TEMPLATE = "%s · NIVEX";
+
+/**
+ * Les métadonnées d'une page de la vitrine : son adresse canonique, ses deux
+ * langues, et sa propre carte de partage.
+ *
+ * Un bloc `openGraph` déclaré plus bas remplace en entier celui du dessus, au
+ * lieu de s'y fondre. Les sous-pages n'en déclaraient pas : elles se
+ * partageaient avec la carte de l'accueil, son titre, sa description et un
+ * `og:url` qui renvoyait à l'accueil — l'adresse que Facebook et LinkedIn
+ * suivent, si bien que le lien profond se perdait. Chaque page reçoit donc un
+ * bloc complet : type, nom du site, langues, et l'image, que le
+ * fichier-convention ne fournit plus dès qu'un bloc est déclaré.
+ *
+ * Le gabarit « · NIVEX » ne s'applique qu'à `<title>` : la carte reçoit le
+ * titre complet. Aucun bloc `twitter` ici — celui de la racine ne survit que
+ * si personne ne le redéclare, et Next remplit le reste depuis `openGraph`.
+ */
+export function pageMeta(
+  t: Dict, locale: string, path: string,
+  title: string | { absolute: string }, description: string,
+): Metadata {
+  const lang: Lang = locale === "en" ? "en" : "fr";
+  const url = `/${lang}${path}`;
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: url,
+      languages: { "fr-CA": `/fr${path}`, "en-CA": `/en${path}`, "x-default": `/fr${path}` },
+    },
+    openGraph: {
+      type: "website",
+      siteName: "NIVEX",
+      title: typeof title === "string" ? TITLE_TEMPLATE.replace("%s", title) : title.absolute,
+      description,
+      url,
+      locale: lang === "en" ? "en_CA" : "fr_CA",
+      alternateLocale: [lang === "en" ? "fr_CA" : "en_CA"],
+      images: [{ url: "/opengraph-image.jpg", width: 1200, height: 630, alt: t.meta.ogAlt }],
+    },
+  };
+}
+
+/**
+ * L'en-tête d'une page introuvable : son titre, sans l'adresse canonique ni
+ * les langues héritées de la racine, qui désignent l'accueil. Next ajoute de
+ * lui-même `noindex` à toute réponse 404.
+ */
+export function notFoundMeta(t: Dict): Metadata {
+  return { title: t.notFound.metaTitle, alternates: {} };
+}
+
+/* ========================= Les données structurées ========================= */
+
 /** « +1 450 943-1217 » : le numéro de la maison, écrit comme on le lit. */
 export function phoneDisplay(): string {
   const d = PHONE.replace(/\D/g, "").slice(-10);
@@ -27,15 +119,17 @@ export function phoneDisplay(): string {
 /**
  * La description de l'accueil : les cinq premiers secteurs de la Rive-Sud,
  * dans l'ordre de l'onglet « Zones et frais », puis Montréal s'il est
- * desservi.
+ * desservi. La première heure offerte ne s'y ajoute que tant que l'artisan
+ * la propose : un extrait de recherche ne promet pas ce que le tunnel refuse.
  */
-export function metaDescription(t: Dict, policy: ZonePolicy, lang: Lang): string {
+export function metaDescription(t: Dict, policy: ZonePolicy, lang: Lang, firstHourFree: boolean): string {
   const { south, montreal } = sectorsByRegion(policy);
   const places = [
     ...south.slice(0, 5).map((s) => nameOf(s, lang)),
     ...(montreal.length ? [lang === "en" ? "Montreal" : "Montréal"] : []),
   ];
-  return t.meta.description.replace("{places}", joinList(places, lang));
+  const text = t.meta.description.replace("{places}", joinList(places, lang));
+  return firstHourFree ? `${text} ${t.meta.offer}` : text;
 }
 
 /**
@@ -67,7 +161,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     "@type": "LocalBusiness",
     "@id": `${origin}/#nivex`,
     name: "NIVEX",
-    description: metaDescription(t, s.zonePolicy, lang),
+    description: metaDescription(t, s.zonePolicy, lang, s.firstHourFree),
     slogan: t.brand.tagline,
     url: `${origin}/${lang}`,
     image: `${origin}/opengraph-image.jpg`,
@@ -100,9 +194,15 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
         /* La durée minimale d'une séance, en heures. */
         eligibleQuantity: { "@type": "QuantitativeValue", minValue: minimum / 60, unitCode: "HUR" },
       },
-      ...t.services.items.map((x) => ({
-        "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
-      })),
+      /* Les prestations que la page d'accueil montre : une carte dont la
+         prestation est désactivée dans Réglages n'est plus offerte, ni à
+         l'écran ni ici. La carte « Tout se fait chez vous » n'en mesure
+         aucune et reste. */
+      ...t.services.items
+        .filter((x) => !x.detail.includes("{qty}") || s.services.some((v) => v.key === x.serviceKey && v.enabled))
+        .map((x) => ({
+          "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
+        })),
     ],
   };
 }

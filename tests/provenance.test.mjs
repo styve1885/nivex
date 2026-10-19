@@ -17,7 +17,7 @@ const { en } = await import("../src/lib/i18n/en.ts");
 const {
   visitSource, referrerHost, deviceType, clip, isHeardFrom, isStoredHeardFrom, HEARD_FROM, HEARD_FROM_FR,
   groupOfSource, visitGroup, bookingGroup, heardFromHint, heardFromText, refName, robotReason,
-  isDatacenterVisit, isPrivatePath, SOURCE_GROUPS,
+  isDatacenterVisit, isPrivatePath, PERSONAL_PATH, SOURCE_GROUPS,
 } = await import("../src/lib/attribution.ts");
 const { isCounted, digestSummary, visitBilan, sourcesOf } = await import("../src/lib/visits.ts");
 const { ownerNotification } = await import("../src/lib/email.ts");
@@ -96,8 +96,36 @@ test("la page qui retire un navigateur ne se compte pas non plus", () => {
   assert.equal(isPrivatePath("/fr/ne-pas-compter-du-tout"), false);
 });
 
+/* Le dernier segment d'un lien « Gérer ma réservation » ou « Gérer mes
+   visites » est un jeton qui vaut une clé : ni le journal, ni l'hébergeur
+   ne doivent le recevoir. */
+test("les liens personnels ne se comptent pas : leur adresse porte un jeton", () => {
+  for (const p of [
+    "/fr/reservation/iOPlq7Mww7M7FyenRM7TENEvOLBQFXGN", "/en/reservation/abcDEF123",
+    "/fr/abonnement/iOPlq7Mww7M7FyenRM7TENEvOLBQFXGN", "/en/abonnement/x_y-z",
+  ]) {
+    assert.equal(isPrivatePath(p), true, `${p} devrait être privé`);
+    assert.equal(isCounted(p), false, `${p} ne devrait pas être compté`);
+  }
+});
+
+test("la page d'abonnement elle-même, sans jeton, reste publique", () => {
+  for (const p of ["/fr/abonnement", "/en/abonnement", "/fr/abonnement/", "/fr/reserver", "/fr/abonnement?formule=confort"]) {
+    assert.equal(isPrivatePath(p), false, `${p} n'est pas un lien personnel`);
+  }
+});
+
+test("le motif des liens personnels, celui que Postgres relit, dit la même chose", () => {
+  /* bootstrap() efface du journal, par ce motif, les lignes d'avant le
+     filtre. Rien de propre à JavaScript : il doit se lire tel quel en SQL. */
+  assert.doesNotMatch(PERSONAL_PATH, /\\|\(\?/, "ni échappement ni groupe spécial");
+  const re = new RegExp(PERSONAL_PATH);
+  assert.equal(re.test("/fr/reservation/abc"), true);
+  assert.equal(re.test("/fr/abonnement"), false);
+});
+
 test("les pages publiques se comptent", () => {
-  for (const p of ["/", "/fr", "/fr/tarifs", "/en/reserver", "/fr/confidentialite"]) {
+  for (const p of ["/", "/fr", "/fr/tarifs", "/en/reserver", "/fr/confidentialite", "/fr/abonnement", "/en/montreal"]) {
     assert.equal(isCounted(p), true, `${p} devrait être compté`);
   }
 });
@@ -128,8 +156,8 @@ test("les deux libellés suivent la liste, en français et en anglais", () => {
   }
   assert.equal(fr.booking.step2.heardFromOptions["porte-a-porte"], "Une visite à ma porte ou une carte de NIVEX");
   assert.equal(fr.booking.step2.heardFromOptions["assistant-ia"], "Un assistant IA (ChatGPT ou autre)");
-  assert.match(fr.booking.step2.heardFrom, /^Comment avez-vous connu NIVEX \?/);
-  assert.match(fr.booking.step2.referredBy, /^Qui vous a recommandé \?/);
+  assert.match(flat(fr.booking.step2.heardFrom), /^Comment avez-vous connu NIVEX \?/);
+  assert.match(flat(fr.booking.step2.referredBy), /^Qui vous a recommandé \?/);
 });
 
 test("les anciennes réponses se lisent encore, mais ne s'envoient plus", () => {
@@ -349,6 +377,23 @@ test("aucune provenance, même absurde, ne fait échouer le formulaire", () => {
     const r = BookingInput.safeParse({ ...base, ...extra });
     assert.equal(r.success, true, `devrait passer : ${JSON.stringify(extra).slice(0, 60)}`);
   }
+});
+
+test("ce que Postgres refuserait n'atteint jamais la base : caractère nul, an zéro, moitié d'emoji", () => {
+  /* Un `?utm_source=%00x` passé par le navigateur, une date de première visite
+     à l'an zéro : Postgres refusait la ligne entière, et la séance avec. */
+  const o = cleanOrigin({
+    attribution: {
+      source: "\u0000x", medium: "a\u0001b", campaign: "ok 😀".slice(0, 4) + "\ud83d",
+      firstSeen: "0000-01-01T00:00:00Z", landing: "/fr\u0000",
+    },
+  });
+  assert.equal(o.source, "x");
+  assert.equal(o.medium, "a b");
+  assert.equal(o.campaign, "ok");
+  assert.equal(o.landing, "/fr");
+  assert.equal(o.firstSeenAt, null);
+  assert.equal(cleanOrigin({ attribution: { firstSeen: "2026-10-01T12:00:00Z" } }).firstSeenAt, "2026-10-01T12:00:00.000Z");
 });
 
 console.log("\nProvenance dans le courriel de l'artisan");

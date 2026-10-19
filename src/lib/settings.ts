@@ -1,21 +1,17 @@
+import { cache } from "react";
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
 import {
   DEFAULT_ZONE_POLICY, POLICY_VERSION, PREFIX_RE, describeChanges,
   type Sector, type Zone, type ZonePolicy,
 } from "./travel";
+import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "./services";
+import { MIN_SESSION_MINUTES } from "./brand";
 
-export type DayHours = { day: number; enabled: boolean; open: string; close: string };
-export type ServiceItem = {
-  key: string;
-  icon: string;
-  fr: string;
-  en: string;
-  minutesPerUnit: number;
-  unitFr: string;
-  unitEn: string;
-  enabled: boolean;
-};
+/* Les prestations du code et la forme d'un horaire vivent dans `services.ts`,
+   qui n'importe rien : un composant client peut les lire sans emporter la
+   base dans le navigateur. Elles restent lisibles d'ici. */
+export { DEFAULT_SERVICES, type DayHours, type ServiceItem };
 
 export type Settings = {
   ownerEmail: string | null;
@@ -62,25 +58,6 @@ export const DEFAULT_HOURS: DayHours[] = [
   { day: 6, enabled: true,  open: "07:00", close: "22:00" }, // samedi
 ];
 
-/**
- * Temps de traitement par pièce, marge de conversation et d'imprévus
- * comprise. Ces minutes ne servent pas qu'au devis : la capacité horaire
- * annoncée sur la page Tarifs en découle (`perHour`), et le site promet de
- * tenir le volume annoncé. Les gonfler d'optimisme revient donc à promettre
- * ce qu'on ne tiendra pas.
- *
- * Valeurs relevées au chronomètre sur séance réelle, septembre 2026.
- */
-export const DEFAULT_SERVICES: ServiceItem[] = [
-  { key: "shirt",    icon: "shirt",  fr: "Chemises",              en: "Shirts",              minutesPerUnit: 8,  unitFr: "chemise",  unitEn: "shirt",   enabled: true },
-  { key: "delicate", icon: "dress",  fr: "Robes & délicats",      en: "Dresses & delicates", minutesPerUnit: 15, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "suit",     icon: "suit",   fr: "Costumes & vestes",     en: "Suits & jackets",     minutesPerUnit: 19, unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "trousers", icon: "badge",  fr: "Pantalons & jupes",     en: "Trousers & skirts",   minutesPerUnit: 9,  unitFr: "pièce",    unitEn: "piece",   enabled: true },
-  { key: "linen",    icon: "linen",  fr: "Draps simple et 2 places", en: "Single & double sheets", minutesPerUnit: 7,  unitFr: "drap",     unitEn: "sheet", enabled: true },
-  { key: "linen-xl", icon: "linen",  fr: "Draps queen et 3 places",  en: "Queen & king sheets",    minutesPerUnit: 10, unitFr: "drap",     unitEn: "sheet", enabled: true },
-  { key: "uniform",  icon: "clock",  fr: "Uniformes (ensemble)",     en: "Uniforms (set)",         minutesPerUnit: 11, unitFr: "ensemble", unitEn: "set",   enabled: true },
-];
-
 export const FALLBACK_SETTINGS: Settings = {
   ownerEmail: null, ownerName: null, ownerPicture: null, connected: false,
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
@@ -105,7 +82,7 @@ function hydrate(row: Row | undefined): Settings {
     businessName: (row.business_name as string) || "NIVEX",
     hourlyRate: Number(row.hourly_rate ?? DEFAULT_HOURLY_RATE),
     currency: (row.currency as string) || "CAD",
-    minMinutes: Number(row.min_minutes ?? 120),
+    minMinutes: Math.max(MIN_SESSION_MINUTES, Number(row.min_minutes ?? MIN_SESSION_MINUTES)),
     bufferMinutes: Number(row.buffer_minutes ?? 30),
     leadHours: Number(row.lead_hours ?? 24),
     horizonDays: Number(row.horizon_days ?? 45),
@@ -217,25 +194,71 @@ function hydrateSector(s: Record<string, unknown>): Sector | null {
   };
 }
 
+/** La base n'a pas pu être lue : rien ne doit se décider sur des valeurs par défaut. */
+export class SettingsUnavailableError extends Error {
+  constructor(detail: string) {
+    super(`Réglages illisibles : ${detail}`);
+    this.name = "SettingsUnavailableError";
+  }
+}
+
 /**
- * Lecture tolérante : si la base n'est pas branchée, on renvoie les valeurs
- * par défaut plutôt que de faire tomber la page.
+ * Lecture stricte : celle de tout ce qui décide.
+ *
+ * L'accès à l'espace artisan, l'écriture des réglages, le prix, la zone et
+ * la pause au moment d'une réservation lisent ici. Une base qui répond mal
+ * y lève une erreur au lieu de rendre les valeurs par défaut — celles-ci
+ * portent `ownerEmail: null` et `paused: false`, et une décision prise sur
+ * elles ouvrirait le compte au premier venu, rouvrirait une maison en pause
+ * ou facturerait un tarif que l'artisan ne pratique plus. Les valeurs par
+ * défaut ne valent ici que pour une base qui répond sans avoir encore de
+ * ligne, ou quand aucune base n'est branchée du tout.
+ *
+ * Les pages de la vitrine mises en cache lisent ici aussi. Une régénération
+ * qui lève une erreur laisse servir la dernière page réussie ; une lecture
+ * tolérante y aurait figé les tarifs et l'horaire du code jusqu'à la
+ * régénération suivante.
+ *
+ * Une seule lecture par rendu (`cache`) : la racine, ses métadonnées et la
+ * page partagent la même ligne, ou la même panne, et une page ne mêle jamais
+ * les valeurs de la base et celles du code. Hors rendu (routes d'API, tâche
+ * quotidienne), `cache` ne retient rien et chaque appel relit la base.
+ */
+export const getSettingsStrict = cache(readSettings);
+
+async function readSettings(): Promise<Settings> {
+  if (!isDbConfigured()) return FALLBACK_SETTINGS;
+  try {
+    await ensureSchema();
+    const rows = (await sql()`SELECT * FROM nivex_settings WHERE id = 1`) as Row[];
+    /* Une lecture réussie efface la panne d'avant : /api/health ne doit pas
+       montrer, pour toute la vie de l'instance, une erreur déjà passée. */
+    lastReadError = null;
+    return hydrate(rows[0]);
+  } catch (e) {
+    lastReadError = String((e as Error)?.message ?? e).slice(0, 300);
+    throw new SettingsUnavailableError(lastReadError);
+  }
+}
+
+/**
+ * Lecture tolérante, pour l'affichage seulement, dans les pages rendues à
+ * chaque visite : si la base n'est pas branchée, on renvoie les valeurs par
+ * défaut plutôt que de faire tomber la page. Les pages mises en cache lisent
+ * la version stricte, pour ne pas figer ces valeurs-là.
  *
  * Cette tolérance a un prix, et il faut le connaître : les valeurs par
  * défaut portent `connected: false`. Une base qui répond mal se lit donc
  * exactement comme un compte Google absent, et l'espace artisan annonce
  * « Non connecté » alors que le jeton se porte bien. On consigne donc la
  * cause au passage — sans elle, le diagnostic part dans la mauvaise
- * direction.
+ * direction. Rien de ce qui autorise, écrit ou engage la maison ne lit
+ * ici : voir `getSettingsStrict`.
  */
 export async function getSettings(): Promise<Settings> {
-  if (!isDbConfigured()) return FALLBACK_SETTINGS;
   try {
-    await ensureSchema();
-    const rows = (await sql()`SELECT * FROM nivex_settings WHERE id = 1`) as Row[];
-    return hydrate(rows[0]);
-  } catch (e) {
-    lastReadError = String((e as Error)?.message ?? e).slice(0, 300);
+    return await getSettingsStrict();
+  } catch {
     console.error("[nivex] réglages illisibles, retour aux valeurs par défaut :", lastReadError);
     return FALLBACK_SETTINGS;
   }
@@ -258,12 +281,21 @@ export async function getRefreshToken(): Promise<string | null> {
   try { return decrypt(enc); } catch { return null; }
 }
 
+/**
+ * Enregistre le compte Google qui vient de se connecter.
+ *
+ * Un propriétaire déjà inscrit n'est jamais remplacé : la mise à jour ne
+ * retient la ligne que si elle n'a pas encore de propriétaire, ou si c'est
+ * le même compte. La route de connexion le vérifie avant, mais sur une
+ * lecture ; la base, elle, tranche au moment d'écrire. Rien d'écrit, et
+ * c'est une erreur.
+ */
 export async function saveConnection(input: {
   email: string; name: string | null; picture: string | null; refreshToken?: string | null;
 }) {
   await ensureSchema();
   const enc = input.refreshToken ? encrypt(input.refreshToken) : null;
-  await sql()`
+  const rows = (await sql()`
     INSERT INTO nivex_settings (id, owner_email, owner_name, owner_picture, refresh_token,
                                 hours, travel_policy, services, connected_at, updated_at)
     VALUES (1, ${input.email}, ${input.name}, ${input.picture}, ${enc},
@@ -283,7 +315,19 @@ export async function saveConnection(input: {
                            THEN nivex_settings.travel_policy ELSE EXCLUDED.travel_policy END,
       services      = COALESCE(nivex_settings.services, EXCLUDED.services),
       connected_at  = now(),
-      updated_at    = now()`;
+      updated_at    = now()
+    WHERE nivex_settings.owner_email IS NULL
+       OR lower(nivex_settings.owner_email) = lower(EXCLUDED.owner_email)
+    RETURNING id`) as Row[];
+  if (rows.length === 0) throw new NotOwnerError();
+}
+
+/** Un autre compte a revendiqué la maison entre la lecture et l'écriture. */
+export class NotOwnerError extends Error {
+  constructor() {
+    super("Ce compte Google n'est pas celui du propriétaire enregistré.");
+    this.name = "NotOwnerError";
+  }
 }
 
 export async function disconnect() {
@@ -298,29 +342,39 @@ export type SettingsPatch = Partial<Pick<Settings,
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
   "hours" | "services">>;
 
-export async function updateSettings(patch: SettingsPatch) {
+/**
+ * N'écrit que les colonnes envoyées.
+ *
+ * Plus de lecture avant l'écriture : une lecture qui échouait rendait les
+ * valeurs par défaut, et l'enregistrement d'un seul champ — le choix de
+ * l'agenda — remettait alors le tarif, l'horaire, la pause et les
+ * prestations ajoutées à leurs valeurs d'usine. Une colonne absente du
+ * correctif garde ce qu'elle a en base.
+ */
+export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
   await ensureSchema();
-  const cur = await getSettings();
-  const n = { ...cur, ...patch };
-  await sql()`
+  const p = patch;
+  const int = (v: number | undefined) => (v == null ? null : Math.round(v));
+  const rows = (await sql()`
     UPDATE nivex_settings SET
-      calendar_id     = ${n.calendarId},
-      timezone        = ${n.timezone},
-      business_name   = ${n.businessName},
-      hourly_rate     = ${Math.round(n.hourlyRate)},
-      currency        = ${n.currency},
-      min_minutes     = ${Math.round(n.minMinutes)},
-      buffer_minutes  = ${Math.round(n.bufferMinutes)},
-      lead_hours      = ${Math.round(n.leadHours)},
-      horizon_days    = ${Math.round(n.horizonDays)},
-      slot_step       = ${Math.round(n.slotStep)},
-      first_hour_free = ${n.firstHourFree},
-      paused          = ${n.paused},
-      hours           = ${JSON.stringify(n.hours)}::jsonb,
-      services        = ${JSON.stringify(n.services)}::jsonb,
+      calendar_id     = COALESCE(${p.calendarId ?? null}, calendar_id),
+      timezone        = COALESCE(${p.timezone ?? null}, timezone),
+      business_name   = COALESCE(${p.businessName ?? null}, business_name),
+      hourly_rate     = COALESCE(${int(p.hourlyRate)}::integer, hourly_rate),
+      currency        = COALESCE(${p.currency ?? null}, currency),
+      min_minutes     = COALESCE(${int(p.minMinutes)}::integer, min_minutes),
+      buffer_minutes  = COALESCE(${int(p.bufferMinutes)}::integer, buffer_minutes),
+      lead_hours      = COALESCE(${int(p.leadHours)}::integer, lead_hours),
+      horizon_days    = COALESCE(${int(p.horizonDays)}::integer, horizon_days),
+      slot_step       = COALESCE(${int(p.slotStep)}::integer, slot_step),
+      first_hour_free = COALESCE(${p.firstHourFree ?? null}::boolean, first_hour_free),
+      paused          = COALESCE(${p.paused ?? null}::boolean, paused),
+      hours           = COALESCE(${p.hours ? JSON.stringify(p.hours) : null}::jsonb, hours),
+      services        = COALESCE(${p.services ? JSON.stringify(p.services) : null}::jsonb, services),
       updated_at      = now()
-    WHERE id = 1`;
-  return n;
+    WHERE id = 1
+    RETURNING *`) as Row[];
+  return rows[0] ? hydrate(rows[0]) : getSettingsStrict();
 }
 
 /** Le site accepte-t-il des réservations en ligne en ce moment ? */
@@ -340,7 +394,9 @@ export function isBookable(s: Settings): boolean {
  */
 export async function saveZonePolicy(next: ZonePolicy, author: string | null): Promise<string[]> {
   await ensureSchema();
-  const cur = (await getSettings()).zonePolicy;
+  /* Lue strictement : comparée à la grille par défaut, une grille illisible
+     inscrirait dans l'historique des changements que personne n'a faits. */
+  const cur = (await getSettingsStrict()).zonePolicy;
   const changes = describeChanges(cur, next);
   await sql()`
     INSERT INTO nivex_settings (id, travel_policy, updated_at)

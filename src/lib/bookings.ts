@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, type Settings } from "./settings";
+import { getSettingsStrict, type Settings } from "./settings";
 import {
   bookingGroup, clip, heardFromText, isHeardFrom, isStoredHeardFrom, referrerHost, refName,
   type SourceGroup, type StoredHeardFrom,
@@ -31,7 +31,9 @@ export const BookingInput = z.object({
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
   startsAt: z.string().datetime({ offset: true }),
   consent: z.literal(true),
-  hp: z.string().max(0).optional(),          // pot de miel anti-robot
+  /* Pot de miel anti-robot. Accepté ici pour que la route réponde par un
+     faux succès plutôt que par un refus qui nommerait le champ. */
+  hp: z.string().max(200).optional(),
 
   /* « Comment nous avez-vous connus ? » — facultatif, et volontairement une
      liste fermée : une réponse libre finirait par contenir des choses qu'on
@@ -154,7 +156,10 @@ export class BookingError extends Error {
 /* ============================ Création ============================ */
 
 export async function createBooking(input: BookingInputType, host?: string | null): Promise<Booking> {
-  const settings = await getSettings();
+  /* Lus strictement : une base muette lève une erreur ici, au lieu de
+     laisser réserver une maison en pause, au tarif et dans les zones par
+     défaut. */
+  const settings = await getSettingsStrict();
 
   /* Seule la mise en pause ferme vraiment la porte : c'est une décision de
      l'artisan. Un compte Google injoignable, lui, ne doit pas empêcher un
@@ -208,9 +213,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   const manageToken = token(24);
   const provenance = cleanOrigin(input);
 
-  let rows: Row[];
-  try {
-    rows = (await sql()`
+  const insert = async (p: typeof provenance) => (await sql()`
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
@@ -224,10 +227,23 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
         ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
         ${verdict.feeCents}, ${verdict.labelFr},
-        ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
-        ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits},
-        ${provenance.referral}, ${provenance.referredBy}
+        ${p.heardFrom}, ${p.source}, ${p.medium}, ${p.campaign},
+        ${p.referrer}, ${p.landing}, ${p.firstSeenAt}, ${p.visits},
+        ${p.referral}, ${p.referredBy}
       ) RETURNING *`) as Row[];
+
+  let rows: Row[];
+  try {
+    try {
+      rows = await insert(provenance);
+    } catch (e) {
+      /* Une valeur de provenance que Postgres refuse encore, malgré le
+         nettoyage, ne coûte jamais la séance : elle s'écrit sans. La réponse
+         à « Comment avez-vous connu NIVEX ? » reste, elle vient d'une liste. */
+      if (!isDataError(e)) throw e;
+      await logEvent("provenance_dropped", { ref });
+      rows = await insert({ ...NO_ORIGIN, heardFrom: provenance.heardFrom });
+    }
   } catch (e) {
     const msg = String((e as Error).message ?? e);
     // 23505 : index unique · 23P01 : contrainte d'exclusion (chevauchement)
@@ -242,14 +258,9 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
   /* — Agenda Google : l'invitation part vers le client — */
   if (accessToken) try {
-    const block = occupiedBlock(booking);
     const ev = await createEvent(accessToken, {
       calendarId: settings.calendarId,
-      summary: `NIVEX — ${booking.clientName}`,
-      description: eventDescription(booking, origin, settings.timezone),
-      location: `${booking.address}, ${booking.city}, QC ${booking.postalCode}`,
-      start: block.start.toISOString(),
-      end: block.end.toISOString(),
+      ...calendarEvent(booking, origin, settings.timezone),
       timeZone: settings.timezone,
       attendeeEmail: booking.clientEmail,
       attendeeName: booking.clientName,
@@ -284,14 +295,32 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
 /**
  * Le temps réellement occupé : la séance, plus l'installation avant et le
- * rangement après. C'est ce bloc-là qu'il faut réserver dans l'agenda, et
- * lui qui ne doit jamais en croiser un autre.
+ * rangement après. C'est ce bloc-là qui ne doit jamais en croiser un autre :
+ * la contrainte d'exclusion le garde, le moteur de créneaux le compte
+ * (`withSetup`), et les événements d'une série d'abonnement, sans invité,
+ * le réservent tel quel. L'événement d'une séance ponctuelle, lui, porte
+ * les heures réservées : voir `calendarEvent`.
  */
 export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start: Date; end: Date } {
   return {
     start: new Date(b.startsAt.getTime() - SETUP_MINUTES * 60_000),
     end: new Date(b.endsAt.getTime() + SETUP_MINUTES * 60_000),
   };
+}
+
+/** Rien n'a pu être vu sur le site avant 2020 : une date plus ancienne est une saleté. */
+const FIRST_SEEN_FLOOR = Date.UTC(2020, 0, 1);
+
+const NO_ORIGIN: ReturnType<typeof cleanOrigin> = {
+  heardFrom: null, referredBy: null, referral: null, source: null, medium: null,
+  campaign: null, referrer: null, landing: null, firstSeenAt: null, visits: null,
+};
+
+/** Une erreur de donnée de Postgres (classe 22) : valeur hors bornes, octet invalide, syntaxe. */
+function isDataError(e: unknown): boolean {
+  const code = (e as { code?: unknown })?.code;
+  if (typeof code === "string" && /^22/.test(code)) return true;
+  return /invalid byte sequence|out of range|invalid input syntax|unsupported Unicode escape/i.test(String((e as Error)?.message ?? e));
 }
 
 /**
@@ -323,13 +352,14 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referre
     ? Math.min(Math.round(rawVisits), 10_000)
     : null;
 
-  /* Une date venue du navigateur peut être n'importe quoi, y compris une
-     date du futur. On la refuse plutôt que de l'écrire. */
+  /* Une date venue du navigateur peut être n'importe quoi : une date du
+     futur, ou l'an zéro, que Postgres refuse. Avant l'ouverture du site, ou
+     après maintenant, on la laisse de côté plutôt que de l'écrire. */
   let firstSeenAt: string | null = null;
   const seen = clip(a.firstSeen, 60);
   if (seen) {
     const d = new Date(seen);
-    if (!Number.isNaN(d.getTime()) && d.getTime() <= Date.now() + 60_000) {
+    if (!Number.isNaN(d.getTime()) && d.getTime() >= FIRST_SEEN_FLOOR && d.getTime() <= Date.now() + 60_000) {
       firstSeenAt = d.toISOString();
     }
   }
@@ -355,32 +385,84 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referre
   };
 }
 
-function eventDescription(b: Booking, origin: string, tz: string): string {
-  const lines = [
-    `Séance : ${formatDateTime(b.startsAt, tz, "fr")} — ${minutesToText(b.durationMinutes, "fr")} de repassage.`,
-    `Ce bloc comprend ${SETUP_MINUTES} min d'installation avant et ${SETUP_MINUTES} min de rangement après.`,
+const EVENT_TEXT = {
+  fr: {
+    summary: (n: string) => `NIVEX — Repassage à domicile · ${n}`,
+    session: "Séance", ironing: (d: string) => `${d} de repassage`,
+    setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
+    address: "Adresse", client: "Client", phone: "Téléphone", email: "Courriel",
+    items: "Prestations", estimate: "Estimation", free: "première heure offerte",
+    travel: "Frais de déplacement", total: "Total estimé", notes: "Précisions",
+    ref: "Référence", manage: "Gérer ma réservation",
+    kv: (k: string, v: string) => `${k} : ${v}`,
+  },
+  en: {
+    summary: (n: string) => `NIVEX — In-home ironing · ${n}`,
+    session: "Session", ironing: (d: string) => `${d} of ironing`,
+    setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
+    address: "Address", client: "Client", phone: "Phone", email: "Email",
+    items: "Services", estimate: "Estimate", free: "first hour free",
+    travel: "Travel fee", total: "Estimated total", notes: "Notes",
+    ref: "Reference", manage: "Manage my booking",
+    kv: (k: string, v: string) => `${k}: ${v}`,
+  },
+} as const;
+
+/**
+ * L'événement d'agenda d'une séance ponctuelle.
+ *
+ * Le client y est invité, et Google le lui envoie tel quel : il est donc
+ * écrit dans sa langue, aux heures de sa confirmation, et ne garde rien de
+ * ce qui ne regarde que l'artisan — ni la provenance, ni le lien vers
+ * l'espace artisan, que la fiche de mission porte déjà. L'artisan, lui, le
+ * lit dans son propre agenda : nom, téléphone, adresse, prestations et
+ * montant y restent.
+ *
+ * Le quart d'heure d'installation n'est plus dans les heures de
+ * l'événement, il est dit en toutes lettres. Le temps réellement occupé
+ * reste protégé là où il se décide : le moteur de créneaux compte
+ * l'installation et le rangement autour de chaque réservation en base, et
+ * la contrainte d'exclusion les garde à l'écriture.
+ */
+export function calendarEvent(b: Booking, origin: string, tz: string): {
+  summary: string; description: string; location: string; start: string; end: string;
+} {
+  const l = b.locale === "en" ? "en" : "fr";
+  const t = EVENT_TEXT[l];
+  const money = (cents: number) => formatMoney(cents, b.currency, l);
+  const lines: string[] = [
+    t.kv(t.session, `${formatDateTime(b.startsAt, tz, l)} — ${t.ironing(minutesToText(b.durationMinutes, l))}.`),
+    t.setup,
     "",
-    `Client : ${b.clientName}`,
-    `Téléphone : ${b.clientPhone}`,
-    `Courriel : ${b.clientEmail}`,
+    t.kv(t.address, `${b.address}, ${b.city}, QC ${b.postalCode}`),
+    t.kv(t.client, b.clientName),
+    t.kv(t.phone, b.clientPhone),
+    t.kv(t.email, b.clientEmail),
     "",
-    "Prestations :",
+    t.kv(t.items, ""),
     ...b.items.map((i) => `  • ${i.label} × ${i.qty}`),
-    "",
-    `Durée estimée : ${minutesToText(b.durationMinutes, "fr")}`,
-    `Estimation : ${formatMoney(b.estimateCents, b.currency, "fr")}${b.firstHourFree ? " (1re heure offerte)" : ""}`,
+    t.kv(t.estimate, `${money(b.estimateCents)}${b.firstHourFree ? ` (${t.free})` : ""}`),
   ];
   if (b.travelFeeCents > 0) {
     lines.push(
-      `Frais de déplacement${b.travelZone ? ` (${b.travelZone})` : ""} : ${formatMoney(b.travelFeeCents, b.currency, "fr")}`,
-      `Total : ${formatMoney(b.estimateCents + b.travelFeeCents, b.currency, "fr")}`,
+      t.kv(`${t.travel}${b.travelZone ? ` (${b.travelZone})` : ""}`, money(b.travelFeeCents)),
+      t.kv(t.total, money(b.estimateCents + b.travelFeeCents)),
     );
   }
-  if (b.notes) lines.push("", `Précisions du client : ${b.notes}`);
-  const heard = heardFromText(b.origin);
-  if (heard) lines.push("", `Nous a connus par : ${heard}`);
-  lines.push("", `Référence : ${b.ref}`, `Tableau de bord : ${origin}/admin`);
-  return lines.join("\n");
+  if (b.notes) lines.push("", t.kv(t.notes, b.notes));
+  lines.push(
+    "",
+    t.kv(t.ref, b.ref),
+    t.kv(t.manage, `${origin}/${b.locale}/reservation/${b.manageToken}`),
+    `NIVEX · ${PHONE} · ${contactEmail()}`,
+  );
+  return {
+    summary: t.summary(b.clientName),
+    description: lines.map((x) => x.trimEnd()).join("\n"),
+    location: `${b.address}, ${b.city}, QC ${b.postalCode}`,
+    start: b.startsAt.toISOString(),
+    end: b.endsAt.toISOString(),
+  };
 }
 
 function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
@@ -394,6 +476,8 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
     businessEmail: contactEmail(),
+    /* Le courriel ne parle de l'invitation que si elle est réellement partie. */
+    invited: Boolean(b.googleEventId),
     /* Seule la notification de l'artisan s'en sert ; le gabarit du client
        ignore ce champ. */
     origin: {
@@ -466,7 +550,7 @@ export async function resendBooking(b: Booking, host?: string | null): Promise<{
     const { resendSubscription } = await import("./subscriptions");
     return resendSubscription(b.subscriptionId, host);
   }
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const origin = siteOrigin(host);
 
   let at: string | null = null;
@@ -482,11 +566,7 @@ export async function resendBooking(b: Booking, host?: string | null): Promise<{
     try {
       const ev = await createEvent(at, {
         calendarId: settings.calendarId,
-        summary: `NIVEX — ${b.clientName}`,
-        description: eventDescription(b, origin, settings.timezone),
-        location: `${b.address}, ${b.city}, QC ${b.postalCode}`,
-        start: occupiedBlock(b).start.toISOString(),
-        end: occupiedBlock(b).end.toISOString(),
+        ...calendarEvent(b, origin, settings.timezone),
         timeZone: settings.timezone,
         attendeeEmail: b.clientEmail,
         attendeeName: b.clientName,
@@ -499,12 +579,19 @@ export async function resendBooking(b: Booking, host?: string | null): Promise<{
     }
   }
 
-  const emailSent = await sendBookingEmails(b, settings, origin).catch(() => false);
+  /* Le courriel ne repart que s'il n'est jamais parti : réparer l'agenda ne
+     doit pas valoir au client une seconde confirmation, ni à la maison une
+     seconde fiche de mission. L'invitation, elle, part avec l'événement. */
+  const emailSent = b.emailSent || await sendBookingEmails(b, settings, origin).catch(() => false);
   await logEvent("booking_resent", { ref: b.ref, emailSent, calendarAdded });
 
   return {
     emailSent, calendarAdded,
-    error: emailSent ? null : "Le courriel n'est toujours pas parti. Vérifiez la connexion Google.",
+    error: !emailSent
+      ? "Le courriel n'est toujours pas parti. Vérifiez la connexion Google."
+      : !calendarAdded && b.status !== "cancelled"
+        ? "L'inscription à l'agenda a de nouveau échoué."
+        : null,
   };
 }
 
@@ -514,9 +601,12 @@ function describeGoogle(e: unknown): string {
 }
 
 async function isFirstBooking(email: string): Promise<boolean> {
+  /* Un rendez-vous de plus de trois ans est anonymisé (retention.ts) : de son
+     courriel ne reste qu'une empreinte, qui suffit à n'offrir l'heure qu'une fois. */
+  const { erasedEmail } = await import("./retention");
   const rows = (await sql()`
     SELECT 1 FROM nivex_bookings
-    WHERE lower(client_email) = ${email.toLowerCase()} AND status <> 'cancelled'
+    WHERE lower(client_email) IN (${email.toLowerCase()}, ${erasedEmail(email)}) AND status <> 'cancelled'
     LIMIT 1`) as Row[];
   return rows.length === 0;
 }
@@ -557,28 +647,56 @@ export async function listBookings(opts: { scope?: "upcoming" | "past" | "all"; 
   return rows.map(hydrate);
 }
 
-export async function stats() {
+/**
+ * Les chiffres du tableau de bord.
+ *
+ * Le mois est celui de Montréal, et il est borné des deux côtés : le
+ * serveur vit en UTC, et une séance du 31 au soir y tombait déjà le mois
+ * suivant — sans borne haute, « ce mois-ci » comptait en plus tous les mois
+ * à venir, six mois de visites d'abonnés compris. Les bornes se calculent à
+ * l'heure murale puis se reconvertissent : ajouter un mois à un instant le
+ * ferait en UTC. « À venir » suit la règle de la liste voisine (trois
+ * semaines de visites d'abonnés), et un client n'est « servi » qu'une fois
+ * sa séance passée.
+ */
+export async function stats(tz = "America/Toronto") {
   await ensureSchema();
   const now = new Date().toISOString();
   const rows = (await sql()`
+    WITH m AS (
+      SELECT date_trunc('month', now() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}                     AS m0,
+             (date_trunc('month', now() AT TIME ZONE ${tz}) + interval '1 month') AT TIME ZONE ${tz} AS m1
+    )
     SELECT
-      count(*) FILTER (WHERE status = 'confirmed' AND starts_at >= ${now})                         AS upcoming,
-      count(*) FILTER (WHERE status = 'confirmed' AND starts_at >= date_trunc('month', now()))     AS this_month,
+      count(*) FILTER (WHERE status = 'confirmed' AND starts_at >= ${now}
+        AND (subscription_id IS NULL OR starts_at < now() + interval '21 days'))                   AS upcoming,
+      count(*) FILTER (WHERE status = 'confirmed' AND starts_at >= m.m0 AND starts_at < m.m1)      AS this_month,
       count(*) FILTER (WHERE status = 'cancelled')                                                 AS cancelled,
       count(*)                                                                                     AS total,
-      coalesce(sum(estimate_cents) FILTER (
-        WHERE status <> 'cancelled' AND starts_at >= date_trunc('month', now())), 0)               AS month_cents,
-      count(DISTINCT lower(client_email)) FILTER (WHERE status <> 'cancelled')                     AS clients
-    FROM nivex_bookings`) as Row[];
+      /* Les frais de route comptent : c'est de l'argent encaissé. Une visite
+         d'abonné en porte zéro, ses frais sont dans le cycle payé. */
+      coalesce(sum(estimate_cents + travel_fee_cents) FILTER (
+        WHERE status <> 'cancelled' AND starts_at >= m.m0 AND starts_at < m.m1), 0)               AS month_cents,
+      count(DISTINCT lower(client_email)) FILTER (
+        WHERE status <> 'cancelled' AND starts_at < ${now})                                        AS clients
+    FROM nivex_bookings, m`) as Row[];
   const r = rows[0] ?? {};
 
   /* Une visite d'abonnement vaut zéro en base : le cycle se paie d'un coup,
      à sa première visite. Les revenus du mois comptent donc les cycles
-     encaissés ce mois-ci, à la date où l'artisan a noté le paiement. */
+     encaissés ce mois-ci, à la date où l'artisan a noté le paiement, au
+     montant noté ce jour-là : des frais changés depuis ne réécrivent pas un
+     cycle déjà réglé. Un paiement d'avant `paid_amounts` se lit au montant
+     courant, faute de mieux. */
   const paid = (await sql()`
-    SELECT coalesce(sum(s.cycle_cents + s.travel_fee_cents * s.visits_per_cycle), 0) AS cents
-    FROM nivex_subscriptions s, jsonb_each_text(s.paid_cycles) p
-    WHERE p.value::timestamptz >= date_trunc('month', now())`.catch(() => [{ cents: 0 }])) as Row[];
+    WITH m AS (
+      SELECT date_trunc('month', now() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}                     AS m0,
+             (date_trunc('month', now() AT TIME ZONE ${tz}) + interval '1 month') AT TIME ZONE ${tz} AS m1
+    )
+    SELECT coalesce(sum(coalesce((s.paid_amounts->>p.key)::int,
+                                 s.cycle_cents + s.travel_fee_cents * s.visits_per_cycle)), 0) AS cents
+    FROM nivex_subscriptions s, jsonb_each_text(s.paid_cycles) p, m
+    WHERE p.value::timestamptz >= m.m0 AND p.value::timestamptz < m.m1`.catch(() => [{ cents: 0 }])) as Row[];
 
   return {
     upcoming: Number(r.upcoming ?? 0), thisMonth: Number(r.this_month ?? 0),
@@ -589,9 +707,12 @@ export async function stats() {
 
 /**
  * D'où viennent les clients : une ligne par séance ponctuelle prise en ligne,
- * séances annulées exclues, et une par abonnement pris en ligne — la
- * provenance d'un abonnement vit sur sa toute première visite. Les abonnés
- * entrés à la main par l'artisan ne sont pas des arrivées du site.
+ * séances annulées exclues, et une par abonnement pris en ligne. La
+ * provenance d'un abonnement est écrite sur la visite posée la première ;
+ * on cherche donc la visite qui la porte, et non la plus proche par la
+ * date — une première visite déplacée après la deuxième faisait passer
+ * l'abonnement en « Direct ». Les abonnés entrés à la main par l'artisan ne
+ * sont pas des arrivées du site.
  */
 export async function bookingSources(): Promise<{ createdAt: Date; group: SourceGroup }[]> {
   await ensureSchema();
@@ -606,7 +727,8 @@ export async function bookingSources(): Promise<{ createdAt: Date; group: Source
       SELECT x.heard_from, x.referral, x.utm_source, x.referrer
       FROM nivex_bookings x
       WHERE x.subscription_id = s.id
-      ORDER BY x.series_no, x.starts_at
+      ORDER BY (x.heard_from IS NULL AND x.referral IS NULL AND x.utm_source IS NULL AND x.referrer IS NULL),
+               x.series_no, x.starts_at
       LIMIT 1
     ) f ON true
     WHERE s.created_by = 'client'`) as Row[];
@@ -632,18 +754,26 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
     await cancelVisit(b, by);
     return;
   }
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   await ensureSchema();
-  await sql()`UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now() WHERE id = ${b.id}`;
+  /* Une seule annulation par séance : deux clics, ou le client et l'artisan
+     à la même seconde, ne doivent pas envoyer deux fois chaque avis. Seul
+     celui dont la mise à jour prend la ligne va plus loin. */
+  const claimed = (await sql()`
+    UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now()
+    WHERE id = ${b.id} AND status <> 'cancelled'
+    RETURNING id`) as Row[];
+  if (claimed.length === 0) return;
 
   const at = await ownerAccessToken().catch(() => null);
   const origin = siteOrigin();
 
+  /* Au mieux, quelle que soit l'erreur : l'annulation est déjà écrite, et
+     une coupure réseau vers Google ne doit priver personne de l'avis qui
+     suit — ni le client de sa confirmation, ni l'artisan de son texto. */
   if (at && b.googleEventId) {
-    await deleteEvent(at, settings.calendarId, b.googleEventId).catch((e) => {
-      if (!(e instanceof GoogleError)) throw e;
-      return logEvent("calendar_delete_failed", { ref: b.ref, error: e.message.slice(0, 400) });
-    });
+    await deleteEvent(at, settings.calendarId, b.googleEventId)
+      .catch((e) => logEvent("calendar_delete_failed", { ref: b.ref, error: describeGoogle(e) }));
   }
 
   if (at) {
@@ -657,9 +787,10 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
         to: b.clientEmail, toName: b.clientName, subject: cc.subject,
         html: cc.html, text: cc.text, fromName, replyTo: contactEmail(),
       }),
-      // L'artisan, seulement quand l'annulation ne vient pas de lui.
-      settings.ownerEmail && by === "client"
-        ? sendGmail(at, { to: settings.ownerEmail, subject: on.subject, html: on.html, text: on.text, fromName })
+      // L'artisan, seulement quand l'annulation ne vient pas de lui — à la
+      // boîte de la maison, comme tous les avis internes.
+      by === "client"
+        ? sendGmail(at, { to: REQUEST_INBOX, subject: on.subject, html: on.html, text: on.text, fromName, replyTo: b.clientEmail })
         : Promise.resolve(null),
     ]);
   }

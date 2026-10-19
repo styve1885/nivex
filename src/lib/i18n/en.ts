@@ -1,17 +1,20 @@
 import type { Dict, LegalDoc } from "./fr";
 import {
-  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, PHONE, SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
+  SERIES_NOTICE_DAYS, SETUP_MINUTES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
-import { formatMoney } from "../time";
+import { formatMoney, minutesToText } from "../time";
 
 /* The subscriber reduction on travel fees, written from the constant. */
 const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "en");
+/* The length that qualifies for the free first hour, from the constant the engine applies. */
+const FIRST_FREE_MIN = minutesToText(FIRST_FREE_MIN_MINUTES, "en");
 
 const privacy: LegalDoc = {
   eyebrow: "Privacy",
   title: "What we know about you.",
   lede:
-    "NIVEX collects enough to reach you and enough to find you. Nothing else. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
+    "NIVEX collects enough to reach you, to find you and to prepare your session, along with a few technical measurements described below. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
   sections: [
     {
       title: "Who answers for your information",
@@ -23,7 +26,7 @@ const privacy: LegalDoc = {
     {
       title: "What we collect",
       body: [
-        "Only what you hand us yourself, at the moment you hand it over. This site follows no one around and buys data from no one.",
+        "What you hand us yourself, at the moment you hand it over, and a few technical measurements, each described below. This site follows no one around and buys data from no one.",
       ],
       list: [
         "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
@@ -31,7 +34,7 @@ const privacy: LegalDoc = {
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
         "Audience measurement — the number of page views, which page was viewed, the site you arrived from, your country and your device type. This data is aggregated: it says how many people came by, never which ones. No cookie is set and no identifier follows you from one visit to the next.",
-        "Visit log — for each page displayed: the date and time, the page, the site or campaign you arrived from at the start of your visit, the first name in the referral link if you followed one, the device type, and the approximate city our host infers from the network. Your IP address is never written down: it serves to infer the city, then it is forgotten along with the request. To set robots aside, the server also looks at the name your browser gives itself, whether it is driven by a program, and the time zone of its clock; it keeps none of it, except the mention “robot” when it is one. No identifier ties two entries together — two of your visits appear there as two strangers. Pages in the craftsman's own area are never counted, nor are the craftsman's own visits.",
+        "Visit log — for each page displayed: the date and time, the page and its language, the site or campaign you arrived from at the start of your visit, with the referring address as your browser sends it, the first name in the referral link if you followed one, the device type, and the approximate city, with its region and country, that our host infers from the network. Your IP address is never written down: it serves to infer the city, then it is forgotten along with the request. To set robots aside, the server also looks at the name your browser gives itself, whether it is driven by a program, and the time zone of its clock; it keeps none of it, except the mention “robot” when it is one. No identifier ties two entries together — two of your visits appear there as two strangers. Pages in the craftsman's own area are never counted, nor are the personal “Manage my booking” and “Manage my visits” links, nor the craftsman's own visits.",
         "Where a booking came from — on your first visit, your browser keeps to itself the campaign tag of the link you followed, the first name in a referral link, the site you came from, the page you landed on, the date of that first visit, and the number of times you came back. This stays in your browser and leaves it only if you book: it then travels with your booking, so that we know which means made the house known to you. If you do not book, we know none of it, and clearing your browser data erases it.",
         "How you heard about us — the answer you give, if you wish to, to the optional question in the booking form, and the name of the person who recommended us if you choose to write it. A visit at your door or a card handed to you in person leaves no technical trace: that answer is the only way to know. It is suggested in advance when you arrive through a referral link or a card's code, and you remain free to change or clear it.",
       ],
@@ -43,7 +46,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. Your phone also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Any other reply is passed on to the artisan's mobile phone; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. If your number is Canadian, it also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone; the site does not keep it.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -69,7 +72,7 @@ const privacy: LegalDoc = {
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
-        "Twilio — carries the confirmation and reminder text messages. It receives your phone number and the text of the message, nothing else.",
+        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio, where the artisan views them. Twilio keeps a copy of the messages it carries.",
         "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
@@ -84,12 +87,13 @@ const privacy: LegalDoc = {
       title: "How long we keep it",
       body: [],
       list: [
-        "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way.",
-        "A subscription: three years after its last visit, for the same reason.",
-        "A message from the contact form: two years, or until you ask us to delete it.",
-        "The technical log: twelve months.",
+        "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way. It is then anonymised: your name, phone number, address and notes are erased; the date, duration, services, amount and zone remain, for the accounts. Of your email only a scrambled fingerprint remains, which cannot be read back and serves only to avoid offering the first hour twice.",
+        "A subscription: three years after its last visit, for the same reason, after which it is anonymised the same way.",
+        "A message from the contact form: two years, after which it is deleted of its own accord, or sooner if you ask us to delete it.",
+        "Copies: the event for an appointment in our calendar is deleted when the appointment is anonymised. The emails exchanged with you — confirmations, reminders, the copy of your messages — stay in our mailbox; we delete them on the same schedule, or sooner if you ask.",
+        "The technical log: twelve months, after which its entries are deleted of their own accord.",
         "The visit log: twelve months, after which entries are deleted of their own accord.",
-        "The origin attached to a booking: it follows the fate of that booking, and goes when it goes.",
+        "The origin attached to a booking: it follows the fate of that booking. An anonymised booking keeps only its family — the campaign label, your answer to “How did you hear about NIVEX?”, the first name in a referral link and the name of the site you came from —, enough to count sources without pointing to anyone.",
       ],
     },
     {
@@ -105,7 +109,7 @@ const privacy: LegalDoc = {
     {
       title: "Cookies",
       body: [
-        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting happens without a cookie: nothing is written into your browser, and nothing recognises you on a later visit.",
+        "This site drops no advertising cookie, no analytics cookie, no social network button. An ordinary visitor receives none at all. Visit counting uses neither a cookie nor an identifier: the log sent to the server cannot recognise a visitor from one visit to the next. What your browser keeps for itself is described below.",
         "Two cookies exist, and they concern the artisan only: the one that keeps his session open in his own area, and a temporary one that protects his Google sign-in against fraud. Both expire on their own.",
         "Typefaces are served from our own domain: displaying this page calls no third-party server.",
         "Your browser does, however, keep two things for itself, in its local storage: the origin described above, which reaches us only if you book, and, for the length of your session, where you arrived from, which serves to relate every page read to the same source and to count one visit rather than one per page read; it is erased when the tab closes. Neither is an identifier, neither is readable by another site, and clearing your browsing data erases both.",
@@ -173,21 +177,22 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. A text message doubles it, and another reminds you of the appointment the day before.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, and another reminds you of the appointment the day before.",
       ],
     },
     {
       title: "The price",
       body: [
-        "A session lasts {min} at the least and is billed {rate2}. Beyond that, each hour begun is added at the same pace, {rate} per hour. Applicable taxes, if any, are added to that amount.",
+        "A session lasts {min} at the least and is billed {entry}. Beyond that, time is added in steps of {step}, at the same rate of {rate} per hour. Applicable taxes, if any, are added to that amount.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
     },
     {
       title: "The first hour, on us",
+      offer: true,
       body: [
-        "On a first booking, the first hour of ironing is offered and deducted from the estimate automatically. Once per email address. It cannot be exchanged for money, and it does not stack with any other offer.",
+        `On a first booking of ${FIRST_FREE_MIN} or more, the first hour of ironing is offered and deducted from the estimate automatically. Once per email address. It cannot be exchanged for money, and it does not stack with any other offer.`,
       ],
     },
     {
@@ -200,8 +205,8 @@ const terms: LegalDoc = {
     {
       title: "Cancelling or moving",
       body: [
-        "Freely, up to {cancel} before the appointment, from the personal link you received by email, or by phone at {phone}. Nothing to pay, nothing to justify.",
-        "A subscription visit can be cancelled or moved at no charge until 11:59 p.m. the day before, in the same way, without touching the rest of the series.",
+        "A session can be cancelled freely up to {cancel} before the appointment, from the personal link you received by email or by phone at {phone}. To move it, call us within the same window and we will agree on another time together. Nothing to pay, nothing to justify.",
+        "A subscription visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the personal link or by phone, without touching the rest of the series.",
         "Past that, call us at {phone}: we will do our best.",
         "Should we have to cancel on our side — illness, equipment failure, an impassable road — you are told as soon as we know, and you owe nothing.",
       ],
@@ -211,8 +216,8 @@ const terms: LegalDoc = {
       body: [
         "A subscription reserves your visits on the same day and at the same time, at the plan's rhythm: every week, every other week or every four weeks. Those slots are offered to nobody else.",
         `A cycle is the plan's number of visits actually completed — four, two or one. A cancelled visit, on your side or ours, does not count: the cycle runs on to the next visit, and a replacement visit is added at the end of the series. If a cycle is not finished ${CYCLE_MAX_WEEKS} weeks after its first visit, we call you to agree on what comes next.`,
-        `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. A week before a series ends, we call you to confirm the next one.`,
-        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle. The first-hour-free offer does not apply to subscriptions.`,
+        `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. We call you ${SERIES_NOTICE_DAYS} days before a series ends to confirm the next one.`,
+        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle.{suboffer}`,
       ],
     },
     {
@@ -277,7 +282,8 @@ export const en: Dict = {
     service: "In-home ironing",
     title: "In-home ironing in Saint-Lambert and Longueuil — NIVEX",
     description:
-      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery. First hour on the house.",
+      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery.",
+    offer: "First hour on the house.",
     ogAlt: "NIVEX — Prestige in-home ironing",
   },
   nav: {
@@ -294,11 +300,10 @@ export const en: Dict = {
     name: "NIVEX",
     tagline: "Prestige in-home ironing",
     values: "Gentle, delicate, elegant",
-    phone: "+1 450 943 1217",
-    phoneHref: "tel:+14509431217",
+    phone: PHONE,
+    phoneHref: PHONE_HREF,
     email: "contact@nivexrepassage.ca",
     emailHref: "mailto:contact@nivexrepassage.ca",
-    region: "Saint-Lambert · Longueuil · Montreal",
   },
   hero: {
     eyebrow: "In-home ironing · Saint-Lambert · Longueuil",
@@ -321,6 +326,7 @@ export const en: Dict = {
     "School & work uniforms",
     "Everything happens at your home",
   ],
+  marqueeControl: { pause: "Pause scrolling", play: "Resume scrolling" },
   story: {
     eyebrow: "The story",
     title: "White, the way it was on day one.",
@@ -353,7 +359,7 @@ export const en: Dict = {
     signature: "Styve",
     signatureRole: "Master presser, founder of NIVEX",
     quote:
-      "Luxury isn't owning many clothes. It's that every one of them is ready to wear.",
+      "“Luxury isn't owning many clothes. It's that every one of them is ready to wear.”",
   },
   services: {
     eyebrow: "Services",
@@ -365,7 +371,7 @@ export const en: Dict = {
         icon: "shirt",
         serviceKey: "shirt",
         name: "Immaculate shirts",
-        body: "Collar, yoke, cuffs, body, sleeves. In that order, always. Pressed on a wooden hanger, ready to wear.",
+        body: "Collar, yoke, cuffs, sleeves, body. In that order, always. Pressed on a wooden hanger, ready to wear.",
         detail: "≈ {qty} shirts an hour",
       },
       {
@@ -401,9 +407,10 @@ export const en: Dict = {
         serviceKey: "trousers",
         name: "Everything happens at your home",
         body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
-        detail: "South Shore, Saint-Jean and several Montreal neighbourhoods",
+        detail: "{zone}",
       },
     ],
+    regions: { south: "South Shore", montreal: "Montreal" },
   },
   how: {
     eyebrow: "How it works",
@@ -422,7 +429,7 @@ export const en: Dict = {
       {
         n: "3",
         title: "Meet",
-        body: "Your craftsman arrives a quarter of an hour before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.",
+        body: `Your craftsman arrives ${SETUP_MINUTES} minutes before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.`,
       },
     ],
   },
@@ -434,19 +441,16 @@ export const en: Dict = {
     offers: [
       {
         name: "Week session",
-        duration: "two hours",
-        volume: "10 to 15 pieces — your whole week's wardrobe",
+        volume: "your whole week's wardrobe",
         note: "The most requested format, and the shortest visit we make.",
       },
       {
         name: "Family session",
-        duration: "three hours",
-        volume: "15 to 22 pieces — shirts, trousers, school uniforms",
+        volume: "shirts, trousers, school uniforms",
         note: "For a household, or a fortnight in one go.",
       },
       {
         name: "Subscription",
-        duration: "",
         volume: "Regular visits, reserved time slots",
         note: "Rate guaranteed twelve months.",
       },
@@ -456,7 +460,7 @@ export const en: Dict = {
     seeAll: "See the full price list",
     firstFree: "First hour free",
     firstFreeConditions:
-      "On any first booking of two hours or more. One use per customer. Not applicable to monthly plans or single pieces.",
+      `On any first booking of ${FIRST_FREE_MIN} or more. One use per customer. Not applicable to subscriptions or single pieces.`,
     note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
   },
   testimonials: {
@@ -466,6 +470,8 @@ export const en: Dict = {
   faq: {
     eyebrow: "Questions",
     title: "What people ask us.",
+    cadence: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces.",
+    cadenceMixed: "Figure about 5 to 7 mixed pieces per hour.",
     items: [
       {
         q: "Do you pick up the clothes?",
@@ -477,7 +483,7 @@ export const en: Dict = {
       },
       {
         q: "How much time should I plan for?",
-        a: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces. During booking, the estimator suggests a duration based on what you select — you can always adjust it.",
+        a: "{cadence} During booking, the estimator works out the duration from the quantities you choose; to change it, change the quantities.",
       },
       {
         q: "Do I have to be there during the session?",
@@ -497,12 +503,13 @@ export const en: Dict = {
       },
       {
         q: "Can I cancel or reschedule?",
-        a: `Yes, freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment. Your confirmation email holds a personal link that lets you manage everything without calling us. For a subscriber, each visit can be cancelled or moved until 11:59 p.m. the day before.`,
+        a: `Yes. A session can be cancelled freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment, from the personal link in your confirmation email, without calling us. To move it, call us at ${PHONE} within the same window. For a subscriber, each visit can be cancelled or moved online until 11:59 p.m. the day before.`,
       },
     ],
   },
   cta: {
     title: "Your first hour is on us.",
+    titlePlain: "Book your session.",
     body: "Pick a slot. The confirmation goes out by email, with the invitation for your calendar.",
     button: "Book now",
     or: "or call",
@@ -528,7 +535,10 @@ export const en: Dict = {
     minimum: "Minimum length",
     minimumValue: "A session lasts at least {min}. The craftsman arrives {setup} minutes early to set up, at no charge: the time you book is all ironing.",
     travel: "Travel fee",
-    travelNote: "Per visit, on top of the session price. The first-hour-free offer does not cover it and does not reduce it.",
+    travelNote: "Per visit, on top of the session price.",
+    travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
+    feesOffer: "The first hour on the house never covers it.",
+    feesFree: "Nothing: the Montreal neighbourhoods we serve have no travel fee.",
     faqTitle: "Questions about Montreal",
     faq: [
       {
@@ -537,7 +547,7 @@ export const en: Dict = {
       },
       {
         q: "How much is the travel fee in Montreal?",
-        a: "{fees} It applies to every visit, is added to the session price and is never covered by the first hour on the house.",
+        a: "{fees} It applies to every visit and is added to the session price.{offer}",
       },
       {
         q: "What do I need to provide?",
@@ -562,10 +572,13 @@ export const en: Dict = {
     title: "Book a session",
     lede: "Four steps, two minutes. You pick your hour, the confirmation goes out at once.",
     steps: ["Services", "Address", "Time slot", "Confirm"],
+    progress: "Progress",
     step1: {
       title: "What are we handling?",
       hint: "Select what applies and adjust the quantities. The estimate updates on its own.",
       qty: "Quantity",
+      less: "Decrease quantity",
+      more: "Increase quantity",
       estimate: "Estimate",
       duration: "Estimated duration",
       price: "Estimated amount",
@@ -573,6 +586,7 @@ export const en: Dict = {
       minutes: "min",
       empty: "Select at least one service to continue.",
       firstFreeApplied: "First hour free applied",
+      firstFreeIfFirst: "First booking: {amount}, first hour free",
       notes: "Anything we should know? (optional)",
       notesPlaceholder: "Fragile pieces, building access, pet at home, parking…",
     },
@@ -592,7 +606,8 @@ export const en: Dict = {
       travelFree: "Your address is served, travel included.",
       inZone: "Good news, you're inside the service area.",
       travelFee: "Travel fee",
-      travelNote: "This fee is added to the price of the session. The first-hour-free offer does not cover it and does not reduce it.",
+      travelNote: "This fee is added to the price of the session.",
+      travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
       heardFrom: "How did you hear about NIVEX? (optional)",
       heardFromEmpty: "I'd rather not say",
       heardFromOptions: {
@@ -609,15 +624,19 @@ export const en: Dict = {
     },
     step3: {
       title: "When would suit you?",
-      hint: "Greyed-out times are already taken. Timezone: Eastern (Montreal).",
+      hint: "Only open times are shown; a greyed-out day is full or closed.",
       loading: "Reading the schedule…",
-      noSlots: "Nothing open that day. Try another date.",
+      noneInRange: "No open time in these two weeks. Try other dates, or call us:",
+      horizon: "Online booking covers the next {n} days. For a later date, call us:",
+      prevDays: "Previous two weeks",
+      nextDays: "Next two weeks",
       morning: "Morning",
       afternoon: "Afternoon",
       evening: "Evening",
       timezone: "Timezone: Eastern (Montreal).",
+      durationLine: "Estimated duration: {duration}",
       setup:
-        "Your presser arrives 15 minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.",
+        `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
       comment: "Anything to add? (optional)",
       commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
     },
@@ -636,6 +655,13 @@ export const en: Dict = {
       submit: "Confirm booking",
       submitting: "Confirming…",
     },
+    legal: {
+      data: "Your details are used for your appointments: the confirmation, reminders and any change reach you by email or text message. They are stored outside Quebec, with the providers named in the privacy policy.",
+      accept: "I accept the {terms} and the {privacy}, revised on {date}.",
+      terms: "terms of use",
+      privacy: "privacy policy",
+      newTab: "new tab",
+    },
     back: "Back",
     next: "Continue",
     success: {
@@ -651,13 +677,14 @@ export const en: Dict = {
       taken: "That slot was just taken. Please pick another.",
       stale: "That time is no longer available. Please pick another.",
       paused: `Booking is paused for the moment. Call us at ${PHONE} and we'll find you a slot.`,
-      tooMany: `Several bookings have just been made with this email. Call us at ${PHONE}.`,
+      tooMany: `This booking cannot be taken online right now. Please call us at ${PHONE} and we will set it up with you.`,
       generic: "Something went wrong. Try again, or call us directly.",
       required: "This field is required",
       email: "Invalid email",
       phone: "Invalid number",
       postal: "Invalid postal code (e.g. J4K 1A1)",
       outOfArea: `This address is outside the area we travel to. Call us at ${PHONE} and we will see together what is possible.`,
+      fields: "Please check these details: {fields}.",
     },
   },
   manage: {
@@ -671,7 +698,7 @@ export const en: Dict = {
     cancel: "Cancel this booking",
     cancelConfirm: "Permanently cancel this appointment?",
     cancelled: "Your booking has been cancelled. Your craftsman has been notified.",
-    tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call +1 450 943 1217.`,
+    tooLate: `This appointment is less than ${CANCEL_WINDOW_HOURS} h away. Please call ${PHONE}.`,
     notFound: "Booking not found. Check the link from your email.",
     rebook: "Book a new appointment",
   },
@@ -681,6 +708,12 @@ export const en: Dict = {
     body: "Your visits to the site from this browser are no longer sent, neither to the visit log nor to the host's audience measurement. Open this same link once in every other browser you use: Safari, Chrome, the in-app browser of Facebook or Instagram, the computer.",
     refused: "This browser refuses to keep the marker, most likely because it is in private browsing. Open the link in an ordinary window.",
     back: "Back to the home page",
+  },
+  notFound: {
+    metaTitle: "Page not found",
+    title: "This page has been folded away.",
+    body: "It does not exist, or no longer does. Let us return to something neatly pressed.",
+    home: "Back to the home page",
   },
   subscribe: {
     title: "Subscribe",
@@ -738,7 +771,7 @@ export const en: Dict = {
     },
     errors: {
       conflicts: "A date in the series has just been taken. Please choose another slot.",
-      tooMany: `A subscription was already taken with this email. Please call us at ${PHONE}.`,
+      tooMany: `This subscription cannot be taken online. Please call us at ${PHONE} and we will set it up with you.`,
     },
   },
   subManage: {
@@ -768,9 +801,11 @@ export const en: Dict = {
     replacedNone: "Visit cancelled. We will call you to place it at the end of the series.",
     moved: "Visit moved.",
     done: "{n} visits already completed.",
+    doneOne: "One visit already completed.",
     errors: {
       tooLate: "The deadline has passed. Please call us for any change.",
       taken: "This slot has just been taken. Please choose another one.",
+      tooMany: `Several changes have already been made today. For another one, please call us at ${PHONE}.`,
     },
   },
   footer: {
@@ -802,7 +837,7 @@ export const en: Dict = {
     eyebrow: "Get in touch",
     title: "A question before you book?",
     lede:
-      "An item you're unsure about, an unusual time slot, a quote for a large batch: write to us. You'll hear back the same day, and get an acknowledgement within the minute.",
+      "An item you're unsure about, an unusual time slot, a quote for a large batch: write to us. You'll hear back the same day.",
     name: "Your name",
     email: "Your email",
     phone: "Phone (optional)",
@@ -812,9 +847,13 @@ export const en: Dict = {
     messagePlaceholder: "Tell us what you need…",
     submit: "Send message",
     submitting: "Sending…",
+    privacyNote: "Your message and contact details are used only to answer you, as our {privacy} describes.",
+    privacyLink: "privacy policy",
     successTitle: "Message sent.",
     successBody:
       "An acknowledgement just landed in your inbox. We usually reply the same day.",
+    successBodyNoEmail:
+      "Your message has been received. We usually reply the same day.",
     another: "Write another message",
     orCall: "Or talk to us directly",
     phoneLabel: "Phone",
@@ -829,7 +868,7 @@ export const en: Dict = {
       short: "A few more words, please",
       rate: "You just wrote to us. Give us a few minutes to reply.",
       unavailable:
-        "Sending isn't working right now. Call +1 450 943 1217 — we pick up.",
+        `Sending isn't working right now. Call ${PHONE} — we pick up.`,
       generic: "Sending failed. Try again, or call us directly.",
     },
   },
@@ -837,6 +876,7 @@ export const en: Dict = {
     updatedLabel: "Last updated",
     summary: "Contents",
     readAlso: "Read also",
+    subOffer: "The first-hour-free offer does not apply to subscriptions.",
     privacy,
     terms,
   },
@@ -845,8 +885,10 @@ export const en: Dict = {
     title: "What a session at your place amounts to.",
     lede:
       "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
-    headline: "The two-hour session — {price}",
-    visitNote: "minimum {min} per visit · travel included",
+    headline: "A session of {min} — {price}",
+    visitNote: "minimum {min} per visit · {travel}",
+    travelIncluded: "travel included",
+    travelVaries: "travel fee depends on your area",
     cadence: {
       title: "Our pace, hour by hour",
       lede:
@@ -938,9 +980,11 @@ export const en: Dict = {
       travelFlat: "{fee} per visit",
       travelShort: "{fee} for a session under {hours}",
       travelLong: "{fee} for a session of {hours} or more",
-      travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
+      travelNote: `The fee depends on the area and on the length of the session. It is added to the price and applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
+      travelNoteOffer: "The first-hour-free offer does not cover it and never reduces it.",
     },
     firstFreeLabel: "First session",
+    insteadOf: "instead of",
     cta: {
       title: "Put your session together.",
       body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and confirms the hour you pick.",

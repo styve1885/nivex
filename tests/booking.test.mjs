@@ -9,13 +9,17 @@
  */
 import assert from "node:assert/strict";
 
-const { clientConfirmation, ownerNotification } = await import("../src/lib/email.ts");
+const { clientConfirmation, clientCancellation, ownerNotification, contactAcknowledgement } = await import("../src/lib/email.ts");
+const { displayName, sendGmail } = await import("../src/lib/google.ts");
+const { getDict } = await import("../src/lib/i18n/index.ts");
 const { slotIsFree } = await import("../src/lib/availability.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { REQUEST_INBOX, PHONE, SETUP_MINUTES } = await import("../src/lib/brand.ts");
-const { occupiedBlock } = await import("../src/lib/bookings.ts");
-const { perHour } = await import("../src/lib/pricing.ts");
+const { occupiedBlock, calendarEvent } = await import("../src/lib/bookings.ts");
+const { perHour, cadenceText, bookableOffers, BLOCKS, BUNDLES } = await import("../src/lib/pricing.ts");
+const { faqFill } = await import("../src/components/home/faq-fill.ts");
+const { fr } = await import("../src/lib/i18n/fr.ts");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -88,6 +92,15 @@ test("le client anglophone est servi en anglais", () => {
   assert.match(m.text, /Saturday, October 3, 2026/);
 });
 
+const { formatDateTime } = await import("../src/lib/time.ts");
+
+test("une heure du matin s'écrit sans zéro de tête, en français comme en anglais", () => {
+  // 7 h à Montréal le 20 octobre = 11 h UTC.
+  const sept = new Date("2026-10-20T11:00:00.000Z");
+  assert.equal(flat(formatDateTime(sept, TZ, "fr")), "mardi 20 octobre 2026 à 7 h 00");
+  assert.equal(flat(formatDateTime(sept, TZ, "en")), "Tuesday, October 20, 2026 at 7:00 a.m.");
+});
+
 /* ————— Le courriel de l'artisan ————— */
 
 test("l'artisan reçoit de quoi se déplacer et de quoi appeler", () => {
@@ -145,6 +158,27 @@ test("une occupation de l'agenda ferme le créneau, tampon compris", () => {
   assert.equal(slotIsFree(at(lundi, 7), 120, busy, settings), true);
 });
 
+/* ————— Le tunnel ————— */
+
+const { pastHorizon, rejectedContactFields } = await import("../src/components/booking/Stepper.helpers.ts");
+
+test("la flèche des quinzaines s'arrête à l'horizon de la réservation en ligne", () => {
+  // Horizon de 45 jours depuis le 19 octobre : dernier début possible le 3 décembre.
+  assert.equal(pastHorizon("2026-11-16", "2026-10-19", 45), false, "la quinzaine suivante commence le 30 novembre");
+  assert.equal(pastHorizon("2026-11-30", "2026-10-19", 45), true, "la suivante commencerait le 14 décembre");
+  assert.equal(pastHorizon("", "2026-10-19", 45), false, "sans horaire, rien à arrêter");
+});
+
+test("un refus du serveur sur les coordonnées renvoie aux champs en cause", () => {
+  assert.deepEqual(
+    rejectedContactFields({ email: ["Invalid email address"], notes: ["Too long"], postalCode: ["Invalid"] }),
+    ["email", "postal"],
+  );
+  assert.deepEqual(rejectedContactFields({ items: ["Required"] }), [], "rien à corriger à l'étape Adresse");
+  assert.deepEqual(rejectedContactFields({ toString: ["x"] }), [], "les noms hérités ne comptent pas");
+  assert.deepEqual(rejectedContactFields(null), []);
+});
+
 /* ————— Installation et rangement ————— */
 
 test("le bloc occupé déborde la séance d'un quart d'heure de chaque côté", () => {
@@ -185,6 +219,32 @@ test("la cadence annoncée découle des minutes du moteur", () => {
   }
 });
 
+test("une pièce de plus d'une heure s'annonce par son temps, pas par « 1 à l'heure »", () => {
+  assert.equal(cadenceText(8, "chemise", "fr"), "7");
+  assert.equal(cadenceText(60, "pièce", "fr"), "1");
+  assert.equal(cadenceText(90, "robe", "fr"), "1 h 30 / robe");
+  assert.equal(cadenceText(120, "", "en"), "2 hours");
+});
+
+test("la grille ne propose aucune séance plus courte que la durée minimale", () => {
+  const cles = (offres) => offres.map((o) => o.key);
+  assert.deepEqual(cles(bookableOffers(BLOCKS, settings)), ["decouverte", "famille", "prestige"]);
+  assert.deepEqual(cles(bookableOffers(BLOCKS, { ...settings, minMinutes: 180 })), ["famille", "prestige"]);
+  assert.ok(bookableOffers(BUNDLES, { ...settings, minMinutes: 180 }).every((o) => o.minutes >= 180));
+  assert.equal(bookableOffers(BUNDLES, settings).length, BUNDLES.length, "au minimum de deux heures, tout reste");
+});
+
+test("la foire aux questions cite la cadence des chemises, sans trou si elles sont désactivées", () => {
+  const reponse = fr.faq.items.find((x) => x.a.includes("{cadence}")).a;
+  const avec = faqFill(reponse, fr, settings, "fr");
+  assert.match(avec, /^Comptez environ 7 chemises par heure, ou 5 à 7 pièces mixtes\./);
+  assert.doesNotMatch(avec, /ajuster/, "le client ne choisit pas une durée : il change les quantités");
+  const sansChemises = { ...settings, services: settings.services.map((x) => (x.key === "shirt" ? { ...x, enabled: false } : x)) };
+  const sans = faqFill(reponse, fr, sansChemises, "fr");
+  assert.match(sans, /^Comptez environ 5 à 7 pièces mixtes par heure\./);
+  assert.doesNotMatch(sans, /chemises|\{| {2}/);
+});
+
 test("les forfaits tiennent dans leur durée, au nouveau rythme", () => {
   const min = Object.fromEntries(FALLBACK_SETTINGS.services.map((s) => [s.key, s.minutesPerUnit]));
   // Les exemples affichés sur la grille, recalculés.
@@ -208,5 +268,136 @@ test("le courriel de confirmation annonce l'arrivée anticipée", () => {
   assert.match(m.html, /15 minutes avant/);
   assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /15 minutes before your session begins/);
 });
+
+test("le courriel ne promet l'invitation que si elle est partie", () => {
+  assert.match(clientConfirmation(d).text, /invitation a été ajoutée/);
+  assert.match(clientConfirmation({ ...d, invited: true }).text, /invitation a été ajoutée/);
+  assert.ok(!/invitation/i.test(clientConfirmation({ ...d, invited: false }).text));
+  assert.ok(!/invitation/i.test(clientConfirmation({ ...d, locale: "en", invited: false }).text));
+});
+
+/* ————— L'invitation d'agenda ————— */
+
+const booking = {
+  ...d, manageToken: "tok123", endsAt: new Date("2026-10-03T20:00:00.000Z"),
+  items: [{ key: "shirt", label: "Chemises", qty: 6 }],
+  travelFeeCents: 1500, travelZone: "Zone B",
+  origin: { heardFrom: "facebook", referral: "julie", source: "facebook" },
+};
+const origin = "https://nivexrepassage.ca";
+
+test("l'invitation porte les heures réservées et dit l'arrivée anticipée", () => {
+  const ev = calendarEvent(booking, origin, TZ);
+  assert.equal(ev.start, "2026-10-03T18:00:00.000Z", "14 h, l'heure de la confirmation");
+  assert.equal(ev.end, "2026-10-03T20:00:00.000Z");
+  assert.match(flat(ev.description), /15 minutes avant le début de votre séance/);
+});
+
+test("l'invitation ne montre ni la provenance ni l'espace artisan", () => {
+  for (const ev of [calendarEvent(booking, origin, TZ), calendarEvent({ ...booking, locale: "en" }, origin, TZ)]) {
+    assert.ok(!/connus|heard|facebook|julie/i.test(ev.description), "provenance");
+    assert.ok(!ev.description.includes("/admin"), "lien vers l'espace artisan");
+  }
+});
+
+test("l'invitation se lit dans la langue du client, l'artisan y garde ses repères", () => {
+  const fr = calendarEvent(booking, origin, TZ);
+  assert.match(fr.summary, /Repassage à domicile · Claire Beaulieu/);
+  for (const bit of ["Séance : samedi 3 octobre 2026", "450 943-1217", "Chemises × 6",
+                     "Frais de déplacement (Zone B) : 15 $", "Total estimé : 65 $", "Référence : NVX-ABC123",
+                     `${origin}/fr/reservation/tok123`]) {
+    assert.ok(flat(fr.description).includes(bit), `fr : « ${bit} » manquant`);
+  }
+  const en = calendarEvent({ ...booking, locale: "en" }, origin, TZ);
+  assert.match(en.summary, /In-home ironing · Claire Beaulieu/);
+  for (const bit of ["Session: Saturday, October 3, 2026", "15 minutes before your session begins",
+                     "Travel fee (Zone B): $15", "Reference: NVX-ABC123", `${origin}/en/reservation/tok123`]) {
+    assert.ok(flat(en.description).includes(bit), `en : « ${bit} » manquant`);
+  }
+  assert.ok(!/[!]/.test(fr.description + en.description + fr.summary + en.summary), "aucun point d'exclamation");
+});
+
+/* ————— L'enveloppe des courriels ————— */
+
+test("le client anglophone lit l'en-tête et le pied en anglais, et la page dit sa langue", () => {
+  for (const m of [clientConfirmation({ ...d, locale: "en" }), clientCancellation({ ...d, locale: "en" })]) {
+    assert.match(m.html, /<html lang="en-CA">/);
+    assert.ok(m.html.includes(getDict("en").brand.tagline), "devise anglaise absente");
+    assert.ok(!m.html.includes(getDict("fr").brand.tagline), "en-tête resté en français");
+  }
+  assert.match(clientConfirmation(d).html, /<html lang="fr-CA">/);
+  assert.ok(clientConfirmation(d).html.includes(getDict("fr").brand.tagline), "devise française absente");
+  /* L'artisan lit en français, même pour un client anglophone. */
+  assert.match(ownerNotification({ ...d, locale: "en" }).html, /<html lang="fr-CA">/);
+});
+
+test("le pied de page tire le téléphone de la marque, et ne nomme aucun secteur à la main", () => {
+  const html = clientConfirmation(d).html;
+  assert.ok(html.includes(`href="tel:${PHONE.replace(/\s/g, "")}"`), "lien tel absent");
+  assert.ok(!/Rive-Sud/.test(html), "phrase de zone écrite à la main");
+});
+
+test("les ors des courriels sont ceux de la charte, jamais l'or inventé", () => {
+  for (const m of [clientConfirmation(d), ownerNotification(d), contactAcknowledgement({ locale: "fr", siteUrl: d.siteUrl })]) {
+    assert.ok(!/#B08D4F/i.test(m.html), "or hors charte");
+    assert.match(m.html, /#866836/);   // gold-600, pour le texte
+  }
+});
+
+/* ————— L'accusé de réception du formulaire de contact ————— */
+
+test("l'accusé de réception est un texte fixe : ni le nom ni le message de l'expéditeur", () => {
+  const typed = { name: "Gagnant-ReclamezVotrePrix", body: "Votre colis est bloque. Payez ici : http://evil.example/pay" };
+  for (const locale of ["fr", "en"]) {
+    /* Même si l'appelant lui passait le formulaire entier, rien n'en sort. */
+    const a = contactAcknowledgement({ locale, siteUrl: d.siteUrl, businessEmail: "contact@nivexrepassage.ca", ...typed });
+    for (const part of [a.subject, a.html, a.text]) {
+      assert.ok(!part.includes("evil.example"), `${locale} : message recopié`);
+      assert.ok(!part.includes("Gagnant"), `${locale} : nom recopié`);
+    }
+    assert.ok(!/!/.test(a.subject + a.text), `${locale} : point d'exclamation`);
+    assert.ok(a.text.includes(PHONE), `${locale} : téléphone de la marque`);
+  }
+});
+
+/* ————— L'en-tête To: ————— */
+
+test("le nom d'un destinataire ne peut ni ajouter d'adresse ni casser l'en-tête", () => {
+  assert.equal(displayName("Tremblay, Jean"), '"Tremblay, Jean"');
+  assert.equal(displayName('Jean "JT" Tremblay'), '"Jean \\"JT\\" Tremblay"');
+  assert.equal(displayName("Ann <a@x.org>, Bob"), '"Ann <a@x.org>, Bob"');
+  assert.match(displayName("Côté, Jean"), /^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/);
+  assert.match(displayName("Jean\r\nBcc: x@y.org"), /^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/);
+});
+
+{
+  /* L'en-tête tel que Gmail le reçoit : une seule boîte, celle du client. */
+  const real = globalThis.fetch;
+  let raw = "";
+  globalThis.fetch = async (_url, init) => {
+    raw = Buffer.from(JSON.parse(init.body).raw, "base64url").toString("utf8");
+    return new Response(JSON.stringify({ id: "m1" }), { status: 200 });
+  };
+  try {
+    await sendGmail("jeton", {
+      to: "client@example.com", toName: "Ann <victim1@example.org>, Bob <victim2@example.org>, Cy",
+      subject: "Essai", html: "<p>x</p>", text: "x", fromName: "NIVEX",
+    });
+  } finally {
+    globalThis.fetch = real;
+  }
+  test("un nom piégé reste un nom : l'en-tête To: ne porte qu'une adresse", () => {
+    const line = raw.split("\r\n").find((l) => l.startsWith("To: "));
+    assert.equal(line, 'To: "Ann <victim1@example.org>, Bob <victim2@example.org>, Cy" <client@example.com>');
+    /* Hors des guillemets, il ne reste qu'une adresse. */
+    assert.equal(line.replace(/"(?:[^"\\]|\\.)*"/g, "").match(/@/g).length, 1);
+  });
+  test("une ligne vide sépare les en-têtes du corps, avant la première frontière", () => {
+    const [head, rest] = raw.split("\r\n\r\n");
+    assert.match(head, /^From: /);
+    assert.match(head, /Content-Type: multipart\/alternative; boundary="nivex_[a-z0-9]+"$/);
+    assert.match(rest, /^--nivex_[a-z0-9]+\r\nContent-Type: text\/plain/);
+  });
+}
 
 console.log(`\n${n} vérifications passées.\n`);

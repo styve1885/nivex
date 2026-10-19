@@ -19,6 +19,9 @@ export function Mark({ className = "h-12 w-auto", alt }: { className?: string; a
       alt={alt ?? ""}
       width={560}
       height={368}
+      // Jamais affichée à plus de h-14, soit 85 px de large : sans `sizes`,
+      // le navigateur prenait la version de 640 px.
+      sizes="88px"
       className={className}
       aria-hidden={alt ? undefined : true}
     />
@@ -35,6 +38,10 @@ export function Lockup({
       alt={alt}
       width={1200}
       height={739}
+      // La largeur réelle de l'accueil, son seul emploi : h-28 puis h-36 dès
+      // `sm`, soit 182 px puis 234 px. Sans `sizes`, le préchargement visait
+      // l'image de 1200 px.
+      sizes="(min-width: 640px) 234px, 182px"
       className={className}
       priority={priority}
     />

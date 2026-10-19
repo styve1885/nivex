@@ -22,7 +22,7 @@
   --color-gold-700: #7A5E31;
 
   /* — Encre — */
-  --color-ink-400: #8A8378;
+  --color-ink-400: #726B5F;   /* texte secondaire : ≥ 4,5:1 jusque sur le lin-200 */
   --color-ink-500: #6B6459;
   --color-ink-600: #4A443B;
   --color-ink-700: #2F2A23;
@@ -56,7 +56,13 @@
   --control-border: #9E7F47;
 }
 
-* { border-color: var(--rule); }
+/* Le filet par défaut de toute bordure sans couleur. Il vit dans la couche
+   « base », juste après la remise à zéro de Tailwind : hors couche, il
+   l'emporterait sur toutes les couleurs explicites — champs, boutons,
+   formule choisie, cadre d'erreur — quelle que soit leur spécificité. */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--rule); }
+}
 
 html {
   scroll-behavior: smooth;
@@ -222,15 +228,21 @@ body {
 .steam > *:nth-child(2) { animation-delay: 1.8s }
 .steam > *:nth-child(3) { animation-delay: 3.6s }
 
-/* Texte or « soie » */
+/* Texte or « soie ». Le reflet ne quitte pas les ors de texte : à son point
+   le plus clair, il reste au gold-600 et lisible sur le lin, même figé par
+   le réglage « réduire les animations ». Le gold-300 d'avant tombait sous
+   2:1 et laissait pâlir la moitié de la ligne. */
 .gold-sheen {
-  background: linear-gradient(90deg, var(--color-gold-600), var(--color-gold-300), var(--color-gold-600));
+  background: linear-gradient(90deg, var(--color-gold-700), var(--color-gold-600), var(--color-gold-700));
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   animation: sheen 7s linear infinite;
 }
+/* Les deux raccourcis `animation` s'écrasent l'un l'autre : la ligne qui
+   brille doit aussi faire son entrée. */
+.gold-sheen.animate-rise { animation: rise 1s var(--ease-silk) both, sheen 7s linear infinite; }
 
 /* Révélation au scroll (IntersectionObserver) */
 .reveal {

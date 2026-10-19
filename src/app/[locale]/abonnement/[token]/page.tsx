@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
-import { amountOf, findPlan, findSubscriptionByToken } from "@/lib/subscriptions";
+import { amountOf, findPlan, findSubscriptionByToken, scheduleInstant } from "@/lib/subscriptions";
 import { canSubscriberChange } from "@/lib/cycles";
 import { rhythmPhrase, slotPhrase } from "@/lib/email";
 import { formatDateTime, formatMoney, minutesToText } from "@/lib/time";
@@ -13,7 +13,10 @@ import { VisitActions } from "@/components/booking/VisitActions";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { title: getDict(locale).subManage.title, robots: { index: false, follow: false } };
+}
 
 /**
  * « Gérer mes visites » — le lien du courriel de confirmation.
@@ -73,9 +76,7 @@ export default async function SubscriptionPage({
         <div className="paper mt-10 p-8 sm:p-10">
           <dl className="divide-y divide-gold-300/40">
             <Line label={t.subscribe.confirm.plan} value={`${name} — ${minutesToText(sub.minutesPerVisit, locale)}`} big />
-            {kept[0] && (
-              <Line label={m.rhythm} value={`${slotPhrase(kept[0].startsAt, tz, locale)}, ${rhythmPhrase(sub.everyWeeks, locale)}`} />
-            )}
+            <Line label={m.rhythm} value={`${slotPhrase(scheduleInstant(sub, tz), tz, locale)}, ${rhythmPhrase(sub.everyWeeks, locale)}`} />
             {!ended && (
               <Line label={m.cycleLabel}
                 value={m.cycleNow.replace("{c}", String(view.currentCycle)).replace("{d}", String(view.doneInCurrent)).replace("{n}", String(sub.perCycle))} />
@@ -104,7 +105,9 @@ export default async function SubscriptionPage({
               </p>
             )}
             {doneCount > 0 && (
-              <p className="mt-1 text-[0.8rem] font-light text-ink-400">{m.done.replace("{n}", String(doneCount))}</p>
+              <p className="mt-1 text-[0.8rem] font-light text-ink-400">
+                {doneCount === 1 ? m.doneOne : m.done.replace("{n}", String(doneCount))}
+              </p>
             )}
             <ul className="mt-6 space-y-3">
               {upcoming.map((v) => {
@@ -124,7 +127,7 @@ export default async function SubscriptionPage({
                       </p>
                     </div>
                     {!cancelled && (open ? (
-                      <VisitActions token={token} visitId={v.id} durationMinutes={v.durationMinutes}
+                      <VisitActions token={token} visitId={v.id} startsAt={v.startsAt.toISOString()}
                         locale={locale} timezone={tz} t={t} />
                     ) : (
                       <p className="mt-2 text-[0.82rem] font-light leading-relaxed text-ink-500">

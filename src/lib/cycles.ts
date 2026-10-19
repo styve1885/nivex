@@ -81,6 +81,15 @@ export function gridDates(g: Grid, from: number, count: number): Date[] {
   return Array.from({ length: count }, (_, i) => gridDate(g, from + i));
 }
 
+/**
+ * Le premier rang de la série suivante : après la dernière visite posée, et
+ * jamais avant `earliest` — maintenant, plus le délai de prévenance. Une série
+ * renouvelée après la fin de la précédente ne pose donc aucune date passée.
+ */
+export function renewalFrom(g: Grid, lastAt: Date | null, earliest: Date): number {
+  return Math.max(lastAt ? gridIndexAfter(g, lastAt) : 0, gridIndexAfter(g, earliest));
+}
+
 /* ============================ Séries ============================ */
 
 /**
@@ -125,6 +134,17 @@ export type CycleAmount = { planCents: number; travelCents: number; totalCents: 
 export function cycleAmount(cycleCents: number, feePerVisitCents: number, perCycle: number): CycleAmount {
   const travelCents = feePerVisitCents * perCycle;
   return { planCents: cycleCents, travelCents, totalCents: cycleCents + travelCents };
+}
+
+/**
+ * Un cycle tel qu'il a été encaissé. Des frais changés après le paiement
+ * valent pour les cycles suivants, ils ne réécrivent pas ce qui a été reçu.
+ * La formule est figée à la souscription : ce qui dépasse son montant, ce
+ * sont les frais.
+ */
+export function paidCycleAmount(cycleCents: number, paidCents: number): CycleAmount {
+  const planCents = Math.min(cycleCents, paidCents);
+  return { planCents, travelCents: paidCents - planCents, totalCents: paidCents };
 }
 
 /** Le montant d'un cycle neuf, au taux du jour. Figé ensuite sur l'abonnement. */
@@ -350,4 +370,40 @@ export function seriesConflicts(
 export function seriesSpanEnd(starts: Date[], durationMinutes: number): Date {
   const last = starts[starts.length - 1];
   return new Date((last?.getTime() ?? Date.now()) + durationMinutes * 60_000 + 86_400_000);
+}
+
+/* ============================ Déplacement ============================ */
+
+/**
+ * Les occupations, moins le bloc de la visite qu'on déplace.
+ *
+ * Sa ligne en base s'écarte par son identifiant ; son événement Google, lui,
+ * revient dans la disponibilité de l'agenda, parfois fondu avec un rendez-vous
+ * voisin. On retranche donc son bloc de chaque intervalle, au lieu de
+ * chercher un intervalle identique. Sans cela, une visite ne pourrait pas
+ * glisser d'une heure dans la même matinée : elle se gênerait elle-même.
+ */
+export function withoutInterval(busy: Interval[], cut: Interval): Interval[] {
+  if (!(cut.end > cut.start)) return busy;
+  return busy.flatMap((b) => {
+    if (b.end <= cut.start || b.start >= cut.end) return [b];
+    const parts: Interval[] = [];
+    if (b.start < cut.start) parts.push({ start: b.start, end: cut.start });
+    if (b.end > cut.end) parts.push({ start: cut.end, end: b.end });
+    return parts;
+  });
+}
+
+/** Les jours que le client peut chercher au-delà de la visite qu'il déplace. */
+export const MOVE_REACH_DAYS = 14;
+
+/**
+ * Jusqu'où le client peut chercher une nouvelle heure pour une visite : au
+ * moins l'horizon de réservation, et toujours deux semaines au-delà de la
+ * visite elle-même. Une visite de mars se décale donc d'un jour ou deux, sans
+ * que la grille publique des séances s'en trouve élargie.
+ */
+export function moveHorizonDays(todayKey: string, visitKey: string, horizonDays: number): number {
+  const days = Math.round((Date.parse(`${visitKey}T12:00:00Z`) - Date.parse(`${todayKey}T12:00:00Z`)) / 86_400_000);
+  return Math.max(horizonDays, days + MOVE_REACH_DAYS);
 }

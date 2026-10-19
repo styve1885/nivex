@@ -3,13 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, servedText } from "@/lib/travel";
+import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
-  firstTimeCents, offerCents, perHour, planCents, planFullCents,
+  bookableOffers, cadenceText, firstTimeCents, offerCents, planCents, planFullCents,
   type Offer, type UnitPrice,
 } from "@/lib/pricing";
 
@@ -20,14 +21,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.tarifs.eyebrow,
-    description: t.tarifs.lede,
-    alternates: {
-      canonical: `/${locale}/tarifs`,
-      languages: { "fr-CA": "/fr/tarifs", "en-CA": "/en/tarifs" },
-    },
-  };
+  return pageMeta(t, locale, "/tarifs", t.tarifs.eyebrow, t.tarifs.lede);
 }
 
 /** Le prix d'une offre : plein, et la première séance à côté si l'heure est offerte. */
@@ -41,8 +35,10 @@ function Price({ o, s, t, locale }: { o: Offer; s: Settings; t: Dict; locale: "f
       <span className="font-display text-[1.35rem] text-gold-700">
         {formatMoney(firstTimeCents(o, s), s.currency, locale)}
       </span>
+      {/* Le trait ne se lit pas : un lecteur d'écran entendrait deux prix
+          côte à côte. « au lieu de » dit lequel ne vaut plus. */}
       <span className="text-[0.72rem] text-ink-400">
-        <span className="line-through">{full}</span> · {t.tarifs.firstFreeLabel}
+        <span className="sr-only">{t.tarifs.insteadOf} </span><s>{full}</s> · {t.tarifs.firstFreeLabel}
       </span>
     </span>
   );
@@ -96,14 +92,21 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   if (!isLocale(locale)) notFound();
 
   const t = getDict(locale);
-  const s = await getSettings();
-  const min = minutesToText(s.minMinutes, locale);
+  const s = await getSettingsStrict();
   /* Le titre annonce la plus courte séance possible, au prix qu'elle coûte :
-     annoncer le taux horaire seul laisserait croire qu'une heure se réserve. */
+     annoncer le taux horaire seul laisserait croire qu'une heure se réserve.
+     Sa durée, le minimum par déplacement et le prix sortent du même calcul,
+     comme sur la page Montréal : aucun des trois ne peut contredire l'autre. */
   const shortest = Math.max(s.minMinutes, 120);
+  const min = minutesToText(shortest, locale);
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
   const fees = feeTable(s.zonePolicy, locale, (c) => formatMoney(c, s.currency, locale));
+  /* « Déplacement inclus » ne se dit que si aucune zone desservie n'a de frais. */
+  const travel = fees.length > 0 && fees.every((f) => f.free) ? t.tarifs.travelIncluded : t.tarifs.travelVaries;
+  /* Les séances et les forfaits que le tunnel peut encore réserver. */
+  const blocks = bookableOffers(BLOCKS, s);
+  const bundles = bookableOffers(BUNDLES, s);
 
   return (
     <div className="bg-linen-100">
@@ -117,10 +120,10 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           <p className="mt-7 max-w-2xl text-[1.02rem] font-light leading-[1.9] text-ink-600">{t.tarifs.lede}</p>
 
           <p className="mt-12 font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-            {t.tarifs.headline.replace("{price}", entry)}
+            {t.tarifs.headline.replace("{min}", min).replace("{price}", entry)}
           </p>
           <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
-            {t.tarifs.visitNote.replace("{min}", min)}
+            {t.tarifs.visitNote.replace("{min}", min).replace("{travel}", travel)}
           </p>
 
           {s.firstHourFree && (
@@ -168,7 +171,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       )}
                     </td>
                     <td className="py-4 text-right align-baseline font-display text-[1.15rem] tabular-nums text-ink-800">
-                      {perHour(svc.minutesPerUnit)}
+                      {cadenceText(svc.minutesPerUnit, locale === "en" ? svc.unitEn : svc.unitFr, locale)}
                     </td>
                   </tr>
                 ))}
@@ -218,9 +221,11 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="eyebrow">{t.tarifs.blocks.title}</p>
             <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.blocks.lede}</h2>
           </div>
-          <div className="mt-10 border-t border-gold-300/40">
-            {BLOCKS.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-          </div>
+          {blocks.length > 0 && (
+            <div className="mt-10 border-t border-gold-300/40">
+              {blocks.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
+            </div>
+          )}
           <p className="mt-8 border-l-2 border-gold-500 bg-linen-200/60 px-6 py-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
             {t.tarifs.blocks.minimum.replace("{min}", min)}
           </p>
@@ -228,17 +233,19 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
       </section>
 
       {/* — Forfaits composés — */}
-      <section className="px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <p className="eyebrow">{t.tarifs.bundles.title}</p>
-            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.bundles.lede}</h2>
+      {bundles.length > 0 && (
+        <section className="px-7 py-24 sm:px-10">
+          <div className="mx-auto max-w-4xl">
+            <div>
+              <p className="eyebrow">{t.tarifs.bundles.title}</p>
+              <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.bundles.lede}</h2>
+            </div>
+            <div className="mt-10 border-t border-gold-300/40">
+              {bundles.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
+            </div>
           </div>
-          <div className="mt-10 border-t border-gold-300/40">
-            {BUNDLES.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* — Ajouts — */}
       <section className="bg-linen-50 px-7 py-24 sm:px-10">
@@ -299,7 +306,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                     <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{t.tarifs.plans.perMonth}</span>
                   </p>
                   <p className="text-[0.75rem] font-light text-ink-400">
-                    {t.tarifs.plans.full} : {formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
+                    {t.tarifs.plans.full}{locale === "en" ? ": " : "\u00a0: "}{formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
                     {formatMoney(full - price, s.currency, locale)}
                   </p>
                   <Link href={`/${locale}/abonnement?formule=${p.key}`}
@@ -337,7 +344,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
               {t.montreal.link}
             </Link>
-            <ZoneChecker t={t} locale={locale} className="mt-6" />
+            <ZoneChecker t={{ brand: t.brand, zoneCheck: t.zoneCheck }} locale={locale} className="mt-6" />
           </div>
 
           <dl className="mt-10 border-t border-gold-300/40">
@@ -382,7 +389,9 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       </li>
                     ))}
                   </ul>
-                  <span className="mt-4 block text-ink-400">{t.tarifs.terms.travelNote}</span>
+                  <span className="mt-4 block text-ink-400">
+                    {t.tarifs.terms.travelNote}{s.firstHourFree ? ` ${t.tarifs.terms.travelNoteOffer}` : null}
+                  </span>
                 </dd>
               </div>
             )}

@@ -11,6 +11,9 @@ export type AdminBooking = {
   emailSent: boolean; inCalendar: boolean;
   /* Une visite d'abonnement : son montant se règle avec le cycle, pas ici. */
   subscription: boolean;
+  /* Une visite d'abonné marquée effectuée : elle ne s'annule plus, sauf à
+     retirer d'abord la mention depuis l'onglet Abonnés. */
+  done: boolean;
   /* D'où vient ce client. Tout y est nul pour les rendez-vous pris avant
      que la provenance ne soit mesurée : « inconnu » n'est pas une erreur. */
   origin: {

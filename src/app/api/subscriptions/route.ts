@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureSchema, sql } from "@/lib/db";
+import { ensureSchema, logEvent, sql } from "@/lib/db";
 import { isDemo } from "@/lib/demo";
 import { bookingRef, token } from "@/lib/crypto";
-import { createSubscription, SubscriptionError, SubscriptionInput } from "@/lib/subscriptions";
+import { createSubscription, onlineSubscriptionAllowed, SubscriptionError, SubscriptionInput } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +19,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Pot de miel : un robot remplit tous les champs, y compris celui qui est caché.
-  if (parsed.data.hp) return NextResponse.json({ ok: true, ref: "ABO-000000" }, { status: 200 });
+  /* Pot de miel : le refus « appelez-nous », jamais une fausse confirmation
+     (voir /api/bookings). */
+  if (parsed.data.hp) {
+    await logEvent("honeypot", { form: "subscription" });
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   // Démonstration locale : rien n'est écrit, mais l'écran de fin s'affiche.
   if (isDemo()) {
@@ -34,6 +39,12 @@ export async function POST(req: NextRequest) {
       WHERE lower(client_email) = ${parsed.data.email} AND created_at > now() - interval '1 hour'`) as { n: number }[];
     if ((recent[0]?.n ?? 0) >= 2) return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   } catch { /* createSubscription échouera proprement plus bas */ }
+
+  // Un courriel se change d'un clic : un seul abonnement en cours par
+  // téléphone et par adresse, et quelques-uns par jour en tout.
+  if (!(await onlineSubscriptionAllowed(parsed.data))) {
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   try {
     const full = await createSubscription(parsed.data, req.headers.get("host"));

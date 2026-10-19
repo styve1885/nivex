@@ -1,5 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, SETUP_MINUTES } from "./brand";
+import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, PHONE, PHONE_HREF, SETUP_MINUTES } from "./brand";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -7,8 +7,17 @@ import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, SETUP_MINUTES } from "./brand";
  * comprennent (Outlook compris).
  */
 
-const GOLD = "#B08D4F";
+/* Les ors de la charte (`@theme`) : gold-600 pour tout ce qui se lit — il
+   tient 4,5:1 sur le lin —, gold-500 pour les filets et le grand logotype. */
+const GOLD = "#866836";
+const GOLD_RULE = "#A7864B";
 const INK = "#1F1B16";
+
+/* La devise sous le logotype, celle du dictionnaire (`brand.tagline`) — un
+   test veille à ce qu'elles restent les mêmes. Recopiée plutôt qu'importée :
+   le tunnel d'abonnement charge ce module dans le navigateur, et les deux
+   dictionnaires entiers n'ont rien à y faire. */
+const TAGLINE = { fr: "Repassage à domicile de prestige", en: "Prestige in-home ironing" } as const;
 const LINEN = "#FBF8F2";
 const MUTED = "#6B6459";
 
@@ -36,6 +45,9 @@ export type BookingEmailData = {
   siteUrl: string;
   businessPhone: string;
   businessEmail: string;
+  /* L'invitation à l'agenda est-elle réellement partie ? Faux, la
+     confirmation n'en parle pas. Absent, elle en parle comme avant. */
+  invited?: boolean;
   /* D'où vient ce client. Absent pour les rendez-vous pris avant la mesure,
      et absent aussi du courriel du client : cela ne regarde que l'artisan. */
   origin?: {
@@ -51,9 +63,15 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-function shell(inner: string, preheader: string, contact = CONTACT_EMAIL): string {
+/**
+ * L'enveloppe commune. Le client la lit dans sa langue — l'en-tête comme le
+ * pied de page ; l'artisan, en français, d'où la valeur par défaut. Le pied
+ * ne nomme aucun secteur : la zone desservie s'écrit depuis l'onglet « Zones
+ * et frais », pas dans un gabarit.
+ */
+function shell(inner: string, preheader: string, contact = CONTACT_EMAIL, locale: "fr" | "en" = "fr"): string {
   return `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="${locale === "en" ? "en-CA" : "fr-CA"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light only"><title>NIVEX</title></head>
 <body style="margin:0;padding:0;background:${LINEN};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(preheader)}</div>
@@ -61,13 +79,13 @@ function shell(inner: string, preheader: string, contact = CONTACT_EMAIL): strin
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FEFDFB;border:1px solid #E8D9B5;">
   <tr><td style="padding:38px 40px 26px;text-align:center;border-bottom:1px solid #F0E6D2;">
-    <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;letter-spacing:0.22em;color:${GOLD};font-weight:400;">NIVEX</div>
-    <div style="font-family:Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:${MUTED};margin-top:10px;">Repassage à domicile de prestige</div>
+    <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;letter-spacing:0.22em;color:${GOLD_RULE};font-weight:400;">NIVEX</div>
+    <div style="font-family:Helvetica,Arial,sans-serif;font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:${MUTED};margin-top:10px;">${esc(TAGLINE[locale])}</div>
   </td></tr>
   ${inner}
   <tr><td style="padding:26px 40px 34px;border-top:1px solid #F0E6D2;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};line-height:1.8;">
-    NIVEX · Longueuil &amp; Rive-Sud<br>
-    <a href="tel:+14509431217" style="color:${GOLD};text-decoration:none;">+1 450 943 1217</a> &nbsp;·&nbsp;
+    NIVEX<br>
+    <a href="${esc(PHONE_HREF)}" style="color:${GOLD};text-decoration:none;">${esc(PHONE)}</a> &nbsp;·&nbsp;
     <a href="mailto:${esc(contact)}" style="color:${GOLD};text-decoration:none;">${esc(contact)}</a>
   </td></tr>
 </table>
@@ -93,11 +111,13 @@ const T = {
     subject: (ref: string) => `Votre séance NIVEX est confirmée · ${ref}`,
     hi: (n: string) => `Bonjour ${n},`,
     intro: "Votre séance de repassage à domicile est confirmée. Votre artisan a été prévenu et l'invitation a été ajoutée à votre agenda.",
+    introNoInvite: "Votre séance de repassage à domicile est confirmée. Votre artisan a été prévenu.",
     when: "Rendez-vous", where: "Adresse", what: "Prestations", duration: "Durée estimée",
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
     travel: "Frais de déplacement", total: "Total estimé",
-    travelNote: "Les frais de déplacement s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas.",
+    travelNote: "Les frais de déplacement s'ajoutent au prix de la séance.",
+    travelNoteOffer: "L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
     setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
@@ -107,7 +127,7 @@ const T = {
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
-    cancelNote: `Vous pouvez annuler ou déplacer librement jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous.`,
+    cancelNote: `Vous pouvez annuler en ligne jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous. Pour le déplacer, appelez-nous au ${PHONE}.`,
     // Annulation
     cancelSubject: (ref: string) => `Séance NIVEX annulée · ${ref}`,
     cancelIntro: "Votre séance a bien été annulée. Aucun montant ne vous sera facturé.",
@@ -126,11 +146,13 @@ const T = {
     subject: (ref: string) => `Your NIVEX session is confirmed · ${ref}`,
     hi: (n: string) => `Hello ${n},`,
     intro: "Your in-home ironing session is confirmed. Your craftsman has been notified and the invitation has been added to your calendar.",
+    introNoInvite: "Your in-home ironing session is confirmed. Your craftsman has been notified.",
     when: "Appointment", where: "Address", what: "Services", duration: "Estimated duration",
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
     travel: "Travel fee", total: "Estimated total",
-    travelNote: "The travel fee is added to the price of the session. The first-hour-free offer does not cover it.",
+    travelNote: "The travel fee is added to the price of the session.",
+    travelNoteOffer: "The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
     setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
@@ -140,7 +162,7 @@ const T = {
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
-    cancelNote: `You may cancel or reschedule freely up to ${CANCEL_WINDOW_HOURS} h before the appointment.`,
+    cancelNote: `You may cancel online up to ${CANCEL_WINDOW_HOURS} h before the appointment. To move it, call us at ${PHONE}.`,
     cancelSubject: (ref: string) => `NIVEX session cancelled · ${ref}`,
     cancelIntro: "Your session has been cancelled. Nothing will be charged.",
     cancelCta: "Book a new appointment",
@@ -200,11 +222,12 @@ export function clientConfirmation(d: BookingEmailData) {
   const when = formatDateTime(d.startsAt, d.timezone, d.locale);
   const dur = minutesToText(d.durationMinutes, d.locale);
   const money = formatMoney(d.estimateCents, d.currency, d.locale);
+  const intro = d.invited === false ? t.introNoInvite : t.intro;
 
   const inner = `
   <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
     <p style="margin:0 0 14px;font-size:16px;">${esc(t.hi(d.clientName.split(" ")[0]))}</p>
-    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(t.intro)}</p>
+    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(intro)}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       ${row(t.when, `<strong style="font-size:16px;">${esc(when)}</strong>`)}
       ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
@@ -217,10 +240,10 @@ export function clientConfirmation(d: BookingEmailData) {
     </table>
   </td></tr>
   ${(d.travelFeeCents ?? 0) > 0 ? `<tr><td style="padding:20px 40px 0;">
-    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}</p>
+    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}${d.firstHourFree ? ` ${esc(t.travelNoteOffer)}` : ""}</p>
   </td></tr>` : ""}
   <tr><td style="padding:24px 40px 0;">
-    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
+    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
   </td></tr>
   <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
@@ -238,7 +261,7 @@ export function clientConfirmation(d: BookingEmailData) {
   </td></tr>`;
 
   const text = [
-    t.hi(d.clientName.split(" ")[0]), "", t.intro, "",
+    t.hi(d.clientName.split(" ")[0]), "", intro, "",
     `${t.when}: ${when}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
     `${t.what}:`, itemsText(d.items),
@@ -253,7 +276,7 @@ export function clientConfirmation(d: BookingEmailData) {
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
   ].filter(Boolean).join("\n");
 
-  return { subject: t.subject(d.ref), html: shell(inner, `${when} — ${d.ref}`, d.businessEmail), text };
+  return { subject: t.subject(d.ref), html: shell(inner, `${when} — ${d.ref}`, d.businessEmail, d.locale), text };
 }
 
 export function clientCancellation(d: BookingEmailData) {
@@ -268,7 +291,7 @@ export function clientCancellation(d: BookingEmailData) {
     <p style="margin:20px 0 0;font-size:13px;color:${MUTED};">${esc(t.cancelBye)}</p>
   </td></tr>`;
   const text = [t.hi(d.clientName.split(" ")[0]), "", t.cancelIntro, "", when, "", `${t.cancelCta}: ${d.siteUrl}/${d.locale}/reserver`].join("\n");
-  return { subject: t.cancelSubject(d.ref), html: shell(inner, t.cancelIntro, d.businessEmail), text };
+  return { subject: t.cancelSubject(d.ref), html: shell(inner, t.cancelIntro, d.businessEmail, d.locale), text };
 }
 
 /** Fiche de mission pour l'artisan — dense, actionnable. */
@@ -321,6 +344,9 @@ function originText(d: BookingEmailData): string[] {
 
 export function ownerNotification(d: BookingEmailData, cancelled = false) {
   const t = T.fr; // l'artisan lit en français
+  /* Les montants aussi, même quand le client a réservé en anglais : sinon
+     la fiche mêlait « 100 $ » et « $15 ». */
+  const fr = { ...d, locale: "fr" as const };
   const when = formatDateTime(d.startsAt, d.timezone, "fr");
   const dur = minutesToText(d.durationMinutes, "fr");
   const money = formatMoney(d.estimateCents, d.currency, "fr");
@@ -338,7 +364,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${row(t.what, itemsHtml(d.items))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
-      ${travelRowsHtml(d, t)}
+      ${travelRowsHtml(fr, t)}
       ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
     </table>
@@ -352,7 +378,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     `${t.phone}: ${d.clientPhone}`, `${t.email}: ${d.clientEmail}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d.items),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
-    ...travelRowsText(d, t),
+    ...travelRowsText(fr, t),
     d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,
     ...originText(d), "", `${d.siteUrl}/admin`,
   ].filter(Boolean).join("\n");
@@ -424,42 +450,46 @@ export function contactNotification(d: ContactEmailData) {
 const ACK = {
   fr: {
     subject: "Nous avons bien reçu votre message · NIVEX",
-    hi: (n: string) => `Bonjour ${n},`,
+    hi: "Bonjour,",
     intro: "Merci de nous avoir écrit. Votre message est arrivé et nous vous répondons en général dans la journée.",
-    yours: "Votre message",
     urgent: "C'est urgent ?",
     urgentBody: "Appelez-nous, nous décrochons.",
     cta: "Réserver une séance",
     signoff: "À très bientôt,",
     team: "NIVEX",
+    notYou: "Vous n'avez pas écrit à NIVEX ? Ignorez simplement ce courriel.",
   },
   en: {
     subject: "We received your message · NIVEX",
-    hi: (n: string) => `Hello ${n},`,
+    hi: "Hello,",
     intro: "Thank you for writing. Your message arrived, and we usually reply the same day.",
-    yours: "Your message",
     urgent: "In a hurry?",
     urgentBody: "Call us — we pick up.",
     cta: "Book a session",
     signoff: "Talk soon,",
     team: "NIVEX",
+    notYou: "Didn't write to NIVEX? Simply ignore this email.",
   },
 } as const;
 
-/** Accusé de réception envoyé à la personne : elle sait que c'est parti. */
-export function contactAcknowledgement(d: ContactEmailData) {
+/**
+ * Accusé de réception envoyé à la personne : elle sait que c'est parti.
+ *
+ * Un texte fixe, sans rien de ce qu'elle a tapé — ni son nom, ni son
+ * message. L'adresse, elle, n'est vérifiée par personne : un accusé qui
+ * recopierait le message enverrait depuis le Gmail de la maison, sous le nom
+ * NIVEX, le texte de n'importe qui à l'adresse de n'importe qui. D'où le
+ * type, qui ne laisse entrer aucun champ du formulaire.
+ */
+export function contactAcknowledgement(d: { locale: "fr" | "en"; siteUrl: string; businessEmail?: string }) {
   const a = ACK[d.locale];
   const inner = `
   <tr><td style="padding:36px 40px 10px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
-    <p style="margin:0 0 14px;font-size:16px;">${esc(a.hi(d.name.split(" ")[0]))}</p>
+    <p style="margin:0 0 14px;font-size:16px;">${esc(a.hi)}</p>
     <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(a.intro)}</p>
-    <div style="padding:22px 24px;background:${LINEN};border:1px solid #F0E6D2;">
-      <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:12px;">${esc(a.yours)}</div>
-      <div style="font-size:14px;line-height:1.85;color:${MUTED};white-space:pre-wrap;">${esc(d.body)}</div>
-    </div>
-    <p style="margin:24px 0 4px;font-size:13px;color:${MUTED};">
+    <p style="margin:0 0 4px;font-size:13px;color:${MUTED};">
       <strong style="color:${INK};">${esc(a.urgent)}</strong> ${esc(a.urgentBody)}
-      <a href="tel:+14509431217" style="color:${GOLD};text-decoration:none;">+1 450 943 1217</a>
+      <a href="${esc(PHONE_HREF)}" style="color:${GOLD};text-decoration:none;">${esc(PHONE)}</a>
     </p>
   </td></tr>
   <tr><td style="padding:22px 40px 34px;text-align:center;">
@@ -467,17 +497,17 @@ export function contactAcknowledgement(d: ContactEmailData) {
     <p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:${MUTED};">
       ${esc(a.signoff)}<br><span style="font-family:Georgia,serif;letter-spacing:0.12em;color:${GOLD};">${esc(a.team)}</span>
     </p>
+    <p style="margin:22px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:1.7;color:${MUTED};">${esc(a.notYou)}</p>
   </td></tr>`;
 
   const text = [
-    a.hi(d.name.split(" ")[0]), "", a.intro, "",
-    `${a.yours} :`, d.body, "",
-    `${a.urgent} ${a.urgentBody} +1 450 943 1217`, "",
-    `${a.cta} : ${d.siteUrl}/${d.locale}/reserver`, "",
-    a.signoff, a.team,
+    a.hi, "", a.intro, "",
+    `${a.urgent} ${a.urgentBody} ${PHONE}`, "",
+    `${a.cta}${d.locale === "en" ? ":" : "\u00a0:"} ${d.siteUrl}/${d.locale}/reserver`, "",
+    a.signoff, a.team, "", a.notYou,
   ].join("\n");
 
-  return { subject: a.subject, html: shell(inner, a.intro, d.businessEmail), text };
+  return { subject: a.subject, html: shell(inner, a.intro, d.businessEmail, d.locale), text };
 }
 
 /* ============================================================
@@ -534,7 +564,7 @@ const S = {
     subject: (plan: string, ref: string) => `Votre abonnement ${plan} est confirmé · ${ref}`,
     intro: "Votre abonnement est en place. Vos visites sont réservées dans notre agenda : personne d'autre ne peut prendre ces créneaux.",
     plan: "Formule", rhythmLabel: "Rythme", first: "Première visite", series: "Visites réservées",
-    seriesValue: (n: number, last: string) => `${n} visites, jusqu'au ${last}`,
+    seriesValue: (n: number, last: string) => n === 1 ? `Une visite, le ${last}` : `${n} visites, jusqu'au ${last}`,
     duration: "Durée d'une visite", where: "Adresse", ref: "Référence",
     cycle: "Par cycle", cycleTravel: "Frais de déplacement du cycle", cycleTotal: "Total d'un cycle",
     cycleNote: (n: number) => n === 1
@@ -573,7 +603,7 @@ const S = {
     subject: (plan: string, ref: string) => `Your ${plan} subscription is confirmed · ${ref}`,
     intro: "Your subscription is in place. Your visits are reserved in our calendar: nobody else can take these slots.",
     plan: "Plan", rhythmLabel: "Rhythm", first: "First visit", series: "Visits reserved",
-    seriesValue: (n: number, last: string) => `${n} visits, until ${last}`,
+    seriesValue: (n: number, last: string) => n === 1 ? `One visit, on ${last}` : `${n} visits, until ${last}`,
     duration: "Length of a visit", where: "Address", ref: "Reference",
     cycle: "Per cycle", cycleTravel: "Travel fees for the cycle", cycleTotal: "Total per cycle",
     cycleNote: (n: number) => n === 1
@@ -595,7 +625,8 @@ const S = {
     tooLateNote: "For any change, please call us.",
     cancelledSubject: (when: string) => `Visit cancelled · ${when}`,
     cancelledIntro: "Your visit has been cancelled. It does not count towards your cycle.",
-    replaced: (when: string) => `It is replaced at the end of the series, on ${when}.`,
+    /* « 2:00 p.m. » porte déjà son point. */
+    replaced: (when: string) => `It is replaced at the end of the series, on ${when.endsWith(".") ? when : `${when}.`}`,
     notReplaced: "We will call you to place it at the end of the series.",
     movedSubject: (when: string) => `Visit moved · ${when}`,
     movedIntro: "Your visit has been moved. The rest of your series stays as it is.",
@@ -612,7 +643,7 @@ function weekdayName(d: Date, tz: string, locale: "fr" | "en"): string {
 
 function timeOf(d: Date, tz: string, locale: "fr" | "en"): string {
   return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
-    timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: locale === "en",
+    timeZone: tz, hour: "numeric", minute: "2-digit", hour12: locale === "en",
   }).format(d);
 }
 
@@ -649,7 +680,7 @@ function cycleRowsText(d: SubscriptionEmailData): string[] {
 
 function note(text: string): string {
   return `<tr><td style="padding:20px 40px 0;">
-    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(text)}</p>
+    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(text)}</p>
   </td></tr>`;
 }
 
@@ -712,7 +743,7 @@ export function subscriptionConfirmation(d: SubscriptionEmailData) {
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
   ].filter((x) => x !== null).join("\n");
 
-  return { subject: t.subject(d.planName, d.ref), html: shell(inner, `${slot} — ${d.ref}`, d.businessEmail), text };
+  return { subject: t.subject(d.planName, d.ref), html: shell(inner, `${slot} — ${d.ref}`, d.businessEmail, d.locale), text };
 }
 
 /** La fiche de l'artisan pour un nouvel abonnement. */
@@ -804,7 +835,7 @@ export function visitReminder(d: VisitEmailData, today = false) {
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
   ].join("\n");
 
-  return { subject: t.reminderSubject(shortWhen), html: shell(inner, when, d.businessEmail), text };
+  return { subject: t.reminderSubject(shortWhen), html: shell(inner, when, d.businessEmail, d.locale), text };
 }
 
 /** Ce que reçoit le client quand une visite est annulée ou déplacée. */
@@ -846,7 +877,7 @@ export function visitChanged(d: VisitEmailData, change: VisitChange) {
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
   ].join("\n");
 
-  return { subject, html: shell(inner, intro, d.businessEmail), text };
+  return { subject, html: shell(inner, intro, d.businessEmail, d.locale), text };
 }
 
 /** L'artisan est prévenu de ce que le client a changé lui-même. */
@@ -894,7 +925,7 @@ export function subscriptionEnded(d: SubscriptionEmailData, removed: Date[]) {
     <p style="margin:0;font-size:14px;color:${MUTED};">${esc(t.endedBye)}</p>
   </td></tr>`;
   const text = [T[d.locale].hi(d.clientName.split(" ")[0]), "", t.endedIntro, ...list.map((x) => `  · ${x}`), "", t.endedBye].join("\n");
-  return { subject: t.endedSubject, html: shell(inner, t.endedIntro, d.businessEmail), text };
+  return { subject: t.endedSubject, html: shell(inner, t.endedIntro, d.businessEmail, d.locale), text };
 }
 
 /**

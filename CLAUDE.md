@@ -68,7 +68,9 @@ ramènerait au prochain chargement ; elles se désactivent.
 ## Quelques faits que le texte doit respecter
 
 - Une séance dure **au minimum deux heures**. Il n'existe pas de séance
-  d'une heure, et la vitrine ne doit pas en proposer.
+  d'une heure, et la vitrine ne doit pas en proposer. Les réglages ne
+  descendent pas sous `MIN_SESSION_MINUTES`, ni à l'enregistrement ni à la
+  lecture.
 - L'artisan arrive **quinze minutes avant** pour s'installer, sans frais.
   Le bloc réservé est entièrement du repassage.
 - **Rien ne quitte le domicile** : pas de collecte, pas de livraison.
@@ -83,6 +85,34 @@ sur Vercel. Pas de framework de composants, pas d'ORM : les requêtes sont
 
 Deux langues sous `src/app/[locale]/` — `fr` et `en`, le français par
 défaut. Tout texte visible passe par `src/lib/i18n/`.
+
+**Deux racines, pas de layout au sommet** : `app/[locale]/layout.tsx` pour la
+vitrine, `app/admin/layout.tsx` pour l'espace artisan. `<html lang>` se déduit
+du segment de langue. Les pages publiques (accueil, Tarifs, Montréal,
+conditions, confidentialité) sont préparées à la construction et se
+régénèrent toutes les cinq minutes (`revalidate = 300`) ; les routes qui
+enregistrent les réglages et les zones appellent `revalidatePath` pour que
+le changement paraisse tout de suite. **Un `headers()` ou un `cookies()`
+dans l'arbre de `[locale]`, ou dans un composant serveur qu'il rend, remet
+tout le site en rendu dynamique** — c'était le cas jusqu'au 19 octobre 2026.
+Un `useSearchParams` dans une page préparée doit vivre sous `<Suspense>`.
+Conséquence à connaître : `next build` lit les réglages et pose le schéma
+(`bootstrap()`) au moment de la construction, contre la base de
+l'environnement construit.
+
+Ces pages lisent les réglages par `getSettingsStrict`, jamais par la lecture
+tolérante : une régénération qui échoue laisse servir la dernière page
+réussie, alors qu'une lecture tolérante y figerait les tarifs et l'horaire
+du code. Une base injoignable pendant `next build` fait donc échouer la
+construction, et la production reste telle quelle. La lecture se fait une
+fois par rendu (`cache` de React) : la racine et la page partagent la même
+ligne, ou la même panne.
+
+Une adresse inconnue sous `/fr` ou `/en` tombe sur `[locale]/[...missing]`,
+qui rend la page 404 de la maison, traduite (son HTML serveur est la coquille
+d'erreur de Next ; le texte paraît avec le JavaScript, le statut est bien
+404). Toute autre « langue » — `/foo.png`, `/api` — est refusée par
+`dynamicParams = false` dans la racine, sans rendu ni cache.
 
 ### Les modules qui décident
 
@@ -101,6 +131,8 @@ défaut. Tout texte visible passe par `src/lib/i18n/`.
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : description de l'accueil, fiche LocalBusiness, FAQ structurée |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
+| `lib/services.ts` | Les prestations par défaut et leurs types, sans dépendance : l'admin les importe sans tirer le pilote de base dans le navigateur |
+| `lib/retention.ts` | Les durées de conservation promises par la politique, tenues par la tâche quotidienne |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
@@ -123,6 +155,14 @@ des courriels aux clients. Cette adresse ne reçoit rien elle-même : ImprovMX
 la renvoie vers le Gmail de l'artisan (enregistrements MX et SPF dans la zone
 DNS d'OVH, où le domaine est acheté). Les courriels partent toujours du compte
 Google branché ; les avis internes vont à `REQUEST_INBOX`.
+
+L'accusé de réception du formulaire de contact est un **texte fixe** — ni le
+nom ni le message de l'expéditeur — et il est plafonné à `ACK_DAILY_CAP` par
+jour : sans cela, le formulaire servait à envoyer n'importe quel texte,
+depuis le Gmail de l'artisan, à n'importe quelle adresse. Le nom d'un
+destinataire passe par `displayName`, qui l'encode : une virgule ou des
+chevrons ne peuvent plus ajouter d'adresse. Un message se supprime depuis
+l'onglet Messages, sur demande de son auteur.
 
 ## Le tunnel de réservation
 
@@ -147,6 +187,29 @@ Les gardes posées là, et pourquoi :
 - Seule la **mise en pause** ferme vraiment les réservations. Un compte
   Google injoignable ne doit pas fermer la maison : le rendez-vous
   s'écrit en base, l'agenda et les courriels suivent dès qu'ils peuvent.
+  En pause, les pages `/reserver` et `/abonnement` montrent un avis et le
+  téléphone au lieu du tunnel.
+- **L'installation compte des deux côtés** : `SETUP_MINUTES` s'ajoute
+  avant et après chaque rendez-vous en base comme autour des événements de
+  l'agenda, dans le calcul des créneaux comme à l'écriture. L'invitation
+  envoyée au client porte les heures réservées, et dit l'arrivée anticipée.
+- **L'horizon et la grille sont tenus par le serveur**, pas seulement par
+  le navigateur : pas de réservation au-delà de `horizonDays`.
+- **La facturation suit le pas des créneaux** (`slotStep`, 30 min par
+  défaut) : au-delà du minimum, la durée et le prix s'arrondissent à cette
+  tranche, et les conditions le disent (`{step}`). Décidé par l'artisan le
+  19 octobre 2026 ; ne pas revenir à « chaque heure entamée ».
+- **Limites, sans adresse IP** : 3 réservations par courriel et par heure,
+  3 séances à venir par numéro de téléphone, 12 nouvelles séances par heure
+  pour tout le site. Au-delà, le client est invité à appeler. Les réglages
+  sensibles (connexion Google, écriture des réglages, création d'un
+  rendez-vous) se lisent par `getSettingsStrict` : une base muette les
+  refuse au lieu de les croire aux valeurs du code.
+- **Le pot de miel** des formulaires s'appelle `nivex_hp`. Ne lui donnez
+  jamais un nom que le remplissage automatique des navigateurs connaît
+  (`company`, `website`…) : un vrai client le remplirait sans le voir. Un
+  champ rempli reçoit le refus « appelez-nous », jamais une fausse
+  confirmation, et s'inscrit au journal (`honeypot`, sans aucune donnée).
 
 ## Les abonnements
 
@@ -177,14 +240,38 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   (0 $, un autre montant, ou retour aux frais de sa zone) depuis l'onglet
   Abonnés : `setTravelFee`.
 - **Délai : 23 h 59 la veille** (`changeDeadline`), lu en heure de Montréal.
-  Les séances ponctuelles gardent `CANCEL_WINDOW_HOURS`.
+  Les séances ponctuelles gardent `CANCEL_WINDOW_HOURS`, s'annulent en ligne
+  et se déplacent par téléphone.
+- **Limites** : un client déplace ou annule au plus
+  `CLIENT_CHANGES_PER_VISIT` fois une visite et
+  `CLIENT_CHANGES_PER_SUBSCRIPTION` fois par jour en tout. Le changement se
+  réserve avant de se faire (`claimClientChange`) : des requêtes lancées
+  d'un coup ne passent pas toutes. En ligne, un seul abonnement en cours (une
+  visite encore à venir) par téléphone et par adresse, et
+  `ONLINE_SUBSCRIPTIONS_PER_DAY` par jour pour tout le site. L'artisan n'a
+  pas de limite. Pour déplacer, la page de l'abonné lit ses créneaux sur
+  `/api/subscriptions/[token]/slots`, qui lève l'horizon pour une visite
+  existante ; `moveVisit` revérifie cet horizon et la grille pour le client,
+  et refuse une date passée à l'artisan. Un remplacement automatique ne
+  tombe jamais avant le délai de prévenance.
+- **Un cycle réglé garde son montant** (`paid_amounts`) : changer les frais
+  d'un abonné ne réécrit pas ce qu'il a déjà payé.
 - **Agenda** : un événement récurrent par série (RRULE), sans invité ; chaque
   occurrence est retouchée pour porter son rang (« 3/4 »). Une visite annulée
   supprime son occurrence ; un remplacement est un événement simple.
 - **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
   rappel de la veille, qui annonce le paiement à la première visite d'un
-  cycle, et courriel de fin de série à l'artisan. Chaque envoi est noté en
-  base : un second passage ne renvoie rien.
+  cycle, et courriel de fin de série à l'artisan. Chaque envoi est réservé
+  en base avant de partir : un second passage, ou le bouton de l'onglet
+  Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
+  de conservation (`purgeExpired`, `lib/retention.ts`) : journal technique
+  effacé à douze mois, messages à deux ans, rendez-vous et abonnements
+  anonymisés trois ans après la dernière séance, journal des visites à
+  douze mois. Du courriel ne reste qu'une empreinte salée, qui tient la
+  première heure offerte à une fois par client. L'événement d'agenda d'un
+  rendez-vous anonymisé s'efface ensuite (`purgeCalendarCopies`), sans avis
+  à personne ; sans Google, il attend le passage suivant. Les copies dans la
+  boîte de courriel, elles, se suppriment à la main (la politique le dit).
 
 ## Les textos
 
@@ -197,6 +284,17 @@ Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
 échouer une réservation, et un compte Google débranché ne l'empêche pas de
 partir. Le rappel par texto se note dans `sms_reminded_at`, à part du
 courriel (`reminder_sent_at`). Une séance ponctuelle n'a que le texto.
+
+**Seuls les numéros canadiens reçoivent des textos** (`isCanadianNumber`) :
+un autre numéro est sauté et noté `sms_skipped`, sans jamais refuser la
+réservation. C'est la parade aux textos vers des destinations surtaxées ;
+chez Twilio, les permissions géographiques limitées au Canada la doublent.
+La confirmation dit comment arrêter (« Répondez STOP ») ; un client qui
+écrit « ARRÊT » reçoit l'indication de répondre STOP, seul mot que Twilio
+honore. Pas de tiret cadratin dans les textos : il fait passer le message
+en Unicode, payé deux tranches. Les textos de l'artisan sont ramenés à
+l'alphabet des textos (`toGsm7` : « août » devient « aout ») ; ceux du
+client gardent leur orthographe.
 
 Les **réponses des clients** arrivent sur `/api/sms/incoming` (réglage « A
 message comes in » du numéro chez Twilio). La signature `X-Twilio-Signature`
@@ -314,6 +412,11 @@ colonnes gardées (américain, direct, ordinateur, ville de
 `DATACENTER_CITIES`). `bootstrap()` marque aussi les anciennes visites qui
 répondent à cette dernière règle.
 
+Les **liens personnels** (`/fr/reservation/<jeton>`, `/fr/abonnement/<jeton>`)
+ne se comptent pas non plus (`isPrivatePath`) : leur jeton ouvre la
+réservation, et il n'a rien à faire dans le journal ni chez l'hébergeur.
+`bootstrap()` efface ceux qu'un journal plus ancien aurait gardés.
+
 **Rien de ce qui touche à la provenance ne doit pouvoir faire échouer une
 réservation.** Un référent à rallonge, un compteur abîmé par une
 extension : tout est accepté puis nettoyé champ par champ. Perdre une
@@ -363,10 +466,12 @@ quotidienne des abonnements), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 
 ## Avant de pousser
 
-`npm test` puis `npm run build`. `npx eslint src` sort **huit erreurs
-anciennes** (des `<a>` vers des routes internes, deux règles React sur des
-composants d'avant) : comptez-les avant et après votre travail, et n'en
-ajoutez pas une neuvième. Ne lisez pas sa sortie avec `| tail -1` — la
+`npm test` puis `npm run build`. `npx eslint src` sort **deux erreurs
+anciennes** (deux règles React sur des composants d'avant : `SiteHeader` et
+la page de gestion d'une réservation) : comptez-les avant et après votre
+travail, et n'en ajoutez pas une troisième. Un `<a>` vers `/api/auth/google`
+est voulu (le détour OAuth quitte l'application) : il porte un
+`eslint-disable-next-line` commenté. Ne lisez pas sa sortie avec `| tail -1` — la
 dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 

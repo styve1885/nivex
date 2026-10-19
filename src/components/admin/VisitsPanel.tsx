@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isOptedOut, subscribeOptOut } from "../SiteMeasurement";
+import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
 import {
   ROBOT_FR, SOURCE_GROUP_FR, VISIT_RETENTION_MONTHS,
   type RobotReason, type SourceGroup,
@@ -64,10 +65,6 @@ const when = (iso: string) =>
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
 
-const VIDE: Payload = {
-  visits: [], groups: [], summary: { views: 0, cities: 0, robots: 0 }, bilan: [], optOutUrl: null,
-};
-
 /* Ce qui précise la famille d'une visite : le prénom de la recommandation,
    le domaine d'où elle vient quand il ne se confond pas avec la famille, et
    l'étiquette de campagne. */
@@ -88,8 +85,11 @@ export function VisitsPanel() {
    * sans drapeau à lever et à baisser. Et une réponse en retard, partie sous
    * un filtre qu'on a changé depuis, se reconnaît et se jette : sans cela,
    * cliquer vite sur « 7 jours » puis « Tout » pouvait laisser les sept
-   * jours écraser le tout. */
-  const [held, setHeld] = useState<{ key: string; data: Payload } | null>(null);
+   * jours écraser le tout.
+   *
+   * Une lecture manquée y est tenue à part : présentée comme un journal vide,
+   * elle se lisait « aucune visite sur cette période ». */
+  const [held, setHeld] = useState<{ key: string; data: Payload | null; error: LoadError | null } | null>(null);
 
   /* Le bilan et le lien personnel ne dépendent d'aucun filtre : on garde la
      dernière version reçue, pour qu'ils ne clignent pas quand le filtre
@@ -99,6 +99,7 @@ export function VisitsPanel() {
   const key = `${days}|${group}|${robots}`;
   const loading = held?.key !== key;
   const data = held?.key === key ? held.data : null;
+  const failed = held?.key === key ? held.error : null;
 
   useEffect(() => {
     let abandoned = false;
@@ -108,14 +109,15 @@ export function VisitsPanel() {
     if (robots !== "hide") p.set("robots", robots);
 
     fetch(`/api/admin/visits?${p}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((json) => {
+      .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }))
+      .then(({ status, json }) => {
         if (abandoned) return;
-        const d: Payload = json.ok ? json : VIDE;
-        setHeld({ key, data: d });
-        if (json.ok) setSteady({ bilan: d.bilan, optOutUrl: d.optOutUrl });
+        if (!json?.ok) { setHeld({ key, data: null, error: loadErrorOf(status) }); return; }
+        const d: Payload = json;
+        setHeld({ key, data: d, error: null });
+        setSteady({ bilan: d.bilan, optOutUrl: d.optOutUrl });
       })
-      .catch(() => { if (!abandoned) setHeld({ key, data: VIDE }); });
+      .catch(() => { if (!abandoned) setHeld({ key, data: null, error: "server" }); });
 
     return () => { abandoned = true; };
   }, [key, days, group, robots]);
@@ -188,6 +190,8 @@ export function VisitsPanel() {
       </div>
 
       {loading && <p className="py-16 text-center text-[0.9rem] text-ink-400" role="status">Lecture du journal…</p>}
+
+      {!loading && failed && <LoadFailure error={failed} />}
 
       {!loading && data && data.visits.length === 0 && (
         <p className="py-16 text-center text-[0.9rem] leading-relaxed text-ink-400">

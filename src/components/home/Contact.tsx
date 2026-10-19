@@ -10,43 +10,15 @@ import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 import { ZoneChecker } from "../ZoneChecker";
 import { servedText } from "@/lib/travel";
+import { openingLine } from "./opening-line";
 
 type Field = "name" | "email" | "message";
 
-/**
- * « 7 h – 22 h, du lundi au samedi », déduit des jours réellement ouverts.
- *
- * Écrire cet horaire à la main, c'était le laisser mentir le jour où
- * l'artisan ouvre le dimanche. Chaque langue a ses usages : le français
- * met ses jours en minuscules et compte en heures, l'anglais capitalise
- * et coupe à midi.
- */
-function clock(hm: string, locale: "fr" | "en"): string {
-  const [h, m] = hm.split(":").map(Number);
-  if (locale === "fr") return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
-  const suffix = h < 12 ? "a.m." : "p.m.";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return m ? `${h12}:${String(m).padStart(2, "0")} ${suffix}` : `${h12} ${suffix}`;
-}
-
-function openingLine(t: Dict, settings: Settings, locale: "fr" | "en"): string {
-  const open = settings.hours.filter((h) => h.enabled);
-  if (open.length === 0) return "";
-
-  const name = (day: number) => (locale === "fr" ? t.days[day].toLowerCase() : t.days[day]);
-  const names = open.map((h) => name(h.day));
-  const contiguous = open.every((h, i) => i === 0 || h.day === open[i - 1].day + 1);
-  const when = contiguous && open.length > 2
-    ? [t.contact.from, names[0], t.contact.to, names[names.length - 1]].filter(Boolean).join(" ")
-    : names.join(", ");
-
-  const sameSpan = open.every((h) => h.open === open[0].open && h.close === open[0].close);
-  if (!sameSpan) return when;
-  return `${clock(open[0].open, locale)} – ${clock(open[0].close, locale)}, ${when}`;
-}
-
+/* Composant client : ses props s'écrivent dans la page, lisibles par tous.
+   Il ne reçoit donc que les deux réglages qu'il lit, jamais l'objet entier,
+   qui porte le compte Google de l'artisan. */
 export function Contact({ t, locale, businessEmail, settings }: {
-  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Settings;
+  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Pick<Settings, "hours" | "zonePolicy">;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,6 +30,9 @@ export function Contact({ t, locale, businessEmail, settings }: {
   const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  /* L'accusé de réception n'est annoncé que s'il est vraiment parti : un
+     compte Google injoignable laisse le message en base, sans courriel. */
+  const [acked, setAcked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const errors = {
@@ -93,6 +68,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
         );
         return;
       }
+      setAcked(data.acked === true);
       setSent(true);
     } catch {
       setError(t.contact.errors.generic);
@@ -102,7 +78,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
   }
 
   function reset() {
-    setSent(false); setName(""); setEmail(""); setPhone(""); setSubject(""); setBody("");
+    setSent(false); setAcked(false); setName(""); setEmail(""); setPhone(""); setSubject(""); setBody("");
     setTouched({}); setError(null);
   }
 
@@ -127,7 +103,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
                 </span>
                 <h3 className="mt-7 font-display text-2xl font-normal text-ink-800">{t.contact.successTitle}</h3>
                 <p className="mx-auto mt-4 max-w-sm text-[0.92rem] font-light leading-[1.9] text-ink-500">
-                  {t.contact.successBody}
+                  {acked ? t.contact.successBody : t.contact.successBodyNoEmail}
                 </p>
                 <button type="button" onClick={reset}
                   className="mt-8 text-[11px] uppercase tracking-[0.18em] text-ink-500 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-ink-900">
@@ -163,8 +139,8 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   )}
                 </div>
 
-                {/* pot de miel */}
-                <input type="text" name="website" value={hp} onChange={(e) => setHp(e.target.value)}
+                {/* pot de miel, sous un nom que le remplissage automatique ignore */}
+                <input type="text" name="nivex_hp" value={hp} onChange={(e) => setHp(e.target.value)}
                   tabIndex={-1} autoComplete="off" aria-hidden="true"
                   className="absolute h-0 w-0 overflow-hidden opacity-0" />
 
@@ -178,6 +154,15 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   {sending ? t.contact.submitting : t.contact.submit}
                   {!sending && <ArrowIcon />}
                 </button>
+
+                <p className="mt-5 text-[0.78rem] font-light leading-relaxed text-ink-500">
+                  {t.contact.privacyNote.split("{privacy}")[0]}
+                  <Link href={`/${locale}/confidentialite`}
+                    className="text-ink-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-700">
+                    {t.contact.privacyLink}
+                  </Link>
+                  {t.contact.privacyNote.split("{privacy}")[1]}
+                </p>
               </form>
             )}
           </Reveal>

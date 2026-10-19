@@ -1,4 +1,5 @@
 import type { Settings } from "./settings";
+import { minutesToText } from "./time";
 
 /**
  * La grille tarifaire.
@@ -40,6 +41,17 @@ export const BLOCKS: Offer[] = [
           detail: "20 to 30 pieces. For instance: 12 shirts, 8 pairs of trousers, 3 jackets and 2 pieces of household linen." },
   },
 ];
+
+/**
+ * Le volume d'une séance de cette durée, tel que la grille le publie
+ * (« 10 à 15 pièces ») ; null quand la grille n'a pas de bloc de cette
+ * durée. L'accueil le reprend : une durée qui suit le minimum réglé ne doit
+ * pas garder le volume d'une autre.
+ */
+export function blockPieces(minutes: number, locale: "fr" | "en"): string | null {
+  const b = BLOCKS.find((x) => x.minutes === minutes);
+  return b ? (locale === "en" ? b.en : b.fr).detail.split(".")[0] : null;
+}
 
 /** Forfaits composés : un panier type, déjà chiffré. */
 export const BUNDLES: Offer[] = [
@@ -211,6 +223,29 @@ export function planFullCents(p: Plan, s: Settings): number {
  */
 export function perHour(minutesPerUnit: number): number {
   return Math.max(1, Math.floor(60 / minutesPerUnit));
+}
+
+/**
+ * Ce que la page Tarifs inscrit sous « En 1 h ».
+ *
+ * Le nombre de pièces tant qu'il en tient au moins une dans l'heure ;
+ * au-delà, le temps d'une pièce. Une prestation ajoutée de quatre-vingt-dix
+ * minutes la pièce s'afficherait sinon « 1 » par heure, quand le tunnel en
+ * réserve une heure et demie.
+ */
+export function cadenceText(minutesPerUnit: number, unit: string, locale: "fr" | "en"): string {
+  if (minutesPerUnit <= 60) return String(perHour(minutesPerUnit));
+  const time = minutesToText(minutesPerUnit, locale);
+  return unit.trim() ? `${time} / ${unit.trim()}` : time;
+}
+
+/**
+ * Les offres que le tunnel peut encore produire : aucune plus courte que la
+ * durée minimale réglée. Une séance de deux heures affichée sous « minimum
+ * 3 heures » se réserverait trois heures, au prix de trois.
+ */
+export function bookableOffers(offers: Offer[], s: Settings): Offer[] {
+  return offers.filter((o) => o.minutes >= s.minMinutes);
 }
 
 /** Précisions de métier, par prestation du moteur. */

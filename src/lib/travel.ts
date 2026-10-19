@@ -181,7 +181,8 @@ export function evaluateZone(
     status: cents > 0 ? "fee" : "free",
     zoneKey: z.key,
     labelFr: z.nameFr,
-    labelEn: z.nameEn,
+    /* Un nom anglais laissé vide suit le français, comme partout ailleurs. */
+    labelEn: z.nameEn || z.nameFr,
     feeCents: cents,
     shortFeeCents: z.shortFeeCents,
     longFeeCents: z.longFeeCents,
@@ -250,6 +251,15 @@ const nameOf = (s: Sector, locale: "fr" | "en") => (locale === "en" ? s.nameEn |
 export function sectorNames(policy: ZonePolicy, locale: "fr" | "en"): string[] {
   const { south, montreal } = sectorsByRegion(policy);
   return [...south, ...montreal].map((s) => nameOf(s, locale));
+}
+
+/**
+ * Les régions qui ont au moins un secteur actif — la Rive-Sud, puis
+ * Montréal —, pour les phrases trop courtes pour nommer chaque secteur.
+ */
+export function servedRegions(policy: ZonePolicy, labels: { south: string; montreal: string }): string[] {
+  const { south, montreal } = sectorsByRegion(policy);
+  return [...(south.length ? [labels.south] : []), ...(montreal.length ? [labels.montreal] : [])];
 }
 
 /** Les noms des quartiers de Montréal desservis, dans l'ordre. */
@@ -335,7 +345,8 @@ export function thresholdText(minutes: number, locale: "fr" | "en"): string {
  * finiraient par contredire ce que le tunnel facture. Chaque zone y figure
  * avec ses secteurs, celles sans frais comprises : c'est là qu'un client
  * apprend qu'il n'en paie aucun. Une zone sans secteur actif n'apprend rien
- * et reste hors du tableau.
+ * et reste hors du tableau. Dans chaque zone, la Rive-Sud vient d'abord et
+ * les quartiers de l'île ensuite, comme dans toute liste de secteurs.
  */
 export type FeeRow = {
   key: string;
@@ -352,7 +363,8 @@ export function feeTable(
   locale: "fr" | "en",
   money: (cents: number) => string,
 ): FeeRow[] {
-  const actifs = activeSectors(policy);
+  const { south, montreal } = sectorsByRegion(policy);
+  const actifs = [...south, ...montreal];
   return policy.zones
     .map((z) => ({ z, sectors: actifs.filter((s) => s.zoneKey === z.key) }))
     .filter(({ sectors }) => sectors.length > 0)
@@ -390,6 +402,19 @@ export function prefixUses(policy: ZonePolicy): Map<string, PrefixUse[]> {
 }
 
 /**
+ * Les bornes d'une grille. Le serveur les refuse ; `policyProblems` les
+ * signale pendant la saisie, pour qu'aucune ne se découvre seulement au
+ * moment d'enregistrer, derrière un refus qui ne dit pas où chercher.
+ */
+export const POLICY_LIMITS = {
+  zones: 30,
+  sectors: 200,
+  prefixesPerSector: 60,
+  nameLength: 80,
+  feeCents: 50_000,
+} as const;
+
+/**
  * Ce qui empêche d'enregistrer une grille, en phrases lisibles par l'artisan.
  *
  * La règle qui compte le plus : **un préfixe, une zone**. Deux zones pour un
@@ -401,8 +426,12 @@ export function prefixUses(policy: ZonePolicy): Map<string, PrefixUse[]> {
 export function policyProblems(policy: ZonePolicy): string[] {
   const out: string[] = [];
   const zones = new Map<string, Zone>();
+  const L = POLICY_LIMITS;
+  const tooLong = (x: { nameFr: string; nameEn: string }) =>
+    x.nameFr.trim().length > L.nameLength || x.nameEn.trim().length > L.nameLength;
 
   if (policy.zones.length === 0) out.push("Il faut au moins une zone.");
+  if (policy.zones.length > L.zones) out.push(`${L.zones} zones au plus.`);
   for (const z of policy.zones) {
     if (zones.has(z.key)) out.push(`Deux zones portent la même clé (${z.key}).`);
     zones.set(z.key, z);
@@ -410,8 +439,13 @@ export function policyProblems(policy: ZonePolicy): string[] {
     if (z.thresholdMinutes < 30 || z.thresholdMinutes > 960) {
       out.push(`${z.nameFr || z.key} : le seuil doit se situer entre 30 minutes et 16 heures.`);
     }
+    if ([z.shortFeeCents, z.longFeeCents].some((c) => !Number.isInteger(c) || c < 0 || c > L.feeCents)) {
+      out.push(`${z.nameFr || z.key} : les frais vont de 0 à ${L.feeCents / 100} $ par visite.`);
+    }
+    if (tooLong(z)) out.push(`${z.nameFr.trim().slice(0, 40) || z.key} : un nom compte ${L.nameLength} caractères au plus.`);
   }
 
+  if (policy.sectors.length > L.sectors) out.push(`${L.sectors} secteurs au plus.`);
   const keys = new Set<string>();
   for (const s of policy.sectors) {
     const nom = s.nameFr.trim() || "Un secteur sans nom";
@@ -422,6 +456,10 @@ export function policyProblems(policy: ZonePolicy): string[] {
     const bad = s.prefixes.filter((p) => !PREFIX_RE.test(p));
     if (bad.length) out.push(`${nom} : préfixe invalide (${bad.join(", ")}). Format attendu : lettre, chiffre, lettre.`);
     if (s.enabled && s.prefixes.length === 0) out.push(`${nom} est actif mais n'a aucun préfixe.`);
+    if (s.prefixes.length > L.prefixesPerSector) {
+      out.push(`${nom} : ${s.prefixes.length} préfixes, pour ${L.prefixesPerSector} au plus. Répartissez-les entre plusieurs secteurs.`);
+    }
+    if (tooLong(s)) out.push(`${nom.slice(0, 40)} : un nom compte ${L.nameLength} caractères au plus.`);
   }
 
   if (!policy.sectors.some((s) => s.enabled && s.prefixes.length > 0 && zones.has(s.zoneKey))) {

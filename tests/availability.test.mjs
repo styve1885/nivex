@@ -7,7 +7,8 @@
 import assert from "node:assert/strict";
 
 const {
-  computeSlots, merge, overlaps, slotIsFree, estimateMinutes, estimateCents,
+  computeSlots, merge, overlaps, slotIsFree, slotProblem, estimateMinutes, estimateCents,
+  withSetup, onSlotGrid, horizonEnd, loadBusyRange,
 } = await import("../src/lib/availability.ts");
 const { fromWall, dateKey, addDaysToKey, weekdayOfKey, parseHM } = await import("../src/lib/time.ts");
 
@@ -123,13 +124,45 @@ t("une occupation bloque le créneau et le tampon autour", () => {
   }
 });
 
-t("le tampon est appliqué des deux côtés, sans excès", () => {
+t("le tampon est appliqué des deux côtés, installation et rangement compris, sans excès", () => {
   const days = computeSlots({ ...base, busy: BUSY_FRI });
   const fri = days.find((d) => d.date === "2026-08-28");
   const times = fri.slots.map((s) => s.time);
-  assert.ok(times.includes("10:30"), "10:30 finit à 12:30, juste avant le tampon");
-  assert.ok(times.includes("14:30"), "14:30 démarre juste après le tampon");
+  // Occupation 13:00–14:00, tampon 30 min : rien entre 12:30 et 14:30, et
+  // le bloc du créneau déborde la séance de quinze minutes de chaque côté.
+  assert.ok(times.includes("10:00"), "10:00 range jusqu'à 12:15, avant le tampon");
+  assert.ok(!times.includes("10:30"), "10:30 rangerait jusqu'à 12:45, dans le tampon");
+  assert.ok(!times.includes("14:30"), "14:30 s'installerait dès 14:15, dans le tampon");
+  assert.ok(times.includes("15:00"), "15:00 s'installe à 14:45, juste après le tampon");
   assert.ok(!times.includes("11:00"), "11:00 finirait à 13:00, en plein rendez-vous");
+});
+
+/* Une réservation lue en base, telle que loadBusy la rend : la séance,
+   élargie de l'installation et du rangement. */
+const ROW_FRI = (() => {
+  const start = fromWall({ year: 2026, month: 8, day: 28, hour: 13, minute: 0 }, TZ).getTime();
+  return withSetup({ start, end: start + 2 * 3600_000 }); // 13:00 – 15:00, bloc 12:45 – 15:15
+})();
+
+t("une réservation en base laisse tout le tampon entre deux clients", () => {
+  const fri = computeSlots({ ...base, busy: [ROW_FRI] }).find((d) => d.date === "2026-08-28");
+  const times = fri.slots.map((s) => s.time);
+  // Rangement fini à 15:15, trente minutes de route : l'installation
+  // suivante commence à 15:45, la séance à 16:00. Symétrique avant.
+  assert.ok(times.includes("16:00") && !times.includes("15:30"), "après : 16:00, pas 15:30");
+  assert.ok(times.includes("10:00") && !times.includes("10:30"), "avant : 10:00, pas 10:30");
+});
+
+t("sans tampon, le moteur dit la même chose que la contrainte de la base", () => {
+  const sans = { ...settings, bufferMinutes: 0 };
+  const fri = computeSlots({ ...base, settings: sans, busy: [ROW_FRI] }).find((d) => d.date === "2026-08-28");
+  const times = fri.slots.map((s) => s.time);
+  // nivex_occupied : [12:45, 15:15). Une séance à 15:30 occupe [15:15, …) —
+  // acceptée ; à 15:00, elle occuperait [14:45, …) — refusée.
+  assert.ok(times.includes("15:30") && !times.includes("15:00"), "après : 15:30, pas 15:00");
+  assert.ok(times.includes("10:30") && !times.includes("11:00"), "avant : 10:30, pas 11:00");
+  const quinze = fromWall({ year: 2026, month: 8, day: 28, hour: 15, minute: 0 }, TZ).getTime();
+  assert.equal(slotProblem(quinze, 120, [ROW_FRI], sans, NOW), "busy");
 });
 
 t("le délai de prévenance ampute le début de la journée limite", () => {
@@ -201,6 +234,30 @@ t("refuse une date invalide", () => {
   assert.equal(slotIsFree("pas-une-date", 120, [], settings, NOW), false);
 });
 
+const at = (y, mo, d, h, mi = 0) => fromWall({ year: y, month: mo, day: d, hour: h, minute: mi }, TZ);
+
+t("refuse une date au-delà de l'horizon réglé", () => {
+  // NOW = 26 août, horizon 45 jours : le samedi 10 octobre est le dernier jour.
+  assert.equal(horizonEnd(settings, NOW), at(2026, 10, 11, 0).getTime());
+  assert.equal(slotIsFree(at(2026, 10, 10, 9).toISOString(), 120, [], settings, NOW), true);
+  assert.equal(slotIsFree(at(2026, 10, 12, 9).toISOString(), 120, [], settings, NOW), false);
+  assert.equal(slotIsFree(at(2030, 11, 5, 10).toISOString(), 120, [], settings, NOW), false);
+});
+
+t("refuse une heure hors de la grille des créneaux", () => {
+  assert.equal(slotIsFree(at(2026, 8, 28, 9, 30).toISOString(), 120, [], settings, NOW), true);
+  assert.equal(slotIsFree(at(2026, 8, 28, 9, 7).toISOString(), 120, [], settings, NOW), false);
+  assert.equal(slotIsFree(at(2026, 8, 28, 9, 15).toISOString(), 120, [], settings, NOW), false);
+  const demi = new Date(at(2026, 8, 28, 9).getTime() + 30_000).toISOString();
+  assert.equal(slotIsFree(demi, 120, [], settings, NOW), false, "à la minute pile");
+  assert.equal(onSlotGrid(at(2026, 8, 28, 9, 15).getTime(), { ...settings, slotStep: 15 }), true);
+});
+
+t("l'artisan et les dates suivantes d'une série ne sont pas tenus à l'horizon", () => {
+  // Un lundi de février 2027, loin derrière l'horizon : slotProblem l'accepte.
+  assert.equal(slotProblem(at(2027, 2, 1, 9).getTime(), 120, [], settings, NOW, { checkLead: false }), null);
+});
+
 console.log("\nBascule d'heure avancée");
 t("créneaux corrects la veille du passage à l'heure d'hiver", () => {
   // 2026-11-01 : retour à l'heure normale au Québec
@@ -219,6 +276,15 @@ t("créneaux corrects la veille du passage à l'heure d'hiver", () => {
   assert.equal(satFirst, 13, "09:00 EDT = 13:00 UTC");
   assert.equal(monFirst, 14, "09:00 EST = 14:00 UTC");
 });
+
+console.log("\nPlage d'occupations");
+try {
+  /* Refusée avant la moindre requête : aucune base n'est nécessaire ici. */
+  await assert.rejects(loadBusyRange({
+    accessToken: null, settings, timeMin: NOW, timeMax: new Date("9999-11-01T14:00:00Z"),
+  }), /trop longue/);
+  console.log("  ✓ une plage de plusieurs années est refusée d'emblée"); pass++;
+} catch (e) { console.log(`  ✗ une plage de plusieurs années est refusée d'emblée\n      ${e.message}`); fail++; }
 
 console.log(`\n${pass} réussis, ${fail} échoués\n`);
 process.exit(fail === 0 ? 0 : 1);

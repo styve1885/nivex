@@ -4,11 +4,11 @@ import { notFound } from "next/navigation";
 import { ArrowIcon } from "@/components/Icons";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { SETUP_MINUTES } from "@/lib/brand";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { montrealFees, montrealNames, type FeeRow } from "@/lib/travel";
-import { faqJsonLd, localBusinessJsonLd } from "@/lib/seo";
+import { faqJsonLd, localBusinessJsonLd, pageMeta } from "@/lib/seo";
 
 /*
  * Repassage à domicile à Montréal.
@@ -24,21 +24,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: { absolute: t.montreal.metaTitle },
-    description: t.montreal.lede,
-    alternates: {
-      canonical: `/${locale}/montreal`,
-      languages: { "fr-CA": "/fr/montreal", "en-CA": "/en/montreal" },
-    },
-    openGraph: {
-      title: t.montreal.metaTitle,
-      description: t.montreal.lede,
-      url: `/${locale}/montreal`,
-      locale: locale === "en" ? "en_CA" : "fr_CA",
-      images: [{ url: "/opengraph-image.jpg", width: 1200, height: 630, alt: t.meta.ogAlt }],
-    },
-  };
+  return pageMeta(t, locale, "/montreal", { absolute: t.montreal.metaTitle }, t.montreal.lede);
 }
 
 /** Les frais d'une zone, en une phrase : ceux d'une courte séance, puis d'une longue. */
@@ -50,20 +36,33 @@ function feeSentence(f: FeeRow, t: Dict): string {
     + `${terms.travelLong.replace("{fee}", f.long).replace("{hours}", f.threshold)}.`;
 }
 
-/** Les réponses de la foire aux questions, remplies depuis les réglages. */
+/**
+ * Les réponses de la foire aux questions, remplies depuis les réglages.
+ *
+ * La réponse sur les frais suit la grille : sans quartier ouvert, la question
+ * disparaît, plutôt que de répondre par un pronom sans montant ; sans frais
+ * nulle part, elle le dit, au lieu d'annoncer des frais « à chaque visite »
+ * juste après « sans frais ». Les données structurées reprennent ces réponses.
+ */
 function faqItems(t: Dict, s: Settings, locale: "fr" | "en", fees: FeeRow[]) {
-  const sep = locale === "en" ? ": " : " : ";
+  const sep = locale === "en" ? ": " : "\u00a0: ";
   const feesText = fees.length === 1
     ? feeSentence(fees[0], t)
     : fees.map((f) => `${f.sectors.join(", ")}${sep}${feeSentence(f, t)}`).join(" ");
   const days = locale === "en" ? "days" : "jours";
-  return t.montreal.faq.map((f) => ({
-    q: f.q,
-    a: f.a
-      .replace("{lead}", minutesToText(s.leadHours * 60, locale))
-      .replace("{horizon}", `${s.horizonDays} ${days}`)
-      .replace("{fees}", feesText),
-  }));
+  return t.montreal.faq
+    .filter((f) => !f.a.includes("{fees}") || fees.length > 0)
+    .map((f) => ({
+      q: f.q,
+      a: f.a.includes("{fees}") && fees.every((x) => x.free)
+        ? t.montreal.feesFree
+        : f.a
+          .replace("{lead}", minutesToText(s.leadHours * 60, locale))
+          .replace("{horizon}", `${s.horizonDays} ${days}`)
+          .replace("{fees}", feesText)
+          /* L'offre n'est nommée que si l'artisan la propose. */
+          .replace("{offer}", s.firstHourFree ? ` ${t.montreal.feesOffer}` : ""),
+    }));
 }
 
 export default async function MontrealPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -72,7 +71,7 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
 
   const t = getDict(locale);
   const m = t.montreal;
-  const s = await getSettings();
+  const s = await getSettingsStrict();
 
   const money = (c: number) => formatMoney(c, s.currency, locale);
   const quartiers = montrealNames(s.zonePolicy, locale);
@@ -130,7 +129,7 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
             <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">{m.none}</p>
           )}
           <div className="paper mt-12 px-7 py-8 sm:px-9">
-            <ZoneChecker t={t} locale={locale} />
+            <ZoneChecker t={{ brand: t.brand, zoneCheck: t.zoneCheck }} locale={locale} />
           </div>
         </div>
       </section>
@@ -168,7 +167,12 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
                     ))}
                   </ul>
                 )}
-                <span className="mt-2 block text-ink-400">{m.travelNote}</span>
+                {/* « Par visite, en plus du prix » ne se dit que s'il y a des frais. */}
+                {fees.some((f) => !f.free) && (
+                  <span className="mt-2 block text-ink-400">
+                    {m.travelNote}{s.firstHourFree ? ` ${m.travelNoteOffer}` : null}
+                  </span>
+                )}
               </Row>
             )}
             {s.firstHourFree && (
