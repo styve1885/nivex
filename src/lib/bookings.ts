@@ -744,9 +744,10 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
         to: b.clientEmail, toName: b.clientName, subject: cc.subject,
         html: cc.html, text: cc.text, fromName, replyTo: contactEmail(),
       }),
-      // L'artisan, seulement quand l'annulation ne vient pas de lui.
-      settings.ownerEmail && by === "client"
-        ? sendGmail(at, { to: settings.ownerEmail, subject: on.subject, html: on.html, text: on.text, fromName })
+      // L'artisan, seulement quand l'annulation ne vient pas de lui — à la
+      // boîte de la maison, comme tous les avis internes.
+      by === "client"
+        ? sendGmail(at, { to: REQUEST_INBOX, subject: on.subject, html: on.html, text: on.text, fromName, replyTo: b.clientEmail })
         : Promise.resolve(null),
     ]);
   }

@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 
-const { toE164, sendSms, smsConfigured, smsWhen, SMS, ownerSmsNumber, twilioSignature, twilioSignatureValid, twimlForward, forwardedReply } = await import("../src/lib/sms.ts");
+const { toE164, isCanadianNumber, sendSms, smsConfigured, smsWhen, SMS, ownerSmsNumber, twilioSignature, twilioSignatureValid, twimlForward, forwardedReply, stopHint } = await import("../src/lib/sms.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { SETUP_MINUTES } = await import("../src/lib/brand.ts");
 
@@ -33,6 +33,17 @@ await test("ce qui n'est pas un numéro nord-américain est refusé", () => {
   assert.equal(toE164(null), null);
 });
 
+await test("on n'écrit qu'aux numéros canadiens : ni les Caraïbes, ni les États-Unis", () => {
+  for (const ok of ["450 943-1217", "514 555-0101", "438 555-0101", "613 555-0101", "604 555-0101"]) {
+    assert.equal(isCanadianNumber(toE164(ok)), true, ok);
+  }
+  /* Jamaïque, République dominicaine, Antigua, îles Turques-et-Caïques, New York. */
+  for (const no of ["876 555 0123", "(809) 555-0123", "+1 268 555 0123", "649 555 0123", "212 555 0123"]) {
+    assert.equal(isCanadianNumber(toE164(no)), false, no);
+  }
+  assert.equal(isCanadianNumber("+33612345678"), false);
+});
+
 await test("l'artisan reçoit ses textos sur le numéro de la maison, sauf SMS_OWNER_TO", () => {
   delete process.env.SMS_OWNER_TO;
   assert.equal(ownerSmsNumber(), "+14509431217");
@@ -47,6 +58,37 @@ await test("la date se lit en heure de Montréal, dans la langue du client", () 
   assert.equal(flat(when), "mardi 20 octobre à 14 h 00");
   const en = smsWhen(fromWall({ year: 2026, month: 10, day: 20, hour: 14, minute: 0 }, TZ), TZ, "en");
   assert.match(flat(en), /Tuesday, October 20.*2:00/);
+  /* L'heure du matin s'écrit sans zéro devant : « 9 h 00 », « 9:00 a.m. ». */
+  const morning = fromWall({ year: 2026, month: 10, day: 20, hour: 9, minute: 0 }, TZ);
+  assert.match(flat(smsWhen(morning, TZ, "fr")), / à 9 h 00$/);
+  assert.match(flat(smsWhen(morning, TZ, "en")), / 9:00 a\.m\.$/);
+});
+
+await test("les confirmations disent comment ne plus recevoir de textos, les autres non", () => {
+  assert.match(SMS.bookingConfirmed("fr", when, "https://x"), /Répondez STOP pour ne plus recevoir de textos\.$/);
+  assert.match(SMS.bookingConfirmed("en", when, "https://x"), /Reply STOP to opt out\.$/);
+  assert.match(SMS.subscriptionConfirmed("fr", "Exécutif", when, "chaque semaine", "https://x"), /Répondez STOP/);
+  assert.match(SMS.subscriptionConfirmed("en", "Executive", when, "every week", "https://x"), /Reply STOP/);
+  assert.ok(!/STOP/.test(SMS.reminder("fr", when, false, null)));
+  assert.ok(!/STOP/.test(SMS.visitMoved("fr", when, when)));
+});
+
+/* L'alphabet des textos (GSM 03.38, table de base). Un seul caractère hors de
+   cette table fait passer tout le message en Unicode, à 70 caractères la tranche. */
+const GSM7 = new Set("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà");
+const gsm7 = (s) => [...s].every((c) => GSM7.has(c));
+
+await test("les textos de l'artisan tiennent dans l'alphabet des textos, en une tranche", () => {
+  const all = [
+    SMS.owner.newBooking("Marie Tremblay", when, "Saint-Lambert"),
+    SMS.owner.newSubscription("Marie Tremblay", "Exécutif", when),
+    SMS.owner.cancelled("Marie Tremblay", when),
+    SMS.owner.moved("Marie Tremblay", when, when),
+  ];
+  for (const m of all) {
+    assert.ok(gsm7(m), `hors alphabet : ${m}`);
+    assert.ok(m.length <= 160, `${m.length} caractères : ${m}`);
+  }
 });
 
 await test("le rappel annonce l'arrivée en avance, et le paiement seulement quand il est dû", () => {
@@ -107,6 +149,9 @@ await test("avec les clés, le texto part vers Twilio au bon format", async () =
     globalThis.fetch = async () => { called = true; return new Response("{}", { status: 201 }); };
     assert.equal(await sendSms("123", "NIVEX : essai"), false);
     assert.equal(called, false);
+    /* Un numéro des Caraïbes non plus : la réservation tient, le texto ne part pas. */
+    assert.equal(await sendSms("876 555 0123", "NIVEX : essai"), false);
+    assert.equal(called, false);
   } finally {
     globalThis.fetch = real;
     delete process.env.TWILIO_ACCOUNT_SID;
@@ -135,15 +180,31 @@ await test("une requête signée par Twilio est reconnue, une requête trafiqué
 
 await test("la réponse d'un client part vers l'artisan, avec son nom et son numéro", () => {
   const m = forwardedReply({ from: "+14505550222", name: "Marc Essai", body: "Je serai en retard de 10 minutes", media: 0 });
-  assert.equal(m, "NIVEX — réponse de Marc Essai (450 555-0222) : Je serai en retard de 10 minutes");
-  assert.match(forwardedReply({ from: "+14505550222", name: null, body: "Oui", media: 1 }), /^NIVEX — réponse de 450 555-0222 : Oui \[1 pièce jointe/);
+  assert.equal(m, "NIVEX : réponse de Marc Essai (450 555-0222) : Je serai en retard de 10 minutes");
+  assert.match(forwardedReply({ from: "+14505550222", name: null, body: "Oui", media: 1 }), /^NIVEX : réponse de 450 555-0222 : Oui \[1 pièce jointe/);
   assert.match(forwardedReply({ from: "+14505550222", name: "Marc", body: "STOP", media: 0 }), /ne recevra plus de textos/);
+  assert.match(forwardedReply({ from: "+14505550222", name: "Marc", body: "optout", media: 0 }), /ne recevra plus de textos/);
   assert.equal(forwardedReply({ from: "+14505550222", name: "Marc", body: "x".repeat(3000), media: 0 }).length < 1100, true);
+});
+
+await test("« ARRÊT » ne désabonne pas chez Twilio : l'artisan n'est pas trompé, le client apprend le bon mot", () => {
+  for (const body of ["ARRÊT", "arret", "Arrêter", " arrête. "]) {
+    assert.match(stopHint(body) ?? "", /répondez STOP/, body);
+    const fwd = forwardedReply({ from: "+14505550222", name: "Marc", body, media: 0, hinted: true });
+    assert.ok(!/ne recevra plus/.test(fwd), fwd);
+    assert.match(fwd, /toujours inscrit/);
+  }
+  assert.equal(stopHint("Je vais arrêter de travailler plus tôt"), null);
+  assert.equal(stopHint("STOP"), null);
+  assert.ok(!/toujours inscrit/.test(forwardedReply({ from: "+14505550222", name: "Marc", body: "ARRÊT", media: 0 })));
 });
 
 await test("l'instruction TwiML échappe le texte du client", () => {
   const x = twimlForward("+14509431217", "Bonjour <b> & \"merci\"");
   assert.equal(x, '<?xml version="1.0" encoding="UTF-8"?><Response><Message to="+14509431217">Bonjour &lt;b&gt; &amp; &quot;merci&quot;</Message></Response>');
+  /* Avec une réponse au client : un second message, sans destinataire, qui revient à l'expéditeur. */
+  const y = twimlForward("+14509431217", "NIVEX : réponse", stopHint("ARRÊT"));
+  assert.match(y, /<\/Message><Message>NIVEX : pour ne plus recevoir de textos, répondez STOP\.<\/Message><\/Response>$/);
 });
 
 console.log(`\n${n} réussis, 0 échoués\n`);

@@ -3,7 +3,7 @@ import { ensureSchema, sql, logEvent, isDbConfigured } from "./db";
 import { getSettings } from "./settings";
 import { ownerAccessToken, sendGmail, siteOrigin } from "./google";
 import { contactNotification, contactAcknowledgement } from "./email";
-import { contactEmail } from "./brand";
+import { contactEmail, REQUEST_INBOX } from "./brand";
 
 export const ContactInput = z.object({
   locale: z.enum(["fr", "en"]).default("fr"),
@@ -12,8 +12,19 @@ export const ContactInput = z.object({
   phone: z.string().trim().max(40).optional().or(z.literal("")),
   subject: z.string().trim().max(160).optional().or(z.literal("")),
   body: z.string().trim().min(10).max(4000),
-  hp: z.string().max(0).optional(),        // pot de miel
+  /* Pot de miel. Le schéma l'accepte rempli : c'est la route qui feint alors
+     le succès. Refusé ici, il rendait une erreur 400 qui nommait le champ, et
+     le robot apprenait lequel laisser vide. */
+  hp: z.string().max(2000).optional(),
 });
+
+/**
+ * Au-delà de tant de messages reçus en vingt-quatre heures, plus d'accusé
+ * de réception. Les messages, eux, s'enregistrent et parviennent toujours à
+ * l'artisan : seul l'envoi vers une adresse que personne n'a vérifiée
+ * s'arrête, le temps qu'une rafale de robots passe.
+ */
+const ACK_DAILY_CAP = 30;
 
 export type ContactInputType = z.infer<typeof ContactInput>;
 
@@ -48,20 +59,32 @@ export class ContactError extends Error {
  * Enregistre le message, puis tente de le transmettre.
  * L'écriture en base passe d'abord : un courriel qui échoue ne doit
  * jamais faire disparaître ce que quelqu'un a pris la peine d'écrire.
+ *
+ * `sent` dit que l'artisan a reçu l'avis ; `acked`, que la personne a reçu
+ * son accusé de réception — la page ne le lui annonce que dans ce cas.
  */
-export async function submitContact(input: ContactInputType): Promise<{ stored: boolean; sent: boolean }> {
+export async function submitContact(
+  input: ContactInputType,
+): Promise<{ stored: boolean; sent: boolean; acked: boolean }> {
   const settings = await getSettings();
   let stored = false;
   let id: string | null = null;
+  /* L'accusé ne part que si la base a compté les messages du jour et gardé
+     celui-ci : sans cela, rien ne borne les envois. */
+  let ackAllowed = false;
 
   if (isDbConfigured()) {
     try {
       await ensureSchema();
 
       const recent = (await sql()`
-        SELECT count(*)::int AS n FROM nivex_messages
-        WHERE lower(email) = ${input.email} AND created_at > now() - interval '10 minutes'`) as { n: number }[];
-      if ((recent[0]?.n ?? 0) >= 3) throw new ContactError("rate_limited");
+        SELECT count(*) FILTER (
+                 WHERE lower(email) = ${input.email} AND created_at > now() - interval '10 minutes'
+               )::int AS mine,
+               count(*)::int AS day
+        FROM nivex_messages
+        WHERE created_at > now() - interval '24 hours'`) as { mine: number; day: number }[];
+      if ((recent[0]?.mine ?? 0) >= 3) throw new ContactError("rate_limited");
 
       const rows = (await sql()`
         INSERT INTO nivex_messages (locale, name, email, phone, subject, body)
@@ -70,6 +93,7 @@ export async function submitContact(input: ContactInputType): Promise<{ stored: 
         RETURNING id`) as Row[];
       id = rows[0]?.id as string;
       stored = true;
+      ackAllowed = (recent[0]?.day ?? 0) < ACK_DAILY_CAP;
     } catch (e) {
       if (e instanceof ContactError) throw e;
       await logEvent("contact_store_failed", { error: String((e as Error).message).slice(0, 300) });
@@ -77,37 +101,45 @@ export async function submitContact(input: ContactInputType): Promise<{ stored: 
   }
 
   let sent = false;
+  let acked = false;
   const at = await ownerAccessToken().catch(() => null);
 
-  if (at && settings.ownerEmail) {
+  if (at) {
     const origin = siteOrigin();
     const owner = contactNotification({ ...input, siteUrl: origin });
-    const ack = contactAcknowledgement({ ...input, siteUrl: origin, businessEmail: contactEmail() });
+    // Un texte fixe : rien de ce que la personne a tapé n'y entre.
+    const ack = contactAcknowledgement({ locale: input.locale, siteUrl: origin, businessEmail: contactEmail() });
     const fromName = settings.businessName || "NIVEX";
 
-    const [toOwner] = await Promise.allSettled([
+    const [toOwner, toSender] = await Promise.allSettled([
+      // L'avis va à la boîte de la maison, comme tous les avis internes.
       sendGmail(at, {
-        to: settings.ownerEmail, subject: owner.subject, html: owner.html, text: owner.text,
+        to: REQUEST_INBOX, subject: owner.subject, html: owner.html, text: owner.text,
         fromName, replyTo: input.email,
       }),
       // Accusé de réception : la personne sait que son message est parti.
-      sendGmail(at, {
-        to: input.email, toName: input.name, subject: ack.subject, html: ack.html, text: ack.text,
-        fromName, replyTo: contactEmail(),
-      }),
+      // Sans nom affiché : ce qu'elle a tapé n'a rien à faire dans l'en-tête.
+      ackAllowed
+        ? sendGmail(at, {
+            to: input.email, subject: ack.subject, html: ack.html, text: ack.text,
+            fromName, replyTo: contactEmail(),
+          })
+        : Promise.resolve(null),
     ]);
 
     sent = toOwner.status === "fulfilled";
+    acked = ackAllowed && toSender.status === "fulfilled";
     if (sent && id) {
       await sql()`UPDATE nivex_messages SET email_sent = true WHERE id = ${id}`.catch(() => {});
     }
+    if (stored && !ackAllowed) await logEvent("contact_ack_capped", { cap: ACK_DAILY_CAP });
   }
 
   // Ni base ni courriel : on ne peut rien promettre à la personne.
   if (!stored && !sent) throw new ContactError("unavailable");
 
-  await logEvent("contact_received", { email: input.email, stored, sent });
-  return { stored, sent };
+  await logEvent("contact_received", { email: input.email, stored, sent, acked });
+  return { stored, sent, acked };
 }
 
 export async function listMessages(limit = 100): Promise<Message[]> {

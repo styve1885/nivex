@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, logEvent, sql } from "@/lib/db";
 import { siteOrigin } from "@/lib/google";
 import {
-  forwardedReply, ownerSmsNumber, toE164, TWIML_EMPTY, twilioSignatureValid, twimlForward,
+  forwardedReply, isCanadianNumber, ownerSmsNumber, stopHint, toE164, TWIML_EMPTY, twilioSignatureValid, twimlForward,
 } from "@/lib/sms";
 
 export const runtime = "nodejs";
@@ -64,8 +64,13 @@ export async function POST(req: NextRequest) {
     name = rows[0]?.client_name ?? null;
   } catch { /* le numéro suffit */ }
 
-  await logEvent("sms_reply_forwarded", { known: Boolean(name) });
+  /* Un « ARRÊT » ne désabonne pas chez Twilio : on dit au client le mot qui
+     le fait. Jamais vers un numéro où l'on n'écrirait pas de toute façon. */
+  const body = params.Body ?? "";
+  const hint = isCanadianNumber(from) ? stopHint(body) : null;
+
+  await logEvent("sms_reply_forwarded", { known: Boolean(name), stopHint: Boolean(hint) });
   return twiml(twimlForward(owner, forwardedReply({
-    from, name, body: params.Body ?? "", media: Number(params.NumMedia ?? 0) || 0,
-  })));
+    from, name, body, media: Number(params.NumMedia ?? 0) || 0, hinted: Boolean(hint),
+  }), hint));
 }

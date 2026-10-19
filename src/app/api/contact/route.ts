@@ -15,15 +15,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Pot de miel : succès silencieux, le robot n'apprend rien.
-  if (parsed.data.hp) return NextResponse.json({ ok: true }, { status: 200 });
+  // Pot de miel : succès silencieux, le robot n'apprend rien — même statut,
+  // même forme qu'un message reçu sans courriel.
+  if (parsed.data.hp) return NextResponse.json({ ok: true, sent: false, acked: false }, { status: 201 });
 
   // Démonstration locale : on confirme sans rien enregistrer ni envoyer.
-  if (isDemo()) return NextResponse.json({ ok: true, demo: true, sent: false }, { status: 201 });
+  if (isDemo()) return NextResponse.json({ ok: true, demo: true, sent: false, acked: false }, { status: 201 });
 
   try {
-    const { sent } = await submitContact(parsed.data);
-    return NextResponse.json({ ok: true, sent }, { status: 201 });
+    const { sent, acked } = await submitContact(parsed.data);
+    return NextResponse.json({ ok: true, sent, acked }, { status: 201 });
   } catch (e) {
     if (e instanceof ContactError) {
       return NextResponse.json({ ok: false, error: e.code }, { status: e.code === "rate_limited" ? 429 : 503 });

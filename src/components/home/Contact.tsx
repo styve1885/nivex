@@ -29,7 +29,7 @@ function clock(hm: string, locale: "fr" | "en"): string {
   return m ? `${h12}:${String(m).padStart(2, "0")} ${suffix}` : `${h12} ${suffix}`;
 }
 
-function openingLine(t: Dict, settings: Settings, locale: "fr" | "en"): string {
+function openingLine(t: Dict, settings: Pick<Settings, "hours">, locale: "fr" | "en"): string {
   const open = settings.hours.filter((h) => h.enabled);
   if (open.length === 0) return "";
 
@@ -45,8 +45,11 @@ function openingLine(t: Dict, settings: Settings, locale: "fr" | "en"): string {
   return `${clock(open[0].open, locale)} – ${clock(open[0].close, locale)}, ${when}`;
 }
 
+/* Composant client : ses props s'écrivent dans la page, lisibles par tous.
+   Il ne reçoit donc que les deux réglages qu'il lit, jamais l'objet entier,
+   qui porte le compte Google de l'artisan. */
 export function Contact({ t, locale, businessEmail, settings }: {
-  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Settings;
+  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Pick<Settings, "hours" | "zonePolicy">;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,6 +61,9 @@ export function Contact({ t, locale, businessEmail, settings }: {
   const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  /* L'accusé de réception n'est annoncé que s'il est vraiment parti : un
+     compte Google injoignable laisse le message en base, sans courriel. */
+  const [acked, setAcked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const errors = {
@@ -93,6 +99,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
         );
         return;
       }
+      setAcked(data.acked === true);
       setSent(true);
     } catch {
       setError(t.contact.errors.generic);
@@ -102,7 +109,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
   }
 
   function reset() {
-    setSent(false); setName(""); setEmail(""); setPhone(""); setSubject(""); setBody("");
+    setSent(false); setAcked(false); setName(""); setEmail(""); setPhone(""); setSubject(""); setBody("");
     setTouched({}); setError(null);
   }
 
@@ -127,7 +134,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
                 </span>
                 <h3 className="mt-7 font-display text-2xl font-normal text-ink-800">{t.contact.successTitle}</h3>
                 <p className="mx-auto mt-4 max-w-sm text-[0.92rem] font-light leading-[1.9] text-ink-500">
-                  {t.contact.successBody}
+                  {acked ? t.contact.successBody : t.contact.successBodyNoEmail}
                 </p>
                 <button type="button" onClick={reset}
                   className="mt-8 text-[11px] uppercase tracking-[0.18em] text-ink-500 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-ink-900">

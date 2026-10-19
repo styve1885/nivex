@@ -43,7 +43,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. Your phone also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Any other reply is passed on to the artisan's mobile phone; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. If your number is Canadian, it also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Any other reply is passed on to the artisan's mobile phone; the site does not keep it.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -69,7 +69,7 @@ const privacy: LegalDoc = {
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
-        "Twilio — carries the confirmation and reminder text messages. It receives your phone number and the text of the message, nothing else.",
+        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also relays your replies to the artisan, photos included, and keeps a copy of the messages it carries.",
         "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
@@ -808,7 +808,7 @@ export const en: Dict = {
     eyebrow: "Get in touch",
     title: "A question before you book?",
     lede:
-      "An item you're unsure about, an unusual time slot, a quote for a large batch: write to us. You'll hear back the same day, and get an acknowledgement within the minute.",
+      "An item you're unsure about, an unusual time slot, a quote for a large batch: write to us. You'll hear back the same day.",
     name: "Your name",
     email: "Your email",
     phone: "Phone (optional)",
@@ -821,6 +821,8 @@ export const en: Dict = {
     successTitle: "Message sent.",
     successBody:
       "An acknowledgement just landed in your inbox. We usually reply the same day.",
+    successBodyNoEmail:
+      "Your message has been received. We usually reply the same day.",
     another: "Write another message",
     orCall: "Or talk to us directly",
     phoneLabel: "Phone",
