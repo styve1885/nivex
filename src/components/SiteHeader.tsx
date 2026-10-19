@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Wordmark } from "./Logo";
 import type { Dict } from "@/lib/i18n";
 
-export function SiteHeader({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
+export function SiteHeader({ t, locale }: { t: Pick<Dict, "nav" | "brand">; locale: "fr" | "en" }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();

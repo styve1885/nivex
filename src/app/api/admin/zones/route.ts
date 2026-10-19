@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { getSettings, saveZonePolicy, zoneHistory } from "@/lib/settings";
@@ -65,6 +66,9 @@ export async function PUT(req: NextRequest) {
   if (problems.length) return NextResponse.json({ ok: false, error: "invalid_policy", problems }, { status: 400 });
 
   const changes = await saveZonePolicy(policy, owner.email);
+  /* Texte de zone, frais, page Montréal : la vitrine se sert depuis le cache,
+     elle se refait dès la prochaine visite. */
+  revalidatePath("/[locale]", "layout");
   const [s, history] = await Promise.all([getSettings(), zoneHistory().catch(() => [])]);
   return NextResponse.json({ ok: true, changes, policy: s.zonePolicy, history });
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { servedText } from "@/lib/travel";
+import { pageMeta } from "@/lib/seo";
 import { PLANS, planCents, planFullCents } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
@@ -13,11 +14,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.subscribe.title,
-    description: t.subscribe.lede,
-    alternates: { canonical: `/${locale}/abonnement`, languages: { "fr-CA": "/fr/abonnement", "en-CA": "/en/abonnement" } },
-  };
+  return pageMeta(t, locale, "/abonnement", t.subscribe.title, t.subscribe.lede);
 }
 
 export default async function SubscribePage({

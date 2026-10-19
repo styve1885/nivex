@@ -8,7 +8,7 @@ import { getSettings, type Settings } from "@/lib/settings";
 import { SETUP_MINUTES } from "@/lib/brand";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { montrealFees, montrealNames, type FeeRow } from "@/lib/travel";
-import { faqJsonLd, localBusinessJsonLd } from "@/lib/seo";
+import { faqJsonLd, localBusinessJsonLd, pageMeta } from "@/lib/seo";
 
 /*
  * Repassage à domicile à Montréal.
@@ -24,21 +24,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: { absolute: t.montreal.metaTitle },
-    description: t.montreal.lede,
-    alternates: {
-      canonical: `/${locale}/montreal`,
-      languages: { "fr-CA": "/fr/montreal", "en-CA": "/en/montreal" },
-    },
-    openGraph: {
-      title: t.montreal.metaTitle,
-      description: t.montreal.lede,
-      url: `/${locale}/montreal`,
-      locale: locale === "en" ? "en_CA" : "fr_CA",
-      images: [{ url: "/opengraph-image.jpg", width: 1200, height: 630, alt: t.meta.ogAlt }],
-    },
-  };
+  return pageMeta(t, locale, "/montreal", { absolute: t.montreal.metaTitle }, t.montreal.lede);
 }
 
 /** Les frais d'une zone, en une phrase : ceux d'une courte séance, puis d'une longue. */
@@ -130,7 +116,7 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
             <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">{m.none}</p>
           )}
           <div className="paper mt-12 px-7 py-8 sm:px-9">
-            <ZoneChecker t={t} locale={locale} />
+            <ZoneChecker t={{ brand: t.brand, zoneCheck: t.zoneCheck }} locale={locale} />
           </div>
         </div>
       </section>

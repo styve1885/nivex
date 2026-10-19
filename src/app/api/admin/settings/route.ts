@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { getSettings, updateSettings } from "@/lib/settings";
@@ -67,5 +68,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   const settings = await updateSettings(parsed.data);
+  /* La vitrine se sert depuis le cache : tarif, horaire et prestations y
+     paraissent dès la prochaine visite, sans attendre `revalidate`. */
+  revalidatePath("/[locale]", "layout");
   return NextResponse.json({ ok: true, settings });
 }

@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
+/* Les prestations du code viennent d'un module sans dépendance : lues depuis
+   `settings.ts`, elles emportaient le pilote de la base dans le navigateur. */
+import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "@/lib/services";
+import type { Settings } from "@/lib/settings";
 import { ServiceIcon } from "../Icons";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];

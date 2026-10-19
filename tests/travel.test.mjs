@@ -421,6 +421,42 @@ test("la foire aux questions structurée reprend le texte affiché", () => {
   assert.equal(ld.mainEntity[0].acceptedAnswer.text, "R.");
 });
 
+const { pageMeta, notFoundMeta, siteMetadata, siteViewport } = await import("../src/lib/seo.ts");
+
+test("chaque page a sa carte de partage : son adresse, ses deux langues, son titre complet", () => {
+  const m = pageMeta(en, "en", "/tarifs", en.tarifs.eyebrow, en.tarifs.lede);
+  assert.equal(m.title, en.tarifs.eyebrow, "le gabarit de la racine ajoute « · NIVEX » au <title>");
+  assert.equal(m.alternates.canonical, "/en/tarifs");
+  assert.deepEqual(m.alternates.languages, { "fr-CA": "/fr/tarifs", "en-CA": "/en/tarifs", "x-default": "/fr/tarifs" });
+  assert.equal(m.openGraph.url, "/en/tarifs", "og:url est la page partagée, pas l'accueil");
+  assert.equal(m.openGraph.type, "website");
+  assert.equal(m.openGraph.siteName, "NIVEX");
+  assert.equal(m.openGraph.title, `${en.tarifs.eyebrow} · NIVEX`, "la carte reçoit le titre complet");
+  assert.equal(m.openGraph.description, en.tarifs.lede);
+  assert.equal(m.openGraph.locale, "en_CA");
+  assert.deepEqual(m.openGraph.alternateLocale, ["fr_CA"]);
+  assert.equal(m.openGraph.images[0].url, "/opengraph-image.jpg", "l'image ne se perd pas avec le bloc");
+  assert.equal(m.twitter, undefined, "la carte Twitter de la racine survit si personne ne la redéclare");
+
+  const mtl = pageMeta(fr, "fr", "/montreal", { absolute: fr.montreal.metaTitle }, fr.montreal.lede);
+  assert.equal(mtl.openGraph.title, fr.montreal.metaTitle, "un titre absolu reste tel quel");
+  assert.deepEqual(mtl.openGraph.alternateLocale, ["en_CA"]);
+  assert.equal(pageMeta(fr, "de", "", "x", "y").alternates.canonical, "/fr", "une langue inconnue retombe sur le français");
+});
+
+test("la page introuvable : un titre dans chaque langue, sans adresse canonique ni point d'exclamation", () => {
+  assert.deepEqual(notFoundMeta(fr), { title: "Page introuvable", alternates: {} });
+  assert.deepEqual(notFoundMeta(en), { title: "Page not found", alternates: {} });
+  assert.deepEqual(Object.keys(en.notFound), Object.keys(fr.notFound));
+  for (const t of [fr, en]) for (const v of Object.values(t.notFound)) assert.doesNotMatch(v, /!/, v);
+});
+
+test("l'en-tête commun aux deux racines : clair seulement, et sans « index, follow »", () => {
+  assert.equal(siteViewport.colorScheme, "only light", "« light » seul laisserait Chrome inverser les couleurs");
+  assert.ok(siteMetadata.metadataBase instanceof URL);
+  assert.equal(siteMetadata.robots, undefined, "il contredisait le noindex des pages 404");
+});
+
 test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", () => {
   const r = robots();
   const agents = r.rules.map((x) => x.userAgent);

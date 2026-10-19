@@ -32,7 +32,8 @@ type Reponse = {
 };
 
 export function ZoneChecker({ t, locale, className = "" }: {
-  t: Dict; locale: "fr" | "en"; className?: string;
+  // Les seules parties lues : le dictionnaire entier partirait dans la page.
+  t: Pick<Dict, "brand" | "zoneCheck">; locale: "fr" | "en"; className?: string;
 }) {
   const [postal, setPostal] = useState("");
   const [etat, setEtat] = useState<"vide" | "chargement" | "reponse" | "erreur">("vide");

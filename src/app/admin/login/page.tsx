@@ -98,6 +98,8 @@ export default async function LoginPage({
         </div>
 
         <p className="mt-8 text-center text-[11px] text-ink-400">
+          {/* La vitrine est une autre racine : la page se recharge de toute façon. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/fr" className="transition-colors hover:text-gold-600">← Retour au site</a>
         </p>
       </div>

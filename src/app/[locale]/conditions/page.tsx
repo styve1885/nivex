@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { LegalDocument } from "@/components/LegalDocument";
+import { pageMeta } from "@/lib/seo";
 
 // Le taux, la durée minimale et les délais sont ceux réglés depuis /admin :
 // la page se relit au même rythme que la page d'accueil.
@@ -11,14 +12,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return {
-    title: t.footer.terms,
-    description: t.legal.terms.lede,
-    alternates: {
-      canonical: `/${locale}/conditions`,
-      languages: { "fr-CA": "/fr/conditions", "en-CA": "/en/conditions" },
-    },
-  };
+  return pageMeta(t, locale, "/conditions", t.footer.terms, t.legal.terms.lede);
 }
 
 export default async function TermsPage({ params }: { params: Promise<{ locale: string }> }) {
