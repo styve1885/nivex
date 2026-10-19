@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, requireOwner } from "@/lib/session";
-import { getSettings } from "@/lib/settings";
+import { getSettingsStrict } from "@/lib/settings";
 import { listBookings, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
@@ -19,10 +19,15 @@ export default async function AdminPage({
   const session = await getSession();
   if (!session) redirect("/admin/login");
 
+  /* Lus strictement : l'onglet Réglages part de ces valeurs et les renvoie
+     presque toutes à l'enregistrement. Des valeurs par défaut affichées
+     pendant une panne remplaceraient, au clic suivant, ce que l'artisan a
+     réglé. Sans base lisible, on le dit, et rien ne s'affiche à modifier. */
+  const settings = await getSettingsStrict().catch(() => null);
+  if (!settings) return <Unreadable />;
+
   const owner = await requireOwner();
   if (!owner) redirect("/admin/login?error=not_owner");
-
-  const settings = await getSettings();
 
   /* « Branché » ne veut pas dire « fonctionne » : un jeton révoqué laisse
      le réglage intact pendant que plus rien ne part. On essaie donc, et
@@ -78,6 +83,21 @@ export default async function AdminPage({
         missingScopes: sp.warn === "missing_scopes" ? (sp.scopes ?? "").split(",").filter(Boolean) : [],
       }}
     />
+  );
+}
+
+/** La base ne répond pas : un message, et rien à enregistrer par-dessus. */
+function Unreadable() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6 py-16">
+      <div className="paper w-full max-w-md p-9">
+        <h1 className="font-display text-2xl font-normal text-ink-800">Réglages momentanément illisibles.</h1>
+        <p className="mt-3 text-[0.88rem] font-light leading-[1.85] text-ink-500">
+          La base de données ne répond pas. Rien n&apos;a été modifié. Rechargez la page dans un instant ;
+          si cela dure, /api/health en donne la raison.
+        </p>
+      </div>
+    </div>
   );
 }
 

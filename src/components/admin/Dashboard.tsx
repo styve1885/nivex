@@ -83,9 +83,11 @@ export function Dashboard({
         </h1>
         <p className="mt-2 text-[0.9rem] font-light text-ink-500">
           {settings.connected
-            ? upcoming.length > 0
-              ? `Vous avez ${upcoming.length} rendez-vous à venir.`
-              : "Aucun rendez-vous à venir pour l'instant. Votre site accepte les réservations."
+            ? upcoming.some((b) => b.status !== "cancelled")
+              ? `Vous avez ${upcoming.filter((b) => b.status !== "cancelled").length} rendez-vous à venir.`
+              : settings.paused
+                ? "Aucun rendez-vous à venir. Les réservations en ligne sont suspendues (onglet Réglages)."
+                : "Aucun rendez-vous à venir pour l'instant. Votre site accepte les réservations."
             : "Il reste une étape : brancher votre compte Google pour ouvrir les réservations."}
         </p>
       </div>

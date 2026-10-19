@@ -36,6 +36,9 @@ export type BookingEmailData = {
   siteUrl: string;
   businessPhone: string;
   businessEmail: string;
+  /* L'invitation à l'agenda est-elle réellement partie ? Faux, la
+     confirmation n'en parle pas. Absent, elle en parle comme avant. */
+  invited?: boolean;
   /* D'où vient ce client. Absent pour les rendez-vous pris avant la mesure,
      et absent aussi du courriel du client : cela ne regarde que l'artisan. */
   origin?: {
@@ -93,6 +96,7 @@ const T = {
     subject: (ref: string) => `Votre séance NIVEX est confirmée · ${ref}`,
     hi: (n: string) => `Bonjour ${n},`,
     intro: "Votre séance de repassage à domicile est confirmée. Votre artisan a été prévenu et l'invitation a été ajoutée à votre agenda.",
+    introNoInvite: "Votre séance de repassage à domicile est confirmée. Votre artisan a été prévenu.",
     when: "Rendez-vous", where: "Adresse", what: "Prestations", duration: "Durée estimée",
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
@@ -126,6 +130,7 @@ const T = {
     subject: (ref: string) => `Your NIVEX session is confirmed · ${ref}`,
     hi: (n: string) => `Hello ${n},`,
     intro: "Your in-home ironing session is confirmed. Your craftsman has been notified and the invitation has been added to your calendar.",
+    introNoInvite: "Your in-home ironing session is confirmed. Your craftsman has been notified.",
     when: "Appointment", where: "Address", what: "Services", duration: "Estimated duration",
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
@@ -200,11 +205,12 @@ export function clientConfirmation(d: BookingEmailData) {
   const when = formatDateTime(d.startsAt, d.timezone, d.locale);
   const dur = minutesToText(d.durationMinutes, d.locale);
   const money = formatMoney(d.estimateCents, d.currency, d.locale);
+  const intro = d.invited === false ? t.introNoInvite : t.intro;
 
   const inner = `
   <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
     <p style="margin:0 0 14px;font-size:16px;">${esc(t.hi(d.clientName.split(" ")[0]))}</p>
-    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(t.intro)}</p>
+    <p style="margin:0 0 26px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(intro)}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       ${row(t.when, `<strong style="font-size:16px;">${esc(when)}</strong>`)}
       ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
@@ -238,7 +244,7 @@ export function clientConfirmation(d: BookingEmailData) {
   </td></tr>`;
 
   const text = [
-    t.hi(d.clientName.split(" ")[0]), "", t.intro, "",
+    t.hi(d.clientName.split(" ")[0]), "", intro, "",
     `${t.when}: ${when}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
     `${t.what}:`, itemsText(d.items),

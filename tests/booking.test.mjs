@@ -14,7 +14,7 @@ const { slotIsFree } = await import("../src/lib/availability.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { REQUEST_INBOX, PHONE, SETUP_MINUTES } = await import("../src/lib/brand.ts");
-const { occupiedBlock } = await import("../src/lib/bookings.ts");
+const { occupiedBlock, calendarEvent } = await import("../src/lib/bookings.ts");
 const { perHour } = await import("../src/lib/pricing.ts");
 
 const TZ = "America/Toronto";
@@ -207,6 +207,54 @@ test("le courriel de confirmation annonce l'arrivée anticipée", () => {
   assert.match(flat(m.text), /15 minutes avant le début de votre séance/);
   assert.match(m.html, /15 minutes avant/);
   assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /15 minutes before your session begins/);
+});
+
+test("le courriel ne promet l'invitation que si elle est partie", () => {
+  assert.match(clientConfirmation(d).text, /invitation a été ajoutée/);
+  assert.match(clientConfirmation({ ...d, invited: true }).text, /invitation a été ajoutée/);
+  assert.ok(!/invitation/i.test(clientConfirmation({ ...d, invited: false }).text));
+  assert.ok(!/invitation/i.test(clientConfirmation({ ...d, locale: "en", invited: false }).text));
+});
+
+/* ————— L'invitation d'agenda ————— */
+
+const booking = {
+  ...d, manageToken: "tok123", endsAt: new Date("2026-10-03T20:00:00.000Z"),
+  items: [{ key: "shirt", label: "Chemises", qty: 6 }],
+  travelFeeCents: 1500, travelZone: "Zone B",
+  origin: { heardFrom: "facebook", referral: "julie", source: "facebook" },
+};
+const origin = "https://nivexrepassage.ca";
+
+test("l'invitation porte les heures réservées et dit l'arrivée anticipée", () => {
+  const ev = calendarEvent(booking, origin, TZ);
+  assert.equal(ev.start, "2026-10-03T18:00:00.000Z", "14 h, l'heure de la confirmation");
+  assert.equal(ev.end, "2026-10-03T20:00:00.000Z");
+  assert.match(flat(ev.description), /15 minutes avant le début de votre séance/);
+});
+
+test("l'invitation ne montre ni la provenance ni l'espace artisan", () => {
+  for (const ev of [calendarEvent(booking, origin, TZ), calendarEvent({ ...booking, locale: "en" }, origin, TZ)]) {
+    assert.ok(!/connus|heard|facebook|julie/i.test(ev.description), "provenance");
+    assert.ok(!ev.description.includes("/admin"), "lien vers l'espace artisan");
+  }
+});
+
+test("l'invitation se lit dans la langue du client, l'artisan y garde ses repères", () => {
+  const fr = calendarEvent(booking, origin, TZ);
+  assert.match(fr.summary, /Repassage à domicile · Claire Beaulieu/);
+  for (const bit of ["Séance : samedi 3 octobre 2026", "450 943-1217", "Chemises × 6",
+                     "Frais de déplacement (Zone B) : 15 $", "Total estimé : 65 $", "Référence : NVX-ABC123",
+                     `${origin}/fr/reservation/tok123`]) {
+    assert.ok(flat(fr.description).includes(bit), `fr : « ${bit} » manquant`);
+  }
+  const en = calendarEvent({ ...booking, locale: "en" }, origin, TZ);
+  assert.match(en.summary, /In-home ironing · Claire Beaulieu/);
+  for (const bit of ["Session: Saturday, October 3, 2026", "15 minutes before your session begins",
+                     "Travel fee (Zone B): $15", "Reference: NVX-ABC123", `${origin}/en/reservation/tok123`]) {
+    assert.ok(flat(en.description).includes(bit), `en : « ${bit} » manquant`);
+  }
+  assert.ok(!/[!]/.test(fr.description + en.description + fr.summary + en.summary), "aucun point d'exclamation");
 });
 
 console.log(`\n${n} vérifications passées.\n`);

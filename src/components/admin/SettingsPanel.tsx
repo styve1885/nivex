@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DEFAULT_SERVICES, type Settings, type DayHours, type ServiceItem } from "@/lib/settings";
 import { ServiceIcon } from "../Icons";
+import { parseHM } from "@/lib/time";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
@@ -100,7 +101,9 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
           ? "Certaines valeurs sont invalides — vérifiez les heures d'ouverture et les prestations."
           : data.error === "duplicate_service_key"
             ? "Deux prestations portent la même clé. Retirez la dernière ajoutée et recommencez."
-            : "L'enregistrement a échoué.");
+            : data.error === "day_too_short"
+              ? "Un jour ouvert est plus court que la durée minimale : aucune séance n'y tiendrait. Allongez-le ou fermez-le."
+              : "L'enregistrement a échoué.");
         return;
       }
       setSaved(true);
@@ -144,6 +147,9 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
                 </div>
                 {h.enabled && h.open >= h.close && (
                   <span className="text-[11px] text-[#8E332C]">La fermeture doit suivre l&apos;ouverture</span>
+                )}
+                {h.enabled && h.open < h.close && parseHM(h.close) - parseHM(h.open) < s.minMinutes && (
+                  <span className="text-[11px] text-[#8E332C]">Plus court que la durée minimale : aucune séance n&apos;y tient</span>
                 )}
               </li>
             );

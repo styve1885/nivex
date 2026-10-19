@@ -87,8 +87,11 @@ export async function takeOAuthState(): Promise<string | null> {
 export async function requireOwner(): Promise<Session | null> {
   const session = await getSession();
   if (!session) return null;
-  const { getSettings } = await import("./settings");
-  const s = await getSettings();
+  /* Lecture stricte, et refus si elle échoue : les valeurs par défaut
+     portent un propriétaire absent, qui ouvrirait la porte à toute session. */
+  const { getSettingsStrict } = await import("./settings");
+  const s = await getSettingsStrict().catch(() => null);
+  if (!s) return null;
   if (!s.ownerEmail) return session;                       // pas encore revendiqué
   return s.ownerEmail.toLowerCase() === session.email.toLowerCase() ? session : null;
 }

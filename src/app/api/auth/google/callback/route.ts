@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { exchangeCode, userInfo, clearTokenCache } from "@/lib/google";
 import { setSession, takeOAuthState } from "@/lib/session";
-import { getSettings, saveConnection } from "@/lib/settings";
+import { getSettingsStrict, saveConnection } from "@/lib/settings";
 import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
 
   if (!profile.email) return fail(req, "no_email");
 
-  const settings = await getSettings();
+  /* Lecture stricte : une base muette se lirait comme un compte encore
+     libre, et le premier venu deviendrait l'artisan. */
+  const settings = await getSettingsStrict().catch(() => null);
+  if (!settings) return fail(req, "db_unavailable");
   const jar = await cookies();
 
   // Le compte est déjà revendiqué : seul le propriétaire peut se reconnecter.

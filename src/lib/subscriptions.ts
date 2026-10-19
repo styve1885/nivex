@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, type Settings } from "./settings";
+import { getSettings, getSettingsStrict, type Settings } from "./settings";
 import { PLANS, type Plan } from "./pricing";
-import { computeSlots, loadBusy, loadBusyRange, slotProblem } from "./availability";
+import { computeSlots, horizonEnd, loadBusy, loadBusyRange, slotProblem } from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import {
   createEvent, createRecurringEvent, deleteEvent, listInstances, ownerAccessToken, patchEvent,
@@ -247,8 +247,18 @@ export async function previewSeries(opts: {
   const plan = findPlan(opts.planKey);
   if (!plan) throw new SubscriptionError("unknown_plan");
   if (!Number.isFinite(opts.first.getTime())) throw new SubscriptionError("invalid");
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const tz = settings.timezone;
+
+  /* Une date lointaine ferait charger des années d'agenda, une requête par
+     tranche de deux mois, depuis une route ouverte à tous. Le client ne
+     réserve pas au-delà de l'horizon réglé ; l'artisan, qui entre aussi des
+     abonnés déjà en route, garde un an derrière et deux ans devant. Refusé
+     avant tout chargement. */
+  const t0 = opts.first.getTime(), now = Date.now();
+  if (opts.checkLead ? t0 >= horizonEnd(settings) : t0 < now - 366 * DAY || t0 > now + 2 * 366 * DAY) {
+    throw new SubscriptionError("invalid");
+  }
   const count = opts.count ?? plan.visits * SERIES_CYCLES;
   const minutes = plan.minutesPerVisit;
   const starts = gridDates(gridFrom(opts.first, plan.everyWeeks, tz), 0, count);
@@ -292,7 +302,7 @@ export async function previewSeries(opts: {
 
 /** L'abonnement d'un client, pris en ligne. */
 export async function createSubscription(input: SubscriptionInputType, host?: string | null): Promise<SubscriptionFull> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   if (settings.paused) throw new SubscriptionError("paused");
   const plan = findPlan(input.planKey);
   if (!plan) throw new SubscriptionError("unknown_plan");
@@ -312,7 +322,7 @@ export async function createSubscription(input: SubscriptionInputType, host?: st
 
 /** L'abonnement qu'entre l'artisan, pour un client existant. */
 export async function createOwnerSubscription(input: OwnerSubscriptionInputType, host?: string | null): Promise<SubscriptionFull> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const plan = findPlan(input.planKey);
   if (!plan) throw new SubscriptionError("unknown_plan");
   if (input.startDone >= plan.visits) throw new SubscriptionError("invalid");

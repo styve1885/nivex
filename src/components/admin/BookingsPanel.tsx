@@ -82,6 +82,9 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   /* Une réservation prise pendant une rupture du lien avec Google existe,
      mais personne n'en a été averti. Elle se rattrape. */
   const silent = !cancelled && (!b.emailSent || !b.inCalendar);
+  /* Seul l'agenda manque : le rattrapage n'envoie aucun courriel. Une visite
+     d'abonnement se rattrape avec sa série, confirmation comprise. */
+  const calendarOnly = b.emailSent && !b.inCalendar && !b.subscription;
 
   async function resend() {
     setResending(true);
@@ -125,7 +128,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
           </p>
         </div>
         {silent && (
-          <span title="Ni courriel ni agenda" aria-label="Confirmation non envoyée"
+          <span title={!b.emailSent && !b.inCalendar ? "Ni courriel ni agenda" : !b.emailSent ? "Courriel non parti" : "Absent de l'agenda"}
+            aria-label={b.emailSent ? "Absent de l'agenda" : "Confirmation non envoyée"}
             className="flex-none border border-[#B4453C]/50 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
             Muet
           </span>
@@ -187,11 +191,11 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                 </p>
                 <button type="button" onClick={resend} disabled={resending}
                   className="mt-3 border border-[#B4453C]/50 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-[#8E332C] transition-colors hover:bg-[#B4453C]/10 disabled:opacity-40">
-                  {resending ? "Envoi en cours…" : "Renvoyer la confirmation"}
+                  {resending ? "Envoi en cours…" : calendarOnly ? "Inscrire à l'agenda" : "Renvoyer la confirmation"}
                 </button>
                 {resent?.ok && (
                   <p className="mt-3 text-[0.82rem] text-gold-700">
-                    C&apos;est parti. Le client a reçu sa confirmation.
+                    {calendarOnly ? "Le rendez-vous est inscrit à votre agenda." : "C'est parti. Le client a reçu sa confirmation."}
                   </p>
                 )}
                 {resent && !resent.ok && (
