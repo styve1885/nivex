@@ -1,11 +1,16 @@
-export function Stepper({ steps, current }: { steps: readonly string[]; current: number }) {
+/**
+ * La progression du tunnel. Au téléphone, l'intitulé des étapes s'efface de
+ * l'écran mais reste lu par les lecteurs d'écran : la liste ne se réduit pas
+ * à « 1 2 3 4 ». Son nom vient du dictionnaire, comme tout texte du site.
+ */
+export function Stepper({ steps, current, label }: { steps: readonly string[]; current: number; label: string }) {
   return (
-    <ol className="mx-auto flex max-w-2xl items-center justify-between gap-1" aria-label="Progression">
-      {steps.map((label, i) => {
+    <ol className="mx-auto flex max-w-2xl items-center justify-between gap-1" aria-label={label}>
+      {steps.map((name, i) => {
         const done = i < current;
         const active = i === current;
         return (
-          <li key={label} className="flex flex-1 items-center gap-2 last:flex-none">
+          <li key={name} className="flex flex-1 items-center gap-2 last:flex-none">
             <div className="flex items-center gap-2.5">
               <span
                 aria-current={active ? "step" : undefined}
@@ -20,10 +25,10 @@ export function Stepper({ steps, current }: { steps: readonly string[]; current:
               >
                 {done ? "✓" : i + 1}
               </span>
-              <span className={`hidden text-[10px] uppercase tracking-[0.18em] transition-colors sm:block ${
+              <span className={`sr-only text-[10px] uppercase tracking-[0.18em] transition-colors sm:not-sr-only ${
                 active ? "text-ink-800" : "text-ink-400"
               }`}>
-                {label}
+                {name}
               </span>
             </div>
             {i < steps.length - 1 && (

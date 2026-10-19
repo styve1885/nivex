@@ -13,7 +13,10 @@ import { VisitActions } from "@/components/booking/VisitActions";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { title: getDict(locale).subManage.title, robots: { index: false, follow: false } };
+}
 
 /**
  * « Gérer mes visites » — le lien du courriel de confirmation.

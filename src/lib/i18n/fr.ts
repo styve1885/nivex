@@ -579,10 +579,13 @@ export const fr = {
     title: "Réserver une séance",
     lede: "Quatre étapes, deux minutes. Vous choisissez votre heure, la confirmation part aussitôt.",
     steps: ["Prestations", "Adresse", "Créneau", "Confirmation"],
+    progress: "Progression",
     step1: {
       title: "Que devons-nous traiter ?",
       hint: "Sélectionnez ce qui vous concerne, ajustez les quantités. L'estimation se met à jour toute seule.",
       qty: "Quantité",
+      less: "Diminuer la quantité",
+      more: "Augmenter la quantité",
       estimate: "Estimation",
       duration: "Durée estimée",
       price: "Montant estimé",
@@ -590,6 +593,9 @@ export const fr = {
       minutes: "min",
       empty: "Sélectionnez au moins une prestation pour continuer.",
       firstFreeApplied: "Première heure offerte appliquée",
+      /* Le navigateur ne sait pas si le client a déjà réservé : seul le
+         serveur le lit. Le montant offert reste donc une éventualité. */
+      firstFreeIfFirst: "Première réservation : {amount}, première heure offerte",
       notes: "Précisions (optionnel)",
       notesPlaceholder: "Pièces fragiles, accès à l'immeuble, animal à la maison, stationnement…",
     },
@@ -626,13 +632,17 @@ export const fr = {
     },
     step3: {
       title: "Quand vous conviendrait-il ?",
-      hint: "Les heures grisées sont déjà prises. Fuseau : heure de l'Est (Montréal).",
+      hint: "Seules les heures libres sont proposées ; un jour grisé est complet ou fermé.",
       loading: "Lecture de l'horaire…",
-      noSlots: "Aucune disponibilité ce jour-là. Essayez une autre date.",
+      noneInRange: "Aucune heure libre sur ces deux semaines. Essayez d'autres dates, ou appelez-nous :",
+      horizon: "La réservation en ligne porte sur les {n} prochains jours. Pour une date plus lointaine, appelez-nous :",
+      prevDays: "Quinzaine précédente",
+      nextDays: "Quinzaine suivante",
       morning: "Matin",
       afternoon: "Après-midi",
       evening: "Soirée",
       timezone: "Fuseau : heure de l'Est (Montréal).",
+      durationLine: "Durée estimée : {duration}",
       setup:
         "Votre repasseur arrive 15 minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.",
       comment: "Commentaire libre (facultatif)",
@@ -652,6 +662,16 @@ export const fr = {
         "Je comprends que l'estimation est indicative et que le montant final sera confirmé sur place avant le début de la séance.",
       submit: "Confirmer la réservation",
       submitting: "Confirmation en cours…",
+    },
+    /* Ce que la politique de confidentialité et les conditions annoncent
+       « en réservant » : dit ici, au moment où les coordonnées sont données,
+       avec la date de leur dernière révision. Commun aux deux tunnels. */
+    legal: {
+      data: "Vos coordonnées servent à vos rendez-vous : la confirmation, les rappels et tout changement vous parviennent par courriel ou par texto. Elles sont conservées hors du Québec, chez les fournisseurs nommés dans la politique de confidentialité.",
+      accept: "J'accepte les {terms} et la {privacy}, révisées le {date}.",
+      terms: "conditions d'utilisation",
+      privacy: "politique de confidentialité",
+      newTab: "nouvel onglet",
     },
     back: "Retour",
     next: "Continuer",
@@ -675,6 +695,7 @@ export const fr = {
       phone: "Numéro invalide",
       postal: "Code postal invalide (ex. J4K 1A1)",
       outOfArea: `Cette adresse est hors de notre zone de déplacement. Appelez-nous au ${PHONE}, nous verrons ensemble ce qui est possible.`,
+      fields: "Vérifiez ces renseignements : {fields}.",
     },
   },
   manage: {

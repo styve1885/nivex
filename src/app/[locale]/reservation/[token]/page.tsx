@@ -11,7 +11,11 @@ import { CancelButton } from "@/components/booking/CancelButton";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+/* Un titre à elle, pour l'onglet et les lecteurs d'écran ; jamais indexée. */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { title: getDict(locale).manage.title, robots: { index: false, follow: false } };
+}
 
 export default async function ManagePage({
   params,
@@ -74,6 +78,18 @@ export default async function ManagePage({
             <Row label={t.booking.step4.total}
               value={formatMoney(b.estimateCents, b.currency, locale)}
               hint={b.firstHourFree ? t.booking.step1.firstFreeApplied : undefined} />
+            {/* Les frais de route, à part de l'estimation, et le total : ce
+                que le client a confirmé et ce que dit son courriel. Rien en
+                zone sans frais, comme dans le courriel. */}
+            {b.travelFeeCents > 0 && (
+              <>
+                <Row label={b.travelZone ? `${t.booking.step4.travelFee} (${b.travelZone})` : t.booking.step4.travelFee}
+                  value={formatMoney(b.travelFeeCents, b.currency, locale)}
+                  hint={t.booking.step4.travelHint} />
+                <Row label={t.booking.step4.grandTotal}
+                  value={formatMoney(b.estimateCents + b.travelFeeCents, b.currency, locale)} />
+              </>
+            )}
             <Row label={t.booking.success.ref} value={b.ref} mono />
           </dl>
         </div>

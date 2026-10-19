@@ -8,8 +8,8 @@ import type { ZoneStatus } from "@/lib/travel";
 import { arrivalHint, readAttribution } from "../SiteMeasurement";
 import { HeardFromField } from "./HeardFromField";
 import { Stepper } from "./Stepper";
-import { Field, Row, SlotPicker } from "./BookingWizard";
-import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal } from "./Stepper.helpers";
+import { Field, LegalAccept, Row, SlotPicker } from "./BookingWizard";
+import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal, rejectedContactFields } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 import { slotPhrase } from "@/lib/email";
 
@@ -39,11 +39,13 @@ export type SubscriptionConfig = {
   initialPlan: string | null;
   /** La phrase des secteurs desservis, écrite par le serveur depuis les réglages. */
   areaText: string;
+  /** Date de dernière révision des documents légaux, « AAAA-MM-JJ ». */
+  legalUpdated: string;
 };
 
 type TravelAnswer = { status: ZoneStatus; labelFr: string | null; labelEn: string | null; feeCents: number };
 type DaySlots = { date: string; weekday: number; open: boolean; slots: { time: string; iso: string }[] };
-type Schedule = { today: string; days: DaySlots[] };
+type Schedule = { today: string; horizonDays?: number; days: DaySlots[] };
 type Check = {
   key: string;
   free: boolean;
@@ -51,6 +53,9 @@ type Check = {
   conflicts: { startsAt: string; reason: "busy" | "closed" | "lead" | "invalid" }[];
   alternatives: string[];
 } | { key: string; failed: true };
+
+/* Le titre de chaque étape reçoit le focus quand elle s'ouvre. */
+const STEP_TITLES = ["a1", "a2", "a3", "a4"];
 
 /* ============================ Composant ============================ */
 
@@ -87,6 +92,9 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
   const [referredBy, setReferredBy] = useState(hint.referredBy);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [heldTravel, setHeldTravel] = useState<{ key: string; data: TravelAnswer | null } | null>(null);
+  /* Comme dans le tunnel de réservation : un refus « hors zone » à la
+     confirmation fait reposer la question de la zone. */
+  const [zoneRound, setZoneRound] = useState(0);
 
   const [sched, setSched] = useState<Schedule | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -101,9 +109,27 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
   const [done, setDone] = useState<{ ref: string; manageToken: string; first: string; emailSent: boolean } | null>(null);
 
   const topRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const shownRef = useRef<string | null>(null);
+
+  /* Une étape qui s'ouvre : on remonte en tête et le focus passe à son
+     titre, sauf au premier affichage. Puis un refus du serveur : l'alerte
+     prend le focus et vient sous les yeux. L'ordre des deux effets compte. */
   useEffect(() => {
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const view = done ? "done" : String(step);
+    const first = shownRef.current === null;
+    if (shownRef.current === view) return;
+    shownRef.current = view;
+    if (!first) document.getElementById(done ? "subscribe-done" : STEP_TITLES[step])?.focus({ preventScroll: true });
   }, [step, done]);
+
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.focus({ preventScroll: true });
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   const money = useCallback(
     (cents: number) =>
@@ -122,12 +148,12 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
   const when = useCallback((iso: string, withTime = true) =>
     new Intl.DateTimeFormat(config.locale === "en" ? "en-CA" : "fr-CA", {
       timeZone: config.timezone, weekday: "long", day: "numeric", month: "long",
-      ...(withTime ? { hour: "2-digit", minute: "2-digit", hour12: config.locale === "en" } : { year: "numeric" }),
+      ...(withTime ? { hour: "numeric", minute: "2-digit", hour12: config.locale === "en" } : { year: "numeric" }),
     }).format(new Date(iso)), [config.locale, config.timezone]);
 
   /* — La zone, pour la durée d'une visite de la formule — */
   const postalKey = POSTAL_RE.test(postal.trim()) ? postal.trim().toUpperCase() : "";
-  const travelKey = postalKey && plan ? `${postalKey}|${plan.minutesPerVisit}` : "";
+  const travelKey = postalKey && plan ? `${postalKey}|${plan.minutesPerVisit}|${zoneRound}` : "";
   const travel = travelKey && heldTravel?.key === travelKey ? heldTravel.data : null;
   const travelLoading = Boolean(travelKey) && heldTravel?.key !== travelKey;
 
@@ -228,15 +254,23 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
       const data = await res.json();
       if (!res.ok || !data.ok) {
         if (data.error === "conflicts" || data.error === "slot_taken") {
+          /* Le message et l'étape changent ensemble, avant de relire
+             l'horaire, pour que l'alerte garde le focus. */
           setError(s.errors.conflicts);
           setCheck(null);
           setSlot(null);
-          await loadSchedule();
           setStep(2);
+          await loadSchedule();
         } else if (data.error === "paused") {
           setError(t.booking.errors.paused);
         } else if (data.error === "out_of_area") {
           setError(t.booking.errors.outOfArea);
+          setZoneRound((n) => n + 1);
+          setStep(1);
+        } else if (data.error === "invalid_input" && rejectedContactFields(data.fields).length > 0) {
+          const bad = rejectedContactFields(data.fields);
+          setTouched((x) => ({ ...x, ...Object.fromEntries(bad.map((f) => [f, true])) }));
+          setError(t.booking.errors.fields.replace("{fields}", bad.map((f) => t.booking.step2[f]).join(", ")));
           setStep(1);
         } else {
           setError(data.error === "rate_limited" ? s.errors.tooMany : t.booking.errors.generic);
@@ -262,12 +296,12 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
             <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-gold-400 text-gold-600">
               <CheckIcon className="h-7 w-7" />
             </span>
-            <h1 className="mt-8 font-display text-4xl font-light text-ink-800">{s.success.title}</h1>
+            <h1 id="subscribe-done" tabIndex={-1} className="mt-8 font-display text-4xl font-light text-ink-800">{s.success.title}</h1>
             <p className="mx-auto mt-5 max-w-md text-[0.95rem] font-light leading-[1.9] text-ink-500">
               {done.emailSent ? s.success.body : s.success.bodyNoEmail}
             </p>
             <p className="mt-9 text-[10px] uppercase tracking-[0.2em] text-ink-400">{s.success.first}</p>
-            <p className="mt-2 font-display text-2xl text-ink-800">{done.first}</p>
+            <p className="mt-2 text-balance font-display text-2xl text-ink-800">{done.first}</p>
             <div className="mx-auto mt-9 inline-flex items-center gap-3 border border-gold-300/60 px-5 py-2.5">
               <span className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{s.success.ref}</span>
               <code className="font-mono text-sm tracking-wider text-ink-800">{done.ref}</code>
@@ -297,13 +331,22 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
         <p className="mx-auto mt-5 max-w-lg text-[0.93rem] font-light leading-[1.9] text-ink-500">{s.lede}</p>
       </header>
 
-      <div className="mt-12"><Stepper steps={s.steps} current={step} /></div>
+      <div className="mt-12"><Stepper steps={s.steps} current={step} label={t.booking.progress} /></div>
 
-      <div className="paper mt-10 p-7 sm:p-10">
+      <div ref={cardRef} className="paper mt-10 p-7 sm:p-10">
+        {/* Un refus du serveur, en tête de la carte et une seule fois : il
+            reste lisible quand il renvoie à une étape précédente. */}
+        {error && (
+          <p ref={errorRef} role="alert" tabIndex={-1}
+            className="mb-8 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.85rem] text-[#8E332C]">
+            {error}
+          </p>
+        )}
+
         {/* ————— Étape 1 : formule ————— */}
         {step === 0 && (
           <section aria-labelledby="a1">
-            <h2 id="a1" className="font-display text-2xl font-normal text-ink-800">{s.plan.title}</h2>
+            <h2 id="a1" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{s.plan.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light leading-relaxed text-ink-500">{s.plan.hint}</p>
             <div role="radiogroup" aria-labelledby="a1" className="mt-8 grid gap-3 sm:grid-cols-2">
               {config.plans.map((p) => {
@@ -334,7 +377,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
         {/* ————— Étape 2 : coordonnées et zone ————— */}
         {step === 1 && plan && (
           <section aria-labelledby="a2">
-            <h2 id="a2" className="font-display text-2xl font-normal text-ink-800">{s.address.title}</h2>
+            <h2 id="a2" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{s.address.title}</h2>
             <p className="mt-2 text-[0.8rem] font-light leading-relaxed text-ink-400">{config.areaText}</p>
             <div className="mt-8 grid gap-5 sm:grid-cols-2">
               <Field label={t.booking.step2.name} value={name} onChange={setName} autoComplete="name"
@@ -351,7 +394,8 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                   autoComplete="street-address" placeholder={t.booking.step2.addressPlaceholder}
                   error={touched.address ? errors.address : null} onBlur={() => setTouched((x) => ({ ...x, address: true }))} />
               </div>
-              <Field label={t.booking.step2.postal} value={postal} onChange={(v) => setPostal(normalisePostal(v))}
+              <Field label={t.booking.step2.postal} value={postal}
+                onChange={(v) => { setPostal(normalisePostal(v)); setError(null); }}
                 autoComplete="postal-code" placeholder={t.booking.step2.postalPlaceholder}
                 error={touched.postal ? errors.postal : null} onBlur={() => setTouched((x) => ({ ...x, postal: true }))} />
             </div>
@@ -406,13 +450,13 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
         {/* ————— Étape 3 : première visite ————— */}
         {step === 2 && plan && (
           <section aria-labelledby="a3">
-            <h2 id="a3" className="font-display text-2xl font-normal text-ink-800">{s.slot.title}</h2>
+            <h2 id="a3" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{s.slot.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light leading-relaxed text-ink-500">{s.slot.hint.replace("{rhythm}", plan.rhythm)}</p>
 
             {loadingSlots && <p className="mt-12 text-center text-[0.9rem] text-ink-400" role="status">{t.booking.step3.loading}</p>}
 
             {!loadingSlots && sched && (
-              <SlotPicker t={t} days={sched.days} today={sched.today} value={slot}
+              <SlotPicker t={t} days={sched.days} today={sched.today} horizonDays={sched.horizonDays} value={slot}
                 onPick={(iso) => { setSlot(iso); setShowDates(false); setError(null); }}
                 onShift={(d) => loadSchedule(d)} className="mt-8" />
             )}
@@ -459,7 +503,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                     <ul className="mt-3 flex flex-wrap gap-2">
                       {held.alternatives.map((iso) => (
                         <li key={iso}>
-                          <button type="button" onClick={() => setSlot(iso)}
+                          <button type="button" onClick={() => { setSlot(iso); setError(null); }}
                             className="border border-gold-300/60 px-4 py-2.5 text-[0.82rem] text-ink-700 transition-colors hover:border-gold-500 hover:bg-linen-100">
                             {when(iso)}
                           </button>
@@ -476,16 +520,13 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
             <p className="mx-auto mt-8 max-w-lg border-l-2 border-gold-400 pl-4 text-[0.84rem] font-light leading-[1.8] text-ink-600">
               {t.booking.step3.setup}
             </p>
-            {error && (
-              <p role="alert" className="mt-6 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.85rem] text-[#8E332C]">{error}</p>
-            )}
           </section>
         )}
 
         {/* ————— Étape 4 : confirmation ————— */}
         {step === 3 && plan && slot && (
           <section aria-labelledby="a4">
-            <h2 id="a4" className="font-display text-2xl font-normal text-ink-800">{s.confirm.title}</h2>
+            <h2 id="a4" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{s.confirm.title}</h2>
             <dl className="mt-8 divide-y divide-gold-300/40 border-y border-gold-300/40">
               <Row label={s.confirm.plan} value={`${plan.name} — ${s.plan.visits.replace("{n}", String(plan.visits)).replace("{duration}", durationText(plan.minutesPerVisit))}`} />
               <Row label={s.confirm.rhythm} value={`${slotPhrase(new Date(slot), config.timezone, config.locale)}, ${plan.rhythm}`} />
@@ -505,33 +546,44 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
             </dl>
             <p className="mt-6 text-[0.84rem] font-light leading-[1.8] text-ink-600">{s.confirm.payment}</p>
             <p className="mt-3 text-[0.84rem] font-light leading-[1.8] text-ink-600">{s.confirm.rule}</p>
+            <p className="mt-3 text-[0.8rem] font-light leading-[1.8] text-ink-500">{t.booking.legal.data}</p>
 
             <label className="mt-8 flex cursor-pointer items-start gap-3">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
                 className="mt-1 h-4 w-4 flex-none accent-[var(--color-gold-500)]" />
-              <span className="text-[0.85rem] font-light leading-relaxed text-ink-500">{s.confirm.consent}</span>
+              <span className="text-[0.85rem] font-light leading-relaxed text-ink-500">
+                {s.confirm.consent} <LegalAccept t={t} locale={config.locale} updated={config.legalUpdated} />
+              </span>
             </label>
-            {error && (
-              <p role="alert" className="mt-6 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.85rem] text-[#8E332C]">{error}</p>
-            )}
           </section>
         )}
 
         {/* ————— Navigation ————— */}
         <div className="mt-10 flex items-center justify-between gap-4 border-t border-gold-300/40 pt-7">
-          <button type="button" onClick={() => setStep((x) => Math.max(0, x - 1))}
+          <button type="button" onClick={() => { setError(null); setStep((x) => Math.max(0, x - 1)); }}
             className={`text-[11px] uppercase tracking-[0.18em] text-ink-500 transition-colors hover:text-ink-900 ${step === 0 ? "invisible" : ""}`}>
             ← {t.booking.back}
           </button>
           {step < 3 ? (
-            <button type="button" disabled={!canContinue}
+            /* À l'étape Adresse, le bouton n'est jamais désactivé : un clic
+               montre chaque champ à revoir, le premier sous le focus. */
+            <button type="button"
+              disabled={step !== 1 && !canContinue}
+              aria-disabled={step === 1 && !canContinue ? true : undefined}
               onClick={() => {
-                if (step === 1) setTouched({ name: true, email: true, phone: true, address: true, city: true, postal: true });
-                if (!canContinue) return;
+                if (!canContinue) {
+                  if (step === 1) {
+                    setTouched({ name: true, email: true, phone: true, address: true, city: true, postal: true });
+                    requestAnimationFrame(() =>
+                      cardRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+                  }
+                  return;
+                }
+                setError(null);
                 if (step === 1 && !sched) loadSchedule();
                 setStep((x) => x + 1);
               }}
-              className="btn">
+              className="btn aria-disabled:opacity-40 aria-disabled:after:hidden">
               {t.booking.next}<ArrowIcon />
             </button>
           ) : (

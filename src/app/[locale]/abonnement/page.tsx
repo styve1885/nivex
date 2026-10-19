@@ -7,6 +7,8 @@ import { PLANS, planCents, planFullCents } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
 import { SubscriptionWizard, type SubscriptionConfig } from "@/components/booking/SubscriptionWizard";
+import { PausedNotice } from "@/components/booking/PausedNotice";
+import { LEGAL_UPDATED } from "@/components/LegalDocument";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,16 @@ export default async function SubscribePage({
   const t = getDict(locale);
   const s = await getSettings();
 
+  /* La pause ferme aussi les abonnements : dit dès l'arrivée, comme sur la
+     page de réservation. */
+  if (s.paused) {
+    return (
+      <div className="bg-linen-100 pt-24">
+        <PausedNotice t={t} locale={locale} title={t.subscribe.title} />
+      </div>
+    );
+  }
+
   /* Les montants viennent des réglages en vigueur : la page Tarifs et ce
      parcours lisent la même fonction, et la création la relit encore. */
   const config: SubscriptionConfig = {
@@ -54,6 +66,7 @@ export default async function SubscribePage({
     seriesCycles: SERIES_CYCLES,
     initialPlan: sp.formule ?? null,
     areaText: servedText(s.zonePolicy, locale, t.zoneText),
+    legalUpdated: LEGAL_UPDATED,
   };
 
   return (
