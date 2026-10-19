@@ -61,5 +61,5 @@ export function openingLine(t: Dict, settings: Settings, locale: "fr" | "en"): s
   }
   return [...spans.values()]
     .map((group) => `${clock(group[0].open, locale)} – ${clock(group[0].close, locale)}, ${days(group)}`)
-    .join(locale === "fr" ? " ; " : "; ");
+    .join(locale === "fr" ? "\u202f; " : "; ");
 }

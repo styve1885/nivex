@@ -295,7 +295,7 @@ test("des montants ou un seuil absurdes retombent sur des valeurs sûres", () =>
 console.log("\nLe texte public, la liste pour Google, le tableau des frais");
 
 test("la phrase de la zone : la Rive-Sud, puis Montréal, en français et en anglais", () => {
-  const f = servedText(P, "fr", fr.zoneText);
+  const f = flat(servedText(P, "fr", fr.zoneText));
   assert.ok(f.startsWith("Secteurs desservis : Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert, Brossard,"));
   assert.ok(f.includes("La Prairie et Saint-Jean-sur-Richelieu. À Montréal : L'Île-des-Sœurs, Verdun,"));
   assert.ok(f.endsWith("Centre-ville de Montréal et Le Plateau-Mont-Royal."));
@@ -308,10 +308,10 @@ test("la phrase de la zone : la Rive-Sud, puis Montréal, en français et en ang
 test("sans quartier de Montréal, la phrase s'arrête à la Rive-Sud ; sans Rive-Sud, elle ne dit que Montréal", () => {
   const p = clone(P);
   for (const x of p.sectors) if (isMontrealSector(x)) x.enabled = false;
-  assert.doesNotMatch(servedText(p, "fr", fr.zoneText), /Montréal :/);
+  assert.doesNotMatch(flat(servedText(p, "fr", fr.zoneText)), /Montréal :/);
   const q = clone(P);
   for (const x of q.sectors) if (!isMontrealSector(x)) x.enabled = false;
-  assert.match(servedText(q, "fr", fr.zoneText), /^À Montréal : L'Île-des-Sœurs/);
+  assert.match(flat(servedText(q, "fr", fr.zoneText)), /^À Montréal : L'Île-des-Sœurs/);
 });
 
 test("aucun point d'exclamation dans les textes générés", () => {
@@ -450,9 +450,19 @@ test("les nouveaux textes : aucun point d'exclamation, et le français a son ang
     ...Object.values(fr.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v])),
     ...Object.values(en.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v]))];
   for (const t of textes) assert.doesNotMatch(t, /!/, t);
-  assert.equal(fr.faq.items[0].q, "Est-ce que vous ramassez les vêtements ?");
+  assert.equal(flat(fr.faq.items[0].q), "Est-ce que vous ramassez les vêtements ?");
   assert.equal(fr.montreal.metaTitle, "Repassage à domicile à Montréal — NIVEX");
   assert.equal(fr.meta.title, "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX");
+});
+
+test("le français garde ses espaces insécables : avant : ; ? et dans les guillemets", () => {
+  /* Une espace ordinaire laisse le navigateur rejeter un « ? » seul en début
+     de ligne, au téléphone surtout. Le dictionnaire les écrit en échappements. */
+  const chaines = [];
+  const lire = (v) => (typeof v === "string" ? chaines.push(v) : v && typeof v === "object" && Object.values(v).forEach(lire));
+  lire(fr);
+  assert.deepEqual(chaines.filter((s) => / [:;?!»]|« /.test(s)), []);
+  assert.ok(chaines.length > 300, "tout le dictionnaire est relu");
 });
 
 console.log("\nCe que la vitrine écrit depuis les réglages");
