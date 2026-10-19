@@ -106,7 +106,7 @@ export async function submitContact(input: ContactInputType): Promise<{ stored: 
   // Ni base ni courriel : on ne peut rien promettre à la personne.
   if (!stored && !sent) throw new ContactError("unavailable");
 
-  await logEvent("contact_received", { email: input.email, stored, sent });
+  await logEvent("contact_received", { stored, sent });
   return { stored, sent };
 }
 

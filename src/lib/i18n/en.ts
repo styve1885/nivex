@@ -738,7 +738,7 @@ export const en: Dict = {
     },
     errors: {
       conflicts: "A date in the series has just been taken. Please choose another slot.",
-      tooMany: `A subscription was already taken with this email. Please call us at ${PHONE}.`,
+      tooMany: `This subscription cannot be taken online. Please call us at ${PHONE} and we will set it up with you.`,
     },
   },
   subManage: {
@@ -768,9 +768,11 @@ export const en: Dict = {
     replacedNone: "Visit cancelled. We will call you to place it at the end of the series.",
     moved: "Visit moved.",
     done: "{n} visits already completed.",
+    doneOne: "One visit already completed.",
     errors: {
       tooLate: "The deadline has passed. Please call us for any change.",
       taken: "This slot has just been taken. Please choose another one.",
+      tooMany: `Several changes have already been made today. For another one, please call us at ${PHONE}.`,
     },
   },
   footer: {

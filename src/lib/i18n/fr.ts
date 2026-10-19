@@ -755,7 +755,7 @@ export const fr = {
     },
     errors: {
       conflicts: "Une date de la série vient d'être prise. Choisissez un autre créneau.",
-      tooMany: `Un abonnement vient déjà d'être pris avec ce courriel. Appelez-nous au ${PHONE}.`,
+      tooMany: `Cet abonnement ne peut pas être pris en ligne. Appelez-nous au ${PHONE} : nous le poserons avec vous.`,
     },
   },
   subManage: {
@@ -785,9 +785,11 @@ export const fr = {
     replacedNone: "Visite annulée. Nous vous appellerons pour la replacer en fin de série.",
     moved: "Visite déplacée.",
     done: "{n} visites déjà effectuées.",
+    doneOne: "Une visite déjà effectuée.",
     errors: {
       tooLate: "Le délai est passé. Appelez-nous pour toute modification.",
       taken: "Ce créneau vient d'être pris. Choisissez-en un autre.",
+      tooMany: `Plusieurs changements ont déjà été faits aujourd'hui. Pour un autre, appelez-nous au ${PHONE}.`,
     },
   },
   footer: {

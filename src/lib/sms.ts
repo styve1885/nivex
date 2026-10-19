@@ -60,10 +60,11 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
       body: new URLSearchParams({ To: number, From: process.env.TWILIO_FROM!, Body: body }),
     });
     if (!res.ok) {
-      /* Twilio rend un code et un message lisibles (numéro non vérifié en
-         compte d'essai, destinataire désabonné par STOP…) : on les garde. */
-      const detail = (await res.text()).slice(0, 300);
-      await logEvent("sms_failed", { ref, status: res.status, detail });
+      /* Twilio rend un code (21608 : numéro non vérifié en compte d'essai,
+         21610 : destinataire désabonné par STOP…) et un message qui cite
+         souvent le numéro. Le journal garde le code, pas le message. */
+      const code = await res.json().then((j) => Number(j?.code) || null).catch(() => null);
+      await logEvent("sms_failed", { ref, status: res.status, code });
       return false;
     }
     await logEvent("sms_sent", { ref });
@@ -126,6 +127,21 @@ export const SMS = {
   visitMoved: (l: Locale, from: string, to: string) => l === "en"
     ? `NIVEX: your visit on ${from} is moved to ${to}.`
     : `NIVEX : votre visite du ${from} est déplacée au ${to}.`,
+
+  /** Une visite de remplacement posée à la main par l'artisan. L'heure anglaise finit déjà par un point. */
+  visitPlaced: (l: Locale, when: string) => l === "en"
+    ? `NIVEX: your replacement visit is booked for ${when.replace(/\.$/, "")}.`
+    : `NIVEX : votre visite de remplacement est posée le ${when}.`,
+
+  /** La série suivante d'un abonnement, posée par l'artisan. */
+  seriesRenewed: (l: Locale, when: string, rhythm: string, url: string) => l === "en"
+    ? `NIVEX: your subscription continues. Next series: first visit ${when}, then ${rhythm}. Manage: ${url}`
+    : `NIVEX : votre abonnement se poursuit. Série suivante : première visite le ${when}, puis ${rhythm}. Gérer : ${url}`,
+
+  /** Un abonnement qui prend fin, et les visites à venir qu'il retire. */
+  subscriptionEnded: (l: Locale, count: number) => l === "en"
+    ? `NIVEX: your subscription is ending. ${count === 1 ? "Your upcoming visit is cancelled." : `Your ${count} upcoming visits are cancelled.`}`
+    : `NIVEX : votre abonnement prend fin. ${count === 1 ? "Votre visite à venir est annulée." : `Vos ${count} visites à venir sont annulées.`}`,
 
   /** Pour l'artisan. */
   owner: {

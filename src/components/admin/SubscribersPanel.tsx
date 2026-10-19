@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AdminSubscription } from "@/app/api/admin/subscriptions/route";
 import { CYCLE_MAX_WEEKS } from "@/lib/brand";
 
-type Client = { name: string; email: string; phone: string; address: string; city: string; postalCode: string };
+type Client = { name: string; email: string; phone: string; address: string; city: string; postalCode: string; locale: "fr" | "en" };
 type Conflict = { startsAt: string; reason: string };
 type Plan = { key: string; name: string; visits: number };
 
@@ -24,7 +25,20 @@ const ERRORS: Record<string, string> = {
   term_done: "Les douze mois sont déjà posés.",
   ended: "Cet abonnement a pris fin.",
   not_found: "Introuvable.",
+  past: "Cette date est déjà passée : entrez la prochaine visite.",
+  invalid_input: "Vérifiez les champs : code postal (A1A 1A1), courriel, téléphone.",
+  network: "Le site n'a pas répondu. Réessayez.",
 };
+
+/* Les champs que le serveur refuse, nommés comme dans le formulaire. */
+const FIELDS: Record<string, string> = {
+  name: "nom", email: "courriel", phone: "téléphone", address: "adresse", city: "ville",
+  postalCode: "code postal (A1A 1A1)", date: "date", time: "heure", notes: "précisions",
+  startCycle: "cycle en cours", startDone: "visites déjà faites",
+};
+
+/* Le même motif que le serveur : un code incomplet ne doit pas activer le bouton. */
+const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
 
 const money = (cents: number, currency = "CAD") =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency, minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -37,11 +51,14 @@ const money = (cents: number, currency = "CAD") =>
  * demander ; la liste se relit après chaque geste.
  */
 export function SubscribersPanel({ timezone, plans }: { timezone: string; plans: Plan[] }) {
+  const router = useRouter();
   const [subs, setSubs] = useState<AdminSubscription[] | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [creating, setCreating] = useState(false);
   const [daily, setDaily] = useState<string | null>(null);
 
+  /* Après chaque geste, la liste se relit — et l'onglet Rendez-vous aussi : ses
+     visites et ses chiffres viennent de la page, qui ne se recalcule pas seule. */
   const reload = useCallback(async () => {
     try {
       const d = await (await fetch("/api/admin/subscriptions", { cache: "no-store" })).json();
@@ -50,7 +67,8 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
     } catch {
       setSubs([]);
     }
-  }, []);
+    router.refresh();
+  }, [router]);
 
   useEffect(() => {
     fetch("/api/admin/subscriptions", { cache: "no-store" })
@@ -89,8 +107,8 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
           {active.length === 0 ? "Aucun abonnement en cours." : `${active.length} abonnement${active.length > 1 ? "s" : ""} en cours.`}
         </p>
         <div className="flex flex-wrap items-center gap-5">
-          <button type="button" onClick={runDaily}
-            className="text-[10px] uppercase tracking-[0.16em] text-ink-400 underline decoration-gold-300 underline-offset-4 hover:text-ink-700">
+          <button type="button" onClick={runDaily} disabled={daily === "…"}
+            className="text-[10px] uppercase tracking-[0.16em] text-ink-400 underline decoration-gold-300 underline-offset-4 hover:text-ink-700 disabled:opacity-40">
             Envoyer les rappels du jour
           </button>
           <button type="button" onClick={() => setCreating((v) => !v)} className="btn !py-3 !px-6 !text-[10px]">
@@ -146,7 +164,12 @@ function startsWithin(iso: string, ms: number): boolean {
   return new Date(iso).getTime() <= Date.now() + ms;
 }
 
-async function act(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; replacement?: string | null; cents?: number }> {
+type ActResult = {
+  ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; fields?: string[];
+  replacement?: string | null; cents?: number;
+};
+
+async function act(body: Record<string, unknown>): Promise<ActResult> {
   try {
     const res = await fetch("/api/admin/subscriptions", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -157,8 +180,10 @@ async function act(body: Record<string, unknown>): Promise<{ ok: boolean; error?
   }
 }
 
-function errorText(e?: string, detail?: string): string {
-  return (e && ERRORS[e]) || detail || "L'action n'a pas abouti. Réessayez.";
+function errorText(d: Pick<ActResult, "error" | "detail" | "fields">): string {
+  const named = (d.fields ?? []).map((f) => FIELDS[f]).filter(Boolean);
+  if (d.error === "invalid_input" && named.length > 0) return `Vérifiez ${named.length > 1 ? "ces champs" : "ce champ"} : ${named.join(", ")}.`;
+  return (d.error && ERRORS[d.error]) || d.detail || "L'action n'a pas abouti. Réessayez.";
 }
 
 /* ============================ Une fiche ============================ */
@@ -183,7 +208,7 @@ function SubscriptionCard({ s, when, onChange }: {
     setBusy(null);
     if (!d.ok) {
       if (body.action === "renew" && d.error === "conflicts") setRenewConflicts(d.conflicts ?? []);
-      setMsg(errorText(d.error, d.detail));
+      setMsg(errorText(d));
       if (body.action !== "resync") return;
     } else {
       setMsg(ok ?? null);
@@ -235,7 +260,7 @@ function SubscriptionCard({ s, when, onChange }: {
               <span>{payment} · {money(s.amount.totalCents, s.currency)}</span>
               {s.amount.travelCents > 0 && (
                 <span className="block text-[0.76rem] text-ink-400">
-                  {money(s.amount.planCents, s.currency)} + {money(s.amount.travelCents, s.currency)} de frais ({money(s.feePerVisitCents, s.currency)} × {s.perCycle}{s.travelZone ? `, ${s.travelZone}` : ""})
+                  {money(s.amount.planCents, s.currency)} + {money(s.amount.travelCents, s.currency)} de frais ({money(Math.round(s.amount.travelCents / s.perCycle), s.currency)} × {s.perCycle}{s.travelZone ? `, ${s.travelZone}` : ""})
                 </span>
               )}
               {!ended && (
@@ -384,9 +409,10 @@ function SubscriptionCard({ s, when, onChange }: {
               <ul className="mt-1 text-[0.8rem] text-ink-600">
                 {renewConflicts.map((c) => <li key={c.startsAt}>{when(c.startsAt)} — {REASONS[c.reason] ?? c.reason}</li>)}
               </ul>
-              <button type="button" onClick={() => run("renew", { action: "renew", id: s.id, skipConflicts: true }, `Série ${s.latestSeries + 1} posée, dates prises sautées.`)}
-                className="mt-2 border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700">
-                Poser en sautant ces dates
+              <button type="button" disabled={busy === "renew"}
+                onClick={() => run("renew", { action: "renew", id: s.id, skipConflicts: true }, `Série ${s.latestSeries + 1} posée, dates prises sautées.`)}
+                className="mt-2 border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
+                {busy === "renew" ? "…" : "Poser en sautant ces dates"}
               </button>
             </div>
           )}
@@ -414,7 +440,7 @@ function VisitRow({ v, perCycle, when, onChange }: {
     setErr(null);
     const d = await act(body);
     setBusy(false);
-    if (!d.ok) { setErr(errorText(d.error, d.detail)); return; }
+    if (!d.ok) { setErr(errorText(d)); return; }
     setMode("idle");
     await onChange();
   }
@@ -484,6 +510,7 @@ function NewSubscription({ plans, clients, when, onDone }: {
     planKey: plans.find((p) => p.key === "executif")?.key ?? plans[0]?.key ?? "",
     name: "", email: "", phone: "", address: "", city: "", postalCode: "", notes: "",
     date: "", time: "", startCycle: 1, startDone: 0, paidCurrent: false,
+    locale: "fr" as "fr" | "en",
   });
   const [check, setCheck] = useState<{ free: boolean; starts: string[]; conflicts: Conflict[] } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -494,17 +521,19 @@ function NewSubscription({ plans, clients, when, onDone }: {
 
   function pick(email: string) {
     const c = clients.find((x) => x.email === email);
-    if (c) setF((x) => ({ ...x, name: c.name, email: c.email, phone: c.phone, address: c.address, city: c.city, postalCode: c.postalCode }));
+    if (c) setF((x) => ({ ...x, name: c.name, email: c.email, phone: c.phone, address: c.address, city: c.city, postalCode: c.postalCode, locale: c.locale }));
     setCheck(null);
   }
 
-  const input = { ...f, locale: "fr", notes: f.notes || undefined };
+  /* La langue choisie ici est celle de tout ce que le client recevra pendant
+     les douze mois : confirmation, rappels, textos. */
+  const input = { ...f, notes: f.notes || undefined };
 
   async function verify() {
     setBusy(true); setErr(null);
     const d = await act({ action: "check", input });
     setBusy(false);
-    if (!d.ok) { setErr(errorText(d.error, d.detail)); return; }
+    if (!d.ok) { setErr(errorText(d)); return; }
     setCheck(d as unknown as { free: boolean; starts: string[]; conflicts: Conflict[] });
   }
 
@@ -514,14 +543,14 @@ function NewSubscription({ plans, clients, when, onDone }: {
     setBusy(false);
     if (!d.ok) {
       if (d.error === "conflicts") setCheck({ free: false, starts: [], conflicts: d.conflicts ?? [] });
-      setErr(errorText(d.error, d.detail));
+      setErr(errorText(d));
       return;
     }
     onDone();
   }
 
   const ready = f.name.trim().length >= 2 && /\S+@\S+\.\S+/.test(f.email) && f.phone.trim().length >= 7
-    && f.address.trim().length >= 4 && f.city.trim().length >= 2 && f.postalCode.trim().length >= 6 && f.date && f.time;
+    && f.address.trim().length >= 4 && f.city.trim().length >= 2 && POSTAL.test(f.postalCode.trim()) && f.date && f.time;
 
   return (
     <div className="mt-8 border border-gold-400/60 bg-linen-50 px-5 py-6">
@@ -544,6 +573,13 @@ function NewSubscription({ plans, clients, when, onDone }: {
         <Input label="Ville" value={f.city} onChange={(v) => set("city", v)} />
         <Input label="Adresse" value={f.address} onChange={(v) => set("address", v)} />
         <Input label="Code postal" value={f.postalCode} onChange={(v) => set("postalCode", v.toUpperCase())} />
+        <label>
+          <span className="label">Langue des messages</span>
+          <select className="field" value={f.locale} onChange={(e) => set("locale", e.target.value === "en" ? "en" : "fr")}>
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
+        </label>
         <label>
           <span className="label">Formule</span>
           <select className="field" value={f.planKey} onChange={(e) => { set("planKey", e.target.value); set("startDone", 0); }}>
@@ -577,7 +613,9 @@ function NewSubscription({ plans, clients, when, onDone }: {
 
       {check && check.free && (
         <p className="mt-4 text-[0.85rem] text-gold-700">
-          Les {check.starts.length} dates sont libres, du {when(check.starts[0], false)} au {when(check.starts[check.starts.length - 1], false)}.
+          {check.starts.length === 1
+            ? `La date est libre : le ${when(check.starts[0], false)}.`
+            : `Les ${check.starts.length} dates sont libres, du ${when(check.starts[0], false)} au ${when(check.starts[check.starts.length - 1], false)}.`}
         </p>
       )}
       {check && !check.free && (

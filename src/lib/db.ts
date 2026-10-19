@@ -392,6 +392,11 @@ async function bootstrap() {
 
   await q`CREATE INDEX IF NOT EXISTS nivex_subscriptions_email_idx ON nivex_subscriptions (lower(client_email))`;
 
+  /* Le montant encaissé de chaque cycle, noté avec le paiement : des frais
+     changés ensuite ne réécrivent pas un cycle déjà reçu. Les cycles payés
+     avant n'en ont pas, et se lisent au montant du jour. */
+  await q`ALTER TABLE nivex_subscriptions ADD COLUMN IF NOT EXISTS paid_amounts jsonb NOT NULL DEFAULT '{}'::jsonb`;
+
   /* Le lien entre une visite et son abonnement. Facultatif : une séance
    * ponctuelle n'en a pas, et toutes celles d'avant n'en avaient pas.
    * `done_at` est posé par le bouton « visite effectuée » — c'est lui qui

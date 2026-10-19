@@ -104,7 +104,9 @@ export default async function SubscriptionPage({
               </p>
             )}
             {doneCount > 0 && (
-              <p className="mt-1 text-[0.8rem] font-light text-ink-400">{m.done.replace("{n}", String(doneCount))}</p>
+              <p className="mt-1 text-[0.8rem] font-light text-ink-400">
+                {doneCount === 1 ? m.doneOne : m.done.replace("{n}", String(doneCount))}
+              </p>
             )}
             <ul className="mt-6 space-y-3">
               {upcoming.map((v) => {
@@ -124,7 +126,7 @@ export default async function SubscriptionPage({
                       </p>
                     </div>
                     {!cancelled && (open ? (
-                      <VisitActions token={token} visitId={v.id} durationMinutes={v.durationMinutes}
+                      <VisitActions token={token} visitId={v.id} startsAt={v.startsAt.toISOString()}
                         locale={locale} timezone={tz} t={t} />
                     ) : (
                       <p className="mt-2 text-[0.82rem] font-light leading-relaxed text-ink-500">

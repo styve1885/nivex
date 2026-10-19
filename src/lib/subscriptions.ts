@@ -20,12 +20,14 @@ import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
 import {
   canSubscriberChange, cycleAmount, gridDate, subscriberFeeCents, gridDates, gridFrom, gridIndexAfter, quoteCycle,
-  seriesConflicts, seriesOfCycle, seriesSpanEnd, startOffset, viewSubscription, visitsToEndOfSeries,
+  moveHorizonDays, paidCycleAmount, renewalFrom, seriesConflicts, seriesOfCycle, seriesSpanEnd, startOffset,
+  viewSubscription, visitsToEndOfSeries, withoutInterval,
   type Grid, type SeriesConflict, type SubscriptionView, type VisitNumber,
 } from "./cycles";
 import {
   contactEmail, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, SETUP_MINUTES, TERM_SERIES,
 } from "./brand";
+import { purgeExpired } from "./retention";
 import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, parseDateKey, parseHM } from "./time";
 
 /**
@@ -54,6 +56,8 @@ export type Subscription = {
   cycleCents: number; feePerVisitCents: number; travelZone: string | null; currency: string;
   startCycle: number; startDone: number;
   paidCycles: Record<string, string>;
+  /** Le montant encaissé de chaque cycle payé, noté au moment du paiement. */
+  paidAmounts: Record<string, number>;
   pendingMakeups: number; noticeSeries: number;
   createdBy: "client" | "owner"; createdAt: Date; endedAt: Date | null;
 };
@@ -76,6 +80,7 @@ function hydrateSub(r: Row): Subscription {
     travelZone: (r.travel_zone as string) ?? null, currency: (r.currency as string) || "CAD",
     startCycle: Number(r.start_cycle ?? 1), startDone: Number(r.start_done ?? 0),
     paidCycles: (r.paid_cycles as Record<string, string>) ?? {},
+    paidAmounts: (r.paid_amounts as Record<string, number>) ?? {},
     pendingMakeups: Number(r.pending_makeups ?? 0), noticeSeries: Number(r.notice_series ?? 0),
     createdBy: r.created_by === "owner" ? "owner" : "client",
     createdAt: new Date(r.created_at as string),
@@ -87,7 +92,7 @@ export class SubscriptionError extends Error {
   constructor(
     public code:
       | "paused" | "unknown_plan" | "out_of_area" | "conflicts" | "slot_taken" | "invalid_slot"
-      | "too_late" | "not_found" | "done" | "ended" | "has_done" | "term_done" | "invalid",
+      | "too_late" | "not_found" | "done" | "ended" | "has_done" | "term_done" | "invalid" | "past",
     public conflicts: SeriesConflict[] = [],
     public alternatives: Date[] = [],
   ) {
@@ -117,7 +122,9 @@ export const SubscriptionInput = z.object({
   ...Client,
   startsAt: z.string().datetime({ offset: true }),
   consent: z.literal(true),
-  hp: z.string().max(0).optional(),
+  /* Le pot de miel est accepté rempli : c'est la route qui répond alors un
+     faux succès. Le refuser ici rendait un 400 qui nommait le champ. */
+  hp: z.string().max(200).optional(),
   /* La provenance, acceptée telle quelle puis nettoyée champ par champ :
      voir BookingInput. Elle ne doit jamais faire échouer un abonnement. */
   heardFrom: z.unknown().optional(),
@@ -207,20 +214,26 @@ export async function listSubscriptions(): Promise<SubscriptionFull[]> {
   return Promise.all(rows.map((r) => loadFull(hydrateSub(r))));
 }
 
-/** Les clients déjà servis, pour entrer un abonnement sans tout retaper. */
+/**
+ * Les clients déjà servis, pour entrer un abonnement sans tout retaper — et
+ * dans la langue de leur dernière réservation : c'est elle que parleront la
+ * confirmation, les rappels et les textos des douze mois.
+ */
 export async function knownClients(): Promise<{
-  name: string; email: string; phone: string; address: string; city: string; postalCode: string;
+  name: string; email: string; phone: string; address: string; city: string; postalCode: string; locale: "fr" | "en";
 }[]> {
   await ensureSchema();
   const rows = (await sql()`
     SELECT DISTINCT ON (lower(client_email))
-      client_name, client_email, client_phone, address, city, postal_code
+      client_name, client_email, client_phone, address, city, postal_code, locale
     FROM nivex_bookings
+    WHERE client_email NOT LIKE 'efface:%'
     ORDER BY lower(client_email), created_at DESC
     LIMIT 500`) as Row[];
   return rows.map((r) => ({
     name: r.client_name as string, email: r.client_email as string, phone: r.client_phone as string,
     address: r.address as string, city: r.city as string, postalCode: r.postal_code as string,
+    locale: r.locale === "en" ? "en" : "fr",
   }));
 }
 
@@ -317,7 +330,7 @@ export async function createOwnerSubscription(input: OwnerSubscriptionInputType,
   if (!plan) throw new SubscriptionError("unknown_plan");
   if (input.startDone >= plan.visits) throw new SubscriptionError("invalid");
 
-  const first = ownerInstant(input.date, input.time, settings.timezone);
+  const first = ownerFirstVisit(input.date, input.time, settings.timezone);
   const count = visitsToEndOfSeries(plan.visits, input.startCycle, input.startDone);
   const preview = await previewSeries({ planKey: plan.key, first, count, checkLead: false });
   if (preview.conflicts.length > 0) {
@@ -335,6 +348,21 @@ export async function createOwnerSubscription(input: OwnerSubscriptionInputType,
 export function ownerInstant(date: string, time: string, tz: string): Date {
   const m = parseHM(time);
   return fromWall({ ...parseDateKey(date), hour: Math.floor(m / 60), minute: m % 60 }, tz);
+}
+
+/**
+ * La prochaine visite que l'artisan entre pour un abonnement, en instant.
+ *
+ * Jamais dans le passé. Le délai de prévenance ne s'applique pas à lui, et
+ * c'était le seul garde-fou : une année mal saisie posait une série de
+ * visites déjà échues, toutes « à confirmer », annoncées au client par texto.
+ * Les visites déjà faites d'un abonné qui reprend se disent par le cycle et
+ * le nombre de visites faites, pas par une date ancienne.
+ */
+export function ownerFirstVisit(date: string, time: string, tz: string, now = new Date()): Date {
+  const first = ownerInstant(date, time, tz);
+  if (first.getTime() <= now.getTime()) throw new SubscriptionError("past");
+  return first;
 }
 
 async function insertSubscription(p: {
@@ -378,6 +406,7 @@ async function insertSubscription(p: {
     referred_by: i === 0 ? prov?.referredBy ?? null : null,
   }));
   const paid = p.paidCurrent ? { [String(p.startCycle)]: new Date().toISOString() } : {};
+  const paidAmounts = p.paidCurrent ? { [String(p.startCycle)]: quote.totalCents } : {};
 
   await ensureSchema();
   const q = sql();
@@ -391,14 +420,14 @@ async function insertSubscription(p: {
           visits_per_cycle, every_weeks, minutes_per_visit, grid_anchor, grid_hm,
           client_name, client_email, client_phone, address, city, postal_code, notes,
           cycle_cents, travel_fee_cents, travel_zone, currency,
-          start_cycle, start_done, paid_cycles, created_by
+          start_cycle, start_done, paid_cycles, paid_amounts, created_by
         ) VALUES (
           ${id}, ${bookingRef().replace("NVX-", "ABO-")}, ${token(24)}, ${input.locale}, 'active', ${plan.key}, ${plan.fr.name},
           ${plan.visits}, ${plan.everyWeeks}, ${plan.minutesPerVisit}, ${grid.anchor}, ${grid.hm},
           ${input.name}, ${input.email}, ${input.phone}, ${input.address}, ${input.city},
           ${input.postalCode.toUpperCase()}, ${input.notes || null},
           ${quote.planCents}, ${quote.feePerVisitCents}, ${verdict.labelFr}, ${settings.currency},
-          ${p.startCycle}, ${p.startDone}, ${JSON.stringify(paid)}::jsonb, ${p.createdBy}
+          ${p.startCycle}, ${p.startDone}, ${JSON.stringify(paid)}::jsonb, ${JSON.stringify(paidAmounts)}::jsonb, ${p.createdBy}
         )`,
       q`INSERT INTO nivex_bookings (
           ref, manage_token, locale, status, client_name, client_email, client_phone,
@@ -471,6 +500,12 @@ function isOverlap(e: unknown): boolean {
 function describe(e: unknown): string {
   if (e instanceof GoogleError) return `${e.op} — HTTP ${e.status} · ${e.body.slice(0, 300)}`;
   return String((e as Error)?.message ?? e).slice(0, 400);
+}
+
+/** Une visite qu'on n'a pas pu réclamer : marquée effectuée entre-temps, ou déjà annulée. */
+async function isDone(id: string): Promise<boolean> {
+  const rows = (await sql()`SELECT done_at FROM nivex_bookings WHERE id = ${id}`) as Row[];
+  return Boolean(rows[0]?.done_at);
 }
 
 /* ============================ Agenda ============================ */
@@ -676,9 +711,11 @@ async function sendConfirmation(full: SubscriptionFull, at: string, s: Settings,
 /**
  * Pose une visite de remplacement après la dernière, sur la grille.
  *
- * Le premier créneau libre parmi les `MAKEUP_SEARCH_STEPS` suivants ; si
- * aucun ne l'est, l'abonnement garde une visite « à replacer », que
- * l'artisan voit en tête de l'onglet Abonnés.
+ * Le premier créneau libre parmi les `MAKEUP_SEARCH_STEPS` suivants. La
+ * visite due a déjà été comptée « à replacer » par l'annulation ; elle se
+ * décompte ici, dans la même instruction que le remplacement. Si aucun
+ * créneau n'est libre, ou si quoi que ce soit échoue en chemin, elle reste
+ * « à replacer », et l'artisan la voit en tête de l'onglet Abonnés.
  */
 async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | null): Promise<Booking | null> {
   const { sub } = full;
@@ -703,26 +740,31 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
     if (slotProblem(when.getTime(), sub.minutesPerVisit, busy, s, new Date(), { checkLead: false })) continue;
     try {
       const rows = (await sql()`
-        INSERT INTO nivex_bookings (
-          ref, manage_token, locale, status, client_name, client_email, client_phone,
-          address, city, postal_code, notes, items, starts_at, ends_at,
-          duration_minutes, estimate_cents, currency, first_hour_free,
-          travel_fee_cents, travel_zone, subscription_id, series_no, makeup, email_sent
-        ) VALUES (
-          ${bookingRef()}, ${token(24)}, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
-          ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
-          ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb,
-          ${when.toISOString()}, ${new Date(when.getTime() + sub.minutesPerVisit * 60_000).toISOString()},
-          ${sub.minutesPerVisit}, 0, ${sub.currency}, false,
-          0, ${sub.travelZone}, ${sub.id}, ${series}, true, true
-        ) RETURNING *`) as Row[];
+        WITH ins AS (
+          INSERT INTO nivex_bookings (
+            ref, manage_token, locale, status, client_name, client_email, client_phone,
+            address, city, postal_code, notes, items, starts_at, ends_at,
+            duration_minutes, estimate_cents, currency, first_hour_free,
+            travel_fee_cents, travel_zone, subscription_id, series_no, makeup, email_sent
+          ) VALUES (
+            ${bookingRef()}, ${token(24)}, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
+            ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
+            ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb,
+            ${when.toISOString()}, ${new Date(when.getTime() + sub.minutesPerVisit * 60_000).toISOString()},
+            ${sub.minutesPerVisit}, 0, ${sub.currency}, false,
+            0, ${sub.travelZone}, ${sub.id}, ${series}, true, true
+          ) RETURNING *
+        ), placed AS (
+          UPDATE nivex_subscriptions SET pending_makeups = greatest(0, pending_makeups - 1)
+          WHERE id = ${sub.id} AND EXISTS (SELECT 1 FROM ins)
+        )
+        SELECT * FROM ins`) as Row[];
       return hydrate(rows[0]);
     } catch (e) {
       if (!isOverlap(e)) throw e;
     }
   }
 
-  await sql()`UPDATE nivex_subscriptions SET pending_makeups = pending_makeups + 1 WHERE id = ${sub.id}`;
   return null;
 }
 
@@ -740,11 +782,35 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
   if (!before) throw new SubscriptionError("not_found");
   if (by === "client" && !canSubscriberChange(b.startsAt, settings.timezone)) throw new SubscriptionError("too_late");
 
-  await sql()`UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now() WHERE id = ${b.id} AND status = 'confirmed'`;
+  /* La visite se réclame avant tout : de deux annulations simultanées — le
+     client et l'artisan, deux onglets —, une seule passe, et une seule pose
+     un remplacement et prévient le client. La visite due se compte « à
+     replacer » dans la même instruction ; si la suite échoue, l'artisan la
+     voit dans l'onglet Abonnés au lieu qu'elle se perde. */
+  const claim = (await sql()`
+    WITH c AS (
+      UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now()
+      WHERE id = ${b.id} AND status = 'confirmed' AND done_at IS NULL
+      RETURNING subscription_id
+    ), owed AS (
+      UPDATE nivex_subscriptions SET pending_makeups = pending_makeups + 1
+      WHERE id IN (SELECT subscription_id FROM c) AND status = 'active'
+      RETURNING id
+    )
+    SELECT (SELECT count(*) FROM c)::int AS claimed, (SELECT count(*) FROM owed)::int AS owed`) as Row[];
+  if (!Number(claim[0]?.claimed)) {
+    if (await isDone(b.id)) throw new SubscriptionError("done");
+    return { replacement: null };
+  }
 
   const at = await ownerAccessToken().catch(() => null);
   const afterCancel = await loadFull(before.sub);
-  const replacement = before.sub.status === "active" ? await appendMakeup(afterCancel, settings, at) : null;
+  const replacement = Number(claim[0]?.owed)
+    ? await appendMakeup(afterCancel, settings, at).catch(async (e) => {
+        await logEvent("subscription_makeup_failed", { ref: b.ref, error: describe(e) });
+        return null;
+      })
+    : null;
   const full = await loadFull(before.sub);
   const origin = siteOrigin(host);
 
@@ -779,33 +845,50 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
   return { replacement };
 }
 
+/**
+ * Ce qui occupe l'agenda autour d'une visite qu'on déplace, sans elle : ni
+ * sa ligne en base, ni son événement Google, qui couvre son installation et
+ * son rangement. Elle peut ainsi glisser d'une heure dans la même journée.
+ */
+async function busyWithout(b: Booking, at: string | null, settings: Settings, timeMin: Date, timeMax: Date) {
+  const own = occupiedBlock(b);
+  const busy = await loadBusy({ accessToken: at, settings, excludeId: b.id, timeMin, timeMax }).catch(() => []);
+  return withoutInterval(busy, { start: own.start.getTime(), end: own.end.getTime() });
+}
+
 /** Déplace une visite. Les autres ne bougent pas ; les rangs suivent l'ordre des dates. */
 export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", host?: string | null): Promise<Booking> {
   if (b.status === "cancelled") throw new SubscriptionError("ended");
   if (b.doneAt) throw new SubscriptionError("done");
   if (!Number.isFinite(to.getTime())) throw new SubscriptionError("invalid_slot");
+  /* La même heure : rien ne bouge, et personne n'est prévenu d'un changement
+     qui n'en est pas un. */
+  if (to.getTime() === b.startsAt.getTime()) return b;
   const settings = await getSettings();
   if (by === "client" && !canSubscriberChange(b.startsAt, settings.timezone)) throw new SubscriptionError("too_late");
 
   const at = await ownerAccessToken().catch(() => null);
-  const busy = await loadBusy({
-    accessToken: at, settings, excludeId: b.id,
-    timeMin: new Date(to.getTime() - DAY), timeMax: new Date(to.getTime() + 2 * DAY),
-  }).catch(() => []);
+  const busy = await busyWithout(b, at, settings, new Date(to.getTime() - DAY), new Date(to.getTime() + 2 * DAY));
   if (slotProblem(to.getTime(), b.durationMinutes, busy, settings, new Date(), { checkLead: by === "client" })) {
     throw new SubscriptionError("invalid_slot");
   }
 
+  /* Une visite annulée ou marquée effectuée entre la lecture et l'écriture ne
+     se déplace pas : sans ce contrôle, le client recevrait l'annonce d'un
+     déplacement pour une visite qui n'a plus lieu. */
   const end = new Date(to.getTime() + b.durationMinutes * 60_000);
+  let updated: Row[];
   try {
-    await sql()`
+    updated = (await sql()`
       UPDATE nivex_bookings
       SET starts_at = ${to.toISOString()}, ends_at = ${end.toISOString()}, reminder_sent_at = NULL, sms_reminded_at = NULL
-      WHERE id = ${b.id} AND status = 'confirmed'`;
+      WHERE id = ${b.id} AND status = 'confirmed' AND done_at IS NULL
+      RETURNING id`) as Row[];
   } catch (e) {
     if (isOverlap(e)) throw new SubscriptionError("slot_taken");
     throw e;
   }
+  if (updated.length === 0) throw new SubscriptionError((await isDone(b.id)) ? "done" : "ended");
 
   const full = (await findSubscription(b.subscriptionId!))!;
   const moved = full.visits.find((v) => v.id === b.id)!;
@@ -833,7 +916,9 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
       smsWhen(to, settings.timezone, "fr")), b.ref);
   }
 
-  await logEvent("subscription_visit_moved", { ref: b.ref, by, from: b.startsAt.toISOString(), to: to.toISOString() });
+  await logEvent("subscription_visit_moved", {
+    ref: b.ref, subscription: full.sub.ref, by, from: b.startsAt.toISOString(), to: to.toISOString(),
+  });
   return moved;
 }
 
@@ -867,14 +952,25 @@ export async function setTravelFee(subId: string, fee: number | "zone", host?: s
   if (!full) throw new SubscriptionError("not_found");
 
   let cents: number;
+  let zone: string | null = null;
   if (fee === "zone") {
+    /* Un code postal sorti de tout secteur actif — un secteur retiré, une
+       zone redécoupée — n'a plus de frais de zone où revenir. Les mettre à
+       zéro en annonçant « rétablis » ferait perdre les frais sans que
+       l'artisan le voie ; il entre plutôt un montant. */
     const verdict = evaluateZone(full.sub.postalCode, full.sub.minutesPerVisit, settings.zonePolicy);
+    if (!bookable(verdict)) throw new SubscriptionError("out_of_area");
     cents = subscriberFeeCents(verdict.feeCents);
+    zone = verdict.labelFr;
   } else {
     cents = Math.max(0, Math.min(50_000, Math.round(fee)));
   }
 
-  await sql()`UPDATE nivex_subscriptions SET travel_fee_cents = ${cents} WHERE id = ${subId}`;
+  /* Le libellé suit la zone quand ce sont ses frais qui reviennent ; un
+     montant entré à la main le laisse tel quel. */
+  await sql()`
+    UPDATE nivex_subscriptions SET travel_fee_cents = ${cents}, travel_zone = coalesce(${zone}, travel_zone)
+    WHERE id = ${subId}`;
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
     const after = (await findSubscription(subId))!;
@@ -884,17 +980,26 @@ export async function setTravelFee(subId: string, fee: number | "zone", host?: s
   return cents;
 }
 
-/** « Paiement reçu » pour un cycle, ou son retrait en cas d'erreur de saisie. */
+/**
+ * « Paiement reçu » pour un cycle, ou son retrait en cas d'erreur de saisie.
+ *
+ * Le montant encaissé se note avec la date : des frais changés ensuite
+ * valent pour les cycles suivants, et ne réécrivent ni la fiche d'un cycle
+ * déjà reçu, ni les revenus du mois.
+ */
 export async function setPaid(subId: string, cycle: number, paid: boolean): Promise<void> {
   await ensureSchema();
   const key = String(Math.max(1, Math.floor(cycle)));
   if (paid) {
     await sql()`
       UPDATE nivex_subscriptions
-      SET paid_cycles = paid_cycles || jsonb_build_object(${key}::text, ${new Date().toISOString()}::text)
+      SET paid_cycles = paid_cycles || jsonb_build_object(${key}::text, ${new Date().toISOString()}::text),
+          paid_amounts = paid_amounts || jsonb_build_object(${key}::text, cycle_cents + travel_fee_cents * visits_per_cycle)
       WHERE id = ${subId}`;
   } else {
-    await sql()`UPDATE nivex_subscriptions SET paid_cycles = paid_cycles - ${key}::text WHERE id = ${subId}`;
+    await sql()`
+      UPDATE nivex_subscriptions SET paid_cycles = paid_cycles - ${key}::text, paid_amounts = paid_amounts - ${key}::text
+      WHERE id = ${subId}`;
   }
 }
 
@@ -940,6 +1045,10 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
     await calendarSingle(after, after.visits.find((x) => x.id === v.id)!, at, settings, origin);
     await renumberCalendar(after, at, settings, origin);
   }
+  /* L'annulation a dit au client qu'on l'appellerait pour replacer sa visite :
+     la date convenue lui arrive par écrit, Google branché ou non. */
+  const l = full.sub.locale;
+  await sendSms(full.sub.clientPhone, SMS.visitPlaced(l, smsWhen(v.startsAt, settings.timezone, l)), v.ref);
   await logEvent("subscription_makeup_placed", { ref: v.ref, subscription: full.sub.ref });
   return v;
 }
@@ -964,7 +1073,9 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
   const kept = full.visits.filter((v) => v.status !== "cancelled");
   const last = kept[kept.length - 1];
   const grid = gridOf(sub, settings.timezone);
-  const from = last ? gridIndexAfter(grid, last.startsAt) : gridIndexAfter(grid, new Date());
+  /* À la suite de la dernière visite, mais jamais dans le passé : une série
+     posée après la fin de la précédente reprend à la prochaine date utile. */
+  const from = renewalFrom(grid, last?.startsAt ?? null, new Date(Date.now() + settings.leadHours * 3600_000));
   const count = sub.perCycle * SERIES_CYCLES;
   const window = gridDates(grid, from, count + (opts.skipConflicts ? count : 0));
 
@@ -1016,6 +1127,10 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
       .catch((e) => logEvent("subscription_calendar_failed", { ref: sub.ref, error: describe(e) }));
     await sendConfirmation(after, at, settings, origin, true, starts);
   }
+  /* Le texto double la confirmation, et part sans Google. */
+  const l = sub.locale;
+  await sendSms(sub.clientPhone, SMS.seriesRenewed(l, smsWhen(starts[0], settings.timezone, l),
+    rhythmPhrase(sub.everyWeeks, l), `${origin}/${l}/abonnement/${sub.manageToken}`), sub.ref);
   await logEvent("subscription_renewed", { ref: sub.ref, series, visits: starts.length, skipped: taken.size });
   return (await findSubscription(subId))!;
 }
@@ -1030,11 +1145,16 @@ export async function endSubscription(subId: string, host?: string | null): Prom
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
 
-  await sql()`UPDATE nivex_subscriptions SET status = 'ended', ended_at = coalesce(ended_at, now()) WHERE id = ${subId}`;
-  const removed = ((await sql()`
-    UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now()
-    WHERE subscription_id = ${subId} AND status = 'confirmed' AND done_at IS NULL AND starts_at > now()
-    RETURNING *`) as Row[]).map(hydrate).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  /* Tout ou rien : un abonnement terminé dont les visites resteraient
+     confirmées continuerait d'occuper l'agenda, sans plus recevoir de rappel. */
+  const q = sql();
+  const [, rows] = await q.transaction([
+    q`UPDATE nivex_subscriptions SET status = 'ended', ended_at = coalesce(ended_at, now()) WHERE id = ${subId}`,
+    q`UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now()
+      WHERE subscription_id = ${subId} AND status = 'confirmed' AND done_at IS NULL AND starts_at > now()
+      RETURNING *`,
+  ]);
+  const removed = (rows as Row[]).map(hydrate).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1047,6 +1167,11 @@ export async function endSubscription(subId: string, host?: string | null): Prom
       await send(at, settings, { email: full.sub.clientEmail, name: full.sub.clientName },
         subscriptionEnded(emailBase(full, settings, origin), removed.map((v) => v.startsAt)));
     }
+  }
+  /* Le client apprend par texto que ses visites sont retirées, même quand
+     le compte Google est débranché et que le courriel ne part pas. */
+  if (removed.length > 0) {
+    await sendSms(full.sub.clientPhone, SMS.subscriptionEnded(full.sub.locale, removed.length), full.sub.ref);
   }
   await logEvent("subscription_ended", { ref: full.sub.ref, removed: removed.length });
   return { removed: removed.length };
@@ -1143,10 +1268,13 @@ export async function resendSubscription(subId: string, host?: string | null): P
  *    matin même.
  *  — Le courriel de l'artisan, une semaine avant la dernière visite d'une
  *    série : la suite est-elle confirmée, ou quelque chose change-t-il ?
+ *  — Les durées de conservation : le journal, les messages et les
+ *    rendez-vous trop anciens (retention.ts).
  *
- * Courriels et textos se notent chacun dans leur colonne : un second passage
- * le même jour ne renvoie rien, et l'un qui échoue n'empêche pas l'autre. Un
- * compte Google débranché coupe les courriels, pas les textos.
+ * Courriels et textos se notent chacun dans leur colonne, avant l'envoi : un
+ * second passage — le même jour, ou pendant que le premier tourne encore — ne
+ * renvoie rien, et l'un qui échoue n'empêche pas l'autre. Un compte Google
+ * débranché coupe les courriels, pas les textos.
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
   reminders: number; smsReminders: number; notices: number; google: boolean;
@@ -1190,18 +1318,20 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       const d = visitData(full, v, settings, origin);
       if (d.paymentDue) payment = formatMoney(d.totalCents, d.currency, v.locale);
       if (at && !v.reminderSentAt) {
-        if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) {
-          await sql()`UPDATE nivex_bookings SET reminder_sent_at = now() WHERE id = ${v.id}`;
-          reminders++;
+        const stamp = await claimReminder(v.id, "email");
+        if (stamp) {
+          if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) reminders++;
+          else await releaseReminder(v.id, "email", stamp);
         }
       }
     }
 
     if (!r.sms_reminded_at) {
-      const body = SMS.reminder(v.locale, smsWhen(v.startsAt, tz, v.locale), isToday, payment);
-      if (await sendSms(v.clientPhone, body, v.ref)) {
-        await sql()`UPDATE nivex_bookings SET sms_reminded_at = now() WHERE id = ${v.id}`;
-        smsReminders++;
+      const stamp = await claimReminder(v.id, "sms");
+      if (stamp) {
+        const body = SMS.reminder(v.locale, smsWhen(v.startsAt, tz, v.locale), isToday, payment);
+        if (await sendSms(v.clientPhone, body, v.ref)) smsReminders++;
+        else await releaseReminder(v.id, "sms", stamp);
       }
     }
   }
@@ -1215,18 +1345,56 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     const { view, sub } = full;
     const alert = view.alerts.find((a) => a.kind === "series_ending");
     if (!alert || alert.kind !== "series_ending" || sub.noticeSeries >= alert.series) continue;
+    /* Réclamé avant l'envoi, comme les rappels ; rendu si l'envoi échoue. */
+    const claimed = (await sql()`
+      UPDATE nivex_subscriptions SET notice_series = ${alert.series}
+      WHERE id = ${sub.id} AND notice_series < ${alert.series} RETURNING id`) as Row[];
+    if (claimed.length === 0) continue;
     const ok = await send(at!, settings, { email: REQUEST_INBOX },
       seriesNotice({ ...emailBase(full, settings, origin), planName: sub.planName }, {
         series: alert.series, lastAt: alert.lastAt, termEnds: alert.series >= TERM_SERIES,
       }), sub.clientEmail);
-    if (ok) {
-      await sql()`UPDATE nivex_subscriptions SET notice_series = ${alert.series} WHERE id = ${sub.id}`;
-      notices++;
+    if (ok) notices++;
+    else {
+      await sql()`
+        UPDATE nivex_subscriptions SET notice_series = ${sub.noticeSeries}
+        WHERE id = ${sub.id} AND notice_series = ${alert.series}`.catch(() => {});
     }
   }
 
-  await logEvent("daily_done", { reminders, smsReminders, notices, day: today });
+  /* — Conservation — les durées promises par la politique de confidentialité.
+     Une purge qui échoue n'empêche ni les rappels ni les avis : elle
+     reprendra au passage suivant. */
+  const purged = await purgeExpired().catch(async (e) => {
+    await logEvent("retention_failed", { error: describe(e) });
+    return null;
+  });
+
+  await logEvent("daily_done", { reminders, smsReminders, notices, day: today, purged });
   return { reminders, smsReminders, notices, google: Boolean(at) };
+}
+
+/**
+ * Réclame un rappel avant de l'envoyer. Deux passages qui se chevauchent — la
+ * tâche de Vercel livrée deux fois, ou le bouton de l'artisan pendant qu'elle
+ * tourne — lisent les mêmes colonnes vides : seul celui qui pose l'heure en
+ * premier envoie. L'heure posée est rendue, pour qu'un envoi raté rende la
+ * main au passage suivant ; un arrêt brutal entre les deux perd au plus ce
+ * rappel-là, ce qui vaut mieux qu'un rappel en double.
+ */
+async function claimReminder(id: string, kind: "email" | "sms"): Promise<string | null> {
+  const stamp = new Date().toISOString();
+  const rows = (kind === "email"
+    ? await sql()`UPDATE nivex_bookings SET reminder_sent_at = ${stamp} WHERE id = ${id} AND reminder_sent_at IS NULL RETURNING id`
+    : await sql()`UPDATE nivex_bookings SET sms_reminded_at = ${stamp} WHERE id = ${id} AND sms_reminded_at IS NULL RETURNING id`) as Row[];
+  return rows.length > 0 ? stamp : null;
+}
+
+async function releaseReminder(id: string, kind: "email" | "sms", stamp: string): Promise<void> {
+  await (kind === "email"
+    ? sql()`UPDATE nivex_bookings SET reminder_sent_at = NULL WHERE id = ${id} AND reminder_sent_at = ${stamp}`
+    : sql()`UPDATE nivex_bookings SET sms_reminded_at = NULL WHERE id = ${id} AND sms_reminded_at = ${stamp}`
+  ).catch(() => {});
 }
 
 /* ============================ Pour l'affichage ============================ */
@@ -1236,8 +1404,135 @@ export function amountOf(sub: Subscription) {
   return cycleAmount(sub.cycleCents, sub.feePerVisitCents, sub.perCycle);
 }
 
+/**
+ * Le montant d'un cycle donné : celui qui a été encaissé, quand le paiement
+ * a été noté avec son montant ; sinon celui qui se paiera. Un cycle payé
+ * avant qu'on note les montants se lit au montant du jour, comme avant.
+ */
+export function amountOfCycle(sub: Subscription, cycle: number) {
+  const paid = sub.paidCycles[String(cycle)] ? Number(sub.paidAmounts[String(cycle)]) : NaN;
+  return Number.isFinite(paid) ? paidCycleAmount(sub.cycleCents, paid) : amountOf(sub);
+}
+
 export function offsetOf(sub: Subscription): number {
   return startOffset(sub.perCycle, sub.startCycle, sub.startDone);
+}
+
+/* ============================ Déplacer, côté client ============================ */
+
+/**
+ * Les heures où un client peut déplacer une visite, pour le sélecteur de sa
+ * page.
+ *
+ * L'horaire et le délai de prévenance de la maison, la durée de la visite
+ * telle qu'elle est en base — jamais celle du navigateur —, et ce qui occupe
+ * l'agenda, sans la visite elle-même. L'horizon va jusqu'à deux semaines
+ * après elle : une visite de mars doit pouvoir glisser d'un jour, même si la
+ * grille publique des séances s'arrête bien avant. Le serveur revérifie tout
+ * au moment du déplacement.
+ */
+export async function visitMoveSlots(visit: Booking, opts: { from?: string | null; days?: number }) {
+  const settings = await getSettings();
+  const tz = settings.timezone;
+  const today = dateKey(new Date(), tz);
+  let from = opts.from && /^\d{4}-\d{2}-\d{2}$/.test(opts.from) ? opts.from : today;
+  if (from < today) from = today;
+  const days = Math.min(Math.max(Math.round(Number(opts.days)) || 14, 1), 31);
+  const horizonDays = moveHorizonDays(today, dateKey(visit.startsAt, tz), settings.horizonDays);
+
+  const at = await ownerAccessToken().catch(() => null);
+  const busy = await busyWithout(visit, at, settings,
+    fromWall({ ...parseDateKey(from), hour: 0, minute: 0 }, tz),
+    fromWall({ ...parseDateKey(addDaysToKey(from, days)), hour: 0, minute: 0 }, tz));
+
+  return {
+    timezone: tz, duration: visit.durationMinutes, horizonDays, leadHours: settings.leadHours, today,
+    days: computeSlots({ fromKey: from, days, durationMinutes: visit.durationMinutes, settings: { ...settings, horizonDays }, busy }),
+  };
+}
+
+/* ============================ Garde-fous ============================ */
+
+/**
+ * Ce qu'un client peut changer lui-même en vingt-quatre heures.
+ *
+ * Chaque déplacement ou annulation part en courriels et en textos, au client
+ * comme à l'artisan, et retouche l'agenda ; le jeton d'un abonnement suffit
+ * pour le faire. Sans limite, une boucle entre deux créneaux enverrait des
+ * textos sans fin. Au-delà, le client est invité à appeler. Les gestes de
+ * l'artisan ne se comptent pas.
+ */
+export const CLIENT_CHANGES_PER_VISIT = 3;
+export const CLIENT_CHANGES_PER_SUBSCRIPTION = 8;
+
+export async function clientChangeAllowed(full: SubscriptionFull, visit: Booking): Promise<boolean> {
+  try {
+    await ensureSchema();
+    const rows = (await sql()`
+      SELECT count(*)::int AS total, count(*) FILTER (WHERE detail->>'ref' = ${visit.ref})::int AS visit
+      FROM nivex_events
+      WHERE kind IN ('subscription_visit_moved', 'subscription_visit_cancelled')
+        AND created_at > now() - interval '1 day'
+        AND detail->>'by' = 'client'
+        AND detail->>'ref' = ANY(${full.visits.map((v) => v.ref)}::text[])`) as Row[];
+    return Number(rows[0]?.visit ?? 0) < CLIENT_CHANGES_PER_VISIT
+      && Number(rows[0]?.total ?? 0) < CLIENT_CHANGES_PER_SUBSCRIPTION;
+  } catch {
+    /* Un compteur muet ne doit pas retirer la main au client. */
+    return true;
+  }
+}
+
+/**
+ * Un abonnement pris en ligne pose six mois de visites d'un coup, et rien ne
+ * vérifie l'adresse ni le téléphone. Trois limites, qui ne gardent aucune
+ * adresse IP : un seul abonnement en cours par téléphone, un seul par
+ * adresse, et quelques-uns par jour en tout. Au-delà, le client est invité à
+ * appeler ; l'artisan, lui, en pose autant qu'il le veut.
+ */
+export const ONLINE_SUBSCRIPTIONS_PER_DAY = 4;
+
+/** Les dix derniers chiffres d'un numéro, l'indicatif 1 retiré : « 450 943-1217 » et « +1 (450) 9431217 » se rejoignent. */
+export function phoneKey(phone: string): string | null {
+  const d = phone.replace(/\D/g, "");
+  const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  return ten.length >= 7 ? ten.slice(-10) : null;
+}
+
+/** Une adresse ramenée à ses lettres et chiffres, sans accents ni ponctuation, avec son code postal. */
+export function addressKey(address: string, postalCode: string): string {
+  const flat = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `${flat(address)}|${flat(postalCode)}`;
+}
+
+export type OnlineSubscriptionFact = { phone: string; address: string; postalCode: string; active: boolean; recent: boolean };
+
+/** Vrai quand l'abonnement demandé dépasse une des trois limites. */
+export function onlineSubscriptionRefused(
+  existing: OnlineSubscriptionFact[], input: { phone: string; address: string; postalCode: string },
+): boolean {
+  if (existing.filter((s) => s.recent).length >= ONLINE_SUBSCRIPTIONS_PER_DAY) return true;
+  const phone = phoneKey(input.phone);
+  const place = addressKey(input.address, input.postalCode);
+  return existing.some((s) => s.active
+    && ((phone !== null && phoneKey(s.phone) === phone) || addressKey(s.address, s.postalCode) === place));
+}
+
+export async function onlineSubscriptionAllowed(input: { phone: string; address: string; postalCode: string }): Promise<boolean> {
+  try {
+    await ensureSchema();
+    const rows = (await sql()`
+      SELECT client_phone, address, postal_code, status, created_at FROM nivex_subscriptions
+      WHERE created_by = 'client' AND (status = 'active' OR created_at > now() - interval '1 day')`) as Row[];
+    const dayAgo = Date.now() - DAY;
+    return !onlineSubscriptionRefused(rows.map((r) => ({
+      phone: String(r.client_phone ?? ""), address: String(r.address ?? ""), postalCode: String(r.postal_code ?? ""),
+      active: r.status === "active", recent: new Date(r.created_at as string).getTime() > dayAgo,
+    })), input);
+  } catch {
+    /* createSubscription échouera proprement si la base ne répond pas. */
+    return true;
+  }
 }
 
 
