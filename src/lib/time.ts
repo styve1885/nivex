@@ -110,7 +110,7 @@ export function formatLongDate(date: Date, tz: string, locale: string): string {
 export function formatDateTime(date: Date, tz: string, locale: string): string {
   return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
     timeZone: tz, weekday: "long", day: "numeric", month: "long", year: "numeric",
-    hour: "2-digit", minute: "2-digit", hour12: locale === "en",
+    hour: "numeric", minute: "2-digit", hour12: locale === "en",
   }).format(date);
 }
 

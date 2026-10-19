@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
       estimateCents: booking.estimateCents,
       currency: booking.currency,
       firstHourFree: booking.firstHourFree,
+      travelFeeCents: booking.travelFeeCents,
       /* Ce qui a réellement eu lieu : l'écran ne promettra pas un courriel
          qui n'est jamais parti. */
       emailSent: booking.emailSent,

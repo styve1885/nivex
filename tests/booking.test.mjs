@@ -90,6 +90,15 @@ test("le client anglophone est servi en anglais", () => {
   assert.match(m.text, /Saturday, October 3, 2026/);
 });
 
+const { formatDateTime } = await import("../src/lib/time.ts");
+
+test("une heure du matin s'écrit sans zéro de tête, en français comme en anglais", () => {
+  // 7 h à Montréal le 20 octobre = 11 h UTC.
+  const sept = new Date("2026-10-20T11:00:00.000Z");
+  assert.equal(flat(formatDateTime(sept, TZ, "fr")), "mardi 20 octobre 2026 à 7 h 00");
+  assert.equal(flat(formatDateTime(sept, TZ, "en")), "Tuesday, October 20, 2026 at 7:00 a.m.");
+});
+
 /* ————— Le courriel de l'artisan ————— */
 
 test("l'artisan reçoit de quoi se déplacer et de quoi appeler", () => {
@@ -145,6 +154,27 @@ test("une occupation de l'agenda ferme le créneau, tampon compris", () => {
   assert.equal(slotIsFree(new Date(neuf).toISOString(), 120, busy, settings), false);
   // À 7 h, l'ouverture, la séance finit à 9 h : deux heures de marge, elle tient.
   assert.equal(slotIsFree(at(lundi, 7), 120, busy, settings), true);
+});
+
+/* ————— Le tunnel ————— */
+
+const { pastHorizon, rejectedContactFields } = await import("../src/components/booking/Stepper.helpers.ts");
+
+test("la flèche des quinzaines s'arrête à l'horizon de la réservation en ligne", () => {
+  // Horizon de 45 jours depuis le 19 octobre : dernier début possible le 3 décembre.
+  assert.equal(pastHorizon("2026-11-16", "2026-10-19", 45), false, "la quinzaine suivante commence le 30 novembre");
+  assert.equal(pastHorizon("2026-11-30", "2026-10-19", 45), true, "la suivante commencerait le 14 décembre");
+  assert.equal(pastHorizon("", "2026-10-19", 45), false, "sans horaire, rien à arrêter");
+});
+
+test("un refus du serveur sur les coordonnées renvoie aux champs en cause", () => {
+  assert.deepEqual(
+    rejectedContactFields({ email: ["Invalid email address"], notes: ["Too long"], postalCode: ["Invalid"] }),
+    ["email", "postal"],
+  );
+  assert.deepEqual(rejectedContactFields({ items: ["Required"] }), [], "rien à corriger à l'étape Adresse");
+  assert.deepEqual(rejectedContactFields({ toString: ["x"] }), [], "les noms hérités ne comptent pas");
+  assert.deepEqual(rejectedContactFields(null), []);
 });
 
 /* ————— Installation et rangement ————— */
