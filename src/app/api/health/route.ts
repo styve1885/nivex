@@ -5,6 +5,7 @@ import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
 import { smsConfigured } from "@/lib/sms";
 import { activeSectors } from "@/lib/travel";
+import { requireOwner } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,15 @@ export const dynamic = "force-dynamic";
  * mot qui dit s'il faut reconnecter le compte ou corriger la console
  * Google, et il ne révèle rien. Le message complet reste dans l'espace
  * artisan, derrière l'authentification.
+ *
+ * La page est publique, et le reste : c'est elle qu'on ouvre quand on ne
+ * peut plus se connecter. Mais ce qui nomme une personne ou trahit
+ * l'intérieur — l'adresse du compte Google branché, la boîte des avis, le
+ * texte brut d'une erreur de base — ne s'affiche qu'à l'artisan connecté.
  */
 export async function GET() {
   const settings = await getSettings();
+  const owner = Boolean(await requireOwner().catch(() => null));
 
   /* Une base muette renvoie les réglages par défaut, qui se lisent comme un
      compte absent. On distingue donc les deux plutôt que de les confondre. */
@@ -62,7 +69,9 @@ export async function GET() {
       sms: smsConfigured(),
       cron: Boolean(process.env.CRON_SECRET),
     },
-    schema,
+    /* Le texte brut d'une erreur de base peut nommer un hôte ou une table :
+       seul l'artisan le lit. Les autres savent qu'il y en a une. */
+    schema: owner ? schema : { ok: schema.ok, error: schema.error ? "masquée : connectez-vous à /admin" : null },
     /* Les zones desservies, résumées : de quoi voir d'un coup d'œil qu'une
        grille est bien en place, sans révéler les montants. */
     zones: settings.zonePolicy.zones.map((z) => {
@@ -73,11 +82,13 @@ export async function GET() {
         free: z.shortFeeCents === 0 && z.longFeeCents === 0,
       };
     }),
-    owner: { connected: settings.connected, email: settings.ownerEmail, paused: settings.paused },
-    calendar: { id: settings.calendarId, tokenUsable, timezone: settings.timezone },
+    /* L'adresse du compte, l'identifiant d'agenda (souvent cette même
+       adresse) et la boîte des avis : pour l'artisan connecté seulement. */
+    owner: { connected: settings.connected, paused: settings.paused, ...(owner ? { email: settings.ownerEmail } : {}) },
+    calendar: { tokenUsable, timezone: settings.timezone, ...(owner ? { id: settings.calendarId } : {}) },
     /* Ce qu'il faut savoir quand un courriel n'arrive pas. */
     email: {
-      inbox: REQUEST_INBOX,
+      ...(owner ? { inbox: REQUEST_INBOX } : {}),
       canSend: tokenUsable === true,
       reason: tokenError,
       fix: tokenError ? FIX[tokenError] ?? FIX.default : null,

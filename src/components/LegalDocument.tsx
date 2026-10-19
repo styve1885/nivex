@@ -18,7 +18,7 @@ import { servedText } from "@/lib/travel";
  */
 
 /** Date de dernière révision des deux documents. */
-export const LEGAL_UPDATED = "2026-10-18";
+export const LEGAL_UPDATED = "2026-10-19";
 
 function values(locale: "fr" | "en", s: Settings): Record<string, string> {
   const days = locale === "en" ? "days" : "jours";

@@ -311,12 +311,27 @@ function encodeHeader(v: string): string {
   return /[^\x20-\x7E]/.test(v) ? `=?UTF-8?B?${Buffer.from(v, "utf8").toString("base64")}?=` : v;
 }
 
+/**
+ * Le nom affiché d'un destinataire, tel que l'en-tête To: peut le porter.
+ *
+ * Ce nom, c'est le client qui l'a tapé. Laissé tel quel, « Tremblay, Jean »
+ * se lit comme deux adresses, dont une fausse, et Gmail refuse l'envoi ;
+ * « Ann <a@x.org>, Bob » ajoute des destinataires au choix de qui remplit
+ * le formulaire. En ASCII, le nom passe donc entre guillemets, guillemets
+ * et barres obliques inverses échappés ; avec un accent, il est encodé en entier
+ * (RFC 2047) — ce qui couvre aussi tout retour à la ligne.
+ */
+export function displayName(name: string): string {
+  if (/[^\x20-\x7E]/.test(name)) return encodeHeader(name);
+  return `"${name.replace(/[\\"]/g, "\\$&")}"`;
+}
+
 export async function sendGmail(
   accessToken: string,
   msg: { to: string; toName?: string; subject: string; html: string; text: string; fromName: string; replyTo?: string; bcc?: string },
 ): Promise<{ id: string }> {
   const boundary = `nivex_${Math.random().toString(36).slice(2)}`;
-  const to = msg.toName ? `${encodeHeader(msg.toName)} <${msg.to}>` : msg.to;
+  const to = msg.toName ? `${displayName(msg.toName)} <${msg.to}>` : msg.to;
 
   const headers = [
     `From: ${encodeHeader(msg.fromName)} <me>`,

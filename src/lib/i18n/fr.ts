@@ -55,7 +55,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le téléphone reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous ; répondez STOP à l'un de ces textos pour ne plus en recevoir. Si vous répondez autrement, votre réponse est transmise au cellulaire de l'artisan ; le site ne la conserve pas.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous ; répondez STOP à l'un de ces textos pour ne plus en recevoir. Si vous répondez autrement, votre réponse est transmise au cellulaire de l'artisan ; le site ne la conserve pas.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -81,7 +81,7 @@ const privacy: LegalDoc = {
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
-        "Twilio — achemine les textos de confirmation et de rappel. Il reçoit votre numéro de téléphone et le texte du message, rien d'autre.",
+        "Twilio — achemine les textos que vous recevez (confirmation, rappel, annulation ou changement de rendez-vous) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Il relaie aussi vers l'artisan les réponses que vous envoyez, photos comprises, et garde une copie des messages qu'il achemine.",
         "ImprovMX — fait suivre vers la boîte de votre artisan les courriels que vous écrivez à notre adresse du domaine.",
       ],
     },
@@ -819,7 +819,7 @@ export const fr = {
     eyebrow: "Nous écrire",
     title: "Une question avant de réserver ?",
     lede:
-      "Une pièce dont vous n'êtes pas sûr, un horaire particulier, un devis pour un lot important : écrivez-nous. Vous recevez une réponse le jour même, et un accusé de réception dans la minute.",
+      "Une pièce dont vous n'êtes pas sûr, un horaire particulier, un devis pour un lot important : écrivez-nous. Vous recevez une réponse le jour même.",
     name: "Votre nom",
     email: "Votre courriel",
     phone: "Téléphone (optionnel)",
@@ -832,6 +832,9 @@ export const fr = {
     successTitle: "Message envoyé.",
     successBody:
       "Un accusé de réception vient de partir vers votre boîte. Nous vous répondons en général dans la journée.",
+    /* Quand l'accusé n'a pas pu partir : le message est là, rien d'autre à attendre. */
+    successBodyNoEmail:
+      "Votre message est bien enregistré. Nous vous répondons en général dans la journée.",
     another: "Écrire un autre message",
     orCall: "Ou parlez-nous directement",
     phoneLabel: "Téléphone",
