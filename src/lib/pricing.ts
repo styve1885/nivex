@@ -1,4 +1,5 @@
 import type { Settings } from "./settings";
+import { minutesToText } from "./time";
 
 /**
  * La grille tarifaire.
@@ -211,6 +212,29 @@ export function planFullCents(p: Plan, s: Settings): number {
  */
 export function perHour(minutesPerUnit: number): number {
   return Math.max(1, Math.floor(60 / minutesPerUnit));
+}
+
+/**
+ * Ce que la page Tarifs inscrit sous « En 1 h ».
+ *
+ * Le nombre de pièces tant qu'il en tient au moins une dans l'heure ;
+ * au-delà, le temps d'une pièce. Une prestation ajoutée de quatre-vingt-dix
+ * minutes la pièce s'afficherait sinon « 1 » par heure, quand le tunnel en
+ * réserve une heure et demie.
+ */
+export function cadenceText(minutesPerUnit: number, unit: string, locale: "fr" | "en"): string {
+  if (minutesPerUnit <= 60) return String(perHour(minutesPerUnit));
+  const time = minutesToText(minutesPerUnit, locale);
+  return unit.trim() ? `${time} / ${unit.trim()}` : time;
+}
+
+/**
+ * Les offres que le tunnel peut encore produire : aucune plus courte que la
+ * durée minimale réglée. Une séance de deux heures affichée sous « minimum
+ * 3 heures » se réserverait trois heures, au prix de trois.
+ */
+export function bookableOffers(offers: Offer[], s: Settings): Offer[] {
+  return offers.filter((o) => o.minutes >= s.minMinutes);
 }
 
 /** Précisions de métier, par prestation du moteur. */

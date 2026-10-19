@@ -119,15 +119,17 @@ export function phoneDisplay(): string {
 /**
  * La description de l'accueil : les cinq premiers secteurs de la Rive-Sud,
  * dans l'ordre de l'onglet « Zones et frais », puis Montréal s'il est
- * desservi.
+ * desservi. La première heure offerte ne s'y ajoute que tant que l'artisan
+ * la propose : un extrait de recherche ne promet pas ce que le tunnel refuse.
  */
-export function metaDescription(t: Dict, policy: ZonePolicy, lang: Lang): string {
+export function metaDescription(t: Dict, policy: ZonePolicy, lang: Lang, firstHourFree: boolean): string {
   const { south, montreal } = sectorsByRegion(policy);
   const places = [
     ...south.slice(0, 5).map((s) => nameOf(s, lang)),
     ...(montreal.length ? [lang === "en" ? "Montreal" : "Montréal"] : []),
   ];
-  return t.meta.description.replace("{places}", joinList(places, lang));
+  const text = t.meta.description.replace("{places}", joinList(places, lang));
+  return firstHourFree ? `${text} ${t.meta.offer}` : text;
 }
 
 /**
@@ -159,7 +161,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     "@type": "LocalBusiness",
     "@id": `${origin}/#nivex`,
     name: "NIVEX",
-    description: metaDescription(t, s.zonePolicy, lang),
+    description: metaDescription(t, s.zonePolicy, lang, s.firstHourFree),
     slogan: t.brand.tagline,
     url: `${origin}/${lang}`,
     image: `${origin}/opengraph-image.jpg`,

@@ -42,8 +42,9 @@ export function Story({ t }: { t: Dict }) {
           />
           <div className="text-center sm:text-left">
             <div className="rule-diamond mb-10 max-w-[10rem] mx-auto sm:mx-0" aria-hidden="true"><span className="text-[10px]">◆</span></div>
+            {/* Les guillemets viennent avec la citation : « … » en français, “…” en anglais. */}
             <blockquote className="font-display text-2xl font-light italic leading-relaxed text-ink-700 sm:text-[1.9rem]">
-              “{t.story.quote}”
+              {t.story.quote}
             </blockquote>
             <p className="mt-8 font-display text-3xl text-gold-600" style={{ fontStyle: "italic" }}>{t.story.signature}</p>
             <p className="mt-1 text-[10px] uppercase tracking-[0.26em] text-ink-400">{t.story.signatureRole}</p>

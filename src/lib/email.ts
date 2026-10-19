@@ -126,7 +126,7 @@ const T = {
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
-    cancelNote: `Vous pouvez annuler ou déplacer librement jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous.`,
+    cancelNote: `Vous pouvez annuler en ligne jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous. Pour le déplacer, appelez-nous au ${PHONE}.`,
     // Annulation
     cancelSubject: (ref: string) => `Séance NIVEX annulée · ${ref}`,
     cancelIntro: "Votre séance a bien été annulée. Aucun montant ne vous sera facturé.",
@@ -160,7 +160,7 @@ const T = {
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
-    cancelNote: `You may cancel or reschedule freely up to ${CANCEL_WINDOW_HOURS} h before the appointment.`,
+    cancelNote: `You may cancel online up to ${CANCEL_WINDOW_HOURS} h before the appointment. To move it, call us at ${PHONE}.`,
     cancelSubject: (ref: string) => `NIVEX session cancelled · ${ref}`,
     cancelIntro: "Your session has been cancelled. Nothing will be charged.",
     cancelCta: "Book a new appointment",

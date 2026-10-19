@@ -169,6 +169,8 @@ export function Dashboard({
             Les réservations en ligne restent ouvertes, mais aucun courriel ne part et rien ne s&apos;inscrit à votre
             agenda. Pour fermer la prise de rendez-vous, utilisez la pause dans l&apos;onglet Réglages.
           </p>
+          {/* Navigation pleine page, comme plus haut : le détour OAuth quitte l'application. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/api/auth/google" className="btn mt-5 !py-3 !px-6 !text-[10px]">Brancher Google</a>
         </div>
       )}

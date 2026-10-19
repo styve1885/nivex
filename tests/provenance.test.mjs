@@ -156,8 +156,8 @@ test("les deux libellés suivent la liste, en français et en anglais", () => {
   }
   assert.equal(fr.booking.step2.heardFromOptions["porte-a-porte"], "Une visite à ma porte ou une carte de NIVEX");
   assert.equal(fr.booking.step2.heardFromOptions["assistant-ia"], "Un assistant IA (ChatGPT ou autre)");
-  assert.match(fr.booking.step2.heardFrom, /^Comment avez-vous connu NIVEX \?/);
-  assert.match(fr.booking.step2.referredBy, /^Qui vous a recommandé \?/);
+  assert.match(flat(fr.booking.step2.heardFrom), /^Comment avez-vous connu NIVEX \?/);
+  assert.match(flat(fr.booking.step2.referredBy), /^Qui vous a recommandé \?/);
 });
 
 test("les anciennes réponses se lisent encore, mais ne s'envoient plus", () => {

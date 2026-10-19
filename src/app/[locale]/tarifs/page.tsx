@@ -10,7 +10,7 @@ import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
-  firstTimeCents, offerCents, perHour, planCents, planFullCents,
+  bookableOffers, cadenceText, firstTimeCents, offerCents, planCents, planFullCents,
   type Offer, type UnitPrice,
 } from "@/lib/pricing";
 
@@ -93,13 +93,20 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
 
   const t = getDict(locale);
   const s = await getSettings();
-  const min = minutesToText(s.minMinutes, locale);
   /* Le titre annonce la plus courte séance possible, au prix qu'elle coûte :
-     annoncer le taux horaire seul laisserait croire qu'une heure se réserve. */
+     annoncer le taux horaire seul laisserait croire qu'une heure se réserve.
+     Sa durée, le minimum par déplacement et le prix sortent du même calcul,
+     comme sur la page Montréal : aucun des trois ne peut contredire l'autre. */
   const shortest = Math.max(s.minMinutes, 120);
+  const min = minutesToText(shortest, locale);
   const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
   const services = s.services.filter((x) => x.enabled);
   const fees = feeTable(s.zonePolicy, locale, (c) => formatMoney(c, s.currency, locale));
+  /* « Déplacement inclus » ne se dit que si aucune zone desservie n'a de frais. */
+  const travel = fees.length > 0 && fees.every((f) => f.free) ? t.tarifs.travelIncluded : t.tarifs.travelVaries;
+  /* Les séances et les forfaits que le tunnel peut encore réserver. */
+  const blocks = bookableOffers(BLOCKS, s);
+  const bundles = bookableOffers(BUNDLES, s);
 
   return (
     <div className="bg-linen-100">
@@ -113,10 +120,10 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           <p className="mt-7 max-w-2xl text-[1.02rem] font-light leading-[1.9] text-ink-600">{t.tarifs.lede}</p>
 
           <p className="mt-12 font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-            {t.tarifs.headline.replace("{price}", entry)}
+            {t.tarifs.headline.replace("{min}", min).replace("{price}", entry)}
           </p>
           <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
-            {t.tarifs.visitNote.replace("{min}", min)}
+            {t.tarifs.visitNote.replace("{min}", min).replace("{travel}", travel)}
           </p>
 
           {s.firstHourFree && (
@@ -164,7 +171,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       )}
                     </td>
                     <td className="py-4 text-right align-baseline font-display text-[1.15rem] tabular-nums text-ink-800">
-                      {perHour(svc.minutesPerUnit)}
+                      {cadenceText(svc.minutesPerUnit, locale === "en" ? svc.unitEn : svc.unitFr, locale)}
                     </td>
                   </tr>
                 ))}
@@ -214,9 +221,11 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="eyebrow">{t.tarifs.blocks.title}</p>
             <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.blocks.lede}</h2>
           </div>
-          <div className="mt-10 border-t border-gold-300/40">
-            {BLOCKS.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-          </div>
+          {blocks.length > 0 && (
+            <div className="mt-10 border-t border-gold-300/40">
+              {blocks.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
+            </div>
+          )}
           <p className="mt-8 border-l-2 border-gold-500 bg-linen-200/60 px-6 py-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
             {t.tarifs.blocks.minimum.replace("{min}", min)}
           </p>
@@ -224,17 +233,19 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
       </section>
 
       {/* — Forfaits composés — */}
-      <section className="px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <p className="eyebrow">{t.tarifs.bundles.title}</p>
-            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.bundles.lede}</h2>
+      {bundles.length > 0 && (
+        <section className="px-7 py-24 sm:px-10">
+          <div className="mx-auto max-w-4xl">
+            <div>
+              <p className="eyebrow">{t.tarifs.bundles.title}</p>
+              <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.bundles.lede}</h2>
+            </div>
+            <div className="mt-10 border-t border-gold-300/40">
+              {bundles.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
+            </div>
           </div>
-          <div className="mt-10 border-t border-gold-300/40">
-            {BUNDLES.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* — Ajouts — */}
       <section className="bg-linen-50 px-7 py-24 sm:px-10">

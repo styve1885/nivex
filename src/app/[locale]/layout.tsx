@@ -41,8 +41,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const t = getDict(locale);
   /* La description nomme les premiers secteurs de la Rive-Sud, puis
      Montréal : une phrase écrite à la main finirait par nommer un secteur
-     fermé. */
-  const description = metaDescription(t, (await getSettings()).zonePolicy, locale);
+     fermé. L'offre n'y figure que si l'artisan la propose. */
+  const s = await getSettings();
+  const description = metaDescription(t, s.zonePolicy, locale === "en" ? "en" : "fr", s.firstHourFree);
 
   return {
     ...siteMetadata,
