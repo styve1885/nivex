@@ -14,7 +14,7 @@ const privacy: LegalDoc = {
   eyebrow: "Privacy",
   title: "What we know about you.",
   lede:
-    "NIVEX collects enough to reach you, to find you and to prepare your session, and counts its visits without knowing who makes them. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
+    "NIVEX collects enough to reach you, to find you and to prepare your session, along with a few technical measurements described below. None of it is ever sold, rented or traded. Here is the whole of it, plainly.",
   sections: [
     {
       title: "Who answers for your information",

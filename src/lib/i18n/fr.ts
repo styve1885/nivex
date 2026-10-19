@@ -32,7 +32,7 @@ const privacy: LegalDoc = {
   eyebrow: "Vie privée",
   title: "Ce que nous savons de vous.",
   lede:
-    "NIVEX recueille de quoi vous joindre, de quoi vous trouver et de quoi préparer votre séance, et compte ses visites sans savoir qui les fait. Aucune de ces informations ne se revend, ne se loue, ni ne se troque. Voici le détail, sans détour.",
+    "NIVEX recueille de quoi vous joindre, de quoi vous trouver et de quoi préparer votre séance, ainsi que quelques mesures techniques décrites plus bas. Aucune de ces informations ne se revend, ne se loue, ni ne se troque. Voici le détail, sans détour.",
   sections: [
     {
       title: "Qui répond de vos renseignements",
