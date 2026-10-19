@@ -13,6 +13,11 @@ import { notFoundMeta } from "@/lib/seo";
  * vraie page, et `notFound()` rend not-found.tsx dans la racine de la
  * langue, avec un vrai statut 404.
  *
+ * À savoir : le HTML que le serveur envoie est la coquille d'erreur de Next,
+ * sans texte ni `lang` ; la page traduite paraît une fois le JavaScript
+ * chargé. C'est ainsi que Next 16 rend un `notFound()` levé hors d'une
+ * frontière Suspense. Le statut, lui, est bien 404 dès le serveur.
+ *
  * Rendue à chaque requête, jamais mise en cache : un robot qui essaie mille
  * adresses ne doit pas remplir le cache de l'hébergeur de mille pages vides.
  */

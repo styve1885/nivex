@@ -379,6 +379,23 @@ test("aucune provenance, même absurde, ne fait échouer le formulaire", () => {
   }
 });
 
+test("ce que Postgres refuserait n'atteint jamais la base : caractère nul, an zéro, moitié d'emoji", () => {
+  /* Un `?utm_source=%00x` passé par le navigateur, une date de première visite
+     à l'an zéro : Postgres refusait la ligne entière, et la séance avec. */
+  const o = cleanOrigin({
+    attribution: {
+      source: "\u0000x", medium: "a\u0001b", campaign: "ok 😀".slice(0, 4) + "\ud83d",
+      firstSeen: "0000-01-01T00:00:00Z", landing: "/fr\u0000",
+    },
+  });
+  assert.equal(o.source, "x");
+  assert.equal(o.medium, "a b");
+  assert.equal(o.campaign, "ok");
+  assert.equal(o.landing, "/fr");
+  assert.equal(o.firstSeenAt, null);
+  assert.equal(cleanOrigin({ attribution: { firstSeen: "2026-10-01T12:00:00Z" } }).firstSeenAt, "2026-10-01T12:00:00.000Z");
+});
+
 console.log("\nProvenance dans le courriel de l'artisan");
 
 const base = {

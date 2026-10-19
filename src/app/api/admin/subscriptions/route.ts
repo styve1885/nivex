@@ -9,8 +9,8 @@ import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
-  placeMakeup, previewSeries, renewSeries, resendSubscription, setPaid, setTravelFee, SubscriptionError,
-  type SubscriptionFull,
+  placeMakeup, previewSeries, renewSeries, resendSubscription, scheduleInstant, setPaid, setTravelFee,
+  SubscriptionError, type SubscriptionFull,
 } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
@@ -20,14 +20,13 @@ export const maxDuration = 60;
 /** Ce que l'onglet Abonnés affiche : tout est déjà calculé, le navigateur ne compte rien. */
 function serialise(f: SubscriptionFull, tz: string) {
   const { sub, view, visits } = f;
-  const firstKept = visits.find((v) => v.status !== "cancelled");
   const current = view.cycles.find((c) => c.cycle === view.currentCycle) ?? null;
   const currentFirst = current?.visitIds[0] ? visits.find((v) => v.id === current.visitIds[0]) : null;
   return {
     id: sub.id, ref: sub.ref, status: sub.status, manageToken: sub.manageToken, locale: sub.locale,
     planKey: sub.planKey, planName: sub.planName, perCycle: sub.perCycle,
     minutesPerVisit: sub.minutesPerVisit,
-    slot: firstKept ? slotPhrase(firstKept.startsAt, tz, "fr") : "",
+    slot: slotPhrase(scheduleInstant(sub, tz), tz, "fr"),
     rhythm: rhythmPhrase(sub.everyWeeks, "fr"),
     clientName: sub.clientName, clientEmail: sub.clientEmail, clientPhone: sub.clientPhone,
     address: sub.address, city: sub.city, postalCode: sub.postalCode, notes: sub.notes,

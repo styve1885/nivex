@@ -84,11 +84,18 @@ await test("les textos de l'artisan tiennent dans l'alphabet des textos, en une 
     SMS.owner.newSubscription("Marie Tremblay", "Exécutif", when),
     SMS.owner.cancelled("Marie Tremblay", when),
     SMS.owner.moved("Marie Tremblay", when, when),
+    /* Un mois d'août et des noms accentués : û, ç, ô, î, ë sortent de l'alphabet. */
+    SMS.owner.newBooking("François Côté", "lundi 3 août à 9 h 00", "Saint-Lambert"),
+    SMS.owner.cancelled("Gaëtan Benoît", "lundi 3 août à 9 h 00"),
+    SMS.owner.moved("Chloé Bélanger", "lundi 3 août à 9 h 00", "mardi 4 août à 14 h 00"),
   ];
   for (const m of all) {
     assert.ok(gsm7(m), `hors alphabet : ${m}`);
     assert.ok(m.length <= 160, `${m.length} caractères : ${m}`);
   }
+  assert.match(SMS.owner.newBooking("François Côté", "lundi 3 août à 9 h 00", "Saint-Lambert"), /Francois Coté, lundi 3 aout à 9 h 00/);
+  /* Un nom qui ne se ramène pas à l'alphabet reste lisible, en deux tranches. */
+  assert.match(SMS.owner.cancelled("王小明", "lundi 3 août"), /王小明/);
 });
 
 await test("le rappel annonce l'arrivée en avance, et le paiement seulement quand il est dû", () => {

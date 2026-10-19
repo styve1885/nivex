@@ -46,7 +46,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. If your number is Canadian, it also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Any other reply is passed on to the artisan's mobile phone; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. If your number is Canadian, it also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone; the site does not keep it.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -72,7 +72,7 @@ const privacy: LegalDoc = {
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
-        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also relays your replies to the artisan, photos included, and keeps a copy of the messages it carries.",
+        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio, where the artisan views them. Twilio keeps a copy of the messages it carries.",
         "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
@@ -90,6 +90,7 @@ const privacy: LegalDoc = {
         "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way. It is then anonymised: your name, phone number, address and notes are erased; the date, duration, services, amount and zone remain, for the accounts. Of your email only a scrambled fingerprint remains, which cannot be read back and serves only to avoid offering the first hour twice.",
         "A subscription: three years after its last visit, for the same reason, after which it is anonymised the same way.",
         "A message from the contact form: two years, after which it is deleted of its own accord, or sooner if you ask us to delete it.",
+        "Copies: the event for an appointment in our calendar is deleted when the appointment is anonymised. The emails exchanged with you — confirmations, reminders, the copy of your messages — stay in our mailbox; we delete them on the same schedule, or sooner if you ask.",
         "The technical log: twelve months, after which its entries are deleted of their own accord.",
         "The visit log: twelve months, after which entries are deleted of their own accord.",
         "The origin attached to a booking: it follows the fate of that booking. An anonymised booking keeps only its family — the campaign label, your answer to “How did you hear about NIVEX?”, the first name in a referral link and the name of the site you came from —, enough to count sources without pointing to anyone.",
@@ -176,7 +177,7 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. A text message doubles it, and another reminds you of the appointment the day before.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, and another reminds you of the appointment the day before.",
       ],
     },
     {
@@ -216,7 +217,7 @@ const terms: LegalDoc = {
         "A subscription reserves your visits on the same day and at the same time, at the plan's rhythm: every week, every other week or every four weeks. Those slots are offered to nobody else.",
         `A cycle is the plan's number of visits actually completed — four, two or one. A cancelled visit, on your side or ours, does not count: the cycle runs on to the next visit, and a replacement visit is added at the end of the series. If a cycle is not finished ${CYCLE_MAX_WEEKS} weeks after its first visit, we call you to agree on what comes next.`,
         `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. We call you ${SERIES_NOTICE_DAYS} days before a series ends to confirm the next one.`,
-        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle. The first-hour-free offer does not apply to subscriptions.`,
+        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle.{suboffer}`,
       ],
     },
     {
@@ -440,12 +441,12 @@ export const en: Dict = {
     offers: [
       {
         name: "Week session",
-        volume: "10 to 15 pieces — your whole week's wardrobe",
+        volume: "your whole week's wardrobe",
         note: "The most requested format, and the shortest visit we make.",
       },
       {
         name: "Family session",
-        volume: "15 to 22 pieces — shirts, trousers, school uniforms",
+        volume: "shirts, trousers, school uniforms",
         note: "For a household, or a fortnight in one go.",
       },
       {
@@ -534,7 +535,9 @@ export const en: Dict = {
     minimum: "Minimum length",
     minimumValue: "A session lasts at least {min}. The craftsman arrives {setup} minutes early to set up, at no charge: the time you book is all ironing.",
     travel: "Travel fee",
-    travelNote: "Per visit, on top of the session price. The first-hour-free offer does not cover it and does not reduce it.",
+    travelNote: "Per visit, on top of the session price.",
+    travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
+    feesOffer: "The first hour on the house never covers it.",
     feesFree: "Nothing: the Montreal neighbourhoods we serve have no travel fee.",
     faqTitle: "Questions about Montreal",
     faq: [
@@ -544,7 +547,7 @@ export const en: Dict = {
       },
       {
         q: "How much is the travel fee in Montreal?",
-        a: "{fees} It applies to every visit, is added to the session price and is never covered by the first hour on the house.",
+        a: "{fees} It applies to every visit and is added to the session price.{offer}",
       },
       {
         q: "What do I need to provide?",
@@ -603,7 +606,8 @@ export const en: Dict = {
       travelFree: "Your address is served, travel included.",
       inZone: "Good news, you're inside the service area.",
       travelFee: "Travel fee",
-      travelNote: "This fee is added to the price of the session. The first-hour-free offer does not cover it and does not reduce it.",
+      travelNote: "This fee is added to the price of the session.",
+      travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
       heardFrom: "How did you hear about NIVEX? (optional)",
       heardFromEmpty: "I'd rather not say",
       heardFromOptions: {
@@ -872,6 +876,7 @@ export const en: Dict = {
     updatedLabel: "Last updated",
     summary: "Contents",
     readAlso: "Read also",
+    subOffer: "The first-hour-free offer does not apply to subscriptions.",
     privacy,
     terms,
   },
@@ -975,7 +980,8 @@ export const en: Dict = {
       travelFlat: "{fee} per visit",
       travelShort: "{fee} for a session under {hours}",
       travelLong: "{fee} for a session of {hours} or more",
-      travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
+      travelNote: `The fee depends on the area and on the length of the session. It is added to the price and applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
+      travelNoteOffer: "The first-hour-free offer does not cover it and never reduces it.",
     },
     firstFreeLabel: "First session",
     insteadOf: "instead of",

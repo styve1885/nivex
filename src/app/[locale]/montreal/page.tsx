@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowIcon } from "@/components/Icons";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { SETUP_MINUTES } from "@/lib/brand";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { montrealFees, montrealNames, type FeeRow } from "@/lib/travel";
@@ -45,7 +45,7 @@ function feeSentence(f: FeeRow, t: Dict): string {
  * juste après « sans frais ». Les données structurées reprennent ces réponses.
  */
 function faqItems(t: Dict, s: Settings, locale: "fr" | "en", fees: FeeRow[]) {
-  const sep = locale === "en" ? ": " : " : ";
+  const sep = locale === "en" ? ": " : "\u00a0: ";
   const feesText = fees.length === 1
     ? feeSentence(fees[0], t)
     : fees.map((f) => `${f.sectors.join(", ")}${sep}${feeSentence(f, t)}`).join(" ");
@@ -59,7 +59,9 @@ function faqItems(t: Dict, s: Settings, locale: "fr" | "en", fees: FeeRow[]) {
         : f.a
           .replace("{lead}", minutesToText(s.leadHours * 60, locale))
           .replace("{horizon}", `${s.horizonDays} ${days}`)
-          .replace("{fees}", feesText),
+          .replace("{fees}", feesText)
+          /* L'offre n'est nommée que si l'artisan la propose. */
+          .replace("{offer}", s.firstHourFree ? ` ${t.montreal.feesOffer}` : ""),
     }));
 }
 
@@ -69,7 +71,7 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
 
   const t = getDict(locale);
   const m = t.montreal;
-  const s = await getSettings();
+  const s = await getSettingsStrict();
 
   const money = (c: number) => formatMoney(c, s.currency, locale);
   const quartiers = montrealNames(s.zonePolicy, locale);
@@ -166,7 +168,11 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
                   </ul>
                 )}
                 {/* « Par visite, en plus du prix » ne se dit que s'il y a des frais. */}
-                {fees.some((f) => !f.free) && <span className="mt-2 block text-ink-400">{m.travelNote}</span>}
+                {fees.some((f) => !f.free) && (
+                  <span className="mt-2 block text-ink-400">
+                    {m.travelNote}{s.firstHourFree ? ` ${m.travelNoteOffer}` : null}
+                  </span>
+                )}
               </Row>
             )}
             {s.firstHourFree && (

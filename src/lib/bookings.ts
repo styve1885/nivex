@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, getSettingsStrict, type Settings } from "./settings";
+import { getSettingsStrict, type Settings } from "./settings";
 import {
   bookingGroup, clip, heardFromText, isHeardFrom, isStoredHeardFrom, referrerHost, refName,
   type SourceGroup, type StoredHeardFrom,
@@ -213,9 +213,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   const manageToken = token(24);
   const provenance = cleanOrigin(input);
 
-  let rows: Row[];
-  try {
-    rows = (await sql()`
+  const insert = async (p: typeof provenance) => (await sql()`
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
@@ -229,10 +227,23 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
         ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
         ${verdict.feeCents}, ${verdict.labelFr},
-        ${provenance.heardFrom}, ${provenance.source}, ${provenance.medium}, ${provenance.campaign},
-        ${provenance.referrer}, ${provenance.landing}, ${provenance.firstSeenAt}, ${provenance.visits},
-        ${provenance.referral}, ${provenance.referredBy}
+        ${p.heardFrom}, ${p.source}, ${p.medium}, ${p.campaign},
+        ${p.referrer}, ${p.landing}, ${p.firstSeenAt}, ${p.visits},
+        ${p.referral}, ${p.referredBy}
       ) RETURNING *`) as Row[];
+
+  let rows: Row[];
+  try {
+    try {
+      rows = await insert(provenance);
+    } catch (e) {
+      /* Une valeur de provenance que Postgres refuse encore, malgré le
+         nettoyage, ne coûte jamais la séance : elle s'écrit sans. La réponse
+         à « Comment avez-vous connu NIVEX ? » reste, elle vient d'une liste. */
+      if (!isDataError(e)) throw e;
+      await logEvent("provenance_dropped", { ref });
+      rows = await insert({ ...NO_ORIGIN, heardFrom: provenance.heardFrom });
+    }
   } catch (e) {
     const msg = String((e as Error).message ?? e);
     // 23505 : index unique · 23P01 : contrainte d'exclusion (chevauchement)
@@ -297,6 +308,21 @@ export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start:
   };
 }
 
+/** Rien n'a pu être vu sur le site avant 2020 : une date plus ancienne est une saleté. */
+const FIRST_SEEN_FLOOR = Date.UTC(2020, 0, 1);
+
+const NO_ORIGIN: ReturnType<typeof cleanOrigin> = {
+  heardFrom: null, referredBy: null, referral: null, source: null, medium: null,
+  campaign: null, referrer: null, landing: null, firstSeenAt: null, visits: null,
+};
+
+/** Une erreur de donnée de Postgres (classe 22) : valeur hors bornes, octet invalide, syntaxe. */
+function isDataError(e: unknown): boolean {
+  const code = (e as { code?: unknown })?.code;
+  if (typeof code === "string" && /^22/.test(code)) return true;
+  return /invalid byte sequence|out of range|invalid input syntax|unsupported Unicode escape/i.test(String((e as Error)?.message ?? e));
+}
+
 /**
  * La provenance, ramenée à ce qui est écrivable en base.
  *
@@ -326,13 +352,14 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referre
     ? Math.min(Math.round(rawVisits), 10_000)
     : null;
 
-  /* Une date venue du navigateur peut être n'importe quoi, y compris une
-     date du futur. On la refuse plutôt que de l'écrire. */
+  /* Une date venue du navigateur peut être n'importe quoi : une date du
+     futur, ou l'an zéro, que Postgres refuse. Avant l'ouverture du site, ou
+     après maintenant, on la laisse de côté plutôt que de l'écrire. */
   let firstSeenAt: string | null = null;
   const seen = clip(a.firstSeen, 60);
   if (seen) {
     const d = new Date(seen);
-    if (!Number.isNaN(d.getTime()) && d.getTime() <= Date.now() + 60_000) {
+    if (!Number.isNaN(d.getTime()) && d.getTime() >= FIRST_SEEN_FLOOR && d.getTime() <= Date.now() + 60_000) {
       firstSeenAt = d.toISOString();
     }
   }
@@ -523,7 +550,7 @@ export async function resendBooking(b: Booking, host?: string | null): Promise<{
     const { resendSubscription } = await import("./subscriptions");
     return resendSubscription(b.subscriptionId, host);
   }
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const origin = siteOrigin(host);
 
   let at: string | null = null;
@@ -727,7 +754,7 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
     await cancelVisit(b, by);
     return;
   }
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   await ensureSchema();
   /* Une seule annulation par séance : deux clics, ou le client et l'artisan
      à la même seconde, ne doivent pas envoyer deux fois chaque avis. Seul

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
-import { getSettings } from "@/lib/settings";
+import { getSettingsStrict } from "@/lib/settings";
 import { LegalDocument } from "@/components/LegalDocument";
 import { pageMeta } from "@/lib/seo";
 
@@ -20,7 +20,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
   if (!isLocale(locale)) notFound();
 
   const t = getDict(locale);
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
 
   return (
     <LegalDocument

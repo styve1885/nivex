@@ -44,6 +44,8 @@ export function legalValues(locale: "fr" | "en", s: Settings): Record<string, st
     // La tranche dont s'allonge une séance au-delà du minimum : le pas des
     // créneaux, celui sur lequel le moteur arrondit la durée et le prix.
     step: minutesToText(s.slotStep, locale),
+    // La phrase qui écarte l'offre des abonnements : sans offre, rien à écarter.
+    suboffer: s.firstHourFree ? ` ${getDict(locale).legal.subOffer}` : "",
     lead: `${s.leadHours} ${hours}`,
     cancel: `${CANCEL_WINDOW_HOURS} ${hours}`,
     horizon: `${s.horizonDays} ${days}`,

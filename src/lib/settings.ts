@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { ensureSchema, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
 import {
@@ -5,6 +6,7 @@ import {
   type Sector, type Zone, type ZonePolicy,
 } from "./travel";
 import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "./services";
+import { MIN_SESSION_MINUTES } from "./brand";
 
 /* Les prestations du code et la forme d'un horaire vivent dans `services.ts`,
    qui n'importe rien : un composant client peut les lire sans emporter la
@@ -80,7 +82,7 @@ function hydrate(row: Row | undefined): Settings {
     businessName: (row.business_name as string) || "NIVEX",
     hourlyRate: Number(row.hourly_rate ?? DEFAULT_HOURLY_RATE),
     currency: (row.currency as string) || "CAD",
-    minMinutes: Number(row.min_minutes ?? 120),
+    minMinutes: Math.max(MIN_SESSION_MINUTES, Number(row.min_minutes ?? MIN_SESSION_MINUTES)),
     bufferMinutes: Number(row.buffer_minutes ?? 30),
     leadHours: Number(row.lead_hours ?? 24),
     horizonDays: Number(row.horizon_days ?? 45),
@@ -211,8 +213,20 @@ export class SettingsUnavailableError extends Error {
  * ou facturerait un tarif que l'artisan ne pratique plus. Les valeurs par
  * défaut ne valent ici que pour une base qui répond sans avoir encore de
  * ligne, ou quand aucune base n'est branchée du tout.
+ *
+ * Les pages de la vitrine mises en cache lisent ici aussi. Une régénération
+ * qui lève une erreur laisse servir la dernière page réussie ; une lecture
+ * tolérante y aurait figé les tarifs et l'horaire du code jusqu'à la
+ * régénération suivante.
+ *
+ * Une seule lecture par rendu (`cache`) : la racine, ses métadonnées et la
+ * page partagent la même ligne, ou la même panne, et une page ne mêle jamais
+ * les valeurs de la base et celles du code. Hors rendu (routes d'API, tâche
+ * quotidienne), `cache` ne retient rien et chaque appel relit la base.
  */
-export async function getSettingsStrict(): Promise<Settings> {
+export const getSettingsStrict = cache(readSettings);
+
+async function readSettings(): Promise<Settings> {
   if (!isDbConfigured()) return FALLBACK_SETTINGS;
   try {
     await ensureSchema();
@@ -228,9 +242,10 @@ export async function getSettingsStrict(): Promise<Settings> {
 }
 
 /**
- * Lecture tolérante, pour l'affichage public seulement : si la base n'est
- * pas branchée, on renvoie les valeurs par défaut plutôt que de faire
- * tomber la page.
+ * Lecture tolérante, pour l'affichage seulement, dans les pages rendues à
+ * chaque visite : si la base n'est pas branchée, on renvoie les valeurs par
+ * défaut plutôt que de faire tomber la page. Les pages mises en cache lisent
+ * la version stricte, pour ne pas figer ces valeurs-là.
  *
  * Cette tolérance a un prix, et il faut le connaître : les valeurs par
  * défaut portent `connected: false`. Une base qui répond mal se lit donc
@@ -304,7 +319,15 @@ export async function saveConnection(input: {
     WHERE nivex_settings.owner_email IS NULL
        OR lower(nivex_settings.owner_email) = lower(EXCLUDED.owner_email)
     RETURNING id`) as Row[];
-  if (rows.length === 0) throw new Error("Ce compte Google n'est pas celui du propriétaire enregistré.");
+  if (rows.length === 0) throw new NotOwnerError();
+}
+
+/** Un autre compte a revendiqué la maison entre la lecture et l'écriture. */
+export class NotOwnerError extends Error {
+  constructor() {
+    super("Ce compte Google n'est pas celui du propriétaire enregistré.");
+    this.name = "NotOwnerError";
+  }
 }
 
 export async function disconnect() {

@@ -9,6 +9,7 @@ import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "@/lib/service
 import type { Settings } from "@/lib/settings";
 import { ServiceIcon } from "../Icons";
 import { parseHM } from "@/lib/time";
+import { MIN_SESSION_MINUTES } from "@/lib/brand";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
@@ -131,7 +132,7 @@ export function SettingsPanel({ initial, onDirty }: {
           return;
         }
         setError(data.error === "invalid_input"
-          ? "Certaines valeurs sont invalides — vérifiez les heures d'ouverture et les prestations."
+          ? `Certaines valeurs sont invalides : vérifiez les heures d'ouverture, les prestations et la durée minimale (${MIN_SESSION_MINUTES} minutes au moins).`
           : data.error === "duplicate_service_key"
             ? "Deux prestations portent la même clé. Retirez la dernière ajoutée et recommencez."
             : data.error === "day_too_short"
@@ -203,7 +204,7 @@ export function SettingsPanel({ initial, onDirty }: {
             value={s.hourlyRate / 100} step={1} min={0} max={1000}
             onChange={(v) => patch("hourlyRate", Math.round(v * 100))} />
           <NumberField label="Durée minimale" suffix="minutes"
-            value={s.minMinutes} step={15} min={15} max={720}
+            value={s.minMinutes} step={15} min={MIN_SESSION_MINUTES} max={720}
             onChange={(v) => patch("minMinutes", v)} />
         </div>
         <label className="mt-6 flex cursor-pointer items-center justify-between gap-6 border-t border-gold-300/30 pt-5">

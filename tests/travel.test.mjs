@@ -573,6 +573,13 @@ test("la description n'annonce la première heure que si l'artisan l'offre", () 
   assert.doesNotMatch(localBusinessJsonLd(fr, { ...FALLBACK_SETTINGS, firstHourFree: false }, "fr").description, /offerte/);
 });
 
+test("les conditions ne nomment l'offre, pour l'écarter des abonnements, que si elle existe", () => {
+  const abonnements = (s) => fr.legal.terms.sections.find((x) => x.title === "Les abonnements").body
+    .map((p) => fill(p, legalValues("fr", s)).map((x) => (typeof x === "string" ? x : "·")).join("")).join(" ");
+  assert.match(abonnements(FALLBACK_SETTINGS), /ne s'applique pas aux abonnements/);
+  assert.doesNotMatch(abonnements({ ...FALLBACK_SETTINGS, firstHourFree: false }), /première heure/);
+});
+
 test("les documents légaux : aucune accolade ne reste, en français comme en anglais", () => {
   const reglages = [FALLBACK_SETTINGS, { ...FALLBACK_SETTINGS, firstHourFree: false, minMinutes: 180 }];
   for (const [locale, d] of [["fr", fr], ["en", en]]) {

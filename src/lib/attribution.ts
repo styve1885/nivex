@@ -404,6 +404,11 @@ export function deviceType(userAgent: string | null | undefined): "mobile" | "ta
 /** Une chaîne bornée, ou rien — pour ne jamais écrire n'importe quoi en base. */
 export function clip(v: unknown, max: number): string | null {
   if (typeof v !== "string") return null;
-  const s = v.trim();
-  return s ? s.slice(0, max) : null;
+  /* Ni caractère de contrôle ni moitié de paire UTF-16 : Postgres refuse un
+     caractère nul, et un `?utm_source=%00` aurait fait tomber la réservation
+     entière avec lui. La coupe peut séparer une paire : on nettoie après. */
+  const s = v.replace(/\p{Cc}+/gu, " ").trim().slice(0, max)
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (m) => (m.length === 2 ? m : ""))
+    .trim();
+  return s || null;
 }

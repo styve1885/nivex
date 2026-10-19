@@ -35,6 +35,11 @@ export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
 
+/* Deux langues, rien d'autre. Sans ce verrou, /foo.png ou /api, que le
+   middleware laisse passer, tombaient ici avec une « langue » inconnue, et
+   chaque adresse essayée par un robot laissait une page 404 dans le cache. */
+export const dynamicParams = false;
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return siteMetadata;

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
@@ -92,7 +92,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
   if (!isLocale(locale)) notFound();
 
   const t = getDict(locale);
-  const s = await getSettings();
+  const s = await getSettingsStrict();
   /* Le titre annonce la plus courte séance possible, au prix qu'elle coûte :
      annoncer le taux horaire seul laisserait croire qu'une heure se réserve.
      Sa durée, le minimum par déplacement et le prix sortent du même calcul,
@@ -389,7 +389,9 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       </li>
                     ))}
                   </ul>
-                  <span className="mt-4 block text-ink-400">{t.tarifs.terms.travelNote}</span>
+                  <span className="mt-4 block text-ink-400">
+                    {t.tarifs.terms.travelNote}{s.firstHourFree ? ` ${t.tarifs.terms.travelNoteOffer}` : null}
+                  </span>
                 </dd>
               </div>
             )}

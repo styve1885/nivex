@@ -60,6 +60,7 @@ export default async function SubscribePage({
     currency: s.currency,
     timezone: s.timezone,
     discountCents: SUBSCRIBER_TRAVEL_DISCOUNT_CENTS,
+    firstHourFree: s.firstHourFree,
     seriesCycles: SERIES_CYCLES,
     initialPlan: sp.formule ?? null,
     areaText: servedText(s.zonePolicy, locale, t.zoneText),

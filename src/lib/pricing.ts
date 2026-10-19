@@ -42,6 +42,17 @@ export const BLOCKS: Offer[] = [
   },
 ];
 
+/**
+ * Le volume d'une séance de cette durée, tel que la grille le publie
+ * (« 10 à 15 pièces ») ; null quand la grille n'a pas de bloc de cette
+ * durée. L'accueil le reprend : une durée qui suit le minimum réglé ne doit
+ * pas garder le volume d'une autre.
+ */
+export function blockPieces(minutes: number, locale: "fr" | "en"): string | null {
+  const b = BLOCKS.find((x) => x.minutes === minutes);
+  return b ? (locale === "en" ? b.en : b.fr).detail.split(".")[0] : null;
+}
+
 /** Forfaits composés : un panier type, déjà chiffré. */
 export const BUNDLES: Offer[] = [
   {

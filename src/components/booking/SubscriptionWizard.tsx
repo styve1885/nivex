@@ -35,6 +35,8 @@ export type SubscriptionConfig = {
   timezone: string;
   /** Réduction des abonnés sur les frais de route, par visite. */
   discountCents: number;
+  /** L'offre « première heure offerte » existe-t-elle ? Sans elle, inutile de dire qu'elle ne s'applique pas ici. */
+  firstHourFree: boolean;
   seriesCycles: number;
   initialPlan: string | null;
   /** La phrase des secteurs desservis, écrite par le serveur depuis les réglages. */
@@ -176,7 +178,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
 
   const errors = {
     name: name.trim().length < 2 ? t.booking.errors.required : null,
-    email: !EMAIL_RE.test(email.trim()) ? t.booking.errors.email : null,
+    email: !email.trim() ? t.booking.errors.required : !EMAIL_RE.test(email.trim()) ? t.booking.errors.email : null,
     phone: !isPhoneValid(phone) ? t.booking.errors.phone : null,
     address: address.trim().length < 4 ? t.booking.errors.required : null,
     city: city.trim().length < 2 ? t.booking.errors.required : null,
@@ -370,7 +372,7 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                 );
               })}
             </div>
-            <p className="mt-6 text-[0.78rem] font-light text-ink-400">{s.plan.noFirstHour}</p>
+            {config.firstHourFree && <p className="mt-6 text-[0.78rem] font-light text-ink-400">{s.plan.noFirstHour}</p>}
           </section>
         )}
 

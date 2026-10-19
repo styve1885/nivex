@@ -116,7 +116,8 @@ const T = {
     estimate: "Estimation", ref: "Référence", notes: "Vos précisions", phone: "Téléphone",
     free: "Première heure offerte — déjà déduite",
     travel: "Frais de déplacement", total: "Total estimé",
-    travelNote: "Les frais de déplacement s'ajoutent au prix de la séance. L'offre « première heure offerte » ne les couvre pas.",
+    travelNote: "Les frais de déplacement s'ajoutent au prix de la séance.",
+    travelNoteOffer: "L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
     setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
@@ -150,7 +151,8 @@ const T = {
     estimate: "Estimate", ref: "Reference", notes: "Your notes", phone: "Phone",
     free: "First hour free — already deducted",
     travel: "Travel fee", total: "Estimated total",
-    travelNote: "The travel fee is added to the price of the session. The first-hour-free offer does not cover it.",
+    travelNote: "The travel fee is added to the price of the session.",
+    travelNoteOffer: "The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
     setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
@@ -238,7 +240,7 @@ export function clientConfirmation(d: BookingEmailData) {
     </table>
   </td></tr>
   ${(d.travelFeeCents ?? 0) > 0 ? `<tr><td style="padding:20px 40px 0;">
-    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}</p>
+    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}${d.firstHourFree ? ` ${esc(t.travelNoteOffer)}` : ""}</p>
   </td></tr>` : ""}
   <tr><td style="padding:24px 40px 0;">
     <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
@@ -342,6 +344,9 @@ function originText(d: BookingEmailData): string[] {
 
 export function ownerNotification(d: BookingEmailData, cancelled = false) {
   const t = T.fr; // l'artisan lit en français
+  /* Les montants aussi, même quand le client a réservé en anglais : sinon
+     la fiche mêlait « 100 $ » et « $15 ». */
+  const fr = { ...d, locale: "fr" as const };
   const when = formatDateTime(d.startsAt, d.timezone, "fr");
   const dur = minutesToText(d.durationMinutes, "fr");
   const money = formatMoney(d.estimateCents, d.currency, "fr");
@@ -359,7 +364,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${row(t.what, itemsHtml(d.items))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
-      ${travelRowsHtml(d, t)}
+      ${travelRowsHtml(fr, t)}
       ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
     </table>
@@ -373,7 +378,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     `${t.phone}: ${d.clientPhone}`, `${t.email}: ${d.clientEmail}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d.items),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
-    ...travelRowsText(d, t),
+    ...travelRowsText(fr, t),
     d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,
     ...originText(d), "", `${d.siteUrl}/admin`,
   ].filter(Boolean).join("\n");

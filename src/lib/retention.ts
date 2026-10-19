@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { ensureSchema, sql } from "./db";
+import { deleteEvent, ownerAccessToken } from "./google";
+import { getSettingsStrict } from "./settings";
+import { purgeOldVisits } from "./visits";
 
 /**
  * Les durées de conservation que promet la politique de confidentialité,
@@ -45,7 +48,7 @@ export function erasedEmail(email: string): string {
 type Row = Record<string, unknown>;
 
 /** Ce que la purge a fait, pour le journal. */
-export type Purged = { events: number; messages: number; subscriptions: number; bookings: number };
+export type Purged = { events: number; messages: number; visits: number; subscriptions: number; bookings: number };
 
 export async function purgeExpired(): Promise<Purged> {
   await ensureSchema();
@@ -61,6 +64,10 @@ export async function purgeExpired(): Promise<Purged> {
     WITH d AS (
       DELETE FROM nivex_messages WHERE created_at < now() - make_interval(years => ${MESSAGES_RETENTION_YEARS}) RETURNING 1
     ) SELECT count(*)::int AS n FROM d`);
+
+  /* Le journal des visites s'efface aussi au passage d'une visite sur
+     cinquante ; ici, il tient ses douze mois même quand personne ne vient. */
+  const visits = await purgeOldVisits();
 
   /* Les abonnements d'abord : trois ans après la dernière visite posée, qu'ils
      aient été clos ou qu'on ait oublié de le faire. Un abonnement qui a
@@ -107,5 +114,47 @@ export async function purgeExpired(): Promise<Purged> {
       WHERE x.id = r.id`;
   }
 
-  return { events, messages, subscriptions: subs.length, bookings: rows.length };
+  return { events, messages, visits, subscriptions: subs.length, bookings: rows.length };
+}
+
+/**
+ * Les copies dans l'agenda de l'artisan. L'événement d'une séance porte le
+ * nom, l'adresse, le téléphone et les précisions du client : il s'efface
+ * quand la ligne est anonymisée, sans avis à personne. Pour un abonnement,
+ * c'est l'événement récurrent de la série qui part, ses occurrences avec lui.
+ *
+ * Sans Google branché, ou si l'appel échoue, l'identifiant reste en base et
+ * la tâche réessaie le lendemain. L'agenda se lit en mode strict : un agenda
+ * par défaut répondrait « introuvable », que Google compte comme un succès,
+ * et l'identifiant s'effacerait avec l'événement toujours en place.
+ */
+export async function purgeCalendarCopies(): Promise<number> {
+  const at = await ownerAccessToken().catch(() => null);
+  if (!at) return 0;
+  const { calendarId } = await getSettingsStrict();
+  const q = sql();
+  const rows = (await q`
+    SELECT id, google_event_id, google_series_id FROM nivex_bookings
+    WHERE client_email LIKE ${`${ERASED}%`}
+      AND (google_event_id IS NOT NULL OR google_series_id IS NOT NULL)
+    LIMIT 200`) as Row[];
+  if (rows.length === 0) return 0;
+
+  const master = (r: Row) => (r.google_series_id ? String(r.google_series_id) : null);
+  const targets = [...new Set(rows.map((r) => master(r) ?? String(r.google_event_id)))];
+  const gone = new Set<string>();
+  for (const id of targets) {
+    try {
+      await deleteEvent(at, calendarId, id, { notify: false });
+      gone.add(id);
+    } catch {
+      /* Le lendemain. */
+    }
+  }
+
+  const cleared = rows.filter((r) => gone.has(master(r) ?? String(r.google_event_id))).map((r) => r.id as string);
+  if (cleared.length > 0) {
+    await q`UPDATE nivex_bookings SET google_event_id = NULL, google_series_id = NULL WHERE id = ANY(${cleared}::uuid[])`;
+  }
+  return gone.size;
 }

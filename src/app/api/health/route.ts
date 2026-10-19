@@ -57,8 +57,13 @@ export async function GET() {
     }
   }
 
+  /* « ok » dit si la base répond : une surveillance externe doit voir la
+     panne, et un 200 permanent la lui cachait. Le reste du diagnostic suit
+     dans les deux cas. */
+  const ok = schema.ok && !schema.error;
+
   return NextResponse.json({
-    ok: true,
+    ok,
     origin: siteOrigin(),
     env: {
       database: isDbConfigured(),
@@ -93,7 +98,7 @@ export async function GET() {
       reason: tokenError,
       fix: tokenError ? FIX[tokenError] ?? FIX.default : null,
     },
-  }, { headers: { "cache-control": "no-store" } });
+  }, { status: ok ? 200 : 503, headers: { "cache-control": "no-store" } });
 }
 
 const FIX: Record<string, string> = {

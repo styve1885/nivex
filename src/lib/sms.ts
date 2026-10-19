@@ -184,15 +184,40 @@ export const SMS = {
     ? `NIVEX: your subscription is ending. ${count === 1 ? "Your upcoming visit is cancelled." : `Your ${count} upcoming visits are cancelled.`}`
     : `NIVEX : votre abonnement prend fin. ${count === 1 ? "Votre visite à venir est annulée." : `Vos ${count} visites à venir sont annulées.`}`,
 
-  /** Pour l'artisan. Sans tiret cadratin : absent de l'alphabet des textos,
-      il ferait passer tout le message en Unicode, payé deux tranches. */
+  /** Pour l'artisan. Sans tiret cadratin, et ramenés à l'alphabet des
+      textos (`toGsm7`) : un seul caractère hors de cet alphabet — le û
+      d'« août », le ç de François — ferait passer tout le message en
+      Unicode, payé deux tranches. */
   owner: {
-    newBooking: (name: string, when: string, city: string) => `NIVEX : nouvelle séance, ${name}, ${when}, ${city}.`,
-    newSubscription: (name: string, plan: string, when: string) => `NIVEX : nouvel abonnement ${plan}, ${name}, première visite le ${when}.`,
-    cancelled: (name: string, when: string) => `NIVEX : ${name} a annulé sa visite du ${when}.`,
-    moved: (name: string, from: string, to: string) => `NIVEX : ${name} a déplacé sa visite du ${from} au ${to}.`,
+    newBooking: (name: string, when: string, city: string) => toGsm7(`NIVEX : nouvelle séance, ${name}, ${when}, ${city}.`),
+    newSubscription: (name: string, plan: string, when: string) => toGsm7(`NIVEX : nouvel abonnement ${plan}, ${name}, première visite le ${when}.`),
+    cancelled: (name: string, when: string) => toGsm7(`NIVEX : ${name} a annulé sa visite du ${when}.`),
+    moved: (name: string, from: string, to: string) => toGsm7(`NIVEX : ${name} a déplacé sa visite du ${from} au ${to}.`),
   },
 };
+
+/* L'alphabet des textos (GSM 03.38, table de base). */
+const GSM7 = new Set("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà");
+const TYPOGRAPHY: Record<string, string> = {
+  "’": "'", "‘": "'", "«": "\"", "»": "\"", "“": "\"", "”": "\"", "–": "-", "—": "-", "…": "...",
+  "\u00a0": " ", "\u202f": " ", "œ": "oe", "Œ": "OE",
+};
+
+/**
+ * Ramène un texte à l'alphabet des textos : ce qui en sort perd son accent
+ * (û devient u, ç devient c), le reste garde le sien (é, è, à, ù). Pour les
+ * textos de l'artisan seulement ; ceux du client gardent leur orthographe.
+ * Un texte qui ne s'y ramène pas entièrement — un nom en caractères
+ * chinois — reste tel quel : mieux vaut deux tranches qu'un nom illisible.
+ */
+export function toGsm7(s: string): string {
+  const out = [...s].map((c) => {
+    if (GSM7.has(c)) return c;
+    if (TYPOGRAPHY[c] !== undefined) return TYPOGRAPHY[c];
+    return c.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }).join("");
+  return [...out].every((c) => GSM7.has(c)) ? out : s;
+}
 
 /* ============================ Les réponses des clients ============================ */
 

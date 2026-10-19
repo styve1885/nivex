@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession, requireOwner } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { getSettingsStrict } from "@/lib/settings";
 import { listBookings, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
@@ -27,8 +27,13 @@ export default async function AdminPage({
   const settings = await getSettingsStrict().catch(() => null);
   if (!settings) return <Unreadable />;
 
-  const owner = await requireOwner();
-  if (!owner) redirect("/admin/login?error=not_owner");
+  /* La propriété se décide sur les réglages qu'on vient de lire : une seconde
+     lecture qui échouerait se lisait comme « ce compte n'est pas celui de
+     l'artisan ». Un compte encore sans propriétaire s'ouvre, comme dans
+     requireOwner. */
+  if (settings.ownerEmail && settings.ownerEmail.toLowerCase() !== session.email.toLowerCase()) {
+    redirect("/admin/login?error=not_owner");
+  }
 
   /* « Branché » ne veut pas dire « fonctionne » : un jeton révoqué laisse
      le réglage intact pendant que plus rien ne part. On essaie donc, et
@@ -67,7 +72,7 @@ export default async function AdminPage({
 
   return (
     <Dashboard
-      session={owner}
+      session={session}
       settings={settings}
       upcoming={serialise(upcoming)}
       past={serialise(past)}

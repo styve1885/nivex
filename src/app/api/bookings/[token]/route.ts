@@ -31,6 +31,13 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   if (b.status === "cancelled") return NextResponse.json({ ok: true, alreadyCancelled: true });
   if (!canSelfCancel(b, await timezone())) return NextResponse.json({ ok: false, error: "too_late" }, { status: 409 });
 
-  await cancelBooking(b, "client");
+  /* Réglages illisibles ou base muette : rien n'est écrit, et le client peut
+     réessayer ou appeler. */
+  try {
+    await cancelBooking(b, "client");
+  } catch (e) {
+    console.error("[nivex] cancellation failed:", e);
+    return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
+  }
   return NextResponse.json({ ok: true });
 }

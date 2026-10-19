@@ -4,7 +4,7 @@ import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
 import { getSettings, getSettingsStrict, type Settings } from "./settings";
 import { PLANS, type Plan } from "./pricing";
-import { computeSlots, horizonEnd, loadBusy, loadBusyRange, slotProblem } from "./availability";
+import { computeSlots, horizonEnd, loadBusy, loadBusyRange, onSlotGrid, slotProblem } from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import {
   createEvent, createRecurringEvent, deleteEvent, listInstances, ownerAccessToken, patchEvent,
@@ -27,7 +27,7 @@ import {
 import {
   contactEmail, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, SETUP_MINUTES, TERM_SERIES,
 } from "./brand";
-import { purgeExpired } from "./retention";
+import { purgeCalendarCopies, purgeExpired } from "./retention";
 import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, parseDateKey, parseHM } from "./time";
 
 /**
@@ -92,7 +92,8 @@ export class SubscriptionError extends Error {
   constructor(
     public code:
       | "paused" | "unknown_plan" | "out_of_area" | "conflicts" | "slot_taken" | "invalid_slot"
-      | "too_late" | "not_found" | "done" | "ended" | "has_done" | "term_done" | "invalid" | "past",
+      | "too_late" | "not_found" | "done" | "ended" | "has_done" | "term_done" | "invalid" | "past"
+      | "out_of_range",
     public conflicts: SeriesConflict[] = [],
     public alternatives: Date[] = [],
   ) {
@@ -161,6 +162,16 @@ function planName(sub: Pick<Subscription, "planKey" | "planName">, locale: "fr" 
 
 function gridOf(sub: Subscription, tz: string): Grid {
   return { anchor: sub.gridAnchor, hm: sub.gridHm, everyWeeks: sub.everyWeeks, tz };
+}
+
+/**
+ * Le jour et l'heure fixes de l'abonnement, lus sur sa grille. Une visite
+ * déplacée ne change pas le rythme : le lire sur la première visite à venir
+ * annonçait « le mercredi à 14 h » quand toutes les suivantes restaient le
+ * mardi à 10 h.
+ */
+export function scheduleInstant(sub: Subscription, tz: string): Date {
+  return gridDate(gridOf(sub, tz), 0);
 }
 
 /* ============================ Lecture ============================ */
@@ -267,10 +278,13 @@ export async function previewSeries(opts: {
      tranche de deux mois, depuis une route ouverte à tous. Le client ne
      réserve pas au-delà de l'horizon réglé ; l'artisan, qui entre aussi des
      abonnés déjà en route, garde un an derrière et deux ans devant. Refusé
-     avant tout chargement. */
+     avant tout chargement. Le client part aussi d'une heure de la grille,
+     comme une séance : dix heures sept ne se réserve pas. */
   const t0 = opts.first.getTime(), now = Date.now();
-  if (opts.checkLead ? t0 >= horizonEnd(settings) : t0 < now - 366 * DAY || t0 > now + 2 * 366 * DAY) {
-    throw new SubscriptionError("invalid");
+  if (opts.checkLead) {
+    if (t0 >= horizonEnd(settings) || !onSlotGrid(t0, settings)) throw new SubscriptionError("invalid");
+  } else if (t0 < now - 366 * DAY || t0 > now + 2 * 366 * DAY) {
+    throw new SubscriptionError("out_of_range");
   }
   const count = opts.count ?? plan.visits * SERIES_CYCLES;
   const minutes = plan.minutesPerVisit;
@@ -734,10 +748,13 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
 
   /* Après la toute dernière date de la série, annulées comprises : quand la
      visite annulée était la dernière, son créneau vient de se libérer, et
-     le remplacement ne doit pas retomber dessus. */
+     le remplacement ne doit pas retomber dessus. Jamais dans le passé non
+     plus, ni sous le délai de prévenance : une dernière visite manquée,
+     annulée deux semaines plus tard, se remplacerait sinon à une date déjà
+     passée, annoncée au client par texto. */
   const lastAt = new Date(Math.max(...full.visits.map((v) => v.startsAt.getTime())));
   const grid = gridOf(sub, s.timezone);
-  const from = gridIndexAfter(grid, lastAt);
+  const from = renewalFrom(grid, lastAt, new Date(Date.now() + s.leadHours * 3600_000));
   const candidates = gridDates(grid, from, MAKEUP_SEARCH_STEPS);
   const busy = await loadBusyRange({
     accessToken: at, settings: s,
@@ -787,7 +804,7 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
 export async function cancelVisit(b: Booking, by: "client" | "owner", host?: string | null): Promise<{ replacement: Booking | null }> {
   if (b.status === "cancelled") return { replacement: null };
   if (b.doneAt) throw new SubscriptionError("done");
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const before = await findSubscription(b.subscriptionId!);
   if (!before) throw new SubscriptionError("not_found");
   if (by === "client" && !canSubscriberChange(b.startsAt, settings.timezone)) throw new SubscriptionError("too_late");
@@ -874,8 +891,31 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   /* La même heure : rien ne bouge, et personne n'est prévenu d'un changement
      qui n'en est pas un. */
   if (to.getTime() === b.startsAt.getTime()) return b;
-  const settings = await getSettings();
-  if (by === "client" && !canSubscriberChange(b.startsAt, settings.timezone)) throw new SubscriptionError("too_late");
+  const settings = await getSettingsStrict();
+  const tz = settings.timezone;
+  if (by === "client" && !canSubscriberChange(b.startsAt, tz)) throw new SubscriptionError("too_late");
+
+  /* Un abonnement terminé ne reprend pas vie par une visite restée en
+     arrière. */
+  const current = await findSubscription(b.subscriptionId!);
+  if (!current) throw new SubscriptionError("not_found");
+  if (current.sub.status !== "active") throw new SubscriptionError("ended");
+
+  /* Le client ne choisit que ce que son calendrier lui propose : une heure de
+     la grille, jusqu'à l'horizon élargi autour de sa visite. Sans ce
+     contrôle, une requête faite à la main pouvait reporter une visite en
+     2028 : elle devenait la dernière de la série, et la fin de série comme
+     le renouvellement se calculaient de là. L'artisan, lui, place où il
+     veut, mais jamais dans le passé : le client serait prévenu d'une visite
+     qui ne peut plus avoir lieu. */
+  if (by === "client") {
+    const reach = moveHorizonDays(dateKey(new Date(), tz), dateKey(b.startsAt, tz), settings.horizonDays);
+    if (to.getTime() >= horizonEnd({ ...settings, horizonDays: reach }) || !onSlotGrid(to.getTime(), settings)) {
+      throw new SubscriptionError("invalid_slot");
+    }
+  } else if (to.getTime() <= Date.now()) {
+    throw new SubscriptionError("past");
+  }
 
   const at = await ownerAccessToken().catch(() => null);
   const busy = await busyWithout(b, at, settings, new Date(to.getTime() - DAY), new Date(to.getTime() + 2 * DAY));
@@ -957,7 +997,7 @@ export async function markDone(visitId: string, done: boolean): Promise<void> {
  * l'agenda, qui citent le montant à encaisser, sont remis à jour.
  */
 export async function setTravelFee(subId: string, fee: number | "zone", host?: string | null): Promise<number> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
 
@@ -1015,10 +1055,13 @@ export async function setPaid(subId: string, cycle: number, paid: boolean): Prom
 
 /** Une visite replacée à la main : l'alerte « à replacer » diminue d'autant. */
 export async function placeMakeup(subId: string, date: string, time: string, host?: string | null): Promise<Booking> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
   const when = ownerInstant(date, time, settings.timezone);
+  /* Une année mal tapée poserait une visite passée, annoncée au client par
+     texto. */
+  if (!(when.getTime() > Date.now())) throw new SubscriptionError("past");
   const at = await ownerAccessToken().catch(() => null);
   const busy = await loadBusy({
     accessToken: at, settings, timeMin: new Date(when.getTime() - DAY), timeMax: new Date(when.getTime() + 2 * DAY),
@@ -1073,19 +1116,21 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
  * série se prolonge alors d'autant de dates, pour garder ses six cycles.
  */
 export async function renewSeries(subId: string, opts: { skipConflicts: boolean }, host?: string | null): Promise<SubscriptionFull> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
   if (full.sub.status !== "active") throw new SubscriptionError("ended");
   if (full.view.latestSeries >= TERM_SERIES) throw new SubscriptionError("term_done");
 
   const { sub } = full;
-  const kept = full.visits.filter((v) => v.status !== "cancelled");
-  const last = kept[kept.length - 1];
   const grid = gridOf(sub, settings.timezone);
   /* À la suite de la dernière visite, mais jamais dans le passé : une série
-     posée après la fin de la précédente reprend à la prochaine date utile. */
-  const from = renewalFrom(grid, last?.startsAt ?? null, new Date(Date.now() + settings.leadHours * 3600_000));
+     posée après la fin de la précédente reprend à la prochaine date utile.
+     Annulées comprises, comme pour un remplacement : une dernière date
+     annulée, restée sans remplaçante, ne rouvre pas la série sur le jour
+     même où le client s'était désisté. */
+  const lastAt = full.visits.length > 0 ? new Date(Math.max(...full.visits.map((v) => v.startsAt.getTime()))) : null;
+  const from = renewalFrom(grid, lastAt, new Date(Date.now() + settings.leadHours * 3600_000));
   const count = sub.perCycle * SERIES_CYCLES;
   const window = gridDates(grid, from, count + (opts.skipConflicts ? count : 0));
 
@@ -1151,7 +1196,7 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
  * Celles qui ont eu lieu restent dans l'historique.
  */
 export async function endSubscription(subId: string, host?: string | null): Promise<{ removed: number }> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
 
@@ -1195,7 +1240,7 @@ export async function endSubscription(subId: string, host?: string | null): Prom
  * coup, puis les visites et l'abonnement de la base.
  */
 export async function deleteSubscription(subId: string): Promise<void> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
   if (full.visits.some((v) => v.doneAt)) throw new SubscriptionError("has_done");
@@ -1226,7 +1271,7 @@ export async function deleteSubscription(subId: string): Promise<void> {
 export async function resendSubscription(subId: string, host?: string | null): Promise<{
   emailSent: boolean; calendarAdded: boolean; error: string | null;
 }> {
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) return { emailSent: false, calendarAdded: false, error: "Abonnement introuvable." };
 
@@ -1328,7 +1373,7 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       const d = visitData(full, v, settings, origin);
       if (d.paymentDue) payment = formatMoney(d.totalCents, d.currency, v.locale);
       if (at && !v.reminderSentAt) {
-        const stamp = await claimReminder(v.id, "email");
+        const stamp = await claimReminder(v, "email");
         if (stamp) {
           if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) reminders++;
           else await releaseReminder(v.id, "email", stamp);
@@ -1337,7 +1382,7 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
 
     if (!r.sms_reminded_at) {
-      const stamp = await claimReminder(v.id, "sms");
+      const stamp = await claimReminder(v, "sms");
       if (stamp) {
         const body = SMS.reminder(v.locale, smsWhen(v.startsAt, tz, v.locale), isToday, payment);
         if (await sendSms(v.clientPhone, body, v.ref)) smsReminders++;
@@ -1379,8 +1424,13 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     await logEvent("retention_failed", { error: describe(e) });
     return null;
   });
+  /* Puis leurs copies dans l'agenda, au mieux : sans Google, elles attendent. */
+  const calendarCopies = await purgeCalendarCopies().catch(async (e) => {
+    await logEvent("retention_calendar_failed", { error: describe(e) });
+    return null;
+  });
 
-  await logEvent("daily_done", { reminders, smsReminders, notices, day: today, purged });
+  await logEvent("daily_done", { reminders, smsReminders, notices, day: today, purged, calendarCopies });
   return { reminders, smsReminders, notices, google: Boolean(at) };
 }
 
@@ -1391,12 +1441,23 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
  * premier envoie. L'heure posée est rendue, pour qu'un envoi raté rende la
  * main au passage suivant ; un arrêt brutal entre les deux perd au plus ce
  * rappel-là, ce qui vaut mieux qu'un rappel en double.
+ *
+ * La visite doit encore être confirmée, à l'heure lue : déplacée ou annulée
+ * pendant que la tâche envoyait les rappels d'avant, elle recevrait sinon
+ * l'heure périmée, et le rappel juste ne partirait jamais.
  */
-async function claimReminder(id: string, kind: "email" | "sms"): Promise<string | null> {
+async function claimReminder(v: Booking, kind: "email" | "sms"): Promise<string | null> {
   const stamp = new Date().toISOString();
+  const at = v.startsAt.toISOString();
   const rows = (kind === "email"
-    ? await sql()`UPDATE nivex_bookings SET reminder_sent_at = ${stamp} WHERE id = ${id} AND reminder_sent_at IS NULL RETURNING id`
-    : await sql()`UPDATE nivex_bookings SET sms_reminded_at = ${stamp} WHERE id = ${id} AND sms_reminded_at IS NULL RETURNING id`) as Row[];
+    ? await sql()`
+        UPDATE nivex_bookings SET reminder_sent_at = ${stamp}
+        WHERE id = ${v.id} AND reminder_sent_at IS NULL AND status = 'confirmed' AND starts_at = ${at}
+        RETURNING id`
+    : await sql()`
+        UPDATE nivex_bookings SET sms_reminded_at = ${stamp}
+        WHERE id = ${v.id} AND sms_reminded_at IS NULL AND status = 'confirmed' AND starts_at = ${at}
+        RETURNING id`) as Row[];
   return rows.length > 0 ? stamp : null;
 }
 
@@ -1475,22 +1536,46 @@ export async function visitMoveSlots(visit: Booking, opts: { from?: string | nul
 export const CLIENT_CHANGES_PER_VISIT = 3;
 export const CLIENT_CHANGES_PER_SUBSCRIPTION = 8;
 
-export async function clientChangeAllowed(full: SubscriptionFull, visit: Booking): Promise<boolean> {
+export type ChangeClaim = { allowed: boolean; id: string | null };
+
+/**
+ * Le changement se réserve avant de se faire : la réservation s'inscrit
+ * d'abord, puis se compte avec les autres, la sienne comprise. De vingt
+ * requêtes lancées d'un coup, chacune voit au moins celles inscrites avant
+ * elle, et seules les premières passent. Compter les changements une fois
+ * faits laissait passer tout le lot. Une réservation refusée, ou dont le
+ * changement échoue ensuite, est rendue (`releaseClientChange`).
+ */
+export async function claimClientChange(full: SubscriptionFull, visit: Booking): Promise<ChangeClaim> {
+  let id: string | null = null;
   try {
     await ensureSchema();
+    const ins = (await sql()`
+      INSERT INTO nivex_events (kind, detail)
+      VALUES ('subscription_change_claim', ${JSON.stringify({ ref: visit.ref, subscription: full.sub.ref })}::jsonb)
+      RETURNING id`) as Row[];
+    id = String(ins[0].id);
     const rows = (await sql()`
       SELECT count(*)::int AS total, count(*) FILTER (WHERE detail->>'ref' = ${visit.ref})::int AS visit
       FROM nivex_events
-      WHERE kind IN ('subscription_visit_moved', 'subscription_visit_cancelled')
+      WHERE kind = 'subscription_change_claim'
         AND created_at > now() - interval '1 day'
-        AND detail->>'by' = 'client'
-        AND detail->>'ref' = ANY(${full.visits.map((v) => v.ref)}::text[])`) as Row[];
-    return Number(rows[0]?.visit ?? 0) < CLIENT_CHANGES_PER_VISIT
-      && Number(rows[0]?.total ?? 0) < CLIENT_CHANGES_PER_SUBSCRIPTION;
+        AND detail->>'subscription' = ${full.sub.ref}`) as Row[];
+    if (Number(rows[0]?.visit ?? 0) <= CLIENT_CHANGES_PER_VISIT
+      && Number(rows[0]?.total ?? 0) <= CLIENT_CHANGES_PER_SUBSCRIPTION) {
+      return { allowed: true, id };
+    }
+    await releaseClientChange(id);
+    return { allowed: false, id: null };
   } catch {
     /* Un compteur muet ne doit pas retirer la main au client. */
-    return true;
+    return { allowed: true, id };
   }
+}
+
+export async function releaseClientChange(id: string | null): Promise<void> {
+  if (!id) return;
+  await sql()`DELETE FROM nivex_events WHERE id = ${id} AND kind = 'subscription_change_claim'`.catch(() => {});
 }
 
 /**
@@ -1531,13 +1616,22 @@ export function onlineSubscriptionRefused(
 export async function onlineSubscriptionAllowed(input: { phone: string; address: string; postalCode: string }): Promise<boolean> {
   try {
     await ensureSchema();
+    /* « En cours » veut dire une visite encore à venir. Rien ne met fin d'office
+       à un abonnement dont les douze mois sont passés : sans ce contrôle, le
+       même client, ou le prochain occupant de l'adresse, restait refusé
+       jusqu'à ce que l'artisan y mette fin à la main. */
     const rows = (await sql()`
-      SELECT client_phone, address, postal_code, status, created_at FROM nivex_subscriptions
-      WHERE created_by = 'client' AND (status = 'active' OR created_at > now() - interval '1 day')`) as Row[];
+      SELECT s.client_phone, s.address, s.postal_code, s.created_at,
+        (s.status = 'active' AND EXISTS (
+          SELECT 1 FROM nivex_bookings b
+          WHERE b.subscription_id = s.id AND b.status = 'confirmed' AND b.ends_at > now()
+        )) AS live
+      FROM nivex_subscriptions s
+      WHERE s.created_by = 'client' AND (s.status = 'active' OR s.created_at > now() - interval '1 day')`) as Row[];
     const dayAgo = Date.now() - DAY;
     return !onlineSubscriptionRefused(rows.map((r) => ({
       phone: String(r.client_phone ?? ""), address: String(r.address ?? ""), postalCode: String(r.postal_code ?? ""),
-      active: r.status === "active", recent: new Date(r.created_at as string).getTime() > dayAgo,
+      active: r.live === true, recent: new Date(r.created_at as string).getTime() > dayAgo,
     })), input);
   } catch {
     /* createSubscription échouera proprement si la base ne répond pas. */

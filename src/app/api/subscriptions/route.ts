@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureSchema, sql } from "@/lib/db";
+import { ensureSchema, logEvent, sql } from "@/lib/db";
 import { isDemo } from "@/lib/demo";
 import { bookingRef, token } from "@/lib/crypto";
 import { createSubscription, onlineSubscriptionAllowed, SubscriptionError, SubscriptionInput } from "@/lib/subscriptions";
@@ -19,7 +19,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Pot de miel : un robot remplit tous les champs, y compris celui qui est caché.
-  if (parsed.data.hp) return NextResponse.json({ ok: true, ref: "ABO-000000" }, { status: 200 });
+  /* Pot de miel : le refus « appelez-nous », jamais une fausse confirmation
+     (voir /api/bookings). */
+  if (parsed.data.hp) {
+    await logEvent("honeypot", { form: "subscription" });
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   // Démonstration locale : rien n'est écrit, mais l'écran de fin s'affiche.
   if (isDemo()) {

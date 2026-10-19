@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { exchangeCode, userInfo, clearTokenCache } from "@/lib/google";
 import { setSession, takeOAuthState } from "@/lib/session";
-import { getSettingsStrict, saveConnection } from "@/lib/settings";
+import { getSettingsStrict, NotOwnerError, saveConnection } from "@/lib/settings";
 import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -65,7 +65,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     await logEvent("save_connection_failed", { error: String((e as Error).message).slice(0, 400) });
-    return fail(req, "db_unavailable");
+    /* Un autre compte revendiqué entre la lecture et l'écriture : c'est un
+       refus de propriété, pas une base en panne. */
+    return fail(req, e instanceof NotOwnerError ? "not_owner" : "db_unavailable");
   }
 
   clearTokenCache();

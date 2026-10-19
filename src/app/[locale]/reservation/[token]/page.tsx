@@ -85,7 +85,7 @@ export default async function ManagePage({
               <>
                 <Row label={b.travelZone ? `${t.booking.step4.travelFee} (${b.travelZone})` : t.booking.step4.travelFee}
                   value={formatMoney(b.travelFeeCents, b.currency, locale)}
-                  hint={t.booking.step4.travelHint} />
+                  hint={b.firstHourFree ? t.booking.step4.travelHint : undefined} />
                 <Row label={t.booking.step4.grandTotal}
                   value={formatMoney(b.estimateCents + b.travelFeeCents, b.currency, locale)} />
               </>

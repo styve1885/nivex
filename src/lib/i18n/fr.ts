@@ -64,7 +64,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Si vous répondez autrement, votre réponse est transmise au cellulaire de l'artisan\u202f; le site ne la conserve pas.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan\u202f; le site ne la conserve pas.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -90,7 +90,7 @@ const privacy: LegalDoc = {
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
-        "Twilio — achemine les textos que vous recevez (confirmation, rappel, annulation ou changement de rendez-vous) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Il relaie aussi vers l'artisan les réponses que vous envoyez, photos comprises, et garde une copie des messages qu'il achemine.",
+        "Twilio — achemine les textos que vous recevez (confirmation, rappel, annulation ou changement de rendez-vous) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Il transmet aussi à l'artisan le texte de vos réponses\u202f; les photos que vous y joindriez restent chez Twilio, où l'artisan les consulte. Twilio garde une copie des messages qu'il achemine.",
         "ImprovMX — fait suivre vers la boîte de votre artisan les courriels que vous écrivez à notre adresse du domaine.",
       ],
     },
@@ -108,6 +108,7 @@ const privacy: LegalDoc = {
         "Un rendez-vous et ce qui l'accompagne\u00a0: trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre. Il est ensuite anonymisé\u00a0: votre nom, votre téléphone, votre adresse et vos précisions sont effacés\u202f; restent la date, la durée, les prestations, le montant et la zone, pour la comptabilité. De votre courriel ne reste qu'une empreinte chiffrée, qui ne se relit pas et sert seulement à ne pas offrir deux fois la première heure.",
         "Un abonnement\u00a0: trois ans après sa dernière visite, pour la même raison, puis il est anonymisé de la même façon.",
         "Un message du formulaire de contact\u00a0: deux ans, après quoi il est supprimé de lui-même, ou plus tôt si vous en demandez la suppression.",
+        "Les copies\u00a0: l'événement d'un rendez-vous dans l'agenda de la maison s'efface quand le rendez-vous est anonymisé. Les courriels échangés avec vous — confirmations, rappels, copie de vos messages — restent dans la boîte de courriel de la maison\u202f; nous les supprimons selon les mêmes durées, ou plus tôt si vous le demandez.",
         "Le journal technique\u00a0: douze mois, après quoi ses entrées sont supprimées d'elles-mêmes.",
         "Le journal des visites\u00a0: douze mois, après quoi les entrées sont supprimées d'elles-mêmes.",
         "La provenance jointe à une réservation\u00a0: elle suit le sort de cette réservation. Une réservation anonymisée n'en garde que la famille — l'étiquette de campagne, votre réponse à «\u00a0Comment avez-vous connu NIVEX\u202f?\u00a0», le prénom inscrit dans un lien de recommandation et le nom du site d'où vous veniez —, de quoi compter les sources sans désigner personne.",
@@ -194,7 +195,7 @@ const terms: LegalDoc = {
         "Les créneaux proposés tiennent compte de l'horaire de la maison et des rendez-vous déjà pris. Ce que vous voyez est réservable.",
         "Une séance dure au minimum {min}.",
         "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
-        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Un texto la double, et un autre vous rappelle le rendez-vous la veille.",
+        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Si votre numéro est canadien, un texto la double, et un autre vous rappelle le rendez-vous la veille.",
       ],
     },
     {
@@ -234,7 +235,7 @@ const terms: LegalDoc = {
         "Un abonnement réserve vos visites au même jour et à la même heure, au rythme de la formule\u00a0: chaque semaine, aux deux semaines ou toutes les quatre semaines. Ces créneaux ne sont proposés à personne d'autre.",
         `Un cycle correspond au nombre de visites de la formule réellement effectuées — quatre, deux ou une. Une visite annulée, de votre côté ou du nôtre, ne compte pas\u00a0: le cycle se prolonge jusqu'à la visite suivante, et une visite de remplacement est ajoutée en fin de série. Un cycle qui n'est pas terminé ${CYCLE_MAX_WEEKS} semaines après sa première visite nous amène à vous appeler pour convenir de la suite.`,
         `Le montant d'un cycle est fixé à la souscription et garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles. Il se règle à la première visite du cycle, sur place. Nous vous appelons ${SERIES_NOTICE_DAYS} jours avant la fin d'une série pour confirmer la suivante.`,
-        `Les frais de déplacement de votre zone, s'il y en a, sont réduits de ${DISCOUNT} par visite pour un abonné, sans jamais descendre sous zéro, et se règlent avec le cycle. L'offre «\u00a0première heure offerte\u00a0» ne s'applique pas aux abonnements.`,
+        `Les frais de déplacement de votre zone, s'il y en a, sont réduits de ${DISCOUNT} par visite pour un abonné, sans jamais descendre sous zéro, et se règlent avec le cycle.{suboffer}`,
       ],
     },
     {
@@ -467,12 +468,13 @@ export const fr = {
     offers: [
       {
         name: "Séance semaine",
-        volume: "10 à 15 pièces — la garde-robe complète de votre semaine",
+        /* Le nombre de pièces vient de la grille, pour la durée affichée. */
+        volume: "la garde-robe complète de votre semaine",
         note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
       },
       {
         name: "Séance famille",
-        volume: "15 à 22 pièces — chemises, pantalons, uniformes scolaires",
+        volume: "chemises, pantalons, uniformes scolaires",
         note: "Pour une maisonnée, ou deux semaines d'un coup.",
       },
       {
@@ -567,7 +569,11 @@ export const fr = {
     minimum: "Durée minimale",
     minimumValue: "Une séance dure au moins {min}. L'artisan arrive {setup} minutes avant pour s'installer, sans frais\u00a0: le temps réservé est entièrement du repassage.",
     travel: "Frais de déplacement",
-    travelNote: "Par visite, en plus du prix de la séance. L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit pas.",
+    travelNote: "Par visite, en plus du prix de la séance.",
+    /* Ajoutée seulement quand l'artisan propose l'offre. */
+    travelNoteOffer: "L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit pas.",
+    /* {offer} de la réponse sur les frais, même condition. */
+    feesOffer: "La première heure offerte ne les couvre jamais.",
     /* La réponse sur les frais ({fees}), quand aucun quartier desservi n'en a. */
     feesFree: "Rien\u00a0: les quartiers de Montréal desservis n'ont pas de frais de déplacement.",
     faqTitle: "Questions sur Montréal",
@@ -578,7 +584,7 @@ export const fr = {
       },
       {
         q: "Combien coûtent les frais de déplacement à Montréal\u202f?",
-        a: "{fees} Ils s'appliquent à chaque visite, s'ajoutent au prix de la séance et ne sont jamais couverts par la première heure offerte.",
+        a: "{fees} Ils s'appliquent à chaque visite et s'ajoutent au prix de la séance.{offer}",
       },
       {
         q: "Que dois-je fournir\u202f?",
@@ -639,7 +645,8 @@ export const fr = {
       travelFree: "Votre adresse est desservie, déplacement compris.",
       inZone: "Parfait, vous êtes dans la zone desservie.",
       travelFee: "Frais de déplacement",
-      travelNote: "Ces frais s'ajoutent au prix de la séance. L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit pas.",
+      travelNote: "Ces frais s'ajoutent au prix de la séance.",
+      travelNoteOffer: "L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit pas.",
       heardFrom: "Comment avez-vous connu NIVEX\u202f? (facultatif)",
       heardFromEmpty: "Je préfère ne pas le dire",
       heardFromOptions: {
@@ -915,6 +922,8 @@ export const fr = {
     updatedLabel: "Dernière mise à jour",
     summary: "Sommaire",
     readAlso: "À lire aussi",
+    /* {suboffer} des conditions : seulement quand l'artisan propose l'offre. */
+    subOffer: "L'offre «\u00a0première heure offerte\u00a0» ne s'applique pas aux abonnements.",
     privacy,
     terms,
   },
@@ -1020,7 +1029,8 @@ export const fr = {
       travelFlat: "{fee} par visite",
       travelShort: "{fee} pour une séance de moins de {hours}",
       travelLong: "{fee} pour une séance de {hours} ou plus",
-      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre «\u00a0première heure offerte\u00a0» et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite\u202f; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
+      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix et s'appliquent à chaque visite\u202f; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
+      travelNoteOffer: "L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit jamais.",
     },
     firstFreeLabel: "Première séance",
     /* Lu seulement par les lecteurs d'écran, devant le prix barré. */

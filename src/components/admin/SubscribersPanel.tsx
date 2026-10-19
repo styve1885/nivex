@@ -40,6 +40,7 @@ const ERRORS: Record<string, string> = {
   ended: "Cet abonnement a pris fin.",
   not_found: "Introuvable.",
   past: "Cette date est déjà passée : entrez la prochaine visite.",
+  out_of_range: "Cette date est trop éloignée : entrez une date entre un an en arrière et deux ans devant.",
   invalid_input: "Vérifiez les champs : code postal (A1A 1A1), courriel, téléphone.",
   network: "Le site n'a pas répondu. Réessayez.",
 };
@@ -119,6 +120,16 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
 
   return (
     <div>
+      {/* Une relecture ratée après un geste : la liste affichée est celle
+          d'avant, et il faut le dire plutôt que de la laisser passer pour
+          l'état actuel. */}
+      {loadError && (
+        <p role="alert" className="mb-6 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3 text-[0.82rem] text-[#8E332C]">
+          {loadError === "session"
+            ? "Session expirée : la liste n'a pas pu être relue. Reconnectez-vous, puis rechargez la page."
+            : "La liste n'a pas pu être relue : elle peut ne pas montrer votre dernier geste. Rechargez la page."}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-[0.9rem] font-light text-ink-500">
           {active.length === 0 ? "Aucun abonnement en cours." : `${active.length} abonnement${active.length > 1 ? "s" : ""} en cours.`}
@@ -295,7 +306,7 @@ function SubscriptionCard({ s, when, onChange }: {
                     aria-label="Frais de déplacement par visite, en dollars"
                     className="field !w-24 !py-1.5 !px-2 text-center text-sm tabular-nums" />
                   <span className="text-[0.8rem] text-ink-400">$</span>
-                  <button type="button" disabled={busy === "fee" || !(Number(fee) >= 0)}
+                  <button type="button" disabled={busy === "fee" || fee.trim() === "" || !(Number(fee) >= 0)}
                     onClick={() => run("fee", { action: "fee", id: s.id, cents: Math.round(Number(fee) * 100) }, "Frais enregistrés.")}
                     className="border border-gold-400/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
                     Enregistrer

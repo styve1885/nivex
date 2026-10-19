@@ -87,11 +87,13 @@ export async function takeOAuthState(): Promise<string | null> {
 export async function requireOwner(): Promise<Session | null> {
   const session = await getSession();
   if (!session) return null;
-  /* Lecture stricte, et refus si elle échoue : les valeurs par défaut
-     portent un propriétaire absent, qui ouvrirait la porte à toute session. */
+  /* Lecture stricte : les valeurs par défaut portent un propriétaire absent,
+     qui ouvrirait la porte à toute session. Une base illisible lève donc
+     l'erreur au lieu de répondre « pas le bon compte » : la route répond 500,
+     et l'onglet dit que le serveur ne répond pas, plutôt qu'une session
+     expirée qui enverrait l'artisan se reconnecter pour rien. */
   const { getSettingsStrict } = await import("./settings");
-  const s = await getSettingsStrict().catch(() => null);
-  if (!s) return null;
+  const s = await getSettingsStrict();
   if (!s.ownerEmail) return session;                       // pas encore revendiqué
   return s.ownerEmail.toLowerCase() === session.email.toLowerCase() ? session : null;
 }

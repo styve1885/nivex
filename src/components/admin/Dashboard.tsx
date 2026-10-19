@@ -92,14 +92,11 @@ export function Dashboard({
           </div>
         </div>
         <div className="flex items-center gap-5">
-          {/* Une navigation dans l'application : le navigateur ne prévient pas
-              lui-même, il faut donc demander ici avant de perdre un brouillon. */}
+          {/* La vitrine a sa propre racine : y aller recharge la page entière,
+              et l'avertissement `beforeunload` plus haut demande, une seule
+              fois, avant de perdre un brouillon. Une seconde question ici
+              faisait confirmer deux fois. */}
           <Link href="/fr"
-            onNavigate={(e) => {
-              if (unsaved && !window.confirm("Des modifications ne sont pas enregistrées. Quitter l'espace artisan sans les enregistrer ?")) {
-                e.preventDefault();
-              }
-            }}
             className="text-[10px] uppercase tracking-[0.18em] text-ink-400 transition-colors hover:text-gold-600">
             Voir le site
           </Link>

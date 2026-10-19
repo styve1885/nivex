@@ -68,7 +68,9 @@ ramènerait au prochain chargement ; elles se désactivent.
 ## Quelques faits que le texte doit respecter
 
 - Une séance dure **au minimum deux heures**. Il n'existe pas de séance
-  d'une heure, et la vitrine ne doit pas en proposer.
+  d'une heure, et la vitrine ne doit pas en proposer. Les réglages ne
+  descendent pas sous `MIN_SESSION_MINUTES`, ni à l'enregistrement ni à la
+  lecture.
 - L'artisan arrive **quinze minutes avant** pour s'installer, sans frais.
   Le bloc réservé est entièrement du repassage.
 - **Rien ne quitte le domicile** : pas de collecte, pas de livraison.
@@ -98,8 +100,19 @@ Conséquence à connaître : `next build` lit les réglages et pose le schéma
 (`bootstrap()`) au moment de la construction, contre la base de
 l'environnement construit.
 
+Ces pages lisent les réglages par `getSettingsStrict`, jamais par la lecture
+tolérante : une régénération qui échoue laisse servir la dernière page
+réussie, alors qu'une lecture tolérante y figerait les tarifs et l'horaire
+du code. Une base injoignable pendant `next build` fait donc échouer la
+construction, et la production reste telle quelle. La lecture se fait une
+fois par rendu (`cache` de React) : la racine et la page partagent la même
+ligne, ou la même panne.
+
 Une adresse inconnue sous `/fr` ou `/en` tombe sur `[locale]/[...missing]`,
-qui rend la page 404 de la maison, traduite.
+qui rend la page 404 de la maison, traduite (son HTML serveur est la coquille
+d'erreur de Next ; le texte paraît avec le JavaScript, le statut est bien
+404). Toute autre « langue » — `/foo.png`, `/api` — est refusée par
+`dynamicParams = false` dans la racine, sans rendu ni cache.
 
 ### Les modules qui décident
 
@@ -194,8 +207,9 @@ Les gardes posées là, et pourquoi :
   refuse au lieu de les croire aux valeurs du code.
 - **Le pot de miel** des formulaires s'appelle `nivex_hp`. Ne lui donnez
   jamais un nom que le remplissage automatique des navigateurs connaît
-  (`company`, `website`…) : un vrai client le remplirait sans le voir et
-  recevrait une fausse confirmation.
+  (`company`, `website`…) : un vrai client le remplirait sans le voir. Un
+  champ rempli reçoit le refus « appelez-nous », jamais une fausse
+  confirmation, et s'inscrit au journal (`honeypot`, sans aucune donnée).
 
 ## Les abonnements
 
@@ -230,12 +244,16 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   et se déplacent par téléphone.
 - **Limites** : un client déplace ou annule au plus
   `CLIENT_CHANGES_PER_VISIT` fois une visite et
-  `CLIENT_CHANGES_PER_SUBSCRIPTION` fois par jour en tout ; en ligne, un seul
-  abonnement en cours par téléphone et par adresse, et
+  `CLIENT_CHANGES_PER_SUBSCRIPTION` fois par jour en tout. Le changement se
+  réserve avant de se faire (`claimClientChange`) : des requêtes lancées
+  d'un coup ne passent pas toutes. En ligne, un seul abonnement en cours (une
+  visite encore à venir) par téléphone et par adresse, et
   `ONLINE_SUBSCRIPTIONS_PER_DAY` par jour pour tout le site. L'artisan n'a
   pas de limite. Pour déplacer, la page de l'abonné lit ses créneaux sur
   `/api/subscriptions/[token]/slots`, qui lève l'horizon pour une visite
-  existante.
+  existante ; `moveVisit` revérifie cet horizon et la grille pour le client,
+  et refuse une date passée à l'artisan. Un remplacement automatique ne
+  tombe jamais avant le délai de prévenance.
 - **Un cycle réglé garde son montant** (`paid_amounts`) : changer les frais
   d'un abonné ne réécrit pas ce qu'il a déjà payé.
 - **Agenda** : un événement récurrent par série (RRULE), sans invité ; chaque
@@ -248,9 +266,12 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
   de conservation (`purgeExpired`, `lib/retention.ts`) : journal technique
   effacé à douze mois, messages à deux ans, rendez-vous et abonnements
-  anonymisés trois ans après la dernière séance. Du courriel ne reste
-  qu'une empreinte salée, qui tient la première heure offerte à une fois
-  par client.
+  anonymisés trois ans après la dernière séance, journal des visites à
+  douze mois. Du courriel ne reste qu'une empreinte salée, qui tient la
+  première heure offerte à une fois par client. L'événement d'agenda d'un
+  rendez-vous anonymisé s'efface ensuite (`purgeCalendarCopies`), sans avis
+  à personne ; sans Google, il attend le passage suivant. Les copies dans la
+  boîte de courriel, elles, se suppriment à la main (la politique le dit).
 
 ## Les textos
 
@@ -271,7 +292,9 @@ chez Twilio, les permissions géographiques limitées au Canada la doublent.
 La confirmation dit comment arrêter (« Répondez STOP ») ; un client qui
 écrit « ARRÊT » reçoit l'indication de répondre STOP, seul mot que Twilio
 honore. Pas de tiret cadratin dans les textos : il fait passer le message
-en Unicode, payé deux tranches.
+en Unicode, payé deux tranches. Les textos de l'artisan sont ramenés à
+l'alphabet des textos (`toGsm7` : « août » devient « aout ») ; ceux du
+client gardent leur orthographe.
 
 Les **réponses des clients** arrivent sur `/api/sms/incoming` (réglage « A
 message comes in » du numéro chez Twilio). La signature `X-Twilio-Signature`

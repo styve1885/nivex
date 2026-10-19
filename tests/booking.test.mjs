@@ -392,6 +392,12 @@ test("le nom d'un destinataire ne peut ni ajouter d'adresse ni casser l'en-tête
     /* Hors des guillemets, il ne reste qu'une adresse. */
     assert.equal(line.replace(/"(?:[^"\\]|\\.)*"/g, "").match(/@/g).length, 1);
   });
+  test("une ligne vide sépare les en-têtes du corps, avant la première frontière", () => {
+    const [head, rest] = raw.split("\r\n\r\n");
+    assert.match(head, /^From: /);
+    assert.match(head, /Content-Type: multipart\/alternative; boundary="nivex_[a-z0-9]+"$/);
+    assert.match(rest, /^--nivex_[a-z0-9]+\r\nContent-Type: text\/plain/);
+  });
 }
 
 console.log(`\n${n} vérifications passées.\n`);

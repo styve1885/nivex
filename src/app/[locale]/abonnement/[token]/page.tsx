@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
-import { amountOf, findPlan, findSubscriptionByToken } from "@/lib/subscriptions";
+import { amountOf, findPlan, findSubscriptionByToken, scheduleInstant } from "@/lib/subscriptions";
 import { canSubscriberChange } from "@/lib/cycles";
 import { rhythmPhrase, slotPhrase } from "@/lib/email";
 import { formatDateTime, formatMoney, minutesToText } from "@/lib/time";
@@ -76,9 +76,7 @@ export default async function SubscriptionPage({
         <div className="paper mt-10 p-8 sm:p-10">
           <dl className="divide-y divide-gold-300/40">
             <Line label={t.subscribe.confirm.plan} value={`${name} — ${minutesToText(sub.minutesPerVisit, locale)}`} big />
-            {kept[0] && (
-              <Line label={m.rhythm} value={`${slotPhrase(kept[0].startsAt, tz, locale)}, ${rhythmPhrase(sub.everyWeeks, locale)}`} />
-            )}
+            <Line label={m.rhythm} value={`${slotPhrase(scheduleInstant(sub, tz), tz, locale)}, ${rhythmPhrase(sub.everyWeeks, locale)}`} />
             {!ended && (
               <Line label={m.cycleLabel}
                 value={m.cycleNow.replace("{c}", String(view.currentCycle)).replace("{d}", String(view.doneInCurrent)).replace("{n}", String(sub.perCycle))} />

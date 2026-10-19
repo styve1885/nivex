@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { getSettingsStrict, SettingsUnavailableError, updateSettings } from "@/lib/settings";
 import { parseHM } from "@/lib/time";
+import { MIN_SESSION_MINUTES } from "@/lib/brand";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ const Patch = z.object({
   hourlyRate: z.number().int().min(0).max(100_000).optional(),
   /* Les textes publics sont écrits en dollars canadiens. */
   currency: z.literal("CAD").optional(),
-  minMinutes: z.number().int().min(15).max(720).optional(),
+  minMinutes: z.number().int().min(MIN_SESSION_MINUTES).max(720).optional(),
   bufferMinutes: z.number().int().min(0).max(240).optional(),
   leadHours: z.number().int().min(0).max(720).optional(),
   horizonDays: z.number().int().min(1).max(180).optional(),

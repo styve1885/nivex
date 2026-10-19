@@ -26,7 +26,7 @@ export function VisitActions({ token, visitId, startsAt, locale, timezone, t }: 
   const [mode, setMode] = useState<"idle" | "cancel" | "move">("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sched, setSched] = useState<{ today: string; days: DaySlots[] } | null>(null);
+  const [sched, setSched] = useState<{ today: string; horizonDays?: number; days: DaySlots[] } | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
 
   const when = (iso: string) => new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
@@ -75,8 +75,12 @@ export function VisitActions({ token, visitId, startsAt, locale, timezone, t }: 
         return;
       }
       /* La carte de la visite change d'état au rechargement, et ce message
-         partirait avec elle : il remonte donc en tête de page, par l'adresse. */
+         partirait avec elle : il remonte donc en tête de page, par l'adresse.
+         Le calendrier se relira à la prochaine ouverture : gardé, il
+         proposerait la nouvelle heure comme un créneau à choisir. */
       setMode("idle");
+      setSlot(null);
+      setSched(null);
       const q = body.action === "cancel"
         ? `remplacement=${encodeURIComponent(d.replacement ?? "aucun")}`
         : `deplacee=${encodeURIComponent(d.startsAt)}`;
@@ -116,8 +120,8 @@ export function VisitActions({ token, visitId, startsAt, locale, timezone, t }: 
         <div>
           <p className="text-[0.85rem] text-ink-700">{m.moveTitle}</p>
           {sched ? (
-            <SlotPicker t={t} days={sched.days} today={sched.today} value={slot} onPick={setSlot}
-              onShift={(d) => load(d)} exclude={startsAt} className="mt-4" />
+            <SlotPicker t={t} days={sched.days} today={sched.today} horizonDays={sched.horizonDays}
+              value={slot} onPick={setSlot} onShift={(d) => load(d)} exclude={startsAt} className="mt-4" />
           ) : (
             <p className="mt-4 text-[0.82rem] text-ink-400" role="status">{t.booking.step3.loading}</p>
           )}

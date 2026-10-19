@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ContactInput, ContactError, submitContact } from "@/lib/messages";
 import { isDemo } from "@/lib/demo";
+import { logEvent } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,9 +16,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Pot de miel : succès silencieux, le robot n'apprend rien — même statut,
-  // même forme qu'un message reçu sans courriel.
-  if (parsed.data.hp) return NextResponse.json({ ok: true, sent: false, acked: false }, { status: 201 });
+  /* Pot de miel : le robot reçoit l'invitation à appeler. Une vraie personne
+     dont le navigateur aurait rempli ce champ à son insu croirait sinon son
+     message reçu, alors qu'il n'est enregistré nulle part. */
+  if (parsed.data.hp) {
+    await logEvent("honeypot", { form: "contact" });
+    return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
+  }
 
   // Démonstration locale : on confirme sans rien enregistrer ni envoyer.
   if (isDemo()) return NextResponse.json({ ok: true, demo: true, sent: false, acked: false }, { status: 201 });

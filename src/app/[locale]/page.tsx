@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { contactEmail } from "@/lib/brand";
 import { Hero } from "@/components/home/Hero";
 import { Marquee } from "@/components/home/Marquee";
@@ -24,7 +24,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   if (!isLocale(locale)) notFound();
 
   const t = getDict(locale);
-  const settings = await getSettings();
+  const settings = await getSettingsStrict();
 
   /* Données structurées : la fiche du commerce, et la foire aux questions
      telle qu'elle s'affiche. */

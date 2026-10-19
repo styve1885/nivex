@@ -211,9 +211,14 @@ export async function createEvent(accessToken: string, e: EventInput): Promise<{
   );
 }
 
-export async function deleteEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+export async function deleteEvent(
+  accessToken: string, calendarId: string, eventId: string, opts: { notify?: boolean } = {},
+): Promise<void> {
+  /* Une annulation prévient l'invité ; l'effacement d'une vieille séance, à
+     l'anonymisation, ne prévient personne. */
+  const send = opts.notify === false ? "none" : "all";
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${send}`,
     { method: "DELETE", headers: { authorization: `Bearer ${accessToken}` } },
   );
   // 410 = déjà supprimé, 404 = introuvable : dans les deux cas, l'objectif est atteint.
@@ -355,7 +360,10 @@ export async function sendGmail(
     `--${boundary}--`, "",
   ].join("\r\n");
 
-  const raw = Buffer.from(headers + body, "utf8").toString("base64url");
+  /* Une ligne vide sépare les en-têtes du corps (RFC 5322). Sans elle, la
+     première frontière se lisait comme un en-tête mal formé : Gmail le
+     tolère, un relais plus strict perdrait la structure du message. */
+  const raw = Buffer.from(`${headers}\r\n${body}`, "utf8").toString("base64url");
 
   return api(
     "gmail.send",

@@ -20,11 +20,17 @@ export const ContactInput = z.object({
 
 /**
  * Au-delà de tant de messages reçus en vingt-quatre heures, plus d'accusé
- * de réception. Les messages, eux, s'enregistrent et parviennent toujours à
- * l'artisan : seul l'envoi vers une adresse que personne n'a vérifiée
+ * de réception : l'envoi vers une adresse que personne n'a vérifiée
  * s'arrête, le temps qu'une rafale de robots passe.
+ *
+ * Au-delà du second plafond, l'avis à l'artisan s'arrête aussi : les
+ * messages s'enregistrent et l'attendent dans l'onglet Messages. Une rafale
+ * de quelques centaines de messages aurait sinon épuisé le quota d'envoi
+ * quotidien du compte Google, et les confirmations de rendez-vous, les
+ * rappels et les avis seraient tombés pour vingt-quatre heures.
  */
 const ACK_DAILY_CAP = 30;
+const NOTIFY_DAILY_CAP = 60;
 
 export type ContactInputType = z.infer<typeof ContactInput>;
 
@@ -70,20 +76,20 @@ export async function submitContact(
   let stored = false;
   let id: string | null = null;
   /* L'accusé ne part que si la base a compté les messages du jour et gardé
-     celui-ci : sans cela, rien ne borne les envois. */
+     celui-ci : sans cela, rien ne borne les envois. L'avis à l'artisan part
+     tant que le second plafond n'est pas atteint, et toujours quand le
+     message n'a pas pu s'enregistrer : il n'existerait nulle part ailleurs. */
   let ackAllowed = false;
+  let notifyAllowed = true;
 
   if (isDbConfigured()) {
     try {
       await ensureSchema();
 
       const recent = (await sql()`
-        SELECT count(*) FILTER (
-                 WHERE lower(email) = ${input.email} AND created_at > now() - interval '10 minutes'
-               )::int AS mine,
-               count(*)::int AS day
+        SELECT count(*)::int AS mine
         FROM nivex_messages
-        WHERE created_at > now() - interval '24 hours'`) as { mine: number; day: number }[];
+        WHERE lower(email) = ${input.email} AND created_at > now() - interval '10 minutes'`) as { mine: number }[];
       if ((recent[0]?.mine ?? 0) >= 3) throw new ContactError("rate_limited");
 
       const rows = (await sql()`
@@ -93,7 +99,15 @@ export async function submitContact(
         RETURNING id`) as Row[];
       id = rows[0]?.id as string;
       stored = true;
-      ackAllowed = (recent[0]?.day ?? 0) < ACK_DAILY_CAP;
+      /* Compté après l'écriture, celui-ci compris : de messages envoyés d'un
+         coup, chacun voit au moins ceux écrits avant lui, et les plafonds
+         tiennent. Comptés avant, ils lisaient tous le même total. */
+      const after = (await sql()`
+        SELECT count(*)::int AS day FROM nivex_messages
+        WHERE created_at > now() - interval '24 hours'`) as { day: number }[];
+      const day = after[0]?.day ?? Number.POSITIVE_INFINITY;
+      ackAllowed = day <= ACK_DAILY_CAP;
+      notifyAllowed = day <= NOTIFY_DAILY_CAP;
     } catch (e) {
       if (e instanceof ContactError) throw e;
       await logEvent("contact_store_failed", { error: String((e as Error).message).slice(0, 300) });
@@ -104,7 +118,7 @@ export async function submitContact(
   let acked = false;
   const at = await ownerAccessToken().catch(() => null);
 
-  if (at) {
+  if (at && (notifyAllowed || ackAllowed)) {
     const origin = siteOrigin();
     const owner = contactNotification({ ...input, siteUrl: origin });
     // Un texte fixe : rien de ce que la personne a tapé n'y entre.
@@ -113,10 +127,12 @@ export async function submitContact(
 
     const [toOwner, toSender] = await Promise.allSettled([
       // L'avis va à la boîte de la maison, comme tous les avis internes.
-      sendGmail(at, {
-        to: REQUEST_INBOX, subject: owner.subject, html: owner.html, text: owner.text,
-        fromName, replyTo: input.email,
-      }),
+      notifyAllowed
+        ? sendGmail(at, {
+            to: REQUEST_INBOX, subject: owner.subject, html: owner.html, text: owner.text,
+            fromName, replyTo: input.email,
+          })
+        : Promise.reject(new Error("notify_capped")),
       // Accusé de réception : la personne sait que son message est parti.
       // Sans nom affiché : ce qu'elle a tapé n'a rien à faire dans l'en-tête.
       ackAllowed
@@ -134,6 +150,7 @@ export async function submitContact(
     }
     if (stored && !ackAllowed) await logEvent("contact_ack_capped", { cap: ACK_DAILY_CAP });
   }
+  if (stored && !notifyAllowed) await logEvent("contact_notify_capped", { cap: NOTIFY_DAILY_CAP });
 
   // Ni base ni courriel : on ne peut rien promettre à la personne.
   if (!stored && !sent) throw new ContactError("unavailable");

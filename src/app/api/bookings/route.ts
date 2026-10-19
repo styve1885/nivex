@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BookingInput, BookingError, createBooking } from "@/lib/bookings";
-import { ensureSchema, sql } from "@/lib/db";
+import { ensureSchema, logEvent, sql } from "@/lib/db";
 import { demoSettings, isDemo } from "@/lib/demo";
 import { estimateCents, estimateMinutes } from "@/lib/availability";
 import { bookingRef, token } from "@/lib/crypto";
@@ -21,8 +21,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Pot de miel : un robot remplit tous les champs, y compris celui qui est caché.
-  if (parsed.data.hp) return NextResponse.json({ ok: true, ref: "NVX-000000" }, { status: 200 });
+  /* Pot de miel : un robot remplit tous les champs, y compris celui qui est
+     caché. Il reçoit le refus « appelez-nous », pas une fausse confirmation :
+     une vraie personne dont le navigateur aurait rempli ce champ à son insu
+     attendrait sinon une séance qui n'existe nulle part. */
+  if (parsed.data.hp) {
+    await logEvent("honeypot", { form: "booking" });
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   // Démonstration locale : on renvoie une confirmation sans rien écrire,
   // mais avec les vrais chiffres, sinon l'aperçu ment.

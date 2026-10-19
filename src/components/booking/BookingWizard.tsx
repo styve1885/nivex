@@ -565,6 +565,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                     </div>
                     <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-400">
                       {t.booking.step2.travelNote}
+                      {config.firstHourFree ? ` ${t.booking.step2.travelNoteOffer}` : null}
                     </p>
                   </>
                 )}
@@ -645,7 +646,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               <Row label={t.booking.step4.total} value={money(estimate)}
                 hint={firstFree ? t.booking.step1.firstFreeIfFirst.replace("{amount}", money(estimateFirst)) : undefined} />
               {travel && travel.feeCents > 0 && (
-                <Row label={travelLabel} value={money(travel.feeCents)} hint={t.booking.step4.travelHint} />
+                <Row label={travelLabel} value={money(travel.feeCents)}
+                  hint={config.firstHourFree ? t.booking.step4.travelHint : undefined} />
               )}
               {travel && travel.feeCents > 0 && <Row label={t.booking.step4.grandTotal} value={money(total)} />}
             </dl>

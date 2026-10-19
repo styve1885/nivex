@@ -352,6 +352,12 @@ async function bootstrap() {
      second passage ne trouve rien. Un échec ne ferme pas la maison. */
   try {
     await q`DELETE FROM nivex_visits WHERE path ~ ${PERSONAL_PATH}::text`;
+    /* Le même jeton a pu entrer par le référent : du 15 au 18 octobre 2026, la
+       mesure envoyait le référent brut, et une page du site ouverte depuis un
+       lien personnel le gardait. Seul le référent s'efface, la visite reste. */
+    await q`
+      UPDATE nivex_visits SET referrer = NULL
+      WHERE referrer ~ ${`^https?://[^/]+${PERSONAL_PATH.slice(1)}`}::text`;
   } catch (e) {
     console.warn("[nivex] liens personnels non effacés du journal :", (e as Error).message);
   }

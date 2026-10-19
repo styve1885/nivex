@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Reveal } from "../Reveal";
 import { CheckIcon, ArrowIcon } from "../Icons";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { cheapestPlanCents } from "@/lib/pricing";
+import { blockPieces, cheapestPlanCents } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
@@ -27,6 +27,11 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
      suivrait le minimum. L'abonnement n'affiche que son prix. */
   const shortest = Math.max(settings.minMinutes, 120);
   const durations = [minutesToText(shortest, locale), minutesToText(shortest + 60, locale), ""];
+  /* Le volume suit la durée, lu sur la grille de la page Tarifs ; sans bloc
+     de cette durée, la carte n'avance pas de chiffre. */
+  const pieces = [blockPieces(shortest, locale), blockPieces(shortest + 60, locale), null];
+  const volume = (text: string, i: number) =>
+    pieces[i] ? `${pieces[i]} — ${text}` : text.charAt(0).toUpperCase() + text.slice(1);
   const amounts = [
     money(Math.round((shortest / 60) * settings.hourlyRate)),
     money(Math.round(((shortest + 60) / 60) * settings.hourlyRate)),
@@ -55,7 +60,7 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
                 {durations[i] ? `${durations[i]} — ${amounts[i]}` : amounts[i]}
               </p>
 
-              <p className="mt-4 text-[0.9rem] font-light leading-[1.8] text-ink-600">{offer.volume}</p>
+              <p className="mt-4 text-[0.9rem] font-light leading-[1.8] text-ink-600">{volume(offer.volume, i)}</p>
               <p className="mt-auto pt-5 text-[0.8rem] font-light leading-[1.7] text-ink-400">{offer.note}</p>
             </Reveal>
           ))}
