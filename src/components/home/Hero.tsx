@@ -5,7 +5,7 @@ import type { Dict } from "@/lib/i18n";
 
 export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
   return (
-    <section className="relative flex min-h-[100svh] items-center overflow-hidden pt-28 pb-20">
+    <section className="relative flex min-h-[100svh] items-center overflow-hidden pt-28 pb-28">
       {/* — Fond : lin chaud, deux halos d'or, trame textile — */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0" style={{
@@ -85,6 +85,10 @@ export function Hero({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
         </div>
       </div>
 
+      {/* L'invitation à défiler monte à près de 95 px du bas de la section.
+          Le `pb-28` de celle-ci (112 px) garde le contenu au-dessus d'elle,
+          bandeau de l'offre compris, même quand il dépasse la hauteur de
+          l'écran. */}
       <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 animate-fade"
         style={{ animationDelay: "1100ms" }} aria-hidden="true">
         <span className="text-[9px] uppercase tracking-[0.3em] text-ink-400">{t.hero.scroll}</span>

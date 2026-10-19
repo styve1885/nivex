@@ -335,6 +335,8 @@ export const fr = {
     "Uniformes scolaires & professionnels",
     "Tout se fait chez vous",
   ],
+  /* Le ruban défile sans fin : un bouton doit pouvoir l'arrêter. */
+  marqueeControl: { pause: "Arrêter le défilement", play: "Reprendre le défilement" },
   story: {
     eyebrow: "L'histoire",
     title: "Le blanc, comme au premier jour.",
@@ -958,6 +960,8 @@ export const fr = {
       travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix, ne sont pas couverts par l'offre « première heure offerte » et ne sont jamais réduits par elle. Ils s'appliquent à chaque visite ; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
     },
     firstFreeLabel: "Première séance",
+    /* Lu seulement par les lecteurs d'écran, devant le prix barré. */
+    insteadOf: "au lieu de",
     cta: {
       title: "Composez votre séance.",
       body: "Le tunnel de réservation reprend exactement ces chiffres : vous cochez vos prestations, il calcule la durée et le montant, et confirme l'heure que vous choisissez.",

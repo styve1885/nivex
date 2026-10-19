@@ -321,6 +321,7 @@ export const en: Dict = {
     "School & work uniforms",
     "Everything happens at your home",
   ],
+  marqueeControl: { pause: "Pause scrolling", play: "Resume scrolling" },
   story: {
     eyebrow: "The story",
     title: "White, the way it was on day one.",
@@ -941,6 +942,7 @@ export const en: Dict = {
       travelNote: `The fee depends on the area and on the length of the session. It is added to the price, is not covered by the first-hour-free offer and is never reduced by it. It applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
     },
     firstFreeLabel: "First session",
+    insteadOf: "instead of",
     cta: {
       title: "Put your session together.",
       body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and confirms the hour you pick.",
