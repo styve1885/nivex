@@ -60,6 +60,17 @@ export async function DELETE(req: NextRequest) {
   if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   if (booking.status === "cancelled") return NextResponse.json({ ok: true, alreadyCancelled: true });
 
-  await cancelBooking(booking, "owner");
+  try {
+    await cancelBooking(booking, "owner");
+  } catch (e) {
+    /* Une visite d'abonné déjà marquée effectuée ne s'annule pas
+       (SubscriptionError « done ») : l'onglet doit pouvoir dire pourquoi,
+       plutôt que de recevoir une erreur nue. */
+    if ((e as Error)?.name === "SubscriptionError") {
+      return NextResponse.json({ ok: false, error: (e as { code?: string }).code ?? "invalid" }, { status: 409 });
+    }
+    console.error("[nivex] annulation par l'artisan impossible :", e);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
 
 type Msg = {
   id: string; locale: string; name: string; email: string | null; phone: string | null;
@@ -8,21 +9,26 @@ type Msg = {
   readAt: string | null; createdAt: string;
 };
 
-const when = (iso: string) =>
+/* L'heure de la maison, explicitement, comme dans les autres onglets : sans
+   fuseau, un appareil réglé ailleurs décalait l'heure de réception. */
+const when = (iso: string, tz: string) =>
   new Intl.DateTimeFormat("fr-CA", {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+    timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
 
 export function MessagesPanel({ timezone }: { timezone: string }) {
   const [messages, setMessages] = useState<Msg[] | null>(null);
+  const [error, setError] = useState<LoadError | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  void timezone;
 
   useEffect(() => {
     fetch("/api/admin/messages")
-      .then((r) => r.json())
-      .then((d) => setMessages(d.ok ? d.messages : []))
-      .catch(() => setMessages([]));
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (r.ok && d?.ok) setMessages(d.messages);
+        else setError(loadErrorOf(r.status));
+      })
+      .catch(() => setError("server"));
   }, []);
 
   async function open(m: Msg) {
@@ -33,6 +39,8 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
       fetch(`/api/admin/messages?id=${m.id}`, { method: "PATCH" }).catch(() => {});
     }
   }
+
+  if (error) return <LoadFailure error={error} className="py-20 text-center" />;
 
   if (messages === null) {
     return <p className="py-20 text-center text-[0.9rem] text-ink-400">Lecture des messages…</p>;
@@ -72,7 +80,7 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
                   </p>
                   <p className="mt-0.5 truncate text-[0.82rem] text-ink-400">{m.body}</p>
                 </div>
-                <span className="hidden flex-none text-[0.78rem] text-ink-400 sm:block">{when(m.createdAt)}</span>
+                <span className="hidden flex-none text-[0.78rem] text-ink-400 sm:block">{when(m.createdAt, timezone)}</span>
                 <span aria-hidden="true" className={`text-gold-500 transition-transform duration-500 ${isOpen ? "rotate-180" : ""}`}>⌄</span>
               </button>
 
@@ -95,7 +103,7 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
                           <a href={`tel:${m.phone.replace(/\D/g, "")}`} className="text-gold-700 hover:underline">{m.phone}</a>
                         </Line>
                       )}
-                      <Line label="Reçu le">{when(m.createdAt)}</Line>
+                      <Line label="Reçu le">{when(m.createdAt, timezone)}</Line>
                       {!m.emailSent && (
                         <Line label="Note">
                           <span className="text-[#8E332C]">

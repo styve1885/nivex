@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useReportUnsaved } from "./unsaved";
 import { useState } from "react";
 /* Les prestations du code viennent d'un module sans dépendance : lues depuis
    `settings.ts`, elles emportaient le pilote de la base dans le navigateur. */
@@ -25,11 +27,40 @@ const ICON_CHOICES = [
    cet écran, elles, peuvent se retirer pour de bon. */
 const DEFAULT_KEYS = new Set(DEFAULT_SERVICES.map((d) => d.key));
 
-export function SettingsPanel({ initial }: { initial: Settings }) {
+/* Ce que l'onglet envoie à chaque enregistrement : tout ce qu'il affiche. */
+const sent = (x: Settings) => ({
+  hourlyRate: x.hourlyRate, currency: x.currency, minMinutes: x.minMinutes,
+  bufferMinutes: x.bufferMinutes, leadHours: x.leadHours, horizonDays: x.horizonDays,
+  slotStep: x.slotStep, firstHourFree: x.firstHourFree, paused: x.paused,
+  hours: x.hours, services: x.services,
+  businessName: x.businessName, timezone: x.timezone,
+});
+
+/*
+ * L'onglet Réglages.
+ *
+ * Il envoie tout ce qu'il affiche à chaque enregistrement. Il ne doit donc
+ * jamais repartir d'une copie plus ancienne que la base : rouvert depuis les
+ * réglages lus au chargement de la page, il remettait en place, à
+ * l'enregistrement suivant, une pause levée ou un tarif abandonné. Le tableau
+ * de bord le garde en vie d'un onglet à l'autre, et chaque enregistrement
+ * fait relire la page, pour que l'onglet Connexion dise ce qui est en vigueur.
+ */
+export function SettingsPanel({ initial, onDirty }: {
+  initial: Settings;
+  /** Prévenu quand des modifications attendent d'être enregistrées. */
+  onDirty?: (dirty: boolean) => void;
+}) {
   const [s, setS] = useState<Settings>(initial);
+  /* Le dernier état enregistré : l'écart avec l'écran dit ce qui attend. */
+  const [base, setBase] = useState<Settings>(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const dirty = JSON.stringify(sent(s)) !== JSON.stringify(sent(base));
+  useReportUnsaved(dirty, onDirty);
 
   function patch<K extends keyof Settings>(key: K, value: Settings[K]) {
     setS((cur) => ({ ...cur, [key]: value }));
@@ -83,6 +114,7 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
       fr: x.fr.trim(), en: x.en.trim() || x.fr.trim(),
       unitFr: x.unitFr.trim() || "pièce", unitEn: x.unitEn.trim() || x.unitFr.trim() || "piece",
     }));
+    const next = { ...s, services };
     setS((cur) => ({ ...cur, services }));
     setSaving(true);
     setError(null);
@@ -90,16 +122,14 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          hourlyRate: s.hourlyRate, currency: s.currency, minMinutes: s.minMinutes,
-          bufferMinutes: s.bufferMinutes, leadHours: s.leadHours, horizonDays: s.horizonDays,
-          slotStep: s.slotStep, firstHourFree: s.firstHourFree, paused: s.paused,
-          hours: s.hours, services,
-          businessName: s.businessName, timezone: s.timezone,
-        }),
+        body: JSON.stringify(sent(next)),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
+        if (res.status === 401) {
+          setError("Votre session a expiré. Reconnectez-vous dans un autre onglet, puis enregistrez de nouveau ici : vos modifications restent dans celui-ci.");
+          return;
+        }
         setError(data.error === "invalid_input"
           ? "Certaines valeurs sont invalides — vérifiez les heures d'ouverture et les prestations."
           : data.error === "duplicate_service_key"
@@ -109,6 +139,11 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
               : "L'enregistrement a échoué.");
         return;
       }
+      /* Ce qui vient d'être enregistré devient la référence de l'onglet, et la
+         page relit les réglages : l'onglet Connexion et l'en-tête cessent
+         d'afficher ceux du chargement. */
+      setBase(next);
+      router.refresh();
       setSaved(true);
       setTimeout(() => setSaved(false), 2600);
     } catch {
@@ -139,7 +174,8 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
             const h = s.hours.find((x) => x.day === d)!;
             return (
               <li key={d} className="flex flex-wrap items-center gap-4 py-3.5">
-                <Toggle checked={h.enabled} onChange={(v) => setDay(d, { enabled: v })} small />
+                <Toggle checked={h.enabled} onChange={(v) => setDay(d, { enabled: v })} small
+                  label={`Ouvert le ${DAYS[d].toLowerCase()}`} />
                 <span className={`w-24 text-[0.9rem] ${h.enabled ? "text-ink-800" : "text-ink-400"}`}>{DAYS[d]}</span>
                 <div className={`flex items-center gap-2 transition-opacity ${h.enabled ? "" : "pointer-events-none opacity-30"}`}>
                   <input type="time" value={h.open} step={900} onChange={(e) => setDay(d, { open: e.target.value })}
@@ -227,7 +263,8 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
           {s.services.map((x) => (
             <li key={x.key} className="space-y-2.5 py-4">
               <div className="flex flex-wrap items-center gap-3">
-                <Toggle checked={x.enabled} onChange={(v) => setService(x.key, { enabled: v })} small />
+                <Toggle checked={x.enabled} onChange={(v) => setService(x.key, { enabled: v })} small
+                  label={`Prestation ${x.fr.trim() || x.key} proposée`} />
                 <ServiceIcon name={x.icon} className="h-5 w-5 flex-none text-gold-600" />
                 <input value={x.fr} onChange={(e) => setService(x.key, { fr: e.target.value })} placeholder="Nom (français)"
                   className="field !w-auto min-w-[10rem] flex-1 !py-2 !px-3 text-sm" aria-label={`Nom français — ${x.key}`} />
@@ -277,7 +314,8 @@ export function SettingsPanel({ initial }: { initial: Settings }) {
       <div className="sticky bottom-0 -mx-1 flex items-center justify-between gap-5 border-t border-gold-300/50 bg-linen-100/95 px-1 py-5 backdrop-blur">
         <p className="text-[0.82rem] text-ink-400">
           {error ? <span className="text-[#8E332C]">{error}</span>
-            : saved ? <span className="text-gold-700">Enregistré. Le site est déjà à jour.</span>
+            : saved && !dirty ? <span className="text-gold-700">Enregistré. Le site est déjà à jour.</span>
+            : dirty ? "Modifications non enregistrées."
             : "Les changements prennent effet immédiatement pour vos clients."}
         </p>
         <button onClick={save} disabled={saving} className="btn !py-3 !px-7 !text-[10px]">
@@ -300,9 +338,14 @@ export function Card({ title, hint, children }: { title: string; hint?: string; 
   );
 }
 
-export function Toggle({ checked, onChange, small }: { checked: boolean; onChange: (v: boolean) => void; small?: boolean }) {
+/* Un interrupteur sans texte : `label` lui donne un nom quand aucune
+   étiquette ne l'entoure, sans quoi un lecteur d'écran n'annonce qu'un
+   « interrupteur, activé » de plus, sans dire lequel. */
+export function Toggle({ checked, onChange, small, label }: {
+  checked: boolean; onChange: (v: boolean) => void; small?: boolean; label?: string;
+}) {
   return (
-    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}
       className={`relative flex-none rounded-full border transition-colors duration-400 ${
         small ? "h-5 w-9" : "h-6 w-11"
       } ${checked ? "border-gold-500 bg-gold-500" : "border-gold-300 bg-linen-200"}`}>
