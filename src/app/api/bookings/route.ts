@@ -5,6 +5,7 @@ import { demoSettings, isDemo } from "@/lib/demo";
 import { estimateCents, estimateMinutes } from "@/lib/availability";
 import { bookingRef, token } from "@/lib/crypto";
 import { SettingsUnavailableError } from "@/lib/settings";
+import { phoneKey } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,16 +42,27 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
   }
 
-  /* Garde-fou : pas plus de 3 réservations par courriel et par heure. Les
-     visites d'un abonnement n'y comptent pas — une série en pose jusqu'à
-     vingt-quatre d'un coup, et /api/subscriptions a sa propre limite. */
+  /* Garde-fous : pas plus de 3 réservations par courriel et par heure, pas
+     plus de 3 séances à venir pour un même numéro de téléphone — changer
+     d'adresse courriel ne suffit donc pas à remplir l'agenda —, et pas plus
+     de 12 nouvelles séances par heure pour tout le site, bien au-delà de ce
+     que la maison reçoit. Les visites d'un abonnement n'y comptent pas : une
+     série en pose jusqu'à vingt-quatre d'un coup, et /api/subscriptions a
+     ses propres limites. Aucune adresse IP n'est lue ni gardée. */
   try {
     await ensureSchema();
-    const recent = (await sql()`
-      SELECT count(*)::int AS n FROM nivex_bookings
-      WHERE lower(client_email) = ${parsed.data.email} AND subscription_id IS NULL
-        AND created_at > now() - interval '1 hour'`) as { n: number }[];
-    if ((recent[0]?.n ?? 0) >= 3) {
+    const phone = phoneKey(parsed.data.phone);
+    const [c] = (await sql()`
+      SELECT
+        count(*) FILTER (WHERE lower(client_email) = ${parsed.data.email}
+                           AND created_at > now() - interval '1 hour')::int AS by_email,
+        count(*) FILTER (WHERE ${phone}::text IS NOT NULL
+                           AND right(regexp_replace(client_phone, '\\D', '', 'g'), 10) = ${phone}::text
+                           AND status = 'confirmed' AND starts_at > now())::int AS by_phone,
+        count(*) FILTER (WHERE created_at > now() - interval '1 hour')::int AS site_wide
+      FROM nivex_bookings
+      WHERE subscription_id IS NULL`) as { by_email: number; by_phone: number; site_wide: number }[];
+    if ((c?.by_email ?? 0) >= 3 || (c?.by_phone ?? 0) >= 3 || (c?.site_wide ?? 0) >= 12) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
   } catch { /* si la base répond mal, createBooking échouera proprement plus bas */ }

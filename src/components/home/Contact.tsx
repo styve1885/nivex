@@ -139,8 +139,8 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   )}
                 </div>
 
-                {/* pot de miel */}
-                <input type="text" name="website" value={hp} onChange={(e) => setHp(e.target.value)}
+                {/* pot de miel, sous un nom que le remplissage automatique ignore */}
+                <input type="text" name="nivex_hp" value={hp} onChange={(e) => setHp(e.target.value)}
                   tabIndex={-1} autoComplete="off" aria-hidden="true"
                   className="absolute h-0 w-0 overflow-hidden opacity-0" />
 
@@ -154,6 +154,15 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   {sending ? t.contact.submitting : t.contact.submit}
                   {!sending && <ArrowIcon />}
                 </button>
+
+                <p className="mt-5 text-[0.78rem] font-light leading-relaxed text-ink-500">
+                  {t.contact.privacyNote.split("{privacy}")[0]}
+                  <Link href={`/${locale}/confidentialite`}
+                    className="text-ink-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-700">
+                    {t.contact.privacyLink}
+                  </Link>
+                  {t.contact.privacyNote.split("{privacy}")[1]}
+                </p>
               </form>
             )}
           </Reveal>

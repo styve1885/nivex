@@ -31,7 +31,9 @@ export const BookingInput = z.object({
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
   startsAt: z.string().datetime({ offset: true }),
   consent: z.literal(true),
-  hp: z.string().max(0).optional(),          // pot de miel anti-robot
+  /* Pot de miel anti-robot. Accepté ici pour que la route réponde par un
+     faux succès plutôt que par un refus qui nommerait le champ. */
+  hp: z.string().max(200).optional(),
 
   /* « Comment nous avez-vous connus ? » — facultatif, et volontairement une
      liste fermée : une réponse libre finirait par contenir des choses qu'on
@@ -655,13 +657,17 @@ export async function stats(tz = "America/Toronto") {
 
   /* Une visite d'abonnement vaut zéro en base : le cycle se paie d'un coup,
      à sa première visite. Les revenus du mois comptent donc les cycles
-     encaissés ce mois-ci, à la date où l'artisan a noté le paiement. */
+     encaissés ce mois-ci, à la date où l'artisan a noté le paiement, au
+     montant noté ce jour-là : des frais changés depuis ne réécrivent pas un
+     cycle déjà réglé. Un paiement d'avant `paid_amounts` se lit au montant
+     courant, faute de mieux. */
   const paid = (await sql()`
     WITH m AS (
       SELECT date_trunc('month', now() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}                     AS m0,
              (date_trunc('month', now() AT TIME ZONE ${tz}) + interval '1 month') AT TIME ZONE ${tz} AS m1
     )
-    SELECT coalesce(sum(s.cycle_cents + s.travel_fee_cents * s.visits_per_cycle), 0) AS cents
+    SELECT coalesce(sum(coalesce((s.paid_amounts->>p.key)::int,
+                                 s.cycle_cents + s.travel_fee_cents * s.visits_per_cycle)), 0) AS cents
     FROM nivex_subscriptions s, jsonb_each_text(s.paid_cycles) p, m
     WHERE p.value::timestamptz >= m.m0 AND p.value::timestamptz < m.m1`.catch(() => [{ cents: 0 }])) as Row[];
 
@@ -723,7 +729,14 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
   }
   const settings = await getSettings();
   await ensureSchema();
-  await sql()`UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now() WHERE id = ${b.id}`;
+  /* Une seule annulation par séance : deux clics, ou le client et l'artisan
+     à la même seconde, ne doivent pas envoyer deux fois chaque avis. Seul
+     celui dont la mise à jour prend la ligne va plus loin. */
+  const claimed = (await sql()`
+    UPDATE nivex_bookings SET status = 'cancelled', cancelled_at = now()
+    WHERE id = ${b.id} AND status <> 'cancelled'
+    RETURNING id`) as Row[];
+  if (claimed.length === 0) return;
 
   const at = await ownerAccessToken().catch(() => null);
   const origin = siteOrigin();

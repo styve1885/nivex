@@ -41,6 +41,9 @@ export function legalValues(locale: "fr" | "en", s: Settings): Record<string, st
     // que dit {min} et que le moteur facture au moins, au taux en vigueur.
     entry: formatMoney(Math.round((s.minMinutes / 60) * s.hourlyRate), s.currency, locale),
     min: minutesToText(s.minMinutes, locale),
+    // La tranche dont s'allonge une séance au-delà du minimum : le pas des
+    // créneaux, celui sur lequel le moteur arrondit la durée et le prix.
+    step: minutesToText(s.slotStep, locale),
     lead: `${s.leadHours} ${hours}`,
     cancel: `${CANCEL_WINDOW_HOURS} ${hours}`,
     horizon: `${s.horizonDays} ${days}`,

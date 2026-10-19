@@ -575,8 +575,10 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <HeardFromField t={t} id="heard" value={heardFrom} onChange={setHeardFrom}
               referredBy={referredBy} onReferredBy={setReferredBy} />
 
-            {/* pot de miel */}
-            <input type="text" name="company" value={hp} onChange={(e) => setHp(e.target.value)}
+            {/* pot de miel. Son nom ne doit rien évoquer au remplissage automatique
+                des navigateurs (« company » leur fait penser à l'entreprise du client) :
+                un champ rempli à son insu lui vaudrait une fausse confirmation. */}
+            <input type="text" name="nivex_hp" value={hp} onChange={(e) => setHp(e.target.value)}
               tabIndex={-1} autoComplete="off" aria-hidden="true"
               className="absolute h-0 w-0 overflow-hidden opacity-0" />
           </section>

@@ -20,6 +20,7 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
   const [messages, setMessages] = useState<Msg[] | null>(null);
   const [error, setError] = useState<LoadError | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/messages")
@@ -37,6 +38,20 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
     if (next && !m.readAt) {
       setMessages((cur) => cur?.map((x) => (x.id === m.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? cur);
       fetch(`/api/admin/messages?id=${m.id}`, { method: "PATCH" }).catch(() => {});
+    }
+  }
+
+  /* Sur demande de son auteur : la politique de confidentialité promet
+     de supprimer un message avant ses deux ans si on nous le demande. */
+  async function remove(m: Msg) {
+    if (!window.confirm(`Supprimer définitivement le message de ${m.name} ? Il ne pourra pas être retrouvé.`)) return;
+    setDeleteError(null);
+    const r = await fetch(`/api/admin/messages?id=${m.id}`, { method: "DELETE" }).catch(() => null);
+    if (r?.ok) {
+      setMessages((cur) => cur?.filter((x) => x.id !== m.id) ?? cur);
+      setOpenId(null);
+    } else {
+      setDeleteError(r?.status === 401 ? "Session expirée : reconnectez-vous, puis recommencez." : "Le message n'a pas pu être supprimé. Réessayez.");
     }
   }
 
@@ -113,16 +128,22 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
                       )}
                     </dl>
 
-                    {m.email ? (
-                      <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re : " + (m.subject || "votre message"))}`}
-                        className="btn mt-6 !py-3 !px-6 !text-[10px]">
-                        Répondre
-                      </a>
-                    ) : m.phone ? (
-                      <a href={`tel:${m.phone.replace(/\D/g, "")}`} className="btn mt-6 !py-3 !px-6 !text-[10px]">
-                        Appeler
-                      </a>
-                    ) : null}
+                    <div className="mt-6 flex flex-wrap items-center gap-4">
+                      {m.email ? (
+                        <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re : " + (m.subject || "votre message"))}`}
+                          className="btn !py-3 !px-6 !text-[10px]">
+                          Répondre
+                        </a>
+                      ) : m.phone ? (
+                        <a href={`tel:${m.phone.replace(/\D/g, "")}`} className="btn !py-3 !px-6 !text-[10px]">
+                          Appeler
+                        </a>
+                      ) : null}
+                      <button onClick={() => remove(m)} className="btn btn-ghost !py-3 !px-6 !text-[10px]">
+                        Supprimer
+                      </button>
+                    </div>
+                    {deleteError && <p role="alert" className="mt-3 text-[0.82rem] text-[#8E332C]">{deleteError}</p>}
                   </div>
                 </div>
               </div>

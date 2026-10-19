@@ -154,6 +154,18 @@ export async function markRead(id: string): Promise<void> {
   await sql()`UPDATE nivex_messages SET read_at = now() WHERE id = ${id} AND read_at IS NULL`;
 }
 
+/**
+ * Supprimer un message, à la demande de la personne qui l'a écrit : la
+ * politique de confidentialité promet de le faire avant les deux ans.
+ * Le journal ne garde que le fait, sans rien de ce que disait le message.
+ */
+export async function deleteMessage(id: string): Promise<boolean> {
+  await ensureSchema();
+  const rows = (await sql()`DELETE FROM nivex_messages WHERE id = ${id} RETURNING 1`) as Row[];
+  if (rows.length > 0) await logEvent("contact_deleted", {});
+  return rows.length > 0;
+}
+
 export async function unreadCount(): Promise<number> {
   try {
     await ensureSchema();

@@ -87,12 +87,12 @@ const privacy: LegalDoc = {
       title: "How long we keep it",
       body: [],
       list: [
-        "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way.",
-        "A subscription: three years after its last visit, for the same reason.",
-        "A message from the contact form: two years, or until you ask us to delete it.",
-        "The technical log: twelve months.",
+        "A booking and everything attached to it: three years after the session. That is the civil limitation period in Quebec — the window during which a session can still be disputed, either way. It is then anonymised: your name, phone number, address and notes are erased; the date, duration, services, amount and zone remain, for the accounts. Of your email only a scrambled fingerprint remains, which cannot be read back and serves only to avoid offering the first hour twice.",
+        "A subscription: three years after its last visit, for the same reason, after which it is anonymised the same way.",
+        "A message from the contact form: two years, after which it is deleted of its own accord, or sooner if you ask us to delete it.",
+        "The technical log: twelve months, after which its entries are deleted of their own accord.",
         "The visit log: twelve months, after which entries are deleted of their own accord.",
-        "The origin attached to a booking: it follows the fate of that booking, and goes when it goes.",
+        "The origin attached to a booking: it follows the fate of that booking. An anonymised booking keeps only its family — the campaign label, your answer to “How did you hear about NIVEX?”, the first name in a referral link and the name of the site you came from —, enough to count sources without pointing to anyone.",
       ],
     },
     {
@@ -182,7 +182,7 @@ const terms: LegalDoc = {
     {
       title: "The price",
       body: [
-        "A session lasts {min} at the least and is billed {entry}. Beyond that, each hour begun is added at the same pace, {rate} per hour. Applicable taxes, if any, are added to that amount.",
+        "A session lasts {min} at the least and is billed {entry}. Beyond that, time is added in steps of {step}, at the same rate of {rate} per hour. Applicable taxes, if any, are added to that amount.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
@@ -673,7 +673,7 @@ export const en: Dict = {
       taken: "That slot was just taken. Please pick another.",
       stale: "That time is no longer available. Please pick another.",
       paused: `Booking is paused for the moment. Call us at ${PHONE} and we'll find you a slot.`,
-      tooMany: `Several bookings have just been made with this email. Call us at ${PHONE}.`,
+      tooMany: `This booking cannot be taken online right now. Please call us at ${PHONE} and we will set it up with you.`,
       generic: "Something went wrong. Try again, or call us directly.",
       required: "This field is required",
       email: "Invalid email",
@@ -843,6 +843,8 @@ export const en: Dict = {
     messagePlaceholder: "Tell us what you need…",
     submit: "Send message",
     submitting: "Sending…",
+    privacyNote: "Your message and contact details are used only to answer you, as our {privacy} describes.",
+    privacyLink: "privacy policy",
     successTitle: "Message sent.",
     successBody:
       "An acknowledgement just landed in your inbox. We usually reply the same day.",

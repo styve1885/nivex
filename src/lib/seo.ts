@@ -194,9 +194,15 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
         /* La durée minimale d'une séance, en heures. */
         eligibleQuantity: { "@type": "QuantitativeValue", minValue: minimum / 60, unitCode: "HUR" },
       },
-      ...t.services.items.map((x) => ({
-        "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
-      })),
+      /* Les prestations que la page d'accueil montre : une carte dont la
+         prestation est désactivée dans Réglages n'est plus offerte, ni à
+         l'écran ni ici. La carte « Tout se fait chez vous » n'en mesure
+         aucune et reste. */
+      ...t.services.items
+        .filter((x) => !x.detail.includes("{qty}") || s.services.some((v) => v.key === x.serviceKey && v.enabled))
+        .map((x) => ({
+          "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
+        })),
     ],
   };
 }

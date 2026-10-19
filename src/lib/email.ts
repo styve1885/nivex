@@ -498,7 +498,7 @@ export function contactAcknowledgement(d: { locale: "fr" | "en"; siteUrl: string
   const text = [
     a.hi, "", a.intro, "",
     `${a.urgent} ${a.urgentBody} ${PHONE}`, "",
-    `${a.cta} : ${d.siteUrl}/${d.locale}/reserver`, "",
+    `${a.cta}${d.locale === "en" ? ":" : "\u00a0:"} ${d.siteUrl}/${d.locale}/reserver`, "",
     a.signoff, a.team, "", a.notYou,
   ].join("\n");
 
@@ -620,7 +620,8 @@ const S = {
     tooLateNote: "For any change, please call us.",
     cancelledSubject: (when: string) => `Visit cancelled · ${when}`,
     cancelledIntro: "Your visit has been cancelled. It does not count towards your cycle.",
-    replaced: (when: string) => `It is replaced at the end of the series, on ${when}.`,
+    /* « 2:00 p.m. » porte déjà son point. */
+    replaced: (when: string) => `It is replaced at the end of the series, on ${when.endsWith(".") ? when : `${when}.`}`,
     notReplaced: "We will call you to place it at the end of the series.",
     movedSubject: (when: string) => `Visit moved · ${when}`,
     movedIntro: "Your visit has been moved. The rest of your series stays as it is.",

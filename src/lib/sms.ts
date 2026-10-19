@@ -131,6 +131,10 @@ export function smsWhen(d: Date, tz: string, locale: Locale): string {
  */
 const STOP_LINE = { fr: " Répondez STOP pour ne plus recevoir de textos.", en: " Reply STOP to opt out." } as const;
 
+/* Une phrase qui finit sur une heure anglaise (« 2:00 p.m. ») a déjà son
+   point : on n'en ajoute pas un second. */
+const period = (s: string) => (s.endsWith(".") ? s : `${s}.`);
+
 export const SMS = {
   /** Une séance ponctuelle vient d'être réservée. */
   bookingConfirmed: (l: Locale, when: string, url: string) => (l === "en"
@@ -147,7 +151,7 @@ export const SMS = {
     const day = today ? (l === "en" ? "today" : "aujourd'hui") : (l === "en" ? "tomorrow" : "demain");
     const pay = payment ? (l === "en" ? ` Payment for the cycle at this visit: ${payment}.` : ` Paiement du cycle à cette visite : ${payment}.`) : "";
     return l === "en"
-      ? `NIVEX: reminder, your visit is ${day}, ${when}. We arrive ${SETUP_MINUTES} minutes early to set up.${pay}`
+      ? `NIVEX: reminder, your visit is ${day}, ${period(when)} We arrive ${SETUP_MINUTES} minutes early to set up.${pay}`
       : `NIVEX : rappel, votre visite a lieu ${day}, ${when}. Nous arrivons ${SETUP_MINUTES} minutes avant pour nous installer.${pay}`;
   },
 
@@ -158,16 +162,16 @@ export const SMS = {
 
   /** Une visite d'abonnement annulée, avec son remplacement s'il y en a un. */
   visitCancelled: (l: Locale, when: string, replacement: string | null) => l === "en"
-    ? `NIVEX: your visit on ${when} is cancelled.${replacement ? ` It is replaced on ${replacement}.` : ""}`
+    ? `NIVEX: your visit on ${when} is cancelled.${replacement ? ` It is replaced on ${period(replacement)}` : ""}`
     : `NIVEX : votre visite du ${when} est annulée.${replacement ? ` Elle est remplacée le ${replacement}.` : ""}`,
 
   visitMoved: (l: Locale, from: string, to: string) => l === "en"
-    ? `NIVEX: your visit on ${from} is moved to ${to}.`
+    ? `NIVEX: your visit on ${from} is moved to ${period(to)}`
     : `NIVEX : votre visite du ${from} est déplacée au ${to}.`,
 
-  /** Une visite de remplacement posée à la main par l'artisan. L'heure anglaise finit déjà par un point. */
+  /** Une visite de remplacement posée à la main par l'artisan. */
   visitPlaced: (l: Locale, when: string) => l === "en"
-    ? `NIVEX: your replacement visit is booked for ${when.replace(/\.$/, "")}.`
+    ? `NIVEX: your replacement visit is booked for ${period(when)}`
     : `NIVEX : votre visite de remplacement est posée le ${when}.`,
 
   /** La série suivante d'un abonnement, posée par l'artisan. */

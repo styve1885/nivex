@@ -23,7 +23,7 @@ export type LegalDoc = { eyebrow: string; title: string; lede: string; sections:
  *
  * Les accolades sont des substitutions, remplies à l'affichage par
  * `LegalDocument` à partir des réglages en vigueur : {email}, {phone}, {neq},
- * {site}, {zone}, {rate}, {entry}, {min}, {lead}, {cancel}, {horizon}. Leur
+ * {site}, {zone}, {rate}, {entry}, {min}, {step}, {lead}, {cancel}, {horizon}. Leur
  * nom ne porte que des lettres. Écrire un taux ou un délai en toutes lettres
  * ici, c'est écrire un texte qui mentira le jour où Styve le changera depuis
  * son espace.
@@ -105,12 +105,12 @@ const privacy: LegalDoc = {
       title: "Combien de temps nous les gardons",
       body: [],
       list: [
-        "Un rendez-vous et ce qui l'accompagne\u00a0: trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre.",
-        "Un abonnement\u00a0: trois ans après sa dernière visite, pour la même raison.",
-        "Un message du formulaire de contact\u00a0: deux ans, ou jusqu'à ce que vous en demandiez la suppression.",
-        "Le journal technique\u00a0: douze mois.",
+        "Un rendez-vous et ce qui l'accompagne\u00a0: trois ans après la séance. C'est le délai de prescription civile au Québec — celui pendant lequel une séance peut encore être contestée de part et d'autre. Il est ensuite anonymisé\u00a0: votre nom, votre téléphone, votre adresse et vos précisions sont effacés\u202f; restent la date, la durée, les prestations, le montant et la zone, pour la comptabilité. De votre courriel ne reste qu'une empreinte chiffrée, qui ne se relit pas et sert seulement à ne pas offrir deux fois la première heure.",
+        "Un abonnement\u00a0: trois ans après sa dernière visite, pour la même raison, puis il est anonymisé de la même façon.",
+        "Un message du formulaire de contact\u00a0: deux ans, après quoi il est supprimé de lui-même, ou plus tôt si vous en demandez la suppression.",
+        "Le journal technique\u00a0: douze mois, après quoi ses entrées sont supprimées d'elles-mêmes.",
         "Le journal des visites\u00a0: douze mois, après quoi les entrées sont supprimées d'elles-mêmes.",
-        "La provenance jointe à une réservation\u00a0: elle suit le sort de cette réservation, et disparaît avec elle.",
+        "La provenance jointe à une réservation\u00a0: elle suit le sort de cette réservation. Une réservation anonymisée n'en garde que la famille — l'étiquette de campagne, votre réponse à «\u00a0Comment avez-vous connu NIVEX\u202f?\u00a0», le prénom inscrit dans un lien de recommandation et le nom du site d'où vous veniez —, de quoi compter les sources sans désigner personne.",
       ],
     },
     {
@@ -200,7 +200,7 @@ const terms: LegalDoc = {
     {
       title: "Le prix",
       body: [
-        "Une séance dure au minimum {min} et se facture {entry}. Au-delà, chaque heure entamée s'ajoute au même rythme, soit {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "Une séance dure au minimum {min} et se facture {entry}. Au-delà, le temps s'ajoute par tranche de {step}, au même taux de {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
         "L'estimation affichée pendant la réservation est indicative\u00a0: elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
         "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
       ],
@@ -712,7 +712,7 @@ export const fr = {
       taken: "Ce créneau vient d'être pris. Choisissez-en un autre.",
       stale: "Cette heure n'est plus disponible. Choisissez-en une autre.",
       paused: `La prise de rendez-vous est momentanément suspendue. Appelez-nous au ${PHONE}, nous vous trouvons une place.`,
-      tooMany: `Plusieurs réservations viennent déjà d'être prises avec ce courriel. Appelez-nous au ${PHONE}.`,
+      tooMany: `Cette réservation ne peut pas être prise en ligne pour l'instant. Appelez-nous au ${PHONE}\u00a0: nous la poserons avec vous.`,
       generic: "Une erreur est survenue. Réessayez, ou appelez-nous directement.",
       required: "Ce champ est requis",
       email: "Courriel invalide",
@@ -884,6 +884,9 @@ export const fr = {
     messagePlaceholder: "Dites-nous ce dont vous avez besoin…",
     submit: "Envoyer le message",
     submitting: "Envoi en cours…",
+    /* Ce que la politique annonce « en nous écrivant par le site » : dit au moment d'écrire. */
+    privacyNote: "Votre message et vos coordonnées servent seulement à vous répondre, comme le décrit notre {privacy}.",
+    privacyLink: "politique de confidentialité",
     successTitle: "Message envoyé.",
     successBody:
       "Un accusé de réception vient de partir vers votre boîte. Nous vous répondons en général dans la journée.",

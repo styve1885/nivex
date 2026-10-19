@@ -306,7 +306,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                     <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{t.tarifs.plans.perMonth}</span>
                   </p>
                   <p className="text-[0.75rem] font-light text-ink-400">
-                    {t.tarifs.plans.full} : {formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
+                    {t.tarifs.plans.full}{locale === "en" ? ": " : "\u00a0: "}{formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
                     {formatMoney(full - price, s.currency, locale)}
                   </p>
                   <Link href={`/${locale}/abonnement?formule=${p.key}`}

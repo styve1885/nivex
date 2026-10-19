@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isDbConfigured } from "@/lib/db";
 import { requireOwner } from "@/lib/session";
-import { listMessages, markRead } from "@/lib/messages";
+import { deleteMessage, listMessages, markRead } from "@/lib/messages";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,4 +37,20 @@ export async function PATCH(req: NextRequest) {
   }
   await markRead(id);
   return NextResponse.json({ ok: true });
+}
+
+/** Supprimer un message, sur demande de son auteur. */
+export async function DELETE(req: NextRequest) {
+  if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
+  }
+  try {
+    const gone = await deleteMessage(id);
+    return NextResponse.json({ ok: gone }, { status: gone ? 200 : 404 });
+  } catch (e) {
+    console.error("[nivex] message non supprimé :", e);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
 }

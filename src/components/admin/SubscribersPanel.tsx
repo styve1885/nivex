@@ -4,10 +4,24 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminSubscription } from "@/app/api/admin/subscriptions/route";
 import { CYCLE_MAX_WEEKS } from "@/lib/brand";
+import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
 
 type Client = { name: string; email: string; phone: string; address: string; city: string; postalCode: string; locale: "fr" | "en" };
 type Conflict = { startsAt: string; reason: string };
 type Plan = { key: string; name: string; visits: number };
+
+/** La liste des abonnés, ou la raison pour laquelle on n'a pas pu la lire. */
+async function readSubscriptions(): Promise<
+  { subscriptions: AdminSubscription[]; clients: Client[] } | { error: LoadError }
+> {
+  try {
+    const r = await fetch("/api/admin/subscriptions", { cache: "no-store" });
+    const d = await r.json().catch(() => null);
+    return r.ok && d?.ok ? { subscriptions: d.subscriptions, clients: d.clients } : { error: loadErrorOf(r.status) };
+  } catch {
+    return { error: "server" };
+  }
+}
 
 const REASONS: Record<string, string> = {
   busy: "déjà réservé", closed: "hors de l'horaire", lead: "trop proche", invalid: "date invalide",
@@ -53,29 +67,31 @@ const money = (cents: number, currency = "CAD") =>
 export function SubscribersPanel({ timezone, plans }: { timezone: string; plans: Plan[] }) {
   const router = useRouter();
   const [subs, setSubs] = useState<AdminSubscription[] | null>(null);
+  const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [creating, setCreating] = useState(false);
   const [daily, setDaily] = useState<string | null>(null);
 
   /* Après chaque geste, la liste se relit — et l'onglet Rendez-vous aussi : ses
      visites et ses chiffres viennent de la page, qui ne se recalcule pas seule. */
-  const reload = useCallback(async () => {
-    try {
-      const d = await (await fetch("/api/admin/subscriptions", { cache: "no-store" })).json();
-      setSubs(d.ok ? d.subscriptions : []);
-      setClients(d.ok ? d.clients : []);
-    } catch {
-      setSubs([]);
+  /* Une lecture qui échoue ne se lit pas « aucun abonnement » : l'artisan
+     croirait ses abonnés disparus. */
+  const apply = useCallback((res: Awaited<ReturnType<typeof readSubscriptions>>) => {
+    if ("error" in res) {
+      setLoadError(res.error);
+    } else {
+      setSubs(res.subscriptions);
+      setClients(res.clients);
+      setLoadError(null);
     }
-    router.refresh();
-  }, [router]);
-
-  useEffect(() => {
-    fetch("/api/admin/subscriptions", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => { setSubs(d.ok ? d.subscriptions : []); setClients(d.ok ? d.clients : []); })
-      .catch(() => setSubs([]));
   }, []);
+
+  const reload = useCallback(async () => {
+    apply(await readSubscriptions());
+    router.refresh();
+  }, [apply, router]);
+
+  useEffect(() => { readSubscriptions().then(apply); }, [apply]);
 
   async function runDaily() {
     setDaily("…");
@@ -95,6 +111,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
     ...(time ? { hour: "2-digit", minute: "2-digit" } : { year: "numeric" }),
   }).format(new Date(iso));
 
+  if (loadError && subs === null) return <LoadFailure error={loadError} className="py-20 text-center" />;
   if (subs === null) return <p className="py-20 text-center text-[0.9rem] text-ink-400">Lecture des abonnements…</p>;
 
   const active = subs.filter((s) => s.status === "active");
@@ -349,8 +366,8 @@ function SubscriptionCard({ s, when, onChange }: {
             <div className="border border-gold-300/60 px-4 py-3">
               <p className="text-[0.82rem] text-ink-700">Replacer une visite ({s.pendingMakeups} en attente)</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <input type="date" value={place.date} onChange={(e) => setPlace({ ...place, date: e.target.value })} className="field !w-auto !py-1.5" />
-                <input type="time" step={1800} value={place.time} onChange={(e) => setPlace({ ...place, time: e.target.value })} className="field !w-auto !py-1.5" />
+                <input type="date" aria-label="Date de la visite à replacer" value={place.date} onChange={(e) => setPlace({ ...place, date: e.target.value })} className="field !w-auto !py-1.5" />
+                <input type="time" aria-label="Heure de la visite à replacer" step={1800} value={place.time} onChange={(e) => setPlace({ ...place, time: e.target.value })} className="field !w-auto !py-1.5" />
                 <button type="button" disabled={!place.date || !place.time || busy === "place"}
                   onClick={() => run("place", { action: "place", id: s.id, ...place }, "Visite replacée.")}
                   className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
@@ -479,8 +496,8 @@ function VisitRow({ v, perCycle, when, onChange }: {
       </div>
       {mode === "move" && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input type="date" value={to.date} onChange={(e) => setTo({ ...to, date: e.target.value })} className="field !w-auto !py-1.5" />
-          <input type="time" step={1800} value={to.time} onChange={(e) => setTo({ ...to, time: e.target.value })} className="field !w-auto !py-1.5" />
+          <input type="date" aria-label="Nouvelle date" value={to.date} onChange={(e) => setTo({ ...to, date: e.target.value })} className="field !w-auto !py-1.5" />
+          <input type="time" aria-label="Nouvelle heure" step={1800} value={to.time} onChange={(e) => setTo({ ...to, time: e.target.value })} className="field !w-auto !py-1.5" />
           <button type="button" disabled={busy || !to.date || !to.time} onClick={() => run({ action: "move", visitId: v.id, ...to })}
             className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
             Déplacer
@@ -605,10 +622,10 @@ function NewSubscription({ plans, clients, when, onDone }: {
             className="h-4 w-4 accent-[var(--color-gold-500)]" />
           <span className="text-[0.85rem] text-ink-600">Le cycle en cours est déjà payé</span>
         </label>
-        <div className="sm:col-span-2">
+        <label className="sm:col-span-2">
           <span className="label">Précisions</span>
           <textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} className="field resize-none" />
-        </div>
+        </label>
       </div>
 
       {check && check.free && (

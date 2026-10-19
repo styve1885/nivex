@@ -227,9 +227,16 @@ export function SettingsPanel({ initial, onDirty }: {
             value={s.horizonDays} step={1} min={1} max={180} onChange={(v) => patch("horizonDays", v)} />
           <div>
             <label className="label" htmlFor="step">Pas des créneaux</label>
-            <select id="step" value={s.slotStep} onChange={(e) => patch("slotStep", Number(e.target.value))} className="field">
+            <select id="step" value={s.slotStep} onChange={(e) => patch("slotStep", Number(e.target.value))}
+              aria-describedby="step-hint" className="field">
               {[15, 20, 30, 60].map((n) => <option key={n} value={n}>{n} minutes</option>)}
             </select>
+            {/* Le même pas arrondit la durée estimée, donc le prix : c'est la
+                tranche que les conditions annoncent au-delà du minimum. */}
+            <p id="step-hint" className="mt-2 text-[11px] leading-relaxed text-ink-400">
+              C&apos;est aussi la tranche facturée au-delà de la durée minimale : la durée estimée et le prix
+              s&apos;arrondissent à ce pas, comme le disent les conditions.
+            </p>
           </div>
         </div>
       </Card>

@@ -42,7 +42,7 @@ export async function POST() {
     },
     body: new URLSearchParams({
       To: to, From: process.env.TWILIO_FROM!,
-      Body: `NIVEX — texto d'essai envoyé depuis l'espace artisan, le ${when}. Les confirmations et les rappels partiront par ce même chemin.`,
+      Body: `NIVEX : texto d'essai envoyé depuis l'espace artisan, le ${when}. Les confirmations et les rappels partiront par ce même chemin.`,
     }),
   }).catch((e) => e as Error);
 
