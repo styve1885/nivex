@@ -138,7 +138,7 @@ export async function submitContact(
   // Ni base ni courriel : on ne peut rien promettre à la personne.
   if (!stored && !sent) throw new ContactError("unavailable");
 
-  await logEvent("contact_received", { email: input.email, stored, sent, acked });
+  await logEvent("contact_received", { stored, sent, acked });
   return { stored, sent, acked };
 }
 

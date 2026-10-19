@@ -572,9 +572,12 @@ function describeGoogle(e: unknown): string {
 }
 
 async function isFirstBooking(email: string): Promise<boolean> {
+  /* Un rendez-vous de plus de trois ans est anonymisé (retention.ts) : de son
+     courriel ne reste qu'une empreinte, qui suffit à n'offrir l'heure qu'une fois. */
+  const { erasedEmail } = await import("./retention");
   const rows = (await sql()`
     SELECT 1 FROM nivex_bookings
-    WHERE lower(client_email) = ${email.toLowerCase()} AND status <> 'cancelled'
+    WHERE lower(client_email) IN (${email.toLowerCase()}, ${erasedEmail(email)}) AND status <> 'cancelled'
     LIMIT 1`) as Row[];
   return rows.length === 0;
 }

@@ -7,8 +7,8 @@ import { rhythmPhrase, slotPhrase } from "@/lib/email";
 import { TERM_SERIES } from "@/lib/brand";
 import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
-  amountOf, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
-  knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerInstant,
+  amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
+  knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
   placeMakeup, previewSeries, renewSeries, resendSubscription, setPaid, setTravelFee, SubscriptionError,
   type SubscriptionFull,
 } from "@/lib/subscriptions";
@@ -31,7 +31,9 @@ function serialise(f: SubscriptionFull, tz: string) {
     rhythm: rhythmPhrase(sub.everyWeeks, "fr"),
     clientName: sub.clientName, clientEmail: sub.clientEmail, clientPhone: sub.clientPhone,
     address: sub.address, city: sub.city, postalCode: sub.postalCode, notes: sub.notes,
-    amount: amountOf(sub), feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone, currency: sub.currency,
+    /* Le cycle en cours : tel qu'il a été encaissé s'il l'est, sinon tel qu'il se paiera. */
+    amount: amountOfCycle(sub, view.currentCycle),
+    feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone, currency: sub.currency,
     currentCycle: view.currentCycle, doneInCurrent: view.doneInCurrent,
     currentPaidAt: current?.paidAt ?? null,
     currentDueAt: currentFirst?.startsAt.toISOString() ?? null,
@@ -103,7 +105,10 @@ export async function POST(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
   const parsed = Action.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: "invalid_input", fields: parsed.error.flatten().fieldErrors }, { status: 400 });
+    /* Les champs en cause, par leur nom — « postalCode », « email » — pour
+       que l'onglet dise lequel corriger au lieu d'inviter à réessayer. */
+    const fields = [...new Set(parsed.error.issues.map((i) => String(i.path[i.path.length - 1] ?? "")).filter(Boolean))];
+    return NextResponse.json({ ok: false, error: "invalid_input", fields }, { status: 400 });
   }
   const a = parsed.data;
   const host = req.headers.get("host");
@@ -116,7 +121,7 @@ export async function POST(req: NextRequest) {
         if (!plan) throw new SubscriptionError("unknown_plan");
         const p = await previewSeries({
           planKey: plan.key,
-          first: ownerInstant(a.input.date, a.input.time, settings.timezone),
+          first: ownerFirstVisit(a.input.date, a.input.time, settings.timezone),
           count: visitsToEndOfSeries(plan.visits, a.input.startCycle, a.input.startDone),
           checkLead: false,
         });
@@ -167,8 +172,13 @@ export async function POST(req: NextRequest) {
         await deleteSubscription(a.id);
         return NextResponse.json({ ok: true });
       case "resync": {
+        /* La raison en clair, pour l'artisan : reconnecter Google n'appelle
+           pas la même réponse qu'une visite restée hors de l'agenda. */
         const r = await resendSubscription(a.id, host);
-        return NextResponse.json({ ok: r.emailSent && r.calendarAdded, ...r });
+        return NextResponse.json({
+          ok: r.emailSent && r.calendarAdded, ...r,
+          detail: r.error ?? (r.emailSent && !r.calendarAdded ? "Courriel envoyé ; certaines visites ne sont pas dans l'agenda." : undefined),
+        });
       }
     }
   } catch (e) {

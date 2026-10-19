@@ -12,13 +12,18 @@ import assert from "node:assert/strict";
 const {
   gridFrom, gridDate, gridDates, gridIndexAfter, visitsToEndOfSeries, subscriberFeeCents, quoteCycle,
   changeDeadline, canSubscriberChange, numberVisits, startOffset, viewSubscription, seriesConflicts,
-  seriesOfCycle, TERM_CYCLES,
+  seriesOfCycle, TERM_CYCLES, withoutInterval, renewalFrom, paidCycleAmount, moveHorizonDays, MOVE_REACH_DAYS,
 } = await import("../src/lib/cycles.ts");
+const {
+  ownerFirstVisit, SubscriptionError, phoneKey, addressKey, onlineSubscriptionRefused, ONLINE_SUBSCRIPTIONS_PER_DAY,
+} = await import("../src/lib/subscriptions.ts");
+const { slotProblem } = await import("../src/lib/availability.ts");
+const { SMS, smsWhen } = await import("../src/lib/sms.ts");
 const { PLANS } = await import("../src/lib/pricing.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
-const { visitReminder, subscriptionConfirmation, visitChanged, seriesNotice } = await import("../src/lib/email.ts");
+const { visitReminder, subscriptionConfirmation, subscriptionOwnerNotification, visitChanged, seriesNotice } = await import("../src/lib/email.ts");
 const { CANCEL_WINDOW_HOURS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, SERIES_CYCLES } = await import("../src/lib/brand.ts");
 
 const TZ = "America/Toronto";
@@ -70,6 +75,23 @@ test("le rang suivant de la grille, après une date donnée", () => {
   assert.equal(gridIndexAfter(g, at(2027, 3, 26)), 21);
 });
 
+test("une série renouvelée en retard reprend à la prochaine date utile, jamais dans le passé", () => {
+  /* La série 1 s'est terminée le mardi 15 septembre ; l'artisan pose la
+     suivante le 18 octobre. Avant, elle repartait le 22 septembre, avec
+     quatre dates déjà passées. */
+  const g = gridFrom(at(2026, 3, 31), 1, TZ);                 // mardis 10 h
+  const now = at(2026, 10, 18, 9);
+  const earliest = new Date(now.getTime() + settings.leadHours * 3600_000);
+  const late = gridDate(g, renewalFrom(g, at(2026, 9, 15), earliest));
+  assert.equal(dateKey(late, TZ), "2026-10-20");
+  assert.ok(late.getTime() > earliest.getTime());
+  /* Posée à l'avance, elle suit simplement la dernière visite. */
+  const early = gridDate(g, renewalFrom(g, at(2026, 12, 15), earliest));
+  assert.equal(dateKey(early, TZ), "2026-12-22");
+  /* Sans visite gardée, elle part de la prochaine date utile. */
+  assert.equal(dateKey(gridDate(g, renewalFrom(g, null, earliest)), TZ), "2026-10-20");
+});
+
 /* ————— Les séries ————— */
 
 test("une série neuve compte six cycles : 24, 12 ou 6 visites", () => {
@@ -114,6 +136,13 @@ test("une adresse sans frais ne paie que la formule", () => {
   const q = quoteCycle(plan("confort"), settings, 0);
   assert.equal(q.travelCents, 0);
   assert.equal(q.totalCents, q.planCents);
+});
+
+test("un cycle encaissé garde son montant, même si les frais changent ensuite", () => {
+  /* Reçu à 400 $ (360 $ + 4 × 10 $), puis frais mis à 0 $ : la fiche du cycle
+     dit toujours 400 $, dont 40 $ de frais. */
+  assert.deepEqual(paidCycleAmount(36000, 40000), { planCents: 36000, travelCents: 4000, totalCents: 40000 });
+  assert.deepEqual(paidCycleAmount(36000, 36000), { planCents: 36000, travelCents: 0, totalCents: 36000 });
 });
 
 /* ————— Le délai de la veille ————— */
@@ -248,6 +277,106 @@ test("le délai de prévenance ne vaut que pour la première date, et pas pour l
   assert.equal(seriesConflicts(starts, 120, [], settings, { now, checkLead: false }).length, 0);
 });
 
+/* ————— Déplacer une visite ————— */
+
+const block = (start, end) => ({ start: start.getTime(), end: end.getTime() });
+
+test("une visite de 10 h glisse à 11 h le même jour : son propre événement Google ne la gêne plus", () => {
+  /* Mardi 10 h–12 h : son événement couvre 9 h 45–12 h 15, installation et
+     rangement compris. Un autre rendez-vous l'après-midi. */
+  const own = block(at(2026, 11, 3, 9, 45), at(2026, 11, 3, 12, 15));
+  const other = block(at(2026, 11, 3, 16), at(2026, 11, 3, 17));
+  const now = at(2026, 10, 1);
+  const p = (h, m, busy) => slotProblem(at(2026, 11, 3, h, m).getTime(), 120, busy, settings, now, { checkLead: true });
+  assert.equal(p(11, 0, [own, other]), "busy");                       // avant : elle se gênait elle-même
+  const busy = withoutInterval([own, other], own);
+  assert.equal(p(11, 0, busy), null);
+  assert.equal(p(8, 0, busy), null);
+  assert.equal(p(12, 30, busy), null);
+  assert.equal(p(14, 0, busy), "busy");                                // le rendez-vous de 16 h, tampon compris
+});
+
+test("son bloc se retranche même fondu avec un rendez-vous voisin dans la disponibilité de Google", () => {
+  /* Google rend une seule plage, 9 h 45–14 h, quand un autre événement suit
+     la visite : chercher une plage identique ne trouverait rien. */
+  const fused = block(at(2026, 11, 3, 9, 45), at(2026, 11, 3, 14));
+  const own = block(at(2026, 11, 3, 9, 45), at(2026, 11, 3, 12, 15));
+  const busy = withoutInterval([fused], own);
+  assert.deepEqual(busy, [block(at(2026, 11, 3, 12, 15), at(2026, 11, 3, 14))]);
+  const now = at(2026, 10, 1);
+  assert.equal(slotProblem(at(2026, 11, 3, 8).getTime(), 120, busy, settings, now), null);
+  assert.equal(slotProblem(at(2026, 11, 3, 10, 30).getTime(), 120, busy, settings, now), "busy");
+  /* Ce qui ne touche pas le bloc reste entier ; ce qui le déborde des deux côtés est coupé en deux. */
+  assert.deepEqual(withoutInterval([{ start: 0, end: 10 }], { start: 20, end: 30 }), [{ start: 0, end: 10 }]);
+  assert.deepEqual(withoutInterval([{ start: 0, end: 100 }], { start: 20, end: 30 }), [{ start: 0, end: 20 }, { start: 30, end: 100 }]);
+  assert.deepEqual(withoutInterval([{ start: 20, end: 30 }], { start: 0, end: 100 }), []);
+});
+
+test("le client cherche une nouvelle heure jusqu'à deux semaines après sa visite, au-delà de l'horizon", () => {
+  assert.equal(MOVE_REACH_DAYS, 14);
+  assert.equal(moveHorizonDays("2026-10-19", "2027-03-09", 45), 141 + 14);   // une visite de mars
+  assert.equal(moveHorizonDays("2026-10-19", "2026-10-29", 45), 45);         // l'horizon suffit déjà
+  /* Le passage à l'heure normale ne décale pas le compte des jours. */
+  assert.equal(moveHorizonDays("2026-10-30", "2026-11-02", 0), 3 + 14);
+});
+
+/* ————— La saisie de l'artisan ————— */
+
+test("l'artisan ne peut pas entrer une prochaine visite déjà passée", () => {
+  const now = at(2026, 10, 18, 9);
+  const refused = (date, time) => {
+    try { ownerFirstVisit(date, time, TZ, now); return null; } catch (e) { return e; }
+  };
+  const typo = refused("2025-10-14", "10:00");                        // l'année mal saisie
+  assert.ok(typo instanceof SubscriptionError);
+  assert.equal(typo.code, "past");
+  assert.equal(refused("2026-10-18", "08:30")?.code, "past");        // ce matin, déjà commencé
+  assert.equal(refused("2026-10-20", "10:00"), null);
+  assert.equal(ownerFirstVisit("2026-10-20", "10:00", TZ, now).getTime(), at(2026, 10, 20, 10).getTime());
+});
+
+/* ————— Les garde-fous de l'abonnement en ligne ————— */
+
+test("un même téléphone ou une même adresse, écrits autrement, se reconnaissent", () => {
+  assert.equal(phoneKey("450 943-1217"), "4509431217");
+  assert.equal(phoneKey("+1 (450) 9431217"), "4509431217");
+  assert.equal(phoneKey("abc"), null);
+  assert.equal(addressKey("88, rue Saint-Édouard", "j4h 1c6"), addressKey("88 RUE SAINT-EDOUARD", "J4H1C6"));
+  assert.notEqual(addressKey("88 rue Saint-Édouard", "J4H 1C6"), addressKey("90 rue Saint-Édouard", "J4H 1C6"));
+});
+
+test("un abonnement en ligne de plus est refusé : même téléphone, même adresse, ou trop pour la journée", () => {
+  const sub = (o) => ({ phone: "450 943-1217", address: "88 rue Saint-Charles Ouest", postalCode: "J4H 1C6", active: true, recent: false, ...o });
+  const ask = { phone: "514 555-0101", address: "12 rue Notre-Dame", postalCode: "J4P 2A1" };
+  assert.equal(onlineSubscriptionRefused([sub()], ask), false);
+  assert.equal(onlineSubscriptionRefused([sub()], { ...ask, phone: "+1 450 943 1217" }), true);
+  assert.equal(onlineSubscriptionRefused([sub()], { ...ask, address: "88, Rue Saint-Charles Ouest", postalCode: "j4h1c6" }), true);
+  /* Un abonnement terminé ne retient ni le téléphone ni l'adresse. */
+  assert.equal(onlineSubscriptionRefused([sub({ active: false, recent: true })], { ...ask, phone: "450 943-1217" }), false);
+  const day = Array.from({ length: ONLINE_SUBSCRIPTIONS_PER_DAY }, (_, i) => sub({ phone: `450 555-01${10 + i}`, address: `${i} rue X`, recent: true }));
+  assert.equal(onlineSubscriptionRefused(day.slice(1), ask), false);
+  assert.equal(onlineSubscriptionRefused(day, ask), true);
+});
+
+/* ————— Les textos de l'abonnement ————— */
+
+test("fin d'abonnement, série renouvelée, visite replacée : un texto calme, signé, dans les deux langues", () => {
+  const visit = at(2026, 11, 3, 14);
+  const msgs = ["fr", "en"].flatMap((l) => [
+    SMS.subscriptionEnded(l, 1), SMS.subscriptionEnded(l, 5),
+    SMS.seriesRenewed(l, smsWhen(visit, TZ, l), l === "en" ? "every week" : "chaque semaine", "https://x"),
+    SMS.visitPlaced(l, smsWhen(visit, TZ, l)),
+  ]);
+  for (const m of msgs) {
+    assert.ok(m.startsWith("NIVEX") && !m.includes("!"), m);
+    assert.ok(!m.includes(".."), `double point : ${m}`);
+  }
+  assert.match(SMS.subscriptionEnded("fr", 1), /Votre visite à venir est annulée\./);
+  assert.match(SMS.subscriptionEnded("fr", 5), /Vos 5 visites à venir sont annulées\./);
+  assert.match(SMS.subscriptionEnded("en", 1), /Your upcoming visit is cancelled\./);
+  assert.match(flat(SMS.visitPlaced("fr", smsWhen(visit, TZ, "fr"))), /remplacement est posée le mardi 3 novembre/);
+});
+
 /* ————— Les courriels ————— */
 
 const base = {
@@ -270,6 +399,15 @@ test("la confirmation dit le rythme, la série, le montant du cycle et la règle
   assert.match(text, /première visite du cycle/);
   assert.ok(m.html.includes(base.manageUrl));
   assert.ok(!/première heure offerte/i.test(text));
+});
+
+test("une série d'une seule visite se dit au singulier, au client comme à l'artisan", () => {
+  /* Un abonné Essentiel entré au cycle 6 : il ne reste qu'une visite à poser. */
+  const one = { ...base, visits: base.visits.slice(0, 1) };
+  assert.match(flat(subscriptionConfirmation(one).text), /Une visite, le vendredi 6 novembre/);
+  assert.ok(!/1 visites/.test(subscriptionConfirmation(one).text));
+  assert.match(flat(subscriptionConfirmation({ ...one, locale: "en" }).text), /One visit, on Friday, November 6/);
+  assert.match(flat(subscriptionOwnerNotification(one, true).text), /Une visite, le vendredi 6 novembre/);
 });
 
 test("le rappel de la première visite d'un cycle annonce le paiement ; les autres non", () => {

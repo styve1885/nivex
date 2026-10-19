@@ -559,7 +559,7 @@ const S = {
     subject: (plan: string, ref: string) => `Votre abonnement ${plan} est confirmé · ${ref}`,
     intro: "Votre abonnement est en place. Vos visites sont réservées dans notre agenda : personne d'autre ne peut prendre ces créneaux.",
     plan: "Formule", rhythmLabel: "Rythme", first: "Première visite", series: "Visites réservées",
-    seriesValue: (n: number, last: string) => `${n} visites, jusqu'au ${last}`,
+    seriesValue: (n: number, last: string) => n === 1 ? `Une visite, le ${last}` : `${n} visites, jusqu'au ${last}`,
     duration: "Durée d'une visite", where: "Adresse", ref: "Référence",
     cycle: "Par cycle", cycleTravel: "Frais de déplacement du cycle", cycleTotal: "Total d'un cycle",
     cycleNote: (n: number) => n === 1
@@ -598,7 +598,7 @@ const S = {
     subject: (plan: string, ref: string) => `Your ${plan} subscription is confirmed · ${ref}`,
     intro: "Your subscription is in place. Your visits are reserved in our calendar: nobody else can take these slots.",
     plan: "Plan", rhythmLabel: "Rhythm", first: "First visit", series: "Visits reserved",
-    seriesValue: (n: number, last: string) => `${n} visits, until ${last}`,
+    seriesValue: (n: number, last: string) => n === 1 ? `One visit, on ${last}` : `${n} visits, until ${last}`,
     duration: "Length of a visit", where: "Address", ref: "Reference",
     cycle: "Per cycle", cycleTravel: "Travel fees for the cycle", cycleTotal: "Total per cycle",
     cycleNote: (n: number) => n === 1

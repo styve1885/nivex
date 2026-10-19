@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { cancelVisit, findSubscriptionByToken, moveVisit, SubscriptionError } from "@/lib/subscriptions";
+import { cancelVisit, clientChangeAllowed, findSubscriptionByToken, moveVisit, SubscriptionError } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,9 @@ const Body = z.discriminatedUnion("action", [
  *
  * Le jeton de l'abonnement ouvre ses visites, et seulement elles : une
  * visite d'un autre abonnement est introuvable ici. Le délai — 23 h 59 la
- * veille — est vérifié par subscriptions.ts, pas par la page.
+ * veille — est vérifié par subscriptions.ts, pas par la page. Le nombre de
+ * changements en vingt-quatre heures aussi : chacun part en courriels et en
+ * textos.
  */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { token } = await ctx.params;
@@ -30,6 +32,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (full.sub.status !== "active") return NextResponse.json({ ok: false, error: "ended" }, { status: 409 });
   const visit = full.visits.find((v) => v.id === parsed.data.visitId);
   if (!visit) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+  if (!(await clientChangeAllowed(full, visit))) {
+    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
 
   try {
     if (parsed.data.action === "cancel") {
