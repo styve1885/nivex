@@ -7,6 +7,7 @@ import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/l
 import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
 import { smsConfigured } from "@/lib/sms";
+import { getDict } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function AdminPage({
       currency: b.currency, firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
-      subscription: Boolean(b.subscriptionId),
+      subscription: Boolean(b.subscriptionId), done: Boolean(b.doneAt),
       origin: {
         heardFrom: b.origin.heardFrom,
         heardFromLabel: heardFromText(b.origin),
@@ -77,6 +78,8 @@ export default async function AdminPage({
         connected: sp.connected === "1",
         missingScopes: sp.warn === "missing_scopes" ? (sp.scopes ?? "").split(",").filter(Boolean) : [],
       }}
+      greeting={greetingAt(new Date(), settings.timezone)}
+      zoneText={getDict("fr").zoneText}
     />
   );
 }
@@ -90,4 +93,20 @@ async function probeGoogle(connected: boolean): Promise<{ usable: boolean; reaso
     const code = e instanceof GoogleError ? /"error"\s*:\s*"([a-z_]+)"/i.exec(e.body)?.[1] ?? null : null;
     return { usable: false, reason: code ?? "unknown" };
   }
+}
+
+/**
+ * Le mot d'accueil, à l'heure de la maison.
+ *
+ * Décidé ici, une seule fois : calculé dans le navigateur, il suivait
+ * l'horloge de l'appareil pendant que le serveur, en UTC, en rendait un
+ * autre, et React jetait la page reçue pour la refaire. Un fuseau illisible
+ * retombe sur celui de Montréal plutôt que de faire tomber la page.
+ */
+function greetingAt(now: Date, timeZone: string): string {
+  const hourIn = (tz: string) => Number(new Intl.DateTimeFormat("fr-CA", { hour: "numeric", hourCycle: "h23", timeZone: tz })
+    .formatToParts(now).find((p) => p.type === "hour")?.value);
+  let hour: number;
+  try { hour = hourIn(timeZone || "America/Toronto"); } catch { hour = hourIn("America/Toronto"); }
+  return hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
 }

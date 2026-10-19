@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import {
-  PREFIX_RE, googleList, policyProblems, prefixUses, servedText, thresholdText,
+  POLICY_LIMITS, PREFIX_RE, googleList, policyProblems, prefixUses, servedText, thresholdText,
   type Sector, type Zone, type ZonePolicy,
 } from "@/lib/travel";
-import { getDict } from "@/lib/i18n";
 import { Card, Toggle } from "./SettingsPanel";
+import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
+import { dollarsText, hoursText, parseDollars, parseHours } from "./inputs";
+import { useReportUnsaved } from "./unsaved";
 
 /*
  * L'onglet « Zones et frais ».
@@ -20,8 +24,19 @@ import { Card, Toggle } from "./SettingsPanel";
 
 type HistoryEntry = { at: string; summary: string; author: string | null };
 type Confirm = { kind: "sector" | "zone"; key: string } | null;
+/** Les trois phrases de la zone desservie, passées par la page : le
+    dictionnaire entier n'a rien à faire dans le JavaScript de l'espace artisan. */
+type ZoneText = { served: string; montreal: string; none: string };
 
 const RED = "text-[#8E332C]";
+
+/* Une fiche d'établissement Google accepte vingt zones desservies au plus. */
+const GOOGLE_AREAS = 20;
+
+/* Après un choix dans une confirmation ou un déplacement, le focus va là où
+   l'on reprend. Sans cela, il retombait en haut de la page, le bouton pressé
+   ayant disparu ou s'étant désactivé sous le doigt. */
+const refocus = (id: string) => document.getElementById(id)?.focus();
 
 /** « J4K, j4l  J4M » → les préfixes valides, et ce qui ne l'est pas. */
 function parsePrefixes(text: string): { valid: string[]; invalid: string[] } {
@@ -42,7 +57,12 @@ function feeSummary(z: Zone): string {
   return `${dollars(z.shortFeeCents)} sous ${thresholdText(z.thresholdMinutes, "fr")}, ${dollars(z.longFeeCents)} à partir de ${thresholdText(z.thresholdMinutes, "fr")}`;
 }
 
-export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
+export function ZonesPanel({ initial, zoneText, onDirty }: {
+  initial: ZonePolicy;
+  zoneText: ZoneText;
+  /** Prévenu quand des modifications attendent : le tableau de bord garde alors l'onglet en vie. */
+  onDirty?: (dirty: boolean) => void;
+}) {
   const [policy, setPolicy] = useState<ZonePolicy>(initial);
   const [saved, setSaved] = useState<ZonePolicy>(initial);
   const [texts, setTexts] = useState<Record<string, string>>(() => prefixTexts(initial));
@@ -51,22 +71,32 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string; lines?: string[] } | null>(null);
   const [copy, setCopy] = useState<{ text: string; done: boolean } | null>(null);
+  const [read, setRead] = useState<"pending" | "ok" | LoadError>("pending");
+  const [attempt, setAttempt] = useState(0);
+  const router = useRouter();
 
   /* La grille relue à l'ouverture de l'onglet, avec l'historique : la page a
-     pu rester ouverte pendant qu'on enregistrait depuis le téléphone. */
+     pu rester ouverte pendant qu'on enregistrait depuis le téléphone.
+     Tant qu'elle n'est pas relue, rien ne s'enregistre : la copie reçue au
+     chargement de la page peut dater d'avant un enregistrement, et l'écrire
+     par-dessus le déferait. Une lecture manquée se dit, au lieu de laisser
+     cette copie s'afficher comme « Tout est enregistré ». */
   useEffect(() => {
     let off = false;
     fetch("/api/admin/zones", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (off || !d.ok) return;
+      .then(async (r) => ({ status: r.status, d: await r.json().catch(() => null) }))
+      .then(({ status, d }) => {
+        if (off) return;
+        if (!d?.ok) { setRead(loadErrorOf(status)); return; }
         setPolicy(d.policy); setSaved(d.policy); setTexts(prefixTexts(d.policy)); setHistory(d.history);
+        setRead("ok");
       })
-      .catch(() => { if (!off) setHistory([]); });
+      .catch(() => { if (!off) setRead("server"); });
     return () => { off = true; };
-  }, []);
+  }, [attempt]);
 
   const dirty = JSON.stringify(policy) !== JSON.stringify(saved);
+  useReportUnsaved(dirty, onDirty);
   const uses = useMemo(() => prefixUses(policy), [policy]);
   const problems = useMemo(() => policyProblems(policy), [policy]);
   const invalidTokens = policy.sectors.flatMap((s) => parsePrefixes(texts[s.key] ?? "").invalid);
@@ -84,21 +114,31 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
   }
 
   function addZone() {
-    /* « Zone D » après A, B et C : la première lettre que personne ne porte. */
+    /* « Zone D » après A, B et C : la première lettre que personne ne porte.
+       Le nom anglais reste vide, et suit donc le nom français, renommage
+       compris. */
     const pris = new Set(policy.zones.map((z) => z.nameFr.trim().toUpperCase()));
     const lettre = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").find((l) => !pris.has(`ZONE ${l}`)) ?? "";
     change({
       ...policy,
       zones: [...policy.zones, {
-        key: newKey("zone"), nameFr: `Zone ${lettre}`.trim(), nameEn: `Zone ${lettre}`.trim(),
+        key: newKey("zone"), nameFr: `Zone ${lettre}`.trim(), nameEn: "",
         shortFeeCents: 0, longFeeCents: 0, thresholdMinutes: 180,
       }],
     });
   }
 
   function removeZone(key: string) {
-    change({ ...policy, zones: policy.zones.filter((z) => z.key !== key) });
-    setConfirm(null);
+    flushSync(() => {
+      change({ ...policy, zones: policy.zones.filter((z) => z.key !== key) });
+      setConfirm(null);
+    });
+    refocus("add-zone");
+  }
+
+  function keepZone(key: string) {
+    flushSync(() => setConfirm(null));
+    refocus(`del-zone-${key}`);
   }
 
   /* ————— Secteurs ————— */
@@ -139,8 +179,17 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
   }
 
   function removeSector(key: string) {
-    change({ ...policy, sectors: policy.sectors.filter((s) => s.key !== key) });
-    setConfirm(null);
+    const zoneKey = policy.sectors.find((s) => s.key === key)?.zoneKey;
+    flushSync(() => {
+      change({ ...policy, sectors: policy.sectors.filter((s) => s.key !== key) });
+      setConfirm(null);
+    });
+    refocus(`add-sector-${zoneKey}`);
+  }
+
+  function keepSector(key: string) {
+    flushSync(() => setConfirm(null));
+    refocus(`del-sector-${key}`);
   }
 
   /* ————— Copie pour Google ————— */
@@ -160,6 +209,7 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
   /* ————— Enregistrement ————— */
 
   async function save() {
+    if (read !== "ok") return;
     if (invalidTokens.length || problems.length) {
       setMessage({ tone: "error", text: "Corrigez les points signalés en rouge avant d'enregistrer." });
       return;
@@ -172,12 +222,21 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ policy }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setMessage({ tone: "error", text: "L'enregistrement a été refusé.", lines: data.problems ?? [] });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        /* Un refus dit pourquoi : la session expirée et la panne du serveur ne
+           se lisent pas comme une grille fautive. */
+        setMessage(res.status === 401
+          ? { tone: "error", text: "Votre session a expiré. Reconnectez-vous dans un autre onglet, puis enregistrez de nouveau ici : vos modifications restent dans celui-ci." }
+          : data?.problems?.length
+            ? { tone: "error", text: "L'enregistrement a été refusé.", lines: data.problems }
+            : { tone: "error", text: "Le serveur n'a pas pu enregistrer la grille. Réessayez dans un instant." });
         return;
       }
       setPolicy(data.policy); setSaved(data.policy); setTexts(prefixTexts(data.policy)); setHistory(data.history);
+      /* Le tableau de bord relit ses réglages : un onglet rouvert repart de la
+         grille enregistrée, pas de celle du chargement de la page. */
+      router.refresh();
       setMessage({
         tone: "ok",
         text: data.changes.length
@@ -210,8 +269,29 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
 
   const activeCount = policy.sectors.filter((s) => s.enabled && policy.zones.some((z) => z.key === s.zoneKey)).length;
 
+  /* Au-delà de vingt lignes, la fiche Google refuse les dernières : la liste
+     et la fiche ne disent plus la même chose, et l'artisan doit le savoir. */
+  const copied = copy ? copy.text.split("\n").filter(Boolean) : [];
+  const beyond = copied.slice(GOOGLE_AREAS);
+
   return (
     <div className="space-y-10">
+      {read === "session" && (
+        <LoadFailure error="session" className="border border-[#B4453C]/40 bg-[#B4453C]/5 px-5 py-4" />
+      )}
+      {read === "server" && (
+        <div role="alert" className="border border-[#B4453C]/40 bg-[#B4453C]/5 px-5 py-4 text-[0.85rem] leading-relaxed text-[#8E332C]">
+          <p>
+            La grille enregistrée n&apos;a pas pu être relue. Ce qui s&apos;affiche date du chargement de la page,
+            et rien ne s&apos;enregistrera tant qu&apos;elle n&apos;aura pas été relue.
+          </p>
+          <button type="button" onClick={() => { setRead("pending"); setAttempt((n) => n + 1); }}
+            className="mt-2 underline underline-offset-4">
+            Relire la grille
+          </button>
+        </div>
+      )}
+
       {/* — Résumé et copie pour Google — */}
       <Card title="Secteurs desservis"
         hint="Un code postal est reconnu à ses trois premiers caractères. Hors de tout secteur actif, la réservation en ligne est impossible et le client est invité à appeler. Les frais s'ajoutent au prix de chaque visite, abonnés compris, et ne sont jamais réduits par la première heure offerte.">
@@ -220,7 +300,7 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
         </p>
         <p className="mt-3 border-l-2 border-gold-400 bg-linen-100 px-4 py-3 text-[0.82rem] font-light leading-relaxed text-ink-500">
           <span className="mb-1 block text-[10px] uppercase tracking-[0.16em] text-ink-400">Texte affiché sur le site</span>
-          {servedText(policy, "fr", getDict("fr").zoneText)}
+          {servedText(policy, "fr", zoneText)}
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-4">
           <button type="button" onClick={copyForGoogle} className="btn !py-2.5 !px-5 !text-[10px]">
@@ -228,10 +308,18 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
           </button>
           {copy?.done && (
             <span role="status" className="text-[0.8rem] text-gold-700">
-              {copy.text.split("\n").filter(Boolean).length} secteurs copiés, un par ligne{dirty ? " (y compris les changements non enregistrés)" : ""}.
+              {copied.length} secteurs copiés, un par ligne{dirty ? " (y compris les changements non enregistrés)" : ""}.
             </span>
           )}
         </div>
+        {beyond.length > 0 && (
+          <p className={`mt-3 text-[0.8rem] leading-relaxed ${RED}`}>
+            Une fiche Google accepte {GOOGLE_AREAS} zones desservies au plus :{" "}
+            {beyond.length === 1
+              ? `la dernière ligne (${beyond[0]}) ne pourra pas y être ajoutée ; le site, lui, continue de desservir ce secteur.`
+              : `les ${beyond.length} dernières lignes (${beyond.join(", ")}) ne pourront pas y être ajoutées ; le site, lui, continue de desservir ces secteurs.`}
+          </p>
+        )}
         {copy && !copy.done && (
           <div className="mt-4">
             <p className="text-[0.8rem] text-ink-500">Le navigateur a refusé la copie. Sélectionnez la liste et copiez-la à la main :</p>
@@ -253,27 +341,29 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="label" htmlFor={`zfr-${z.key}`}>Nom (français)</label>
-                    <input id={`zfr-${z.key}`} value={z.nameFr} onChange={(e) => setZone(z.key, { nameFr: e.target.value })} className="field" />
+                    <input id={`zfr-${z.key}`} value={z.nameFr} maxLength={POLICY_LIMITS.nameLength}
+                      onChange={(e) => setZone(z.key, { nameFr: e.target.value })} className="field" />
                   </div>
                   <div>
                     <label className="label" htmlFor={`zen-${z.key}`}>Nom (anglais)</label>
-                    <input id={`zen-${z.key}`} value={z.nameEn} placeholder={z.nameFr}
+                    <input id={`zen-${z.key}`} value={z.nameEn} placeholder={z.nameFr} maxLength={POLICY_LIMITS.nameLength}
                       onChange={(e) => setZone(z.key, { nameEn: e.target.value })} className="field" />
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <Dollars id={`zs-${z.key}`} label={`Sous ${thresholdText(z.thresholdMinutes, "fr")}`}
-                    cents={z.shortFeeCents} onChange={(c) => setZone(z.key, { shortFeeCents: c })} />
-                  <Dollars id={`zl-${z.key}`} label={`${thresholdText(z.thresholdMinutes, "fr")} ou plus`}
-                    cents={z.longFeeCents} onChange={(c) => setZone(z.key, { longFeeCents: c })} />
+                  <Amount id={`zs-${z.key}`} label={`Sous ${thresholdText(z.thresholdMinutes, "fr")}`} unit="$"
+                    value={z.shortFeeCents} format={dollarsText} parse={parseDollars}
+                    invalid="Montant illisible : tapez par exemple 15 ou 12,50."
+                    onChange={(c) => setZone(z.key, { shortFeeCents: c })} />
+                  <Amount id={`zl-${z.key}`} label={`${thresholdText(z.thresholdMinutes, "fr")} ou plus`} unit="$"
+                    value={z.longFeeCents} format={dollarsText} parse={parseDollars}
+                    invalid="Montant illisible : tapez par exemple 15 ou 12,50."
+                    onChange={(c) => setZone(z.key, { longFeeCents: c })} />
                   <div className="col-span-2 sm:col-span-1">
-                    <label className="label" htmlFor={`zt-${z.key}`}>Seuil</label>
-                    <div className="flex items-center gap-2">
-                      <input id={`zt-${z.key}`} type="number" min={0.5} max={16} step={0.5} value={z.thresholdMinutes / 60}
-                        onChange={(e) => setZone(z.key, { thresholdMinutes: Math.round((Number(e.target.value) || 0) * 60) })}
-                        className="field !w-24 text-center tabular-nums" />
-                      <span className="text-[11px] text-ink-400">heures</span>
-                    </div>
+                    <Amount id={`zt-${z.key}`} label="Seuil" unit="heures"
+                      value={z.thresholdMinutes} format={hoursText} parse={parseHours}
+                      invalid="Durée illisible : tapez par exemple 3, 2,5 ou 2 h 30."
+                      onChange={(m) => setZone(z.key, { thresholdMinutes: m })} />
                   </div>
                 </div>
                 <p className="mt-3 text-[11px] text-ink-400">
@@ -282,9 +372,9 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
 
                 {confirm?.kind === "zone" && confirm.key === z.key ? (
                   <ConfirmBox text={`Supprimer « ${z.nameFr || "cette zone"} » ? Elle disparaît à l'enregistrement.`}
-                    onYes={() => removeZone(z.key)} onNo={() => setConfirm(null)} />
+                    onYes={() => removeZone(z.key)} onNo={() => keepZone(z.key)} />
                 ) : count === 0 ? (
-                  <button type="button" onClick={() => setConfirm({ kind: "zone", key: z.key })}
+                  <button type="button" id={`del-zone-${z.key}`} onClick={() => setConfirm({ kind: "zone", key: z.key })}
                     className="mt-3 text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-[#8E332C]">
                     Supprimer cette zone
                   </button>
@@ -295,7 +385,7 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
             );
           })}
         </ul>
-        <button type="button" onClick={addZone}
+        <button type="button" id="add-zone" onClick={addZone}
           className="mt-5 border border-gold-400/70 px-4 py-2.5 text-[10px] uppercase tracking-[0.16em] text-gold-700 transition-colors hover:bg-linen-100">
           Créer une zone
         </button>
@@ -326,11 +416,11 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
                       onShift={(d) => shift(s.key, d)}
                       onAskDelete={() => setConfirm({ kind: "sector", key: s.key })}
                       onDelete={() => removeSector(s.key)}
-                      onCancel={() => setConfirm(null)} />
+                      onCancel={() => keepSector(s.key)} />
                   ))}
                 </ul>
                 {list.length === 0 && <p className="mt-4 text-[0.82rem] text-ink-400">Aucun secteur dans cette zone.</p>}
-                <button type="button" onClick={() => addSector(z.key)}
+                <button type="button" id={`add-sector-${z.key}`} onClick={() => addSector(z.key)}
                   className="mt-4 text-[10px] uppercase tracking-[0.16em] text-gold-700 underline decoration-gold-300 underline-offset-4 hover:text-gold-600">
                   Ajouter un secteur en {z.nameFr || "cette zone"}
                 </button>
@@ -342,7 +432,11 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
 
       {/* — Historique — */}
       <Card title="Historique des modifications">
-        {history === null && <p className="text-[0.85rem] text-ink-400">Chargement…</p>}
+        {history === null && (
+          <p className="text-[0.85rem] text-ink-400">
+            {read === "pending" ? "Chargement…" : "Historique indisponible : la grille n'a pas pu être relue."}
+          </p>
+        )}
         {history !== null && historyGroups.length === 0 && <p className="text-[0.85rem] text-ink-400">Aucune modification enregistrée.</p>}
         <ol className="space-y-5">
           {historyGroups.map((g) => (
@@ -373,9 +467,11 @@ export function ZonesPanel({ initial }: { initial: ZonePolicy }) {
                 {message.text}
                 {message.lines?.map((l) => <span key={l} className="mt-1 block">{l}</span>)}
               </span>
-            ) : dirty ? "Modifications non enregistrées." : "Tout est enregistré."}
+            ) : read === "pending" ? "Lecture de la grille enregistrée…"
+              : read !== "ok" ? <span className={RED}>Enregistrement impossible tant que la grille n&apos;a pas été relue.</span>
+              : dirty ? "Modifications non enregistrées." : "Tout est enregistré."}
           </div>
-          <button onClick={save} disabled={saving || !dirty} className="btn flex-none !py-3 !px-7 !text-[10px] disabled:opacity-40">
+          <button onClick={save} disabled={saving || !dirty || read !== "ok"} className="btn flex-none !py-3 !px-7 !text-[10px] disabled:opacity-40">
             {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
@@ -423,29 +519,46 @@ function SectorRow({ s, zones, text, first, last, alerts, confirming, onChange, 
   onShift: (d: -1 | 1) => void; onAskDelete: () => void; onDelete: () => void; onCancel: () => void;
 }) {
   const nom = s.nameFr || "ce secteur";
+  const up = useRef<HTMLButtonElement>(null);
+  const down = useRef<HTMLButtonElement>(null);
+
+  /* Le bouton pressé se désactive en arrivant en tête ou en fin de zone, et
+     la ligne déplacée peut perdre le focus : on le rend au bouton pressé, ou
+     à l'autre flèche s'il ne peut plus servir. */
+  function move(d: -1 | 1) {
+    flushSync(() => onShift(d));
+    const pressed = d < 0 ? up.current : down.current;
+    const other = d < 0 ? down.current : up.current;
+    (pressed && !pressed.disabled ? pressed : other)?.focus();
+  }
+
   return (
     <li className={`border p-4 transition-colors ${s.enabled ? "border-gold-300/50 bg-linen-50" : "border-gold-300/30 bg-linen-100/50"}`}>
       <div className="flex items-center justify-between gap-3">
+        {/* L'interrupteur porte le nom du secteur : « Actif », lu vingt fois de
+            suite, ne disait pas lequel. Le mot visible reste l'état. */}
         <label className="flex cursor-pointer items-center gap-3">
-          <Toggle small checked={s.enabled} onChange={(v) => onChange({ enabled: v })} />
+          <Toggle small checked={s.enabled} onChange={(v) => onChange({ enabled: v })}
+            label={`Secteur ${s.nameFr.trim() || "sans nom"} actif`} />
           <span className={`text-[11px] uppercase tracking-[0.14em] ${s.enabled ? "text-gold-700" : "text-ink-400"}`}>
             {s.enabled ? "Actif" : "Inactif"}
           </span>
         </label>
         <div className="flex items-center gap-1">
-          <IconButton label={`Monter ${nom}`} disabled={first} onClick={() => onShift(-1)}>↑</IconButton>
-          <IconButton label={`Descendre ${nom}`} disabled={last} onClick={() => onShift(1)}>↓</IconButton>
+          <IconButton ref={up} label={`Monter ${nom}`} disabled={first} onClick={() => move(-1)}>↑</IconButton>
+          <IconButton ref={down} label={`Descendre ${nom}`} disabled={last} onClick={() => move(1)}>↓</IconButton>
         </div>
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label" htmlFor={`sfr-${s.key}`}>Nom (français)</label>
-          <input id={`sfr-${s.key}`} value={s.nameFr} onChange={(e) => onChange({ nameFr: e.target.value })} className="field" />
+          <input id={`sfr-${s.key}`} value={s.nameFr} maxLength={POLICY_LIMITS.nameLength}
+            onChange={(e) => onChange({ nameFr: e.target.value })} className="field" />
         </div>
         <div>
           <label className="label" htmlFor={`sen-${s.key}`}>Nom (anglais)</label>
-          <input id={`sen-${s.key}`} value={s.nameEn} placeholder={s.nameFr}
+          <input id={`sen-${s.key}`} value={s.nameEn} placeholder={s.nameFr} maxLength={POLICY_LIMITS.nameLength}
             onChange={(e) => onChange({ nameEn: e.target.value })} className="field" />
         </div>
       </div>
@@ -476,7 +589,7 @@ function SectorRow({ s, zones, text, first, last, alerts, confirming, onChange, 
       {confirming ? (
         <ConfirmBox text={`Supprimer « ${nom} » ? Le secteur disparaît du site à l'enregistrement.`} onYes={onDelete} onNo={onCancel} />
       ) : (
-        <button type="button" onClick={onAskDelete}
+        <button type="button" id={`del-sector-${s.key}`} onClick={onAskDelete}
           className="mt-3 text-[10px] uppercase tracking-[0.16em] text-ink-400 transition-colors hover:text-[#8E332C]">
           Supprimer
         </button>
@@ -487,17 +600,28 @@ function SectorRow({ s, zones, text, first, last, alerts, confirming, onChange, 
 
 /* ————— Primitives ————— */
 
-/** Une confirmation dans la page : pas de boîte du navigateur, qui se perd sur un téléphone. */
+/**
+ * Une confirmation dans la page : pas de boîte du navigateur, qui se perd sur un téléphone.
+ *
+ * Elle remplace le bouton « Supprimer » qui l'a ouverte : le focus y entre
+ * donc aussitôt, sur « Annuler », le choix sans conséquence — deux appuis
+ * trop rapides sur Entrée ne suppriment rien. Le lecteur d'écran annonce la
+ * question avec elle.
+ */
 function ConfirmBox({ text, onYes, onNo }: { text: string; onYes: () => void; onNo: () => void }) {
+  const cancel = useRef<HTMLButtonElement>(null);
+  const textId = useId();
+  useEffect(() => { cancel.current?.focus(); }, []);
   return (
-    <div role="alertdialog" aria-label="Confirmer la suppression" className="mt-3 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3">
-      <p className={`text-[0.82rem] leading-relaxed ${RED}`}>{text}</p>
+    <div role="alertdialog" aria-label="Confirmer la suppression" aria-describedby={textId}
+      className="mt-3 border border-[#B4453C]/40 bg-[#B4453C]/5 px-4 py-3">
+      <p id={textId} className={`text-[0.82rem] leading-relaxed ${RED}`}>{text}</p>
       <div className="mt-3 flex flex-wrap gap-3">
         <button type="button" onClick={onYes}
           className="border border-[#8E332C] bg-[#8E332C] px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-linen-50 transition-opacity hover:opacity-90">
           Oui, supprimer
         </button>
-        <button type="button" onClick={onNo}
+        <button type="button" ref={cancel} onClick={onNo}
           className="border border-gold-400/70 px-4 py-2 text-[10px] uppercase tracking-[0.16em] text-ink-600 transition-colors hover:bg-linen-100">
           Annuler
         </button>
@@ -506,28 +630,50 @@ function ConfirmBox({ text, onYes, onNo }: { text: string; onYes: () => void; on
   );
 }
 
-function IconButton({ label, disabled, onClick, children }: {
+function IconButton({ ref, label, disabled, onClick, children }: {
+  ref?: React.Ref<HTMLButtonElement>;
   label: string; disabled: boolean; onClick: () => void; children: React.ReactNode;
 }) {
   return (
-    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick}
+    <button type="button" ref={ref} aria-label={label} title={label} disabled={disabled} onClick={onClick}
       className="flex h-9 w-9 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:bg-linen-100 disabled:opacity-30">
       {children}
     </button>
   );
 }
 
-/** Un montant saisi en dollars, conservé en cents. */
-function Dollars({ id, label, cents, onChange }: { id: string; label: string; cents: number; onChange: (c: number) => void }) {
+/**
+ * Un nombre saisi comme on l'écrit : un montant en dollars, gardé en cents,
+ * ou un seuil en heures, gardé en minutes.
+ *
+ * Le texte tapé reste tel quel pendant la saisie, et seule une valeur lisible
+ * part dans la grille — les bornes, elles, sont signalées en rouge par
+ * `policyProblems`, comme le reste. En quittant le champ, il se remet au
+ * propre et montre exactement ce qui sera enregistré.
+ */
+function Amount({ id, label, unit, value, format, parse, invalid, onChange }: {
+  id: string; label: string; unit: string; value: number;
+  format: (v: number) => string; parse: (text: string) => number | null;
+  invalid: string; onChange: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const bad = draft !== null && parse(draft) === null;
   return (
     <div>
       <label className="label" htmlFor={id}>{label}</label>
       <div className="flex items-center gap-2">
-        <input id={id} type="number" min={0} max={500} step={1} value={Math.round(cents / 100)}
-          onChange={(e) => onChange(Math.max(0, Math.min(500, Math.round(Number(e.target.value) || 0))) * 100)}
+        <input id={id} type="text" inputMode="decimal" autoComplete="off" value={draft ?? format(value)}
+          aria-invalid={bad || undefined} aria-describedby={bad ? `${id}-bad` : undefined}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            const v = parse(e.target.value);
+            if (v !== null) onChange(v);
+          }}
+          onBlur={() => setDraft(null)}
           className="field !w-24 text-center tabular-nums" />
-        <span className="text-[11px] text-ink-400">$</span>
+        <span className="text-[11px] text-ink-400">{unit}</span>
       </div>
+      {bad && <p id={`${id}-bad`} className={`mt-1 text-[11px] leading-snug ${RED}`}>{invalid}</p>}
     </div>
   );
 }

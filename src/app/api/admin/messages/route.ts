@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDbConfigured } from "@/lib/db";
 import { requireOwner } from "@/lib/session";
 import { listMessages, markRead } from "@/lib/messages";
 
@@ -7,7 +8,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
-  const messages = await listMessages().catch(() => []);
+  /* Une base qui ne répond pas n'est pas une boîte vide : l'onglet doit
+     pouvoir dire « lecture impossible » plutôt que « aucun message ». Sans
+     base du tout (poste de développement), il n'y a rien à lire. */
+  let messages: Awaited<ReturnType<typeof listMessages>>;
+  try {
+    messages = isDbConfigured() ? await listMessages() : [];
+  } catch (e) {
+    console.error("[nivex] messages illisibles :", e);
+    return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
+  }
   return NextResponse.json({
     ok: true,
     messages: messages.map((m) => ({

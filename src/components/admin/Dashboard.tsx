@@ -28,7 +28,7 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 export function Dashboard({
-  session, settings, upcoming, past, stats, env, link, flash,
+  session, settings, upcoming, past, stats, env, link, flash, greeting, zoneText,
 }: {
   session: { email: string; name: string | null; picture: string | null };
   settings: Settings;
@@ -38,6 +38,9 @@ export function Dashboard({
   env: { database: boolean; google: boolean; sms: boolean; origin: string };
   link: GoogleLink;
   flash: { connected: boolean; missingScopes: string[] };
+  /** « Bonjour », « Bon après-midi » ou « Bonsoir », décidé par le serveur à l'heure de la maison. */
+  greeting: string;
+  zoneText: { served: string; montreal: string; none: string };
 }) {
   /* Le lien est rompu quand le compte est bien enregistré mais que Google
      refuse le jeton : c'est le cas silencieux, celui qu'il faut montrer
@@ -46,14 +49,37 @@ export function Dashboard({
   const [tab, setTab] = useState<Tab>(broken ? "connection" : settings.connected ? "bookings" : "connection");
   const [dismissed, setDismissed] = useState(false);
 
+  /* Les deux onglets qui portent un brouillon ne s'effacent pas quand on en
+     sort. Réglages, une fois ouvert, reste en vie : rouvert depuis les
+     réglages du chargement de la page, il renvoyait ceux-ci au prochain
+     enregistrement, pause levée et ancien tarif compris. Zones et frais reste
+     en vie tant qu'il a des modifications en cours ; propre, il se referme,
+     et se relit à la prochaine ouverture. */
+  const [settingsOpened, setSettingsOpened] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [zonesDirty, setZonesDirty] = useState(false);
+  const unsaved = settingsDirty || zonesDirty;
+
+  function open(next: Tab) {
+    setTab(next);
+    if (next === "settings") setSettingsOpened(true);
+  }
+
   /* Un navigateur où l'artisan ouvre son espace est le sien : ses passages
      sur le site ne se comptent plus, ni au journal, ni chez l'hébergeur. */
   useEffect(() => { setOptedOut(true); }, []);
 
+  /* Fermer l'onglet, recharger la page ou se déconnecter avec des
+     modifications en attente : le navigateur demande d'abord. */
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
+
   const unsent = [...upcoming, ...past].filter((b) => b.status !== "cancelled" && !b.emailSent);
   const firstName = (session.name ?? session.email).split(" ")[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10 sm:px-10 sm:py-14">
@@ -66,7 +92,15 @@ export function Dashboard({
           </div>
         </div>
         <div className="flex items-center gap-5">
-          <Link href="/fr" className="text-[10px] uppercase tracking-[0.18em] text-ink-400 transition-colors hover:text-gold-600">
+          {/* Une navigation dans l'application : le navigateur ne prévient pas
+              lui-même, il faut donc demander ici avant de perdre un brouillon. */}
+          <Link href="/fr"
+            onNavigate={(e) => {
+              if (unsaved && !window.confirm("Des modifications ne sont pas enregistrées. Quitter l'espace artisan sans les enregistrer ?")) {
+                e.preventDefault();
+              }
+            }}
+            className="text-[10px] uppercase tracking-[0.18em] text-ink-400 transition-colors hover:text-gold-600">
             Voir le site
           </Link>
           <form action="/api/auth/logout" method="POST">
@@ -86,7 +120,7 @@ export function Dashboard({
             ? upcoming.length > 0
               ? `Vous avez ${upcoming.length} rendez-vous à venir.`
               : "Aucun rendez-vous à venir pour l'instant. Votre site accepte les réservations."
-            : "Il reste une étape : brancher votre compte Google pour ouvrir les réservations."}
+            : "Il reste une étape : brancher votre compte Google, pour que les courriels partent et que chaque rendez-vous s'inscrive à votre agenda."}
         </p>
       </div>
 
@@ -124,11 +158,14 @@ export function Dashboard({
         </div>
       )}
 
+      {/* Seule la pause ferme les réservations : sans Google, elles restent
+          ouvertes, et c'est ce qu'il faut savoir. */}
       {!settings.connected && (
         <div className="mt-8 border border-gold-400/60 bg-linen-50 px-6 py-5">
-          <p className="text-[0.92rem] text-ink-800">Les réservations en ligne sont fermées.</p>
+          <p className="text-[0.92rem] text-ink-800">Google n&apos;est pas branché.</p>
           <p className="mt-1 text-[0.82rem] leading-relaxed text-ink-500">
-            Tant que Google n&apos;est pas branché, le formulaire affiche votre numéro de téléphone au lieu du calendrier.
+            Les réservations en ligne restent ouvertes, mais aucun courriel ne part et rien ne s&apos;inscrit à votre
+            agenda. Pour fermer la prise de rendez-vous, utilisez la pause dans l&apos;onglet Réglages.
           </p>
           <a href="/api/auth/google" className="btn mt-5 !py-3 !px-6 !text-[10px]">Brancher Google</a>
         </div>
@@ -140,15 +177,24 @@ export function Dashboard({
           La barre défile donc latéralement, et rien ne se perd. */}
       <nav className="mt-10 flex gap-7 overflow-x-auto border-b border-gold-300/40 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         aria-label="Sections">
-        {TABS.map((x) => (
-          <button key={x.key} onClick={() => setTab(x.key)}
-            className={`relative flex-none whitespace-nowrap pb-3 text-[11px] uppercase tracking-[0.18em] transition-colors ${
-              tab === x.key ? "text-ink-800" : "text-ink-400 hover:text-ink-600"
-            }`}>
-            {x.label}
-            {tab === x.key && <span className="absolute inset-x-0 -bottom-px h-px bg-gold-500" />}
-          </button>
-        ))}
+        {TABS.map((x) => {
+          const pending = (x.key === "settings" && settingsDirty) || (x.key === "zones" && zonesDirty);
+          return (
+            <button key={x.key} onClick={() => open(x.key)} aria-pressed={tab === x.key}
+              className={`relative flex-none whitespace-nowrap pb-3 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                tab === x.key ? "text-ink-800" : "text-ink-400 hover:text-ink-600"
+              }`}>
+              {x.label}
+              {pending && (
+                <>
+                  <span aria-hidden="true" className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-gold-500 align-middle" />
+                  <span className="sr-only"> (modifications non enregistrées)</span>
+                </>
+              )}
+              {tab === x.key && <span className="absolute inset-x-0 -bottom-px h-px bg-gold-500" />}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="mt-10">
@@ -161,8 +207,16 @@ export function Dashboard({
         )}
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
         {tab === "visits" && <VisitsPanel />}
-        {tab === "settings" && <SettingsPanel initial={settings} />}
-        {tab === "zones" && <ZonesPanel initial={settings.zonePolicy} />}
+        {(tab === "settings" || settingsOpened) && (
+          <div hidden={tab !== "settings"}>
+            <SettingsPanel initial={settings} onDirty={setSettingsDirty} />
+          </div>
+        )}
+        {(tab === "zones" || zonesDirty) && (
+          <div hidden={tab !== "zones"}>
+            <ZonesPanel initial={settings.zonePolicy} zoneText={zoneText} onDirty={setZonesDirty} />
+          </div>
+        )}
         {tab === "connection" && (
           <ConnectionPanel settings={settings} session={session} env={env} link={link} missingScopes={flash.missingScopes} />
         )}

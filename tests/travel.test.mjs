@@ -236,6 +236,67 @@ test("plus aucun secteur actif : refusé, sinon plus personne ne réserve", () =
   assert.match(policyProblems(p).join("\n"), /Au moins un secteur doit rester actif/);
 });
 
+/* Les bornes que le serveur refuse se signalent pendant la saisie, en
+   nommant le secteur ou la zone : un refus en bloc, à l'enregistrement, ne
+   disait pas où chercher. */
+const { POLICY_LIMITS } = await import("../src/lib/travel.ts");
+
+test("les bornes du serveur se signalent pendant la saisie, avec le nom en cause", () => {
+  assert.deepEqual(policyProblems(P), [], "la grille par défaut les respecte");
+
+  const p = clone(P);
+  const lettres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const trop = Array.from({ length: POLICY_LIMITS.prefixesPerSector + 1 }, (_, i) => `H${Math.floor(i / 26)}${lettres[i % 26]}`);
+  p.sectors.push({ key: "ile", nameFr: "Île de Montréal", nameEn: "", prefixes: trop, zoneKey: "b", enabled: false });
+  assert.deepEqual(policyProblems(p), ["Île de Montréal : 61 préfixes, pour 60 au plus. Répartissez-les entre plusieurs secteurs."]);
+
+  const q = clone(P);
+  q.zones[1].longFeeCents = POLICY_LIMITS.feeCents + 1;
+  q.sectors[0].nameEn = "x".repeat(POLICY_LIMITS.nameLength + 1);
+  const pb = policyProblems(q).join("\n");
+  assert.match(pb, /Zone B : les frais vont de 0 à 500 \$ par visite/);
+  assert.match(pb, /Saint-Lambert : un nom compte 80 caractères au plus/);
+});
+
+test("un nom anglais laissé vide suit le français, jusque dans le tunnel", () => {
+  const p = clone(P);
+  p.zones[1].nameFr = "Zone Montréal";
+  p.zones[1].nameEn = "";
+  p.sectors.find((s) => s.key === "verdun").nameEn = "";
+  assert.equal(evaluateZone("H4G 1A1", COURT, p).labelEn, "Zone Montréal", "le libellé anglais des frais");
+  assert.ok(sectorNames(p, "en").includes("Verdun"));
+  assert.equal(feeTable(p, "en", (c) => `$${c / 100}`)[1].zone, "Zone Montréal");
+});
+
+/* Ce que l'artisan tape dans l'onglet : virgule ou point, et rien de deviné.
+   Un champ numérique réécrit à chaque touche changeait « 12,50 » en 130 $. */
+const { parseDollars, parseHours, dollarsText, hoursText } = await import("../src/components/admin/inputs.ts");
+
+test("les montants se lisent comme on les tape, au cent près", () => {
+  assert.equal(parseDollars("12,50"), 1250);
+  assert.equal(parseDollars("12.5"), 1250);
+  assert.equal(parseDollars("12 $"), 1200);
+  assert.equal(parseDollars("12,"), 1200, "une saisie en cours reste lisible");
+  assert.equal(parseDollars(""), 0, "un champ vidé vaut zéro, comme avant");
+  assert.equal(parseDollars("12,505"), null, "trois décimales ne se devinent pas");
+  assert.equal(parseDollars("abc"), null);
+  assert.equal(parseDollars("-5"), null);
+  for (const c of [0, 1500, 1250, 99, POLICY_LIMITS.feeCents]) assert.equal(parseDollars(dollarsText(c)), c);
+  assert.equal(dollarsText(1250), "12,50");
+});
+
+test("les seuils se lisent en heures, décimales ou « 2 h 30 »", () => {
+  assert.equal(parseHours("3"), 180);
+  assert.equal(parseHours("2,5"), 150);
+  assert.equal(parseHours("2.5"), 150, "et non 5 h");
+  assert.equal(parseHours("2 h 30"), 150);
+  assert.equal(parseHours("2:30"), 150);
+  assert.equal(parseHours("2."), 120, "une saisie en cours reste lisible");
+  assert.equal(parseHours(""), null, "un seuil vide ne vaut pas zéro");
+  assert.equal(parseHours("2 h 75"), null);
+  for (const m of [30, 150, 180, 135, 960]) assert.equal(parseHours(hoursText(m)), m);
+});
+
 test("l'ordre suit les zones, puis le tableau", () => {
   const p = clone(P);
   const sj = p.sectors.pop();

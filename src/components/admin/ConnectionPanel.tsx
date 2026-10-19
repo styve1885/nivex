@@ -18,9 +18,14 @@ export function ConnectionPanel({
   missingScopes: string[];
 }) {
   const [calendars, setCalendars] = useState<Calendar[] | null>(null);
+  /* Pourquoi la liste des agendas ne vient pas : sans cela, « Lecture de vos
+     agendas… » restait affiché pour toujours, au moment précis où l'artisan
+     ouvre cet onglet pour comprendre ce qui ne va pas. */
+  const [calError, setCalError] = useState<string | null>(null);
   const [calendarId, setCalendarId] = useState(settings.calendarId);
   const [savingCal, setSavingCal] = useState(false);
   const [calSaved, setCalSaved] = useState(false);
+  const [calSaveFailed, setCalSaveFailed] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -32,22 +37,35 @@ export function ConnectionPanel({
   useEffect(() => {
     if (!settings.connected) return;
     fetch("/api/admin/calendars")
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setCalendars(d.calendars); })
-      .catch(() => {});
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (d?.ok) setCalendars(d.calendars);
+        else setCalError(r.status === 401 ? "session" : d?.error ?? "unknown");
+      })
+      .catch(() => setCalError("network"));
   }, [settings.connected]);
 
+  /* Le choix ne s'affiche comme fait qu'une fois enregistré : en cas d'échec,
+     l'ancien agenda revient à l'écran, puisque c'est lui qui reste en usage. */
   async function saveCalendar(id: string) {
+    const before = calendarId;
     setCalendarId(id);
     setSavingCal(true);
     setCalSaved(false);
+    setCalSaveFailed(false);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ calendarId: id }),
       });
-      if (res.ok) { setCalSaved(true); setTimeout(() => setCalSaved(false), 2600); }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCalSaved(true);
+      setTimeout(() => setCalSaved(false), 2600);
+      router.refresh();
+    } catch {
+      setCalendarId(before);
+      setCalSaveFailed(true);
     } finally {
       setSavingCal(false);
     }
@@ -139,7 +157,28 @@ export function ConnectionPanel({
             disparaîtra du site tout seul.
           </p>
 
-          {calendars === null ? (
+          {calendars === null && calError ? (
+            <div role="alert" className="mt-6 text-[0.85rem] leading-relaxed text-[#8E332C]">
+              {calError === "not_connected" ? (
+                <p>Vos agendas sont illisibles tant que le lien avec Google est rompu. Reconnectez le compte.</p>
+              ) : calError === "calendar_error" ? (
+                <>
+                  <p>
+                    Google accepte le jeton mais refuse la liste de vos agendas. C&apos;est le cas lorsque l&apos;accès
+                    à l&apos;agenda a été décoché pendant l&apos;autorisation : réautorisez Google en le laissant coché.
+                  </p>
+                  {/* Une navigation pleine page, pas un Link : le détour OAuth doit
+                      quitter l'application pour revenir avec un jeton. */}
+                  {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                  <a href="/api/auth/google" className="mt-2 inline-block underline underline-offset-4">Réautoriser Google</a>
+                </>
+              ) : calError === "session" ? (
+                <p>Votre session a expiré. Rechargez la page pour vous reconnecter.</p>
+              ) : (
+                <p>La liste de vos agendas n&apos;a pas pu être lue. Rechargez la page dans un instant.</p>
+              )}
+            </div>
+          ) : calendars === null ? (
             <p className="mt-6 text-[0.85rem] text-ink-400">Lecture de vos agendas…</p>
           ) : (
             <ul className="mt-6 space-y-2">
@@ -148,7 +187,7 @@ export function ConnectionPanel({
                   <label className={`flex cursor-pointer items-center gap-3 border px-4 py-3 transition-colors ${
                     calendarId === c.id ? "border-gold-500 bg-linen-100" : "border-gold-300/50 hover:border-gold-400"
                   }`}>
-                    <input type="radio" name="calendar" checked={calendarId === c.id}
+                    <input type="radio" name="calendar" checked={calendarId === c.id} disabled={savingCal}
                       onChange={() => saveCalendar(c.id)} className="accent-[var(--color-gold-500)]" />
                     <span className="h-3 w-3 flex-none rounded-full border border-black/10"
                       style={{ background: c.backgroundColor ?? "var(--color-gold-300)" }} aria-hidden="true" />
@@ -161,6 +200,11 @@ export function ConnectionPanel({
           )}
           {savingCal && <p className="mt-3 text-[0.8rem] text-ink-400">Enregistrement…</p>}
           {calSaved && <p className="mt-3 text-[0.8rem] text-gold-700">Agenda mis à jour.</p>}
+          {calSaveFailed && (
+            <p role="alert" className="mt-3 text-[0.8rem] text-[#8E332C]">
+              L&apos;agenda n&apos;a pas été changé : NIVEX continue d&apos;utiliser le précédent. Réessayez dans un instant.
+            </p>
+          )}
         </section>
       )}
 
@@ -245,18 +289,27 @@ export function ConnectionPanel({
           <Check ok={!settings.paused} label="Réservations ouvertes" fail="Réservations suspendues (onglet Réglages)" />
           <Check ok={env.sms} label="Textos (Twilio)" fail="Clés Twilio absentes — seuls les courriels partent" />
         </ul>
+        {/* Ces adresses ne contiennent aucune espace : sans coupure permise,
+            l'URI de redirection débordait de la carte sur un téléphone, et sa
+            fin — celle qu'il faut recopier chez Google — disparaissait. */}
         <p className="mt-6 border-t border-gold-300/30 pt-5 text-[0.78rem] leading-relaxed text-ink-400">
-          Adresse publique du site : <code className="font-mono text-ink-600">{env.origin}</code><br />
-          URI de redirection à déclarer chez Google : <code className="font-mono text-ink-600">{env.origin}/api/auth/google/callback</code>
+          Adresse publique du site : <code className="break-all font-mono text-ink-600">{env.origin}</code><br />
+          URI de redirection à déclarer chez Google : <code className="break-all font-mono text-ink-600">{env.origin}/api/auth/google/callback</code>
         </p>
       </section>
 
       {/* — Déconnexion — */}
       <section className="border border-gold-300/40 bg-linen-50 p-7">
         <h3 className="font-display text-xl font-normal text-ink-800">Révoquer l&apos;accès</h3>
+        {/* Ce texte se lit juste avant de cliquer : il doit dire ce que fait
+            vraiment la déconnexion. Seule la pause ferme les réservations ;
+            un compte Google débranché ne ferme pas la maison. */}
         <p className="mt-1.5 max-w-2xl text-[0.82rem] font-light leading-relaxed text-ink-400">
-          NIVEX oublie votre jeton et le révoque auprès de Google. Vos rendez-vous déjà inscrits dans l&apos;agenda
-          restent en place ; les réservations en ligne s&apos;arrêtent jusqu&apos;à une nouvelle connexion.
+          NIVEX oublie votre jeton, le révoque auprès de Google et ferme votre session. Les rendez-vous déjà inscrits
+          restent dans l&apos;agenda. Les réservations en ligne, elles, restent ouvertes : jusqu&apos;à votre
+          prochaine connexion, plus aucun courriel ne part et rien ne s&apos;inscrit à l&apos;agenda
+          {env.sms ? " ; seuls les textos continuent" : ""}. Pour fermer la prise de rendez-vous, utilisez la pause
+          dans l&apos;onglet Réglages.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-4">
           {confirmDisconnect ? (
