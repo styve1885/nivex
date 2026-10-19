@@ -1,7 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { SETUP_MINUTES } from "./brand";
 import { DEFAULT_ZONE_POLICY } from "./travel";
-import { DATACENTER_CITIES } from "./attribution";
+import { DATACENTER_CITIES, PERSONAL_PATH } from "./attribution";
 
 /**
  * Neon (Postgres) via HTTP. Une seule connexion logique par instance
@@ -339,6 +339,16 @@ async function bootstrap() {
         AND lower(city) = ANY(${[...DATACENTER_CITIES]}::text[])`;
   } catch (e) {
     console.warn("[nivex] visites de centres de données non marquées :", (e as Error).message);
+  }
+
+  /* Les liens personnels de réservation et d'abonnement se comptaient avant
+     que le journal ne les écarte (`isPrivatePath`), et leur adresse porte le
+     jeton du rendez-vous. Ces lignes s'effacent ; il n'en entre plus, et un
+     second passage ne trouve rien. Un échec ne ferme pas la maison. */
+  try {
+    await q`DELETE FROM nivex_visits WHERE path ~ ${PERSONAL_PATH}::text`;
+  } catch (e) {
+    console.warn("[nivex] liens personnels non effacés du journal :", (e as Error).message);
   }
 
   /*
