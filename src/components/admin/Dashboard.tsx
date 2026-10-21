@@ -210,7 +210,7 @@ export function Dashboard({
         {tab === "visits" && <VisitsPanel />}
         {(tab === "settings" || settingsOpened) && (
           <div hidden={tab !== "settings"}>
-            <SettingsPanel initial={settings} onDirty={setSettingsDirty} />
+            <SettingsPanel initial={settings} origin={env.origin} onDirty={setSettingsDirty} />
           </div>
         )}
         {(tab === "zones" || zonesDirty) && (

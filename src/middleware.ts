@@ -9,12 +9,17 @@ export function middleware(req: NextRequest) {
   /* `/_vercel` porte la mesure de l'hébergeur : son script et ses envois
      (`/_vercel/insights/view`, sans extension). Le middleware les redirigeait
      vers /fr/_vercel/…, une page introuvable. Le `matcher` du bas les écarte
-     déjà ; ce test-ci tient si on le retouche. */
+     déjà ; ce test-ci tient si on le retouche.
+
+     `/avis`, le lien court de la carte de remerciement, est une route à part
+     (app/avis/route.ts) : envoyé vers /fr/avis, il tombait sur la page
+     introuvable, et le code QR imprimé avec lui. */
   if (
     pathname.startsWith("/api") ||
     pathname.startsWith("/admin") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/_vercel") ||
+    pathname === "/avis" ||
     PUBLIC_FILE.test(pathname)
   ) {
     return NextResponse.next();

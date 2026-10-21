@@ -414,6 +414,13 @@ sont des redirections temporaires de `next.config.ts` vers `/fr` avec
 `utm_source=porte-a-porte`. Les codes QR imprimés pointent dessus : ne les
 renommez jamais.
 
+`/avis`, celui de la carte de remerciement laissée en fin de séance, est une
+route (`app/avis/route.ts`) : il renvoie vers le lien d'avis collé dans
+Réglages, ou vers l'accueil s'il n'y en a pas. Si Google change son lien, on
+colle le nouveau, et les cartes distribuées suivent. Le middleware le laisse
+passer tel quel ; sans cette exception, il devenait `/fr/avis`, une page
+introuvable. Même règle : ne le renommez jamais.
+
 Les **robots** restent en base, marqués dans `robot`, et l'onglet les écarte
 par défaut. `robotReason` lit l'agent, `navigator.webdriver` et le fuseau
 de l'horloge, puis les oublie ; le centre de données se reconnaît aux

@@ -48,8 +48,10 @@ const sent = (x: Settings) => ({
  * de bord le garde en vie d'un onglet à l'autre, et chaque enregistrement
  * fait relire la page, pour que l'onglet Connexion dise ce qui est en vigueur.
  */
-export function SettingsPanel({ initial, onDirty }: {
+export function SettingsPanel({ initial, origin, onDirty }: {
   initial: Settings;
+  /** L'adresse publique du site, pour nommer le lien court de la carte imprimée. */
+  origin: string;
   /** Prévenu quand des modifications attendent d'être enregistrées. */
   onDirty?: (dirty: boolean) => void;
 }) {
@@ -259,6 +261,17 @@ export function SettingsPanel({ initial, onDirty }: {
           aria-describedby="review-hint" className="field" />
         <p id="review-hint" className="mt-2 text-[11px] leading-relaxed text-ink-400">
           Dans votre fiche Google, touchez « Demander des avis », copiez le lien, puis collez-le ici.
+        </p>
+        {/* Le code QR de la carte porte le lien court, jamais celui de Google :
+            un lien changé se colle ici, et les cartes distribuées suivent. */}
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
+          La carte de remerciement imprimée porte le lien court{" "}
+          <a href={`${origin}/avis`} target="_blank" rel="noopener"
+            className="break-words text-ink-600 underline decoration-gold-300 underline-offset-4">
+            {origin.replace(/^https?:\/\//, "")}/avis
+          </a>
+          {" "}: il mène à ce lien, ou à l&apos;accueil si le champ est vide. Si Google change votre lien,
+          collez le nouveau ici : les cartes déjà distribuées restent bonnes.
         </p>
       </Card>
 
