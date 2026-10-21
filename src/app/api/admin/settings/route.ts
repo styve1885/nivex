@@ -37,6 +37,12 @@ const Patch = z.object({
   slotStep: z.union([z.literal(15), z.literal(20), z.literal(30), z.literal(60)]).optional(),
   firstHourFree: z.boolean().optional(),
   paused: z.boolean().optional(),
+  /* Le lien d'avis de la fiche Google, ou une chaîne vide pour l'effacer. Il
+     part dans un courriel aux clients : une adresse https, rien d'autre. */
+  reviewUrl: z.union([
+    z.literal(""),
+    z.string().trim().max(500).url().refine((u) => u.startsWith("https://"), { message: "Lien https attendu" }),
+  ]).optional(),
   hours: z.array(z.object({
     day: z.number().int().min(0).max(6),
     enabled: z.boolean(),

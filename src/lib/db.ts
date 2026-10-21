@@ -433,6 +433,13 @@ async function bootstrap() {
      l'autre, et une séance ponctuelle ne reçoit que le texto. */
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_reminded_at  timestamptz`;
   await q`CREATE INDEX IF NOT EXISTS nivex_bookings_subscription_idx ON nivex_bookings (subscription_id) WHERE subscription_id IS NOT NULL`;
+
+  /* Le remerciement après la séance : le lien d'avis de la fiche Google,
+     collé dans Réglages, et l'heure où la demande est partie. Une seule par
+     client : la date posée sur une de ses lignes suffit à ne plus le
+     relancer. */
+  await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS review_url      text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS review_asked_at timestamptz`;
 }
 
 /* La note de la bascule, écrite depuis la grille qu'elle pose. */

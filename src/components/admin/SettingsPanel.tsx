@@ -35,6 +35,7 @@ const sent = (x: Settings) => ({
   slotStep: x.slotStep, firstHourFree: x.firstHourFree, paused: x.paused,
   hours: x.hours, services: x.services,
   businessName: x.businessName, timezone: x.timezone,
+  reviewUrl: (x.reviewUrl ?? "").trim(),
 });
 
 /*
@@ -115,7 +116,13 @@ export function SettingsPanel({ initial, onDirty }: {
       fr: x.fr.trim(), en: x.en.trim() || x.fr.trim(),
       unitFr: x.unitFr.trim() || "pièce", unitEn: x.unitEn.trim() || x.unitFr.trim() || "piece",
     }));
-    const next = { ...s, services };
+    /* Le lien part dans un courriel aux clients : une adresse complète. */
+    const reviewUrl = (s.reviewUrl ?? "").trim();
+    if (reviewUrl && !/^https:\/\/\S+$/.test(reviewUrl)) {
+      setError("Le lien d'avis doit être une adresse complète, qui commence par https://.");
+      return;
+    }
+    const next = { ...s, services, reviewUrl: reviewUrl || null };
     setS((cur) => ({ ...cur, services }));
     setSaving(true);
     setError(null);
@@ -240,6 +247,19 @@ export function SettingsPanel({ initial, onDirty }: {
             </p>
           </div>
         </div>
+      </Card>
+
+      {/* — Avis — */}
+      <Card title="Avis des clients"
+        hint="Le lendemain de la première séance d'un client, ou de sa première visite d'abonné marquée effectuée, un courriel le remercie et l'invite à laisser un avis sur votre fiche Google. Une seule fois par client. Laissé vide, aucun courriel ne part.">
+        <label className="label" htmlFor="review-url">Lien d&apos;avis de votre fiche Google</label>
+        <input id="review-url" type="url" inputMode="url" autoComplete="off" spellCheck={false}
+          value={s.reviewUrl ?? ""} placeholder="https://g.page/r/…/review"
+          onChange={(e) => patch("reviewUrl", e.target.value)}
+          aria-describedby="review-hint" className="field" />
+        <p id="review-hint" className="mt-2 text-[11px] leading-relaxed text-ink-400">
+          Dans votre fiche Google, touchez « Demander des avis », copiez le lien, puis collez-le ici.
+        </p>
       </Card>
 
       {/* — Prestations — */}

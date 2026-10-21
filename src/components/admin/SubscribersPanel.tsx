@@ -99,7 +99,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
     try {
       const d = await (await fetch("/api/cron/daily", { cache: "no-store" })).json();
       setDaily(d.ok
-        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.notices} avis de fin de série.`
+        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {

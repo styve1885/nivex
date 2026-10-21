@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 
-const { clientConfirmation, clientCancellation, ownerNotification, contactAcknowledgement } = await import("../src/lib/email.ts");
+const { clientConfirmation, clientCancellation, ownerNotification, contactAcknowledgement, reviewRequest } = await import("../src/lib/email.ts");
 const { displayName, sendGmail } = await import("../src/lib/google.ts");
 const { getDict } = await import("../src/lib/i18n/index.ts");
 const { slotIsFree } = await import("../src/lib/availability.ts");
@@ -399,5 +399,27 @@ test("le nom d'un destinataire ne peut ni ajouter d'adresse ni casser l'en-tête
     assert.match(rest, /^--nivex_[a-z0-9]+\r\nContent-Type: text\/plain/);
   });
 }
+
+/* ————— Le remerciement après la séance ————— */
+
+test("le remerciement invite à un avis, quel qu'il soit, dans la langue du client", () => {
+  const url = "https://g.page/r/CExemple123/review";
+  const fr = reviewRequest({ locale: "fr", clientName: "Claire <b>Dubois</b>", reviewUrl: url });
+  const en = reviewRequest({ locale: "en", clientName: "Claire Dubois", reviewUrl: url });
+  for (const m of [fr, en]) {
+    assert.ok(m.html.includes(`href="${url}"`), "le bouton mène au lien de la fiche");
+    assert.ok(m.text.includes(url), "le texte brut porte le lien");
+    assert.doesNotMatch(m.subject + m.text, /!/, "aucun point d'exclamation");
+    assert.doesNotMatch(m.html + m.text, /[{}]/, "aucune accolade oubliée");
+  }
+  /* Le nom tapé par le client n'entre jamais tel quel dans le HTML. */
+  assert.ok(!fr.html.includes("<b>Dubois</b>") && fr.html.includes("&lt;b&gt;Dubois&lt;/b&gt;"));
+  /* Une invitation neutre : Google interdit de ne solliciter que les clients contents. */
+  assert.match(fr.text, /quel qu'il soit/);
+  assert.match(en.text, /whatever it says/);
+  assert.match(fr.html, /lang="fr-CA"/);
+  assert.match(en.html, /lang="en-CA"/);
+  assert.match(fr.text, /qu'une fois/);
+});
 
 console.log(`\n${n} vérifications passées.\n`);

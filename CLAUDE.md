@@ -112,7 +112,9 @@ Une adresse inconnue sous `/fr` ou `/en` tombe sur `[locale]/[...missing]`,
 qui rend la page 404 de la maison, traduite (son HTML serveur est la coquille
 d'erreur de Next ; le texte paraît avec le JavaScript, le statut est bien
 404). Toute autre « langue » — `/foo.png`, `/api` — est refusée par
-`dynamicParams = false` dans la racine, sans rendu ni cache.
+`dynamicParams = false` dans la racine, sans rendu ni cache. En local,
+`next start` inscrit alors une `NoFallbackError` interne au journal pour
+chacune : c'est ce 404 attendu, pas une panne.
 
 ### Les modules qui décident
 
@@ -272,6 +274,13 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   rendez-vous anonymisé s'efface ensuite (`purgeCalendarCopies`), sans avis
   à personne ; sans Google, il attend le passage suivant. Les copies dans la
   boîte de courriel, elles, se suppriment à la main (la politique le dit).
+- **Remerciement et avis Google** : la même tâche envoie `reviewRequest`, une
+  fois par client (`review_asked_at`), le lendemain d'une séance terminée ou
+  d'une visite d'abonné cochée, seulement si le lien d'avis de la fiche Google
+  est collé dans Réglages (`reviewUrl`). Fenêtre de trois jours : un lien collé
+  ne relance pas les anciens clients. L'invitation reste neutre (« quel qu'il
+  soit ») : Google interdit de ne solliciter que les clients contents, et
+  n'admet aucune contrepartie.
 
 ## Les textos
 

@@ -11,7 +11,7 @@ import {
   sendGmail, siteOrigin, GoogleError,
 } from "./google";
 import {
-  ownerVisitChanged, seriesNotice, subscriptionConfirmation, subscriptionEnded,
+  ownerVisitChanged, reviewRequest, seriesNotice, subscriptionConfirmation, subscriptionEnded,
   subscriptionOwnerNotification, visitChanged, visitReminder,
   type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
@@ -1332,7 +1332,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  * débranché coupe les courriels, pas les textos.
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
-  reminders: number; smsReminders: number; notices: number; google: boolean;
+  reminders: number; smsReminders: number; notices: number; thanks: number; google: boolean;
 }> {
   await ensureSchema();
   const settings = await getSettings();
@@ -1391,6 +1391,31 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
+  /* — Remerciements — un par client, le lendemain de sa première séance, ou
+     de la première visite d'abonné marquée effectuée. Seulement si l'artisan
+     a collé dans Réglages le lien d'avis de sa fiche Google. */
+  let thanks = 0;
+  if (at && settings.reviewUrl) {
+    const exclude = [settings.ownerEmail, REQUEST_INBOX].filter((x): x is string => Boolean(x));
+    const seen = new Set<string>();
+    for (const v of await dueReviewRequests(now, exclude)) {
+      const key = v.clientEmail.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const stamp = await claimReview(v);
+      if (!stamp) continue;
+      const m = reviewRequest({
+        locale: v.locale, clientName: v.clientName, reviewUrl: settings.reviewUrl, businessEmail: contactEmail(),
+      });
+      if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, m)) {
+        thanks++;
+        await logEvent("review_requested", { ref: v.ref });
+      } else {
+        await releaseReview(v.id, stamp);
+      }
+    }
+  }
+
   /* — Fin de série — */
   let notices = 0;
   const active = at ? (await sql()`SELECT * FROM nivex_subscriptions WHERE status = 'active'`) as Row[] : [];
@@ -1430,8 +1455,56 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     return null;
   });
 
-  await logEvent("daily_done", { reminders, smsReminders, notices, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, notices, google: Boolean(at) };
+  await logEvent("daily_done", { reminders, smsReminders, notices, thanks, day: today, purged, calendarCopies });
+  return { reminders, smsReminders, notices, thanks, google: Boolean(at) };
+}
+
+/**
+ * Les séances à remercier : une séance ponctuelle terminée depuis au moins
+ * deux heures, ou une visite d'abonné marquée effectuée, dans les trois
+ * derniers jours. Jamais un client déjà remercié, quelle que soit la ligne
+ * qui porte la date. La fenêtre de trois jours tient aussi la mise en
+ * service : un lien collé dans Réglages ne relance pas tous les anciens
+ * clients d'un coup. Une visite annulée ne compte pas.
+ */
+export async function dueReviewRequests(now: Date, exclude: string[] = []): Promise<Booking[]> {
+  await ensureSchema();
+  const since = new Date(now.getTime() - 3 * DAY).toISOString();
+  const settled = new Date(now.getTime() - 2 * 3600_000).toISOString();
+  const rows = (await sql()`
+    SELECT b.* FROM nivex_bookings b
+    WHERE b.status = 'confirmed' AND b.review_asked_at IS NULL
+      AND b.client_email NOT LIKE 'efface:%'
+      AND lower(b.client_email) <> ALL(${exclude.map((x) => x.toLowerCase())}::text[])
+      AND ((b.subscription_id IS NULL AND b.ends_at < ${settled} AND b.ends_at > ${since})
+        OR (b.subscription_id IS NOT NULL AND b.done_at IS NOT NULL AND b.done_at > ${since}))
+      AND NOT EXISTS (
+        SELECT 1 FROM nivex_bookings o
+        WHERE lower(o.client_email) = lower(b.client_email) AND o.review_asked_at IS NOT NULL)
+    ORDER BY b.ends_at
+    LIMIT 40`) as Row[];
+  return rows.map(hydrate);
+}
+
+/**
+ * Réserve le remerciement avant de l'envoyer, comme un rappel : deux passages
+ * qui se chevauchent n'en envoient qu'un. La condition « jamais remercié » se
+ * relit au moment de poser la date.
+ */
+async function claimReview(v: Booking): Promise<string | null> {
+  const stamp = new Date().toISOString();
+  const rows = (await sql()`
+    UPDATE nivex_bookings b SET review_asked_at = ${stamp}
+    WHERE b.id = ${v.id} AND b.review_asked_at IS NULL AND b.status = 'confirmed'
+      AND NOT EXISTS (
+        SELECT 1 FROM nivex_bookings o
+        WHERE lower(o.client_email) = lower(b.client_email) AND o.review_asked_at IS NOT NULL)
+    RETURNING b.id`) as Row[];
+  return rows.length > 0 ? stamp : null;
+}
+
+async function releaseReview(id: string, stamp: string): Promise<void> {
+  await sql()`UPDATE nivex_bookings SET review_asked_at = NULL WHERE id = ${id} AND review_asked_at = ${stamp}`.catch(() => {});
 }
 
 /**
