@@ -511,6 +511,69 @@ export function contactAcknowledgement(d: { locale: "fr" | "en"; siteUrl: string
 }
 
 /* ============================================================
+   Remerciement après la séance
+   ============================================================ */
+
+const REVIEW = {
+  fr: {
+    subject: "Merci pour votre confiance · NIVEX",
+    hi: (n: string) => `Bonjour ${n},`,
+    thanks: "Merci d'avoir confié votre repassage à NIVEX.",
+    ask: "Votre avis sur Google, quel qu'il soit, aide d'autres foyers à nous trouver et nous dit ce qu'il faut garder ou améliorer. Il prend une minute.",
+    cta: "Laisser un avis",
+    reply: "Une remarque à nous faire directement ? Répondez à ce courriel : il arrive chez votre artisan.",
+    signoff: "Au plaisir de vous revoir,",
+    once: "Ce courriel ne vous est envoyé qu'une fois. Pour ne plus en recevoir de ce genre, répondez simplement à ce message.",
+  },
+  en: {
+    subject: "Thank you for your trust · NIVEX",
+    hi: (n: string) => `Hello ${n},`,
+    thanks: "Thank you for trusting NIVEX with your ironing.",
+    ask: "Your review on Google, whatever it says, helps other households find us and tells us what to keep and what to improve. It takes a minute.",
+    cta: "Leave a review",
+    reply: "Something you would rather tell us directly? Reply to this email: it goes straight to your presser.",
+    signoff: "Hoping to see you again,",
+    once: "This email is sent only once. To receive no more emails of this kind, simply reply to this message.",
+  },
+} as const;
+
+/**
+ * Le remerciement, le lendemain de la première séance d'un client.
+ *
+ * Il invite à laisser un avis, quel qu'il soit : Google interdit de ne
+ * solliciter que les clients satisfaits, et l'invitation ne promet rien en
+ * échange. Une seule fois par client ; la tâche quotidienne en tient le
+ * compte. Le lien vient de Réglages, jamais d'un texte.
+ */
+export function reviewRequest(d: {
+  locale: "fr" | "en"; clientName: string; reviewUrl: string; businessEmail?: string;
+}) {
+  const r = REVIEW[d.locale];
+  const inner = `
+  <tr><td style="padding:36px 40px 10px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    <p style="margin:0 0 14px;font-size:16px;">${esc(r.hi(d.clientName))}</p>
+    <p style="margin:0 0 14px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(r.thanks)}</p>
+    <p style="margin:0 0 6px;font-size:15px;line-height:1.75;color:${MUTED};">${esc(r.ask)}</p>
+  </td></tr>
+  <tr><td style="padding:22px 40px 34px;text-align:center;">
+    ${button(d.reviewUrl, r.cta)}
+    <p style="margin:24px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.7;color:${MUTED};">${esc(r.reply)}</p>
+    <p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:13px;color:${MUTED};">
+      ${esc(r.signoff)}<br><span style="font-family:Georgia,serif;letter-spacing:0.12em;color:${GOLD};">NIVEX</span>
+    </p>
+    <p style="margin:22px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:1.7;color:${MUTED};">${esc(r.once)}</p>
+  </td></tr>`;
+
+  const text = [
+    r.hi(d.clientName), "", r.thanks, "", r.ask, "",
+    `${r.cta}${d.locale === "en" ? ":" : "\u00a0:"} ${d.reviewUrl}`, "",
+    r.reply, "", r.signoff, "NIVEX", "", r.once,
+  ].join("\n");
+
+  return { subject: r.subject, html: shell(inner, r.thanks, d.businessEmail, d.locale), text };
+}
+
+/* ============================================================
    Abonnements
    ============================================================ */
 

@@ -18,7 +18,7 @@ import { servedText } from "@/lib/travel";
  */
 
 /** Date de dernière révision des deux documents. */
-export const LEGAL_UPDATED = "2026-10-19";
+export const LEGAL_UPDATED = "2026-10-21";
 
 /*
  * Les noms d'accolades ne portent que des lettres : `fill` ne reconnaît rien

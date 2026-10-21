@@ -34,6 +34,8 @@ export type Settings = {
   zonePolicy: ZonePolicy;
   services: ServiceItem[];
   connectedAt: string | null;
+  /** Le lien « Demander des avis » de la fiche Google. Vide : aucun remerciement ne part. */
+  reviewUrl: string | null;
 };
 
 /**
@@ -66,6 +68,7 @@ export const FALLBACK_SETTINGS: Settings = {
   hours: DEFAULT_HOURS, zonePolicy: DEFAULT_ZONE_POLICY,
   services: DEFAULT_SERVICES,
   connectedAt: null,
+  reviewUrl: null,
 };
 
 type Row = Record<string, unknown>;
@@ -93,6 +96,7 @@ function hydrate(row: Row | undefined): Settings {
     zonePolicy: readZonePolicy(row.travel_policy),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
+    reviewUrl: (row.review_url as string) || null,
   };
 }
 
@@ -340,7 +344,7 @@ export async function disconnect() {
 export type SettingsPatch = Partial<Pick<Settings,
   "calendarId" | "timezone" | "businessName" | "hourlyRate" | "currency" | "minMinutes" |
   "bufferMinutes" | "leadHours" | "horizonDays" | "slotStep" | "firstHourFree" | "paused" |
-  "hours" | "services">>;
+  "hours" | "services" | "reviewUrl">>;
 
 /**
  * N'écrit que les colonnes envoyées.
@@ -371,6 +375,9 @@ export async function updateSettings(patch: SettingsPatch): Promise<Settings> {
       paused          = COALESCE(${p.paused ?? null}::boolean, paused),
       hours           = COALESCE(${p.hours ? JSON.stringify(p.hours) : null}::jsonb, hours),
       services        = COALESCE(${p.services ? JSON.stringify(p.services) : null}::jsonb, services),
+      /* Un lien vidé doit pouvoir s'effacer : COALESCE le garderait. */
+      review_url      = CASE WHEN ${p.reviewUrl !== undefined}::boolean
+                             THEN NULLIF(${p.reviewUrl ?? ""}, '') ELSE review_url END,
       updated_at      = now()
     WHERE id = 1
     RETURNING *`) as Row[];
