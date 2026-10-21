@@ -22,6 +22,8 @@ const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.
 const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd } = await import("../src/lib/seo.ts");
 const { default: robots } = await import("../src/app/robots.ts");
 const { default: sitemap } = await import("../src/app/sitemap.ts");
+const { middleware } = await import("../src/middleware.ts");
+const { NextRequest } = await import("next/server");
 const { estimateCents } = await import("../src/lib/availability.ts");
 const { ownerNotification, clientConfirmation } = await import("../src/lib/email.ts");
 const { fr } = await import("../src/lib/i18n/fr.ts");
@@ -540,6 +542,16 @@ test("le plan du site contient la page Montréal, en français et en anglais", (
   const urls = sitemap().map((x) => x.url);
   assert.ok(urls.some((u) => u.endsWith("/fr/montreal")));
   assert.ok(urls.some((u) => u.endsWith("/en/montreal")));
+});
+
+test("le lien court /avis traverse le middleware, les autres adresses gardent leur langue", () => {
+  const avis = middleware(new NextRequest("https://nivexrepassage.ca/avis"));
+  assert.equal(avis.headers.get("location"), null, "envoyé vers /fr/avis, il tombait sur la page introuvable");
+  assert.equal(avis.headers.get("x-middleware-next"), "1");
+  const tarifs = middleware(new NextRequest("https://nivexrepassage.ca/tarifs"));
+  assert.equal(new URL(tarifs.headers.get("location")).pathname, "/fr/tarifs");
+  const deeper = middleware(new NextRequest("https://nivexrepassage.ca/avis/autre"));
+  assert.equal(new URL(deeper.headers.get("location")).pathname, "/fr/avis/autre", "seule l'adresse exacte passe");
 });
 
 test("les nouveaux textes : aucun point d'exclamation, et le français a son anglais", () => {
