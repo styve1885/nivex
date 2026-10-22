@@ -87,6 +87,9 @@ ramènerait au prochain chargement ; elles se désactivent.
   taille, le type et la matière des vêtements. Aucune autre estimation de
   quantité ne s'écrit.
 - **Rien ne quitte le domicile** : pas de collecte, pas de livraison.
+- **Le client prévoit la planche à repasser**, une prise et environ deux
+  mètres carrés ; l'artisan apporte tout le reste (générateur de vapeur,
+  fer, pattemouilles, cintres). Le texto de confirmation le rappelle.
 - La première heure est offerte à partir de deux heures réservées, une
   fois par client, jamais sur les abonnements.
 

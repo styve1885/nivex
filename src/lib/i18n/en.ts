@@ -161,7 +161,7 @@ const terms: LegalDoc = {
     {
       title: "The service",
       body: [
-        "An artisan comes to your home with his professional equipment: active table, steam generator, pressing cloths and hangers. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
+        "An artisan comes to your home with his professional equipment: steam generator, iron, pressing cloths and hangers. You provide the ironing board. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
         `The artisan arrives at the start time of the session. Setting up and packing away his equipment, ${INSTALL_MINUTES} minutes each, are part of the time booked; the rest is ironing.`,
         "Your clothes never leave your home: everything happens on site, in front of you.",
       ],
@@ -227,7 +227,7 @@ const terms: LegalDoc = {
       title: "What we need at your place",
       body: [],
       list: [
-        "About two square metres of clear floor and one free electrical outlet.",
+        "Your ironing board, about two square metres of clear floor and one free electrical outlet.",
         "Agreed access: building code, parking, elevator, and the household animal mentioned in advance.",
         "The pieces gathered, clean and dry. We iron; we do not wash.",
         "An adult present when the artisan arrives and when he leaves.",
@@ -409,7 +409,7 @@ export const en: Dict = {
         icon: "clock",
         serviceKey: "trousers",
         name: "Everything happens at your home",
-        body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
+        body: "Nothing leaves your home. Your craftsman arrives with his steam, his iron and his hangers, works in front of you, and tidies up before leaving.",
         detail: "{zone}",
       },
     ],
@@ -440,7 +440,7 @@ export const en: Dict = {
     eyebrow: "Pricing",
     title: "For the result, not the minute.",
     lede:
-      "You choose the pieces to be handled; we arrive with all the equipment. The amount is confirmed on site before we begin.",
+      "You choose the pieces and have the ironing board ready; we bring everything else. The amount is confirmed on site before we begin.",
     offers: [
       {
         name: "Week session",
@@ -487,7 +487,7 @@ export const en: Dict = {
       },
       {
         q: "Do I need to provide a board and iron?",
-        a: "No. Your craftsman arrives with the full professional kit: active pressing table, steam generator, pressing cloths, hangers. All we need is a power outlet and roughly two square metres.",
+        a: "The board, yes; the rest, no. Your craftsman arrives with the professional kit: steam generator, iron, pressing cloths, hangers. Have your ironing board ready, along with a power outlet and roughly two square metres.",
       },
       {
         q: "How much time should I plan for?",
@@ -542,7 +542,7 @@ export const en: Dict = {
     lede:
       "NIVEX irons your clothes and bed linen on site, in your home, in Montreal. No pickup, no delivery: nothing leaves your home.",
     areasTitle: "Neighbourhoods served",
-    areasLede: "The craftsman travels to these neighbourhoods with all his equipment. Enter your postal code to check your address and see the travel fee.",
+    areasLede: "The craftsman travels to these neighbourhoods with his equipment. Enter your postal code to check your address and see the travel fee.",
     none: `No Montreal neighbourhood is open to online booking at the moment. Call us at ${PHONE}.`,
     conditionsTitle: "Terms in Montreal",
     conditionsLede: "The same as on the {link} page, drawn from the same settings.",
@@ -567,7 +567,7 @@ export const en: Dict = {
       },
       {
         q: "What do I need to provide?",
-        a: "An electrical outlet and about two square metres of clear space. Nothing else: the active board, steam generator, pressing cloths and hangers arrive with the craftsman. Mention building access and parking in your booking.",
+        a: "Your ironing board, an electrical outlet and about two square metres of clear space. The steam generator, iron, pressing cloths and hangers arrive with the craftsman. Mention building access and parking in your booking.",
       },
     ],
     link: "In-home ironing in Montreal: neighbourhoods served and terms",
@@ -924,8 +924,8 @@ export const en: Dict = {
         },
         {
           title: "The equipment",
-          them: "Your iron, your board, your power. The result depends on what you happen to own.",
-          us: "Active board, steam generator, pressing cloths and wooden hangers brought along. You provide an outlet and two square metres.",
+          them: "Your iron, your steam, your hangers. The result depends on what you happen to own.",
+          us: "Professional steam generator, iron, pressing cloths and wooden hangers brought along. You provide the board, an outlet and two square metres.",
         },
         {
           title: "The order of work",
@@ -987,7 +987,7 @@ export const en: Dict = {
         { dt: "Time honoured", dd: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each; the rest of the booked time is ironing. If it is cut short through our own doing, the missing time isn't billed.` },
         { dt: "Estimate and final amount", dd: "The estimate is indicative. The final amount follows the time actually spent and is confirmed to you on site, before we begin." },
         { dt: "Payment", dd: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking." },
-        { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
+        { dt: "What we need at your place", dd: "Your ironing board, one power outlet and about two square metres of clear floor. The rest of the equipment arrives with the artisan." },
       ],
       travel: "Travel fee",
       travelFree: "No travel fee",

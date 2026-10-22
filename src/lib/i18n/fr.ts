@@ -179,7 +179,7 @@ const terms: LegalDoc = {
     {
       title: "Le service",
       body: [
-        "Un artisan se déplace chez vous avec son matériel professionnel\u00a0: table active, générateur de vapeur, pattemouilles et cintres. Il repasse sur place les pièces que vous lui présentez, puis les remet sur cintres ou pliées.",
+        "Un artisan se déplace chez vous avec son matériel professionnel\u00a0: générateur de vapeur, fer, pattemouilles et cintres. Vous fournissez la planche à repasser. Il repasse sur place les pièces que vous lui présentez, puis les remet sur cintres ou pliées.",
         `L'artisan arrive à l'heure du début de la séance. L'installation et le rangement de son matériel, ${INSTALL_MINUTES} minutes chacun, font partie du temps réservé\u00a0; le reste est du repassage.`,
         "Vos vêtements ne quittent jamais votre domicile\u00a0: tout se fait sur place, devant vous.",
       ],
@@ -245,7 +245,7 @@ const terms: LegalDoc = {
       title: "Ce dont nous avons besoin chez vous",
       body: [],
       list: [
-        "Environ deux mètres carrés dégagés et une prise électrique libre.",
+        "Votre planche à repasser, environ deux mètres carrés dégagés et une prise électrique libre.",
         "Un accès convenu\u00a0: code d'immeuble, stationnement, ascenseur, et l'animal de la maison signalé d'avance.",
         "Les pièces rassemblées, propres et sèches. Nous repassons, nous ne lavons pas.",
         "Une personne majeure présente à l'arrivée et au départ de l'artisan.",
@@ -432,7 +432,7 @@ export const fr = {
         icon: "clock",
         serviceKey: "trousers",
         name: "Tout se fait chez vous",
-        body: "Rien ne quitte votre domicile. Votre artisan vient avec sa table, sa vapeur et ses cintres, travaille devant vous, et range avant de partir.",
+        body: "Rien ne quitte votre domicile. Votre artisan vient avec sa vapeur, son fer et ses cintres, travaille devant vous, et range avant de partir.",
         detail: "{zone}",
       },
     ],
@@ -465,7 +465,7 @@ export const fr = {
     eyebrow: "Tarification",
     title: "Au résultat, pas à la minute.",
     lede:
-      "Vous choisissez les pièces à traiter, nous venons avec tout le matériel. Le montant est confirmé sur place avant de commencer.",
+      "Vous choisissez les pièces et prévoyez la planche, nous apportons tout le reste. Le montant est confirmé sur place avant de commencer.",
     /* Les durées des deux séances ne s'écrivent pas ici : elles suivent la
        durée minimale réglée, comme leurs montants (voir Pricing). */
     offers: [
@@ -520,7 +520,7 @@ export const fr = {
       },
       {
         q: "Faut-il fournir la planche et le fer\u202f?",
-        a: "Non. Votre artisan arrive avec l'ensemble du matériel professionnel\u00a0: table active, générateur de vapeur, pattemouilles, cintres. Nous avons seulement besoin d'une prise électrique et d'environ deux mètres carrés.",
+        a: "La planche, oui\u00a0; le reste, non. Votre artisan arrive avec le matériel professionnel\u00a0: générateur de vapeur, fer, pattemouilles, cintres. Prévoyez votre planche à repasser, une prise électrique et environ deux mètres carrés.",
       },
       {
         q: "Combien de temps prévoir\u202f?",
@@ -579,7 +579,7 @@ export const fr = {
     lede:
       "NIVEX repasse vos vêtements et votre literie sur place, chez vous, à Montréal. Pas de collecte, pas de livraison\u00a0: rien ne quitte votre domicile.",
     areasTitle: "Quartiers desservis",
-    areasLede: "L'artisan se déplace dans ces quartiers avec tout son matériel. Entrez votre code postal pour vérifier votre adresse et connaître les frais.",
+    areasLede: "L'artisan se déplace dans ces quartiers avec son matériel. Entrez votre code postal pour vérifier votre adresse et connaître les frais.",
     none: `Aucun quartier de Montréal n'est ouvert à la réservation en ligne pour le moment. Appelez-nous au ${PHONE}.`,
     conditionsTitle: "Conditions à Montréal",
     conditionsLede: "Les mêmes que sur la page {link}, tirées des mêmes réglages.",
@@ -608,7 +608,7 @@ export const fr = {
       },
       {
         q: "Que dois-je fournir\u202f?",
-        a: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre\u00a0: table active, générateur de vapeur, pattemouilles et cintres arrivent avec l'artisan. Précisez dans la réservation l'accès à l'immeuble et le stationnement.",
+        a: "Votre planche à repasser, une prise électrique et environ deux mètres carrés dégagés. Le générateur de vapeur, le fer, les pattemouilles et les cintres arrivent avec l'artisan. Précisez dans la réservation l'accès à l'immeuble et le stationnement.",
       },
     ],
     link: "Repassage à domicile à Montréal\u00a0: quartiers desservis et conditions",
@@ -982,8 +982,8 @@ export const fr = {
         },
         {
           title: "Le matériel",
-          them: "Votre fer, votre planche, votre électricité. Le résultat dépend de ce que vous possédez.",
-          us: "Table active, générateur de vapeur, pattemouilles et cintres de bois apportés. Vous fournissez une prise et deux mètres carrés.",
+          them: "Votre fer, votre vapeur, vos cintres. Le résultat dépend de ce que vous possédez.",
+          us: "Générateur de vapeur professionnel, fer, pattemouilles et cintres de bois apportés. Vous fournissez la planche, une prise et deux mètres carrés.",
         },
         {
           title: "L'ordre de travail",
@@ -1046,7 +1046,7 @@ export const fr = {
         { dt: "Temps tenu", dd: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0; le reste du temps réservé est du repassage. S'il est écourté de notre fait, le temps manquant ne vous est pas facturé.` },
         { dt: "Estimation et montant final", dd: "L'estimation est indicative. Le montant final suit le temps réellement passé et vous est confirmé sur place, avant de commencer." },
         { dt: "Paiement", dd: "Sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement à la réservation." },
-        { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre\u00a0: le matériel professionnel arrive avec l'artisan." },
+        { dt: "Ce qu'il nous faut chez vous", dd: "Votre planche à repasser, une prise électrique et environ deux mètres carrés dégagés. Le reste du matériel arrive avec l'artisan." },
       ],
       travel: "Frais de déplacement",
       travelFree: "Sans frais de déplacement",

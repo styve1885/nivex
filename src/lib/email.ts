@@ -128,7 +128,7 @@ const T = {
     before: "Avant notre arrivée",
     beforeList: [
       "Rassemblez les pièces à traiter (panier, lit, dossier de chaise : tout convient).",
-      "Prévoyez une prise électrique et environ deux mètres carrés de dégagement.",
+      "Prévoyez votre planche à repasser, une prise électrique et environ deux mètres carrés de dégagement.",
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
@@ -164,7 +164,7 @@ const T = {
     before: "Before we arrive",
     beforeList: [
       "Gather the pieces to be handled (a basket, a bed, the back of a chair: anything works).",
-      "Have a power outlet and roughly two square metres of clear space available.",
+      "Have your ironing board, a power outlet and roughly two square metres of clear space available.",
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
