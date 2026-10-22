@@ -1,12 +1,14 @@
 import type { Dict, LegalDoc } from "./fr";
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  SERIES_NOTICE_DAYS, SETUP_MINUTES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
 /* The subscriber reduction on travel fees, written from the constant. */
 const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "en");
+/* What a subscriber pays less per hour, from the constant. */
+const HOURLY_DISCOUNT = formatMoney(SUBSCRIBER_HOURLY_DISCOUNT_CENTS, "CAD", "en");
 /* The length that qualifies for the free first hour, from the constant the engine applies. */
 const FIRST_FREE_MIN = minutesToText(FIRST_FREE_MIN_MINUTES, "en");
 
@@ -46,7 +48,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, the reminder and any change to an appointment; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, the reminder the day before, a note two hours before the artisan arrives and any change to an appointment; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone; the site does not keep it.",
         "The services you chose are how we book the right length of time and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -72,7 +74,7 @@ const privacy: LegalDoc = {
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
-        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio, where the artisan views them. Twilio keeps a copy of the messages it carries.",
+        "Twilio — carries the text messages you receive (confirmation, reminder, two-hour note, cancellation or change of appointment) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. The two-hour note is handed to it in advance, and goes out at the set time. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio, where the artisan views them. Twilio keeps a copy of the messages it carries.",
         "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
@@ -159,7 +161,8 @@ const terms: LegalDoc = {
     {
       title: "The service",
       body: [
-        "An artisan comes to your home with his professional equipment: active table, steam generator, pressing cloths and hangers. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
+        "An artisan comes to your home with his professional equipment: steam generator, iron, pressing cloths and hangers. You provide the ironing board. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
+        `The artisan arrives at the start time of the session. Setting up and packing away his equipment, ${INSTALL_MINUTES} minutes each, are part of the time booked; the rest is ironing.`,
         "Your clothes never leave your home: everything happens on site, in front of you.",
       ],
     },
@@ -177,7 +180,7 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, and another reminds you of the appointment the day before.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, another reminds you of the appointment the day before, and a last one lets you know two hours before the artisan arrives.",
       ],
     },
     {
@@ -224,7 +227,7 @@ const terms: LegalDoc = {
       title: "What we need at your place",
       body: [],
       list: [
-        "About two square metres of clear floor and one free electrical outlet.",
+        "Your ironing board, about two square metres of clear floor and one free electrical outlet.",
         "Agreed access: building code, parking, elevator, and the household animal mentioned in advance.",
         "The pieces gathered, clean and dry. We iron; we do not wash.",
         "An adult present when the artisan arrives and when he leaves.",
@@ -372,41 +375,41 @@ export const en: Dict = {
         serviceKey: "shirt",
         name: "Immaculate shirts",
         body: "Collar, yoke, cuffs, sleeves, body. In that order, always. Pressed on a wooden hanger, ready to wear.",
-        detail: "≈ {qty} shirts an hour",
+        detail: "On wooden hangers",
       },
       {
         icon: "dress",
         serviceKey: "delicate",
         name: "Dresses & delicates",
         body: "Silk, viscose, lace, pleats. Contactless steam when the fibre demands it, a pressing cloth when it deserves one.",
-        detail: "≈ {qty} pieces an hour",
+        detail: "Contactless steam",
       },
       {
         icon: "linen",
         serviceKey: "linen",
         name: "Sheets & household linen",
         body: "Single, double, queen, king. The larger sizes take longer, and they are counted separately. Hotel folding, sharp edges.",
-        detail: "≈ {qty} double sheets an hour",
+        detail: "Hotel folding",
       },
       {
         icon: "suit",
         serviceKey: "suit",
         name: "Suits & jackets",
         body: "Steam relaxing, shoulders reshaped, trouser crease marked. Never any shine.",
-        detail: "≈ {qty} pieces an hour",
+        detail: "Never any shine",
       },
       {
         icon: "badge",
         serviceKey: "uniform",
         name: "Uniforms",
         body: "School and professional. The whole week's set, handled in one go, returned on numbered hangers.",
-        detail: "≈ {qty} sets an hour",
+        detail: "Numbered hangers",
       },
       {
         icon: "clock",
         serviceKey: "trousers",
         name: "Everything happens at your home",
-        body: "Nothing leaves your home. Your craftsman arrives with his board, his steam and his hangers, works in front of you, and tidies up before leaving.",
+        body: "Nothing leaves your home. Your craftsman arrives with his steam, his iron and his hangers, works in front of you, and tidies up before leaving.",
         detail: "{zone}",
       },
     ],
@@ -429,7 +432,7 @@ export const en: Dict = {
       {
         n: "3",
         title: "Meet",
-        body: `Your craftsman arrives ${SETUP_MINUTES} minutes before the agreed time to set up, then irons for the whole time you booked. You get back a wardrobe that's ready to wear, on hangers.`,
+        body: `Your craftsman arrives at the agreed time. Setting up and packing away take ${INSTALL_MINUTES} minutes each, within the session, and he irons for all the rest of it. You get back a wardrobe that's ready to wear, on hangers.`,
       },
     ],
   },
@@ -437,7 +440,7 @@ export const en: Dict = {
     eyebrow: "Pricing",
     title: "For the result, not the minute.",
     lede:
-      "You choose the pieces to be handled; we arrive with all the equipment. The amount is confirmed on site before we begin.",
+      "You choose the pieces and have the ironing board ready; we bring everything else. The amount is confirmed on site before we begin.",
     offers: [
       {
         name: "Week session",
@@ -463,6 +466,13 @@ export const en: Dict = {
       `On any first booking of ${FIRST_FREE_MIN} or more. One use per customer. Not applicable to subscriptions or single pieces.`,
     note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
   },
+  capacity: {
+    upTo: "Up to {n} pieces",
+    perCycle: "Up to {n} pieces per cycle",
+    caveat: "The number of pieces depends on the size, type and fabric of the garments.",
+    sentence: "Up to {a} pieces in {da}, and up to {b} in {db}, depending on the size, type and fabric of the garments.",
+    setup: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each. A session of {min} therefore includes {ironing} of ironing.`,
+  },
   testimonials: {
     eyebrow: "Word of mouth",
     title: "Closets, transformed.",
@@ -470,8 +480,6 @@ export const en: Dict = {
   faq: {
     eyebrow: "Questions",
     title: "What people ask us.",
-    cadence: "Figure about {shirts} shirts per hour, or 5 to 7 mixed pieces.",
-    cadenceMixed: "Figure about 5 to 7 mixed pieces per hour.",
     items: [
       {
         q: "Do you pick up the clothes?",
@@ -479,11 +487,19 @@ export const en: Dict = {
       },
       {
         q: "Do I need to provide a board and iron?",
-        a: "No. Your craftsman arrives with the full professional kit: active pressing table, steam generator, pressing cloths, hangers. All we need is a power outlet and roughly two square metres.",
+        a: "The board, yes; the rest, no. Your craftsman arrives with the professional kit: steam generator, iron, pressing cloths, hangers. Have your ironing board ready, along with a power outlet and roughly two square metres.",
       },
       {
         q: "How much time should I plan for?",
-        a: "{cadence} During booking, the estimator works out the duration from the quantities you choose; to change it, change the quantities.",
+        a: "During booking, the estimator works out the duration from the quantities you choose, setting up and packing away included; to change it, change the quantities.",
+      },
+      {
+        q: "How many garments do you iron in a session?",
+        a: "{capacity}",
+      },
+      {
+        q: "Is setting up included in the session?",
+        a: "Yes. {setup} Your craftsman arrives at the start time of the session.",
       },
       {
         q: "Do I have to be there during the session?",
@@ -526,14 +542,14 @@ export const en: Dict = {
     lede:
       "NIVEX irons your clothes and bed linen on site, in your home, in Montreal. No pickup, no delivery: nothing leaves your home.",
     areasTitle: "Neighbourhoods served",
-    areasLede: "The craftsman travels to these neighbourhoods with all his equipment. Enter your postal code to check your address and see the travel fee.",
+    areasLede: "The craftsman travels to these neighbourhoods with his equipment. Enter your postal code to check your address and see the travel fee.",
     none: `No Montreal neighbourhood is open to online booking at the moment. Call us at ${PHONE}.`,
     conditionsTitle: "Terms in Montreal",
     conditionsLede: "The same as on the {link} page, drawn from the same settings.",
     rate: "Rate",
     rateValue: "{rate} per hour, that is {entry} for a {min} session.",
     minimum: "Minimum length",
-    minimumValue: "A session lasts at least {min}. The craftsman arrives {setup} minutes early to set up, at no charge: the time you book is all ironing.",
+    minimumValue: "A session lasts at least {min}. {setup}",
     travel: "Travel fee",
     travelNote: "Per visit, on top of the session price.",
     travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
@@ -551,7 +567,7 @@ export const en: Dict = {
       },
       {
         q: "What do I need to provide?",
-        a: "An electrical outlet and about two square metres of clear space. Nothing else: the active board, steam generator, pressing cloths and hangers arrive with the craftsman. Mention building access and parking in your booking.",
+        a: "Your ironing board, an electrical outlet and about two square metres of clear space. The steam generator, iron, pressing cloths and hangers arrive with the craftsman. Mention building access and parking in your booking.",
       },
     ],
     link: "In-home ironing in Montreal: neighbourhoods served and terms",
@@ -581,6 +597,7 @@ export const en: Dict = {
       more: "Increase quantity",
       estimate: "Estimate",
       duration: "Estimated duration",
+      ironing: "including {ironing} of ironing",
       price: "Estimated amount",
       hours: "h",
       minutes: "min",
@@ -636,7 +653,7 @@ export const en: Dict = {
       timezone: "Timezone: Eastern (Montreal).",
       durationLine: "Estimated duration: {duration}",
       setup:
-        `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
+        `Your presser arrives at the start time. Your session of {duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: {ironing} of ironing.`,
       comment: "Anything to add? (optional)",
       commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
     },
@@ -723,6 +740,7 @@ export const en: Dict = {
       title: "Which plan?",
       hint: "A cycle is the plan's visits actually completed. It is paid at its first visit, on site.",
       perCycle: "/ cycle",
+      insteadOf: "instead of",
       visits: "{n} × {duration}",
       noFirstHour: "The first-hour-free offer does not apply to subscriptions.",
     },
@@ -890,12 +908,8 @@ export const en: Dict = {
     travelIncluded: "travel included",
     travelVaries: "travel fee depends on your area",
     cadence: {
-      title: "Our pace, hour by hour",
-      lede:
-        "These figures aren't a sales promise: they are the ones our booking engine uses to work out how long your session will take. What you read here is what the form will calculate.",
-      colType: "Type of piece",
-      colQty: "In 1 h",
-      note: "A mixed basket runs at about 5 to 7 pieces an hour. That average is what sets the ranges quoted on each package.",
+      title: "What a session holds",
+      colType: "What we handle, and how",
     },
     versus: {
       title: "This is not household ironing.",
@@ -906,12 +920,12 @@ export const en: Dict = {
         {
           title: "The volume",
           them: "Whatever can be done in the time paid for. You find out how far it got at the end.",
-          us: "A number of pieces stated before we start. If we fall short through our own doing, the missing time isn't billed.",
+          us: "A capacity stated before we start, and booked time that is entirely yours. If it is cut short through our own doing, the missing time isn't billed.",
         },
         {
           title: "The equipment",
-          them: "Your iron, your board, your power. The result depends on what you happen to own.",
-          us: "Active board, steam generator, pressing cloths and wooden hangers brought along. You provide an outlet and two square metres.",
+          them: "Your iron, your steam, your hangers. The result depends on what you happen to own.",
+          us: "Professional steam generator, iron, pressing cloths and wooden hangers brought along. You provide the board, an outlet and two square metres.",
         },
         {
           title: "The order of work",
@@ -957,9 +971,9 @@ export const en: Dict = {
       perMonth: "/ cycle",
       cycleNote: "A cycle is the plan's visits actually completed, roughly four weeks. It is paid at its first visit, on site.",
       cta: "Subscribe",
-      full: "Single sessions",
-      save: "You save",
+      insteadOf: "instead of",
       perks: [
+        `Each hour ${HOURLY_DISCOUNT} less than a single session, guaranteed when you subscribe.`,
         "Your slots are kept for you: the same day, at the same time, all year.",
         "A visit can be cancelled or moved at no charge until 11:59 p.m. the day before. It does not count, and is added at the end of the series.",
         "Light starch on collars and cuffs, included at no extra cost.",
@@ -970,10 +984,10 @@ export const en: Dict = {
     terms: {
       title: "What holds for every session",
       items: [
-        { dt: "Volume honoured", dd: "The number of pieces stated on each package is a commitment. If we fall short through our own doing, the missing time isn't billed." },
+        { dt: "Time honoured", dd: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each; the rest of the booked time is ironing. If it is cut short through our own doing, the missing time isn't billed.` },
         { dt: "Estimate and final amount", dd: "The estimate is indicative. The final amount follows the time actually spent and is confirmed to you on site, before we begin." },
         { dt: "Payment", dd: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking." },
-        { dt: "What we need at your place", dd: "One power outlet and about two square metres of clear floor. Nothing else: the professional equipment arrives with the artisan." },
+        { dt: "What we need at your place", dd: "Your ironing board, one power outlet and about two square metres of clear floor. The rest of the equipment arrives with the artisan." },
       ],
       travel: "Travel fee",
       travelFree: "No travel fee",

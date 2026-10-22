@@ -6,7 +6,7 @@ import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
-import { smsConfigured } from "@/lib/sms";
+import { smsConfigured, smsScheduleConfigured } from "@/lib/sms";
 import { getDict } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ export default async function AdminPage({
       clientEmail: b.clientEmail, clientPhone: b.clientPhone,
       address: b.address, city: b.city, postalCode: b.postalCode, notes: b.notes,
       items: b.items, startsAt: b.startsAt.toISOString(), endsAt: b.endsAt.toISOString(),
-      durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
+      durationMinutes: b.durationMinutes, setupMinutes: b.setupMinutes, estimateCents: b.estimateCents,
       currency: b.currency, firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
@@ -81,6 +81,7 @@ export default async function AdminPage({
         database: isDbConfigured(),
         google: googleConfigured(),
         sms: smsConfigured(),
+        smsSchedule: smsScheduleConfigured(),
         origin: siteOrigin(),
       }}
       link={link}

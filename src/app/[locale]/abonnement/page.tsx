@@ -4,7 +4,7 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
-import { PLANS, planCents, planFullCents } from "@/lib/pricing";
+import { PLANS, planCents, planFullCents, planPieces } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
 import { SubscriptionWizard, type SubscriptionConfig } from "@/components/booking/SubscriptionWizard";
@@ -56,6 +56,7 @@ export default async function SubscribePage({
       rhythm: rhythmPhrase(p.everyWeeks, locale),
       cycleCents: planCents(p, s),
       fullCents: planFullCents(p, s),
+      pieces: planPieces(p),
     })),
     currency: s.currency,
     timezone: s.timezone,

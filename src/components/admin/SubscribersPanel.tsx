@@ -99,7 +99,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
     try {
       const d = await (await fetch("/api/cron/daily", { cache: "no-store" })).json();
       setDaily(d.ok
-        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
+        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.soon ?? 0} texto(s) de deux heures avant programmé(s), ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {
@@ -194,7 +194,7 @@ function startsWithin(iso: string, ms: number): boolean {
 
 type ActResult = {
   ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; fields?: string[];
-  replacement?: string | null; cents?: number;
+  replacement?: string | null; cents?: number; price?: number;
 };
 
 async function act(body: Record<string, unknown>): Promise<ActResult> {
@@ -227,6 +227,7 @@ function SubscriptionCard({ s, when, onChange }: {
   const [confirming, setConfirming] = useState<"end" | "delete" | null>(null);
   const [place, setPlace] = useState({ date: "", time: "" });
   const [fee, setFee] = useState(String(s.feePerVisitCents / 100));
+  const [price, setPrice] = useState(String(s.cycleCents / 100));
   const ended = s.status === "ended";
 
   async function run(key: string, body: Record<string, unknown>, ok?: string) {
@@ -236,13 +237,16 @@ function SubscriptionCard({ s, when, onChange }: {
     setBusy(null);
     if (!d.ok) {
       if (body.action === "renew" && d.error === "conflicts") setRenewConflicts(d.conflicts ?? []);
-      setMsg(errorText(d));
+      setMsg(body.action === "early" && d.error === "slot_taken"
+        ? "Le quart d'heure de plus ne tient pas : une visite à venir est collée à un autre rendez-vous. Déplacez-la d'abord."
+        : errorText(d));
       if (body.action !== "resync") return;
     } else {
       setMsg(ok ?? null);
       setRenewConflicts(null);
       setConfirming(null);
       if (typeof d.cents === "number") setFee(String(d.cents / 100));
+      if (typeof d.price === "number") setPrice(String(d.price / 100));
     }
     await onChange();
   }
@@ -326,6 +330,38 @@ function SubscriptionCard({ s, when, onChange }: {
                 </span>
                 <span className="mt-1 block text-[0.74rem] text-ink-400">
                   S&apos;applique au cycle en cours s&apos;il n&apos;est pas encore payé, et aux suivants.
+                </span>
+              </Line>
+            )}
+            {!ended && (
+              <Line label="Prix garanti">
+                <span className="flex flex-wrap items-center gap-2">
+                  <input type="number" min={0} step={1} value={price} onChange={(e) => setPrice(e.target.value)}
+                    aria-label="Prix garanti d'un cycle, hors frais, en dollars"
+                    className="field !w-24 !py-1.5 !px-2 text-center text-sm tabular-nums" />
+                  <span className="text-[0.8rem] text-ink-400">$ par cycle</span>
+                  <button type="button" disabled={busy === "price" || price.trim() === "" || !(Number(price) >= 0)}
+                    onClick={() => run("price", { action: "price", id: s.id, cents: Math.round(Number(price) * 100) }, "Prix garanti enregistré.")}
+                    className="border border-gold-400/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
+                    Enregistrer
+                  </button>
+                </span>
+                <span className="mt-1 block text-[0.74rem] text-ink-400">
+                  Le montant d&apos;un cycle, hors frais de déplacement, figé à la souscription pour douze mois. Un cycle déjà payé garde son montant.
+                </span>
+              </Line>
+            )}
+            {!ended && (
+              <Line label="Arrivée">
+                <label className="flex items-center gap-2.5">
+                  <input type="checkbox" checked={s.setupMinutes > 0} disabled={busy === "early"}
+                    onChange={(e) => run("early", { action: "early", id: s.id, early: e.target.checked },
+                      e.target.checked ? "Arrivée 15 min avant : rappels et agenda mis à jour." : "Arrivée à l'heure du début : rappels et agenda mis à jour.")}
+                    className="h-4 w-4 accent-[#866836]" />
+                  <span>Arrivée 15 min avant</span>
+                </label>
+                <span className="mt-1 block text-[0.74rem] text-ink-400">
+                  L&apos;ancien déroulement, pour un abonné d&apos;avant le changement : installation avant la visite, rangement après, et ce temps bloqué. Décochée, l&apos;installation et le rangement se font dans la visite. S&apos;applique aux visites à venir.
                 </span>
               </Line>
             )}

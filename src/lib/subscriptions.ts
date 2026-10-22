@@ -15,8 +15,8 @@ import {
   subscriptionOwnerNotification, visitChanged, visitReminder,
   type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
-import { cleanOrigin, hydrate, occupiedBlock, type Booking } from "./bookings";
-import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
+import { cancelSoonText, cleanOrigin, dueSoonTexts, hydrate, occupiedBlock, scheduleSoonText, type Booking } from "./bookings";
+import { ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
 import {
   canSubscriberChange, cycleAmount, gridDate, subscriberFeeCents, gridDates, gridFrom, gridIndexAfter, quoteCycle,
@@ -25,7 +25,7 @@ import {
   type Grid, type SeriesConflict, type SubscriptionView, type VisitNumber,
 } from "./cycles";
 import {
-  contactEmail, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, SETUP_MINUTES, TERM_SERIES,
+  contactEmail, EARLY_ARRIVAL_MINUTES, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, TERM_SERIES,
 } from "./brand";
 import { purgeCalendarCopies, purgeExpired } from "./retention";
 import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, parseDateKey, parseHM } from "./time";
@@ -54,6 +54,8 @@ export type Subscription = {
   clientName: string; clientEmail: string; clientPhone: string;
   address: string; city: string; postalCode: string; notes: string | null;
   cycleCents: number; feePerVisitCents: number; travelZone: string | null; currency: string;
+  /** Les minutes d'arrivée anticipée : 15 pour l'ancien déroulement, 0 aujourd'hui. Ses visites en héritent. */
+  setupMinutes: number;
   startCycle: number; startDone: number;
   paidCycles: Record<string, string>;
   /** Le montant encaissé de chaque cycle payé, noté au moment du paiement. */
@@ -78,6 +80,7 @@ function hydrateSub(r: Row): Subscription {
     city: r.city as string, postalCode: r.postal_code as string, notes: (r.notes as string) ?? null,
     cycleCents: Number(r.cycle_cents), feePerVisitCents: Number(r.travel_fee_cents ?? 0),
     travelZone: (r.travel_zone as string) ?? null, currency: (r.currency as string) || "CAD",
+    setupMinutes: r.setup_minutes == null ? EARLY_ARRIVAL_MINUTES : Number(r.setup_minutes),
     startCycle: Number(r.start_cycle ?? 1), startDone: Number(r.start_done ?? 0),
     paidCycles: (r.paid_cycles as Record<string, string>) ?? {},
     paidAmounts: (r.paid_amounts as Record<string, number>) ?? {},
@@ -443,20 +446,20 @@ async function insertSubscription(p: {
           id, ref, manage_token, locale, status, plan_key, plan_name,
           visits_per_cycle, every_weeks, minutes_per_visit, grid_anchor, grid_hm,
           client_name, client_email, client_phone, address, city, postal_code, notes,
-          cycle_cents, travel_fee_cents, travel_zone, currency,
+          cycle_cents, travel_fee_cents, travel_zone, currency, setup_minutes,
           start_cycle, start_done, paid_cycles, paid_amounts, created_by
         ) VALUES (
           ${id}, ${bookingRef().replace("NVX-", "ABO-")}, ${token(24)}, ${input.locale}, 'active', ${plan.key}, ${plan.fr.name},
           ${plan.visits}, ${plan.everyWeeks}, ${plan.minutesPerVisit}, ${grid.anchor}, ${grid.hm},
           ${input.name}, ${input.email}, ${input.phone}, ${input.address}, ${input.city},
           ${input.postalCode.toUpperCase()}, ${input.notes || null},
-          ${quote.planCents}, ${quote.feePerVisitCents}, ${verdict.labelFr}, ${settings.currency},
+          ${quote.planCents}, ${quote.feePerVisitCents}, ${verdict.labelFr}, ${settings.currency}, 0,
           ${p.startCycle}, ${p.startDone}, ${JSON.stringify(paid)}::jsonb, ${JSON.stringify(paidAmounts)}::jsonb, ${p.createdBy}
         )`,
       q`INSERT INTO nivex_bookings (
           ref, manage_token, locale, status, client_name, client_email, client_phone,
           address, city, postal_code, notes, items, starts_at, ends_at,
-          duration_minutes, estimate_cents, currency, first_hour_free,
+          duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
           travel_fee_cents, travel_zone, subscription_id, series_no,
           heard_from, utm_source, utm_medium, utm_campaign,
           referrer, landing_page, first_seen_at, visit_count, referral, referred_by
@@ -465,7 +468,7 @@ async function insertSubscription(p: {
           r.ref, r.manage_token, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
           ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
           ${JSON.stringify([{ key: plan.key, label, qty: 1 }])}::jsonb, r.starts_at, r.ends_at,
-          ${plan.minutesPerVisit}, 0, ${settings.currency}, false,
+          ${plan.minutesPerVisit}, 0, 0, ${settings.currency}, false,
           0, ${verdict.labelFr}, ${id}::uuid, ${p.series},
           r.heard_from, r.utm_source, r.utm_medium, r.utm_campaign,
           r.referrer, r.landing_page, r.first_seen_at, r.visit_count, r.referral, r.referred_by
@@ -508,6 +511,7 @@ async function insertSubscription(p: {
             smsWhen(first.startsAt, settings.timezone, "fr")), full.sub.ref)
         : Promise.resolve(false),
     ]);
+    await scheduleSoonTexts(full.visits, settings.timezone);
   }
 
   await logEvent("subscription_created", {
@@ -541,15 +545,20 @@ function summaryOf(sub: Subscription, n: VisitNumber | undefined): string {
 
 /**
  * La description d'une visite dans l'agenda : de quoi partir sans ouvrir
- * le tableau de bord. L'heure d'arrivée y figure, puisque l'événement couvre
- * l'installation et le rangement.
+ * le tableau de bord. L'événement commence à l'heure d'arrivée : le début de
+ * la séance, ou un quart d'heure avant pour un abonné resté à l'ancien
+ * déroulement, et la description le redit.
  */
 function descriptionOf(sub: Subscription, v: Booking, n: VisitNumber | undefined, origin: string, tz: string): string {
-  const arrival = new Date(v.startsAt.getTime() - SETUP_MINUTES * 60_000);
   const amount = cycleAmount(sub.cycleCents, sub.feePerVisitCents, sub.perCycle);
+  const arrival = new Date(v.startsAt.getTime() - v.setupMinutes * 60_000);
   const lines = [
-    `Arrivée : ${formatTimeIn(arrival, tz)} (${SETUP_MINUTES} min avant la séance, pour s'installer)`,
-    `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}`,
+    v.setupMinutes > 0
+      ? `Arrivée : ${formatTimeIn(arrival, tz)} (${v.setupMinutes} min avant la séance, pour s'installer)`
+      : `Arrivée : ${formatTimeIn(v.startsAt, tz)}, à l'heure du début`,
+    v.setupMinutes > 0
+      ? `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}`
+      : `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}, installation et rangement compris`,
     "",
     `Formule : ${sub.planName}`,
     n ? `Visite ${n.index}/${sub.perCycle} du cycle ${n.cycle}` : "Visite",
@@ -596,7 +605,9 @@ async function calendarSeries(full: SubscriptionFull, rows: Booking[], at: strin
   const firstIdx = gridIndexAfter(grid, new Date(kept[0].startsAt.getTime() - 1));
   const lastIdx = gridIndexAfter(grid, new Date(kept[kept.length - 1].startsAt.getTime() - 1));
   const firstGrid = gridDate(grid, firstIdx);
-  const block = occupiedBlock({ startsAt: firstGrid, endsAt: new Date(firstGrid.getTime() + sub.minutesPerVisit * 60_000) });
+  const block = occupiedBlock({
+    startsAt: firstGrid, endsAt: new Date(firstGrid.getTime() + sub.minutesPerVisit * 60_000), setupMinutes: sub.setupMinutes,
+  });
 
   const ev = await createRecurringEvent(at, {
     calendarId: s.calendarId,
@@ -687,6 +698,7 @@ function emailBase(full: SubscriptionFull, s: Settings, origin: string, visits?:
     address: sub.address, city: sub.city, postalCode: sub.postalCode, notes: sub.notes,
     planName: planName(sub, sub.locale),
     perCycle: sub.perCycle, everyWeeks: sub.everyWeeks, minutesPerVisit: sub.minutesPerVisit,
+    setupMinutes: sub.setupMinutes,
     visits: upcoming,
     planCents: amount.planCents, travelCents: amount.travelCents, totalCents: amount.totalCents,
     feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone,
@@ -700,6 +712,9 @@ function visitData(full: SubscriptionFull, v: Booking, s: Settings, origin: stri
   const n = full.view.numbers.get(v.id) ?? { cycle: full.view.currentCycle, index: 1 };
   return {
     ...emailBase(full, s, origin),
+    /* Une visite garde l'arrivée qu'on lui a annoncée, même si la case de
+       l'abonné a changé depuis. */
+    setupMinutes: v.setupMinutes,
     startsAt: v.startsAt, cycle: n.cycle, index: n.index,
     paymentDue: n.index === 1 && !full.sub.paidCycles[String(n.cycle)],
   };
@@ -764,21 +779,21 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
   const series = Math.max(...kept.map((v) => v.seriesNo ?? 1));
 
   for (const when of candidates) {
-    if (slotProblem(when.getTime(), sub.minutesPerVisit, busy, s, new Date(), { checkLead: false })) continue;
+    if (slotProblem(when.getTime(), sub.minutesPerVisit, busy, s, new Date(), { checkLead: false, setupMinutes: sub.setupMinutes })) continue;
     try {
       const rows = (await sql()`
         WITH ins AS (
           INSERT INTO nivex_bookings (
             ref, manage_token, locale, status, client_name, client_email, client_phone,
             address, city, postal_code, notes, items, starts_at, ends_at,
-            duration_minutes, estimate_cents, currency, first_hour_free,
+            duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
             travel_fee_cents, travel_zone, subscription_id, series_no, makeup, email_sent
           ) VALUES (
             ${bookingRef()}, ${token(24)}, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
             ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
             ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb,
             ${when.toISOString()}, ${new Date(when.getTime() + sub.minutesPerVisit * 60_000).toISOString()},
-            ${sub.minutesPerVisit}, 0, ${sub.currency}, false,
+            ${sub.minutesPerVisit}, ${sub.setupMinutes}, 0, ${sub.currency}, false,
             0, ${sub.travelZone}, ${sub.id}, ${series}, true, true
           ) RETURNING *
         ), placed AS (
@@ -829,6 +844,7 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
     if (await isDone(b.id)) throw new SubscriptionError("done");
     return { replacement: null };
   }
+  await cancelSoonText(b).catch(() => {});
 
   const at = await ownerAccessToken().catch(() => null);
   const afterCancel = await loadFull(before.sub);
@@ -919,7 +935,7 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
 
   const at = await ownerAccessToken().catch(() => null);
   const busy = await busyWithout(b, at, settings, new Date(to.getTime() - DAY), new Date(to.getTime() + 2 * DAY));
-  if (slotProblem(to.getTime(), b.durationMinutes, busy, settings, new Date(), { checkLead: by === "client" })) {
+  if (slotProblem(to.getTime(), b.durationMinutes, busy, settings, new Date(), { checkLead: by === "client", setupMinutes: b.setupMinutes })) {
     throw new SubscriptionError("invalid_slot");
   }
 
@@ -943,6 +959,12 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   const full = (await findSubscription(b.subscriptionId!))!;
   const moved = full.visits.find((v) => v.id === b.id)!;
   const origin = siteOrigin(host);
+  /* Le texto de deux heures avant suit la visite : retiré à l'ancienne
+     heure, reprogrammé à la nouvelle s'il tombe dans la fenêtre. */
+  await cancelSoonText(b).catch(() => {});
+  moved.smsSoonAt = null;
+  moved.smsSoonSid = null;
+  await scheduleSoonText(moved, tz).catch(() => false);
 
   if (at) {
     if (moved.googleEventId) {
@@ -1031,6 +1053,77 @@ export async function setTravelFee(subId: string, fee: number | "zone", host?: s
 }
 
 /**
+ * Le prix garanti d'un abonné : le montant d'un cycle, hors frais, réglé à la
+ * main par l'artisan. Un abonné d'avant le changement de tarif garde ainsi le
+ * sien jusqu'à la fin de ses douze mois. Les cycles déjà réglés gardent leur
+ * montant (`paid_amounts`) ; les rangs de l'agenda, qui citent le montant à
+ * encaisser, sont remis à jour.
+ */
+export async function setGuaranteedPrice(subId: string, cents: number, host?: string | null): Promise<number> {
+  const settings = await getSettingsStrict();
+  const full = await findSubscription(subId);
+  if (!full) throw new SubscriptionError("not_found");
+  const value = Math.max(0, Math.min(1_000_000, Math.round(cents)));
+  await sql()`UPDATE nivex_subscriptions SET cycle_cents = ${value} WHERE id = ${subId}`;
+  const at = await ownerAccessToken().catch(() => null);
+  if (at) {
+    const after = (await findSubscription(subId))!;
+    await renumberCalendar(after, at, settings, siteOrigin(host));
+  }
+  await logEvent("subscription_price_set", { ref: full.sub.ref, from: full.sub.cycleCents, to: value });
+  return value;
+}
+
+/**
+ * La case « arrivée 15 min avant » d'un abonné.
+ *
+ * Cochée, il garde l'ancien déroulement : l'artisan arrive un quart d'heure
+ * avant chaque visite et repart un quart d'heure après, et ce temps est
+ * bloqué. Décochée, l'installation et le rangement se font dans la séance.
+ * Ses visites à venir suivent dans la même transaction : si l'une est collée
+ * à un autre rendez-vous, le quart d'heure de plus ne tient pas, et rien ne
+ * change. L'agenda, ses rappels et le texto de deux heures avant suivent
+ * l'heure d'arrivée.
+ */
+export async function setEarlyArrival(subId: string, early: boolean, host?: string | null): Promise<number> {
+  const settings = await getSettingsStrict();
+  const full = await findSubscription(subId);
+  if (!full) throw new SubscriptionError("not_found");
+  const minutes = early ? EARLY_ARRIVAL_MINUTES : 0;
+  if (full.sub.setupMinutes === minutes) return minutes;
+
+  const q = sql();
+  try {
+    await q.transaction([
+      q`UPDATE nivex_subscriptions SET setup_minutes = ${minutes} WHERE id = ${subId}`,
+      q`UPDATE nivex_bookings SET setup_minutes = ${minutes}
+        WHERE subscription_id = ${subId} AND status = 'confirmed' AND done_at IS NULL AND starts_at > now()`,
+    ]);
+  } catch (e) {
+    if (isOverlap(e)) throw new SubscriptionError("slot_taken");
+    throw e;
+  }
+
+  const after = (await findSubscription(subId))!;
+  const now = Date.now();
+  for (const v of after.visits.filter((x) => x.status === "confirmed" && x.startsAt.getTime() > now && x.smsSoonAt)) {
+    await cancelSoonText(v).catch(() => {});
+    v.smsSoonAt = null;
+    v.smsSoonSid = null;
+    await scheduleSoonText(v, settings.timezone).catch(() => false);
+  }
+  const at = await ownerAccessToken().catch(() => null);
+  if (at) await renumberCalendar(after, at, settings, siteOrigin(host), { times: true });
+  await logEvent("subscription_arrival_set", { ref: full.sub.ref, minutes });
+  return minutes;
+}
+
+/** Le texto de deux heures avant, pour celles de ces visites qui tombent dans la fenêtre. */
+async function scheduleSoonTexts(visits: Booking[], tz: string): Promise<void> {
+  for (const v of visits) await scheduleSoonText(v, tz).catch(() => false);
+}
+
+/**
  * « Paiement reçu » pour un cycle, ou son retrait en cas d'erreur de saisie.
  *
  * Le montant encaissé se note avec la date : des frais changés ensuite
@@ -1066,7 +1159,7 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
   const busy = await loadBusy({
     accessToken: at, settings, timeMin: new Date(when.getTime() - DAY), timeMax: new Date(when.getTime() + 2 * DAY),
   }).catch(() => []);
-  if (slotProblem(when.getTime(), full.sub.minutesPerVisit, busy, settings, new Date(), { checkLead: false })) {
+  if (slotProblem(when.getTime(), full.sub.minutesPerVisit, busy, settings, new Date(), { checkLead: false, setupMinutes: full.sub.setupMinutes })) {
     throw new SubscriptionError("invalid_slot");
   }
   const series = Math.max(1, ...full.visits.map((v) => v.seriesNo ?? 1));
@@ -1076,14 +1169,14 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
-        duration_minutes, estimate_cents, currency, first_hour_free,
+        duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
         travel_fee_cents, travel_zone, subscription_id, series_no, makeup, email_sent
       ) VALUES (
         ${bookingRef()}, ${token(24)}, ${full.sub.locale}, 'confirmed', ${full.sub.clientName}, ${full.sub.clientEmail}, ${full.sub.clientPhone},
         ${full.sub.address}, ${full.sub.city}, ${full.sub.postalCode}, ${full.sub.notes},
         ${JSON.stringify([{ key: full.sub.planKey, label: `Abonnement ${full.sub.planName}`, qty: 1 }])}::jsonb,
         ${when.toISOString()}, ${new Date(when.getTime() + full.sub.minutesPerVisit * 60_000).toISOString()},
-        ${full.sub.minutesPerVisit}, 0, ${full.sub.currency}, false,
+        ${full.sub.minutesPerVisit}, ${full.sub.setupMinutes}, 0, ${full.sub.currency}, false,
         0, ${full.sub.travelZone}, ${full.sub.id}, ${series}, true, true
       ) RETURNING *`) as Row[])[0];
   } catch (e) {
@@ -1102,6 +1195,7 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
      la date convenue lui arrive par écrit, Google branché ou non. */
   const l = full.sub.locale;
   await sendSms(full.sub.clientPhone, SMS.visitPlaced(l, smsWhen(v.startsAt, settings.timezone, l)), v.ref);
+  await scheduleSoonText(v, settings.timezone).catch(() => false);
   await logEvent("subscription_makeup_placed", { ref: v.ref, subscription: full.sub.ref });
   return v;
 }
@@ -1157,14 +1251,14 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
-        duration_minutes, estimate_cents, currency, first_hour_free,
+        duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
         travel_fee_cents, travel_zone, subscription_id, series_no
       )
       SELECT
         r.ref, r.manage_token, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
         ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
         ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb, r.starts_at, r.ends_at,
-        ${sub.minutesPerVisit}, 0, ${sub.currency}, false,
+        ${sub.minutesPerVisit}, ${sub.setupMinutes}, 0, ${sub.currency}, false,
         0, ${sub.travelZone}, ${sub.id}::uuid, ${series}
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS r(
         ref text, manage_token text, starts_at timestamptz, ends_at timestamptz
@@ -1210,6 +1304,7 @@ export async function endSubscription(subId: string, host?: string | null): Prom
       RETURNING *`,
   ]);
   const removed = (rows as Row[]).map(hydrate).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  for (const v of removed.filter((x) => x.smsSoonAt)) await cancelSoonText(v).catch(() => {});
 
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1244,6 +1339,7 @@ export async function deleteSubscription(subId: string): Promise<void> {
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
   if (full.visits.some((v) => v.doneAt)) throw new SubscriptionError("has_done");
+  for (const v of full.visits.filter((x) => x.smsSoonAt)) await cancelSoonText(v).catch(() => {});
 
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1332,7 +1428,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  * débranché coupe les courriels, pas les textos.
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
-  reminders: number; smsReminders: number; notices: number; thanks: number; google: boolean;
+  reminders: number; smsReminders: number; soon: number; notices: number; thanks: number; google: boolean;
 }> {
   await ensureSchema();
   const settings = await getSettings();
@@ -1384,11 +1480,25 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     if (!r.sms_reminded_at) {
       const stamp = await claimReminder(v, "sms");
       if (stamp) {
-        const body = SMS.reminder(v.locale, smsWhen(v.startsAt, tz, v.locale), isToday, payment);
+        /* L'heure dite est celle où l'artisan sonne : le début de la séance,
+           ou un quart d'heure avant pour l'ancien déroulement. */
+        const arrival = new Date(v.startsAt.getTime() - v.setupMinutes * 60_000);
+        const body = SMS.reminder(v.locale, smsDay(v.startsAt, tz, v.locale), smsTime(arrival, tz, v.locale), isToday, payment);
         if (await sendSms(v.clientPhone, body, v.ref)) smsReminders++;
         else await releaseReminder(v.id, "sms", stamp);
       }
     }
+  }
+
+  /* — Texto de deux heures avant — programmé chez Twilio pour les séances
+     du lendemain ; celles réservées d'ici là le sont à la réservation. */
+  let soon = 0;
+  for (const v of await dueSoonTexts(now).catch(() => [] as Booking[])) {
+    if (v.subscriptionId) {
+      const full = await subOf(v.subscriptionId);
+      if (!full || full.sub.status !== "active") continue;
+    }
+    if (await scheduleSoonText(v, tz, now).catch(() => false)) soon++;
   }
 
   /* — Remerciements — un par client, le lendemain de sa première séance, ou
@@ -1455,8 +1565,8 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     return null;
   });
 
-  await logEvent("daily_done", { reminders, smsReminders, notices, thanks, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, notices, thanks, google: Boolean(at) };
+  await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, day: today, purged, calendarCopies });
+  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at) };
 }
 
 /**
@@ -1591,7 +1701,10 @@ export async function visitMoveSlots(visit: Booking, opts: { from?: string | nul
 
   return {
     timezone: tz, duration: visit.durationMinutes, horizonDays, leadHours: settings.leadHours, today,
-    days: computeSlots({ fromKey: from, days, durationMinutes: visit.durationMinutes, settings: { ...settings, horizonDays }, busy }),
+    days: computeSlots({
+      fromKey: from, days, durationMinutes: visit.durationMinutes, settings: { ...settings, horizonDays }, busy,
+      setupMinutes: visit.setupMinutes,
+    }),
   };
 }
 

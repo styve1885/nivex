@@ -1,5 +1,6 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, PHONE, PHONE_HREF, SETUP_MINUTES } from "./brand";
+import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, INSTALL_MINUTES, PHONE, PHONE_HREF } from "./brand";
+import { ironingMinutes } from "./pricing";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -34,6 +35,9 @@ export type BookingEmailData = {
   items: { label: string; qty: number }[];
   startsAt: Date;
   durationMinutes: number;
+  /* Minutes d'arrivée anticipée : absentes ou nulles aujourd'hui, l'artisan
+     arrivant au début ; quinze pour un rendez-vous de l'ancien déroulement. */
+  setupMinutes?: number;
   estimateCents: number;
   currency: string;
   firstHourFree: boolean;
@@ -119,11 +123,12 @@ const T = {
     travelNote: "Les frais de déplacement s'ajoutent au prix de la séance.",
     travelNoteOffer: "L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
-    setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
+    setup: (duration: string, ironing: string) => `Votre artisan arrive à l'heure du début. Votre séance de ${duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun : ${ironing} de repassage.`,
+    early: (m: number) => `Votre repasseur arrive ${m} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
     beforeList: [
       "Rassemblez les pièces à traiter (panier, lit, dossier de chaise : tout convient).",
-      "Prévoyez une prise électrique et environ deux mètres carrés de dégagement.",
+      "Prévoyez votre planche à repasser, une prise électrique et environ deux mètres carrés de dégagement.",
       "Mettez de côté les pièces fragiles : nous vous consulterons avant d'y toucher.",
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
@@ -154,11 +159,12 @@ const T = {
     travelNote: "The travel fee is added to the price of the session.",
     travelNoteOffer: "The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
-    setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
+    setup: (duration: string, ironing: string) => `Your presser arrives at the start time. Your session of ${duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: ${ironing} of ironing.`,
+    early: (m: number) => `Your presser arrives ${m} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
     beforeList: [
       "Gather the pieces to be handled (a basket, a bed, the back of a chair: anything works).",
-      "Have a power outlet and roughly two square metres of clear space available.",
+      "Have your ironing board, a power outlet and roughly two square metres of clear space available.",
       "Set aside anything fragile — we'll check with you before touching it.",
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
@@ -243,7 +249,7 @@ export function clientConfirmation(d: BookingEmailData) {
     <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.75;color:${MUTED};">${esc(t.travelNote)}${d.firstHourFree ? ` ${esc(t.travelNoteOffer)}` : ""}</p>
   </td></tr>` : ""}
   <tr><td style="padding:24px 40px 0;">
-    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(t.setup)}</p>
+    <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(setupLine(d))}</p>
   </td></tr>
   <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
@@ -270,7 +276,7 @@ export function clientConfirmation(d: BookingEmailData) {
     ...travelRowsText(d, t),
     d.notes ? `${t.notes}: ${d.notes}` : "",
     `${t.ref}: ${d.ref}`, "",
-    t.setup, "",
+    setupLine(d), "",
     `${t.manage}: ${d.manageUrl}`, "",
     t.cancelNote, "", t.footNote, "",
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
@@ -592,6 +598,8 @@ export type SubscriptionEmailData = {
   perCycle: number;
   everyWeeks: number;
   minutesPerVisit: number;
+  /** Minutes d'arrivée anticipée de l'abonné : 15 pour l'ancien déroulement, 0 sinon. */
+  setupMinutes?: number;
   /** Les visites posées, dans l'ordre : la première dit le jour et l'heure. */
   visits: Date[];
   planCents: number;
@@ -620,6 +628,20 @@ export type VisitChange =
   | { kind: "cancelled"; replacement: Date | null }
   | { kind: "moved"; from: Date };
 
+/** La phrase sur l'arrivée d'une séance : à l'heure du début, ou un quart d'heure avant dans l'ancien déroulement. */
+function setupLine(d: BookingEmailData): string {
+  const t = T[d.locale];
+  return (d.setupMinutes ?? 0) > 0
+    ? t.early(d.setupMinutes!)
+    : t.setup(minutesToText(d.durationMinutes, d.locale), minutesToText(ironingMinutes(d.durationMinutes), d.locale));
+}
+
+/** La même, pour les visites d'un abonné. */
+function arrivalLine(d: SubscriptionEmailData): string {
+  return S[d.locale].arrival(d.setupMinutes ?? 0, minutesToText(d.minutesPerVisit, d.locale),
+    minutesToText(ironingMinutes(d.minutesPerVisit), d.locale));
+}
+
 const S = {
   fr: {
     rhythm: (w: number) => w === 1 ? "chaque semaine" : w === 2 ? "aux deux semaines" : `toutes les ${w === 4 ? "quatre" : w} semaines`,
@@ -634,7 +656,9 @@ const S = {
       ? "Un cycle correspond à une visite effectuée. Il se règle à cette visite, sur place : comptant, virement Interac ou carte."
       : `Un cycle correspond à ${n} visites effectuées. Il se règle à la première visite du cycle, sur place : comptant, virement Interac ou carte. Une visite annulée ne compte pas : le cycle se prolonge jusqu'à la suivante.`,
     travelNote: (fee: string) => `Les frais de déplacement de votre zone sont réduits pour les abonnés : ${fee} par visite.`,
-    arrival: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de chaque visite pour s'installer, sans frais.`,
+    arrival: (m: number, duration: string, ironing: string) => m > 0
+      ? `Votre repasseur arrive ${m} minutes avant le début de chaque visite pour s'installer, sans frais.`
+      : `Votre artisan arrive à l'heure du début. Chaque visite de ${duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun : ${ironing} de repassage.`,
     rule: "Chaque visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, depuis le lien ci-dessous. Une visite annulée est ajoutée en fin de série. Passé ce délai, appelez-nous.",
     manage: "Gérer mes visites",
     upcoming: "Vos prochaines visites",
@@ -673,7 +697,9 @@ const S = {
       ? "A cycle is one completed visit. It is paid at that visit, on site: cash, Interac e-Transfer or card."
       : `A cycle is ${n} completed visits. It is paid at the first visit of the cycle, on site: cash, Interac e-Transfer or card. A cancelled visit does not count: the cycle simply runs on to the next one.`,
     travelNote: (fee: string) => `The travel fee for your area is reduced for subscribers: ${fee} per visit.`,
-    arrival: `Your presser arrives ${SETUP_MINUTES} minutes before each visit begins to set up, at no charge.`,
+    arrival: (m: number, duration: string, ironing: string) => m > 0
+      ? `Your presser arrives ${m} minutes before each visit begins to set up, at no charge.`
+      : `Your presser arrives at the start time. Each visit of ${duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: ${ironing} of ironing.`,
     rule: "Each visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the link below. A cancelled visit is added at the end of the series. After that, please call us.",
     manage: "Manage my visits",
     upcoming: "Your next visits",
@@ -779,7 +805,7 @@ export function subscriptionConfirmation(d: SubscriptionEmailData) {
   </td></tr>
   ${note(t.cycleNote(d.perCycle))}
   ${d.feePerVisitCents > 0 ? note(t.travelNote(fee)) : ""}
-  ${note(t.arrival)}
+  ${note(arrivalLine(d))}
   <tr><td style="padding:24px 40px 0;font-family:Helvetica,Arial,sans-serif;">
     <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:10px;">${esc(t.upcoming)}</div>
     <p style="margin:0;font-size:14px;line-height:1.9;color:${MUTED};">${next.map(esc).join("<br>")}</p>
@@ -800,7 +826,7 @@ export function subscriptionConfirmation(d: SubscriptionEmailData) {
     `${t.ref}: ${d.ref}`, "",
     t.cycleNote(d.perCycle),
     d.feePerVisitCents > 0 ? t.travelNote(fee) : "",
-    t.arrival, "",
+    arrivalLine(d), "",
     `${t.upcoming}:`, ...next.map((x) => `  · ${x}`), "",
     `${t.manage}: ${d.manageUrl}`, "", t.rule, "",
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
@@ -883,7 +909,7 @@ export function visitReminder(d: VisitEmailData, today = false) {
     </table>
   </td></tr>
   ${d.paymentDue ? note(t.paymentNote(d.cycle, total)) : ""}
-  ${note(t.arrival)}
+  ${note(arrivalLine(d))}
   <tr><td style="padding:28px 40px 34px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};">${esc(today ? t.tooLateNote : t.stillTime)}</p>
   </td></tr>`;
@@ -894,7 +920,7 @@ export function visitReminder(d: VisitEmailData, today = false) {
     `${t.visit}: ${t.visitValue(d.index, d.perCycle, d.cycle)}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
     ...(d.paymentDue ? ["", ...cycleRowsText(d), t.paymentNote(d.cycle, total)] : []),
-    "", t.arrival, "", `${t.manage}: ${d.manageUrl}`, today ? t.tooLateNote : t.stillTime, "",
+    "", arrivalLine(d), "", `${t.manage}: ${d.manageUrl}`, today ? t.tooLateNote : t.stillTime, "",
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
   ].join("\n");
 

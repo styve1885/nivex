@@ -12,8 +12,13 @@ import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, Goog
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { canSubscriberChange } from "./cycles";
-import { ownerSmsNumber, sendSms, SMS, smsWhen } from "./sms";
-import { contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX, SETUP_MINUTES } from "./brand";
+import {
+  cancelScheduledSms, ownerSmsNumber, scheduleSms, sendSms, SMS, smsDay, smsScheduleConfigured, smsTime, smsWhen,
+} from "./sms";
+import { ironingMinutes } from "./pricing";
+import {
+  contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX, SOON_TEXT_MINUTES,
+} from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
 
@@ -66,6 +71,9 @@ export type Booking = {
   address: string; city: string; postalCode: string; notes: string | null;
   items: { key: string; label: string; qty: number }[];
   startsAt: Date; endsAt: Date; durationMinutes: number;
+  /* Les minutes passées sur place hors du temps réservé, avant et après :
+     0 aujourd'hui, 15 pour l'ancien déroulement (voir db.ts). */
+  setupMinutes: number;
   estimateCents: number; currency: string; firstHourFree: boolean;
   /* Les frais de route, à part de l'estimation : voir travel.ts. */
   travelFeeCents: number; travelZone: string | null;
@@ -76,6 +84,8 @@ export type Booking = {
   /* Une visite d'abonnement : vide pour une séance ponctuelle. */
   subscriptionId: string | null; seriesNo: number | null; makeup: boolean;
   doneAt: Date | null; reminderSentAt: Date | null; googleSeriesId: string | null;
+  /* Le texto « je serai chez vous », programmé chez Twilio. */
+  smsSoonAt: Date | null; smsSoonSid: string | null;
 };
 
 /**
@@ -113,6 +123,7 @@ export function hydrate(r: Row): Booking {
     items: (r.items as Booking["items"]) ?? [],
     startsAt: new Date(r.starts_at as string), endsAt: new Date(r.ends_at as string),
     durationMinutes: Number(r.duration_minutes), estimateCents: Number(r.estimate_cents),
+    setupMinutes: r.setup_minutes == null ? 15 : Number(r.setup_minutes),
     currency: r.currency as string, firstHourFree: r.first_hour_free === true,
     travelFeeCents: Number(r.travel_fee_cents ?? 0),
     travelZone: (r.travel_zone as string) ?? null,
@@ -138,6 +149,8 @@ export function hydrate(r: Row): Booking {
     doneAt: r.done_at ? new Date(r.done_at as string) : null,
     reminderSentAt: r.reminder_sent_at ? new Date(r.reminder_sent_at as string) : null,
     googleSeriesId: (r.google_series_id as string) ?? null,
+    smsSoonAt: r.sms_soon_at ? new Date(r.sms_soon_at as string) : null,
+    smsSoonSid: (r.sms_soon_sid as string) ?? null,
   };
 }
 
@@ -217,7 +230,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
       INSERT INTO nivex_bookings (
         ref, manage_token, locale, status, client_name, client_email, client_phone,
         address, city, postal_code, notes, items, starts_at, ends_at,
-        duration_minutes, estimate_cents, currency, first_hour_free,
+        duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
         travel_fee_cents, travel_zone,
         heard_from, utm_source, utm_medium, utm_campaign,
         referrer, landing_page, first_seen_at, visit_count, referral, referred_by
@@ -225,7 +238,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${ref}, ${manageToken}, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
         ${JSON.stringify(labelled)}::jsonb, ${start.toISOString()}, ${end.toISOString()},
-        ${durationMinutes}, ${cents}, ${settings.currency}, ${firstHourFree},
+        ${durationMinutes}, 0, ${cents}, ${settings.currency}, ${firstHourFree},
         ${verdict.feeCents}, ${verdict.labelFr},
         ${p.heardFrom}, ${p.source}, ${p.medium}, ${p.campaign},
         ${p.referrer}, ${p.landing}, ${p.firstSeenAt}, ${p.visits},
@@ -278,13 +291,16 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   booking.emailSent = await sendBookingEmails(booking, settings, origin).catch(() => false);
 
   /* — Textos : la confirmation au client, l'alerte à l'artisan (au mieux) — */
-  const whenClient = smsWhen(booking.startsAt, settings.timezone, booking.locale);
+  const tz = settings.timezone, l = booking.locale;
   await Promise.all([
-    sendSms(booking.clientPhone, SMS.bookingConfirmed(booking.locale, whenClient,
-      `${origin}/${booking.locale}/reservation/${booking.manageToken}`), ref),
+    sendSms(booking.clientPhone, SMS.bookingConfirmed(l, smsDay(booking.startsAt, tz, l),
+      smsTime(booking.startsAt, tz, l), smsTime(booking.endsAt, tz, l)), ref),
     sendSms(ownerSmsNumber(), SMS.owner.newBooking(booking.clientName,
-      smsWhen(booking.startsAt, settings.timezone, "fr"), booking.city), ref),
+      smsWhen(booking.startsAt, tz, "fr"), booking.city), ref),
   ]);
+  /* Le « je serai chez vous » de deux heures avant, s'il tombe avant la
+     prochaine tâche quotidienne ; sinon, c'est elle qui le programmera. */
+  await scheduleSoonText(booking, tz).catch(() => false);
 
   await logEvent("booking_created", {
     ref, startsAt: booking.startsAt.toISOString(), durationMinutes,
@@ -294,18 +310,87 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 }
 
 /**
- * Le temps réellement occupé : la séance, plus l'installation avant et le
- * rangement après. C'est ce bloc-là qui ne doit jamais en croiser un autre :
- * la contrainte d'exclusion le garde, le moteur de créneaux le compte
- * (`withSetup`), et les événements d'une série d'abonnement, sans invité,
- * le réservent tel quel. L'événement d'une séance ponctuelle, lui, porte
- * les heures réservées : voir `calendarEvent`.
+ * Le temps réellement occupé : la séance, plus les minutes passées sur place
+ * hors du temps réservé (`setupMinutes`, zéro aujourd'hui). C'est ce bloc-là
+ * qui ne doit jamais en croiser un autre : la contrainte d'exclusion le
+ * garde, le moteur de créneaux le compte (`withSetup`), et les événements
+ * d'une série d'abonnement, sans invité, le réservent tel quel — leur début
+ * est donc l'heure d'arrivée. L'événement d'une séance ponctuelle porte les
+ * heures réservées : voir `calendarEvent`.
  */
-export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt">): { start: Date; end: Date } {
+export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt" | "setupMinutes">): { start: Date; end: Date } {
   return {
-    start: new Date(b.startsAt.getTime() - SETUP_MINUTES * 60_000),
-    end: new Date(b.endsAt.getTime() + SETUP_MINUTES * 60_000),
+    start: new Date(b.startsAt.getTime() - b.setupMinutes * 60_000),
+    end: new Date(b.endsAt.getTime() + b.setupMinutes * 60_000),
   };
+}
+
+/* ============================ Texto de deux heures avant ============================ */
+
+/** Quand part le « je serai chez vous » : deux heures avant l'arrivée de l'artisan. */
+export function soonTextAt(b: Pick<Booking, "startsAt" | "setupMinutes">): Date {
+  return new Date(b.startsAt.getTime() - (b.setupMinutes + SOON_TEXT_MINUTES) * 60_000);
+}
+
+/* Twilio programme un envoi de quinze minutes à trente-cinq jours d'avance.
+   On s'en tient à un jour et demi : la tâche quotidienne repasse avant. */
+const SOON_MIN_LEAD_MS = 16 * 60_000;
+export const SOON_WINDOW_MS = 36 * 3600_000;
+
+/**
+ * Programme le texto de deux heures avant, s'il tombe dans la fenêtre que
+ * Twilio accepte et qu'on surveille. Réservé en base avant de partir : la
+ * tâche quotidienne et une réservation à la même seconde n'en programment
+ * qu'un. Un échec chez Twilio rend la réservation ; un numéro étranger la
+ * garde, puisqu'il le restera. Jamais d'exception.
+ */
+export async function scheduleSoonText(b: Booking, tz: string, now = new Date()): Promise<boolean> {
+  if (b.status !== "confirmed" || b.smsSoonAt || !smsScheduleConfigured()) return false;
+  const at = soonTextAt(b);
+  if (at.getTime() < now.getTime() + SOON_MIN_LEAD_MS || at.getTime() > now.getTime() + SOON_WINDOW_MS) return false;
+  const claimed = (await sql()`
+    UPDATE nivex_bookings SET sms_soon_at = ${at.toISOString()}
+    WHERE id = ${b.id} AND status = 'confirmed' AND sms_soon_at IS NULL
+      AND starts_at = ${b.startsAt.toISOString()} AND setup_minutes = ${b.setupMinutes}
+    RETURNING id`) as Row[];
+  if (claimed.length === 0) return false;
+  const arrival = new Date(b.startsAt.getTime() - b.setupMinutes * 60_000);
+  const r = await scheduleSms(b.clientPhone, SMS.soon(b.locale, smsTime(arrival, tz, b.locale)), at, b.ref);
+  if (r.sid) {
+    await sql()`UPDATE nivex_bookings SET sms_soon_sid = ${r.sid} WHERE id = ${b.id}`;
+    b.smsSoonAt = at;
+    b.smsSoonSid = r.sid;
+    return true;
+  }
+  if (r.retry) await sql()`UPDATE nivex_bookings SET sms_soon_at = NULL WHERE id = ${b.id} AND sms_soon_sid IS NULL`;
+  return false;
+}
+
+/**
+ * Retire le texto programmé d'une séance annulée ou déplacée. La ligne est
+ * remise à zéro, pour qu'un déplacement le reprogramme à la nouvelle heure.
+ * Twilio ne peut plus l'annuler s'il est déjà parti : le journal le note.
+ */
+export async function cancelSoonText(b: Pick<Booking, "id" | "ref">): Promise<void> {
+  const rows = (await sql()`
+    WITH old AS (SELECT id, sms_soon_sid FROM nivex_bookings WHERE id = ${b.id} AND sms_soon_at IS NOT NULL FOR UPDATE)
+    UPDATE nivex_bookings n SET sms_soon_at = NULL, sms_soon_sid = NULL
+    FROM old WHERE n.id = old.id
+    RETURNING old.sms_soon_sid AS sid`) as Row[];
+  const sid = rows[0]?.sid as string | null | undefined;
+  if (sid) await cancelScheduledSms(sid, b.ref);
+}
+
+/** Les séances dont le texto de deux heures avant reste à programmer, pour la tâche quotidienne. */
+export async function dueSoonTexts(now: Date): Promise<Booking[]> {
+  await ensureSchema();
+  const rows = (await sql()`
+    SELECT * FROM nivex_bookings
+    WHERE status = 'confirmed' AND sms_soon_at IS NULL
+      AND starts_at > ${new Date(now.getTime() + SOON_TEXT_MINUTES * 60_000).toISOString()}
+      AND starts_at < ${new Date(now.getTime() + SOON_WINDOW_MS + 3 * 3600_000).toISOString()}
+    ORDER BY starts_at LIMIT 100`) as Row[];
+  return rows.map(hydrate);
 }
 
 /** Rien n'a pu être vu sur le site avant 2020 : une date plus ancienne est une saleté. */
@@ -388,8 +473,9 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referre
 const EVENT_TEXT = {
   fr: {
     summary: (n: string) => `NIVEX — Repassage à domicile · ${n}`,
-    session: "Séance", ironing: (d: string) => `${d} de repassage`,
-    setup: `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
+    session: "Séance", ironing: (d: string) => `${d}, installation et rangement compris`,
+    setup: (ironing: string) => `Votre artisan arrive à l'heure du début. L'installation et le rangement de son matériel, ${INSTALL_MINUTES} minutes chacun, font partie de la séance : ${ironing} de repassage.`,
+    early: (m: number) => `Votre repasseur arrive ${m} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     address: "Adresse", client: "Client", phone: "Téléphone", email: "Courriel",
     items: "Prestations", estimate: "Estimation", free: "première heure offerte",
     travel: "Frais de déplacement", total: "Total estimé", notes: "Précisions",
@@ -398,8 +484,9 @@ const EVENT_TEXT = {
   },
   en: {
     summary: (n: string) => `NIVEX — In-home ironing · ${n}`,
-    session: "Session", ironing: (d: string) => `${d} of ironing`,
-    setup: `Your presser arrives ${SETUP_MINUTES} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
+    session: "Session", ironing: (d: string) => `${d}, setting up and packing away included`,
+    setup: (ironing: string) => `Your presser arrives at the start time. Setting up and packing away the equipment, ${INSTALL_MINUTES} minutes each, are part of the session: ${ironing} of ironing.`,
+    early: (m: number) => `Your presser arrives ${m} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     address: "Address", client: "Client", phone: "Phone", email: "Email",
     items: "Services", estimate: "Estimate", free: "first hour free",
     travel: "Travel fee", total: "Estimated total", notes: "Notes",
@@ -418,11 +505,11 @@ const EVENT_TEXT = {
  * lit dans son propre agenda : nom, téléphone, adresse, prestations et
  * montant y restent.
  *
- * Le quart d'heure d'installation n'est plus dans les heures de
- * l'événement, il est dit en toutes lettres. Le temps réellement occupé
- * reste protégé là où il se décide : le moteur de créneaux compte
- * l'installation et le rangement autour de chaque réservation en base, et
- * la contrainte d'exclusion les garde à l'écriture.
+ * L'événement porte les heures réservées, et l'artisan arrive au début :
+ * l'installation et le rangement sont dans la séance, et la description le
+ * dit. Un rendez-vous de l'ancien déroulement garde sa phrase d'arrivée
+ * anticipée ; le temps qu'il occupe en plus reste protégé là où il se
+ * décide, par le moteur de créneaux et la contrainte d'exclusion.
  */
 export function calendarEvent(b: Booking, origin: string, tz: string): {
   summary: string; description: string; location: string; start: string; end: string;
@@ -432,7 +519,7 @@ export function calendarEvent(b: Booking, origin: string, tz: string): {
   const money = (cents: number) => formatMoney(cents, b.currency, l);
   const lines: string[] = [
     t.kv(t.session, `${formatDateTime(b.startsAt, tz, l)} — ${t.ironing(minutesToText(b.durationMinutes, l))}.`),
-    t.setup,
+    b.setupMinutes > 0 ? t.early(b.setupMinutes) : t.setup(minutesToText(ironingMinutes(b.durationMinutes), l)),
     "",
     t.kv(t.address, `${b.address}, ${b.city}, QC ${b.postalCode}`),
     t.kv(t.client, b.clientName),
@@ -470,7 +557,7 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
     ref: b.ref, locale: b.locale, clientName: b.clientName, clientEmail: b.clientEmail,
     clientPhone: b.clientPhone, address: b.address, city: b.city, postalCode: b.postalCode,
     notes: b.notes, items: b.items.map((i) => ({ label: i.label, qty: i.qty })),
-    startsAt: b.startsAt, durationMinutes: b.durationMinutes, estimateCents: b.estimateCents,
+    startsAt: b.startsAt, durationMinutes: b.durationMinutes, setupMinutes: b.setupMinutes, estimateCents: b.estimateCents,
     currency: b.currency, firstHourFree: b.firstHourFree, timezone: s.timezone,
     travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
@@ -764,6 +851,7 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
     WHERE id = ${b.id} AND status <> 'cancelled'
     RETURNING id`) as Row[];
   if (claimed.length === 0) return;
+  await cancelSoonText(b).catch(() => {});
 
   const at = await ownerAccessToken().catch(() => null);
   const origin = siteOrigin();

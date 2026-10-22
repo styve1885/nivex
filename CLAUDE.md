@@ -50,12 +50,16 @@ d'une constante dans un texte. La règle s'est payée plusieurs fois : une
 page qui récite de mémoire finit par contredire le moteur.
 
 - **Prix** : depuis `settings.hourlyRate`, via `src/lib/pricing.ts`.
-- **Cadence** (pièces à l'heure) : `perHour(minutesPerUnit)`, lu des
-  prestations enregistrées.
+- **Capacité** (pièces par séance) : `capacityPieces(minutes)`, depuis
+  `PIECES_PER_HOUR`, mis en phrases par `lib/capacity.ts`. C'est le **seul**
+  chiffre de quantité affiché : aucune page ne cite plus de pièces à l'heure
+  par prestation. Il s'accompagne toujours de « selon la taille, le type et
+  la matière des vêtements » (`capacity.caveat`).
 - **Horaire d'ouverture** : déduit de `settings.hours`, jours ouverts
   compris.
 - **Délais** : `CANCEL_WINDOW_HOURS`, `FIRST_FREE_MIN_MINUTES`,
-  `SETUP_MINUTES` dans `src/lib/brand.ts`.
+  `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES`,
+  `SOON_TEXT_MINUTES` dans `src/lib/brand.ts`.
 
 Les prestations et les réglages vivent **en base**, et la base l'emporte
 sur les valeurs par défaut du code. Changer `DEFAULT_SERVICES` ne suffit
@@ -71,9 +75,21 @@ ramènerait au prochain chargement ; elles se désactivent.
   d'une heure, et la vitrine ne doit pas en proposer. Les réglages ne
   descendent pas sous `MIN_SESSION_MINUTES`, ni à l'enregistrement ni à la
   lecture.
-- L'artisan arrive **quinze minutes avant** pour s'installer, sans frais.
-  Le bloc réservé est entièrement du repassage.
+- L'artisan arrive **à l'heure du début**. L'installation et le rangement
+  du matériel, cinq minutes chacun (`INSTALL_MINUTES`, `PACKUP_MINUTES`), se
+  font **dans** la séance : 2 h réservées, 1 h 50 de repassage. La durée
+  calculée ajoute ces dix minutes au temps de repassage du panier
+  (`sessionMinutes`). Décidé le 22 octobre 2026 ; avant, l'artisan arrivait
+  quinze minutes avant et le bloc était entièrement du repassage. Les
+  rendez-vous pris avant gardent l'ancien déroulement (`setup_minutes`,
+  plus bas).
+- Une séance traite **jusqu'à 18 pièces en 2 h, 27 en 3 h**, selon la
+  taille, le type et la matière des vêtements. Aucune autre estimation de
+  quantité ne s'écrit.
 - **Rien ne quitte le domicile** : pas de collecte, pas de livraison.
+- **Le client prévoit la planche à repasser**, une prise et environ deux
+  mètres carrés ; l'artisan apporte tout le reste (générateur de vapeur,
+  fer, pattemouilles, cintres). Le texto de confirmation le rappelle.
 - La première heure est offerte à partir de deux heures réservées, une
   fois par client, jamais sur les abonnements.
 
@@ -138,9 +154,16 @@ chacune : c'est ce 404 attendu, pas une panne.
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
-`nivex_zone_history`. Le schéma se pose tout
+`nivex_zone_history`, `nivex_migrations`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 **idempotent** : il s'exécute à chaque instance froide.
+
+Une migration de données qui ne doit passer qu'**une fois** s'inscrit dans
+`nivex_migrations` : le nom s'insère et la mise à jour se fait dans la même
+instruction (CTE `INSERT … ON CONFLICT DO NOTHING RETURNING`), si bien
+qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
+remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
+50 $ à 55 $, seulement s'il valait encore 50 $.
 
 ### L'espace artisan
 
@@ -183,18 +206,27 @@ Les gardes posées là, et pourquoi :
   ré-exportée, et jamais appelée. Une adresse de Gatineau s'inscrivait
   dans l'agenda comme une autre.
 - Une contrainte d'exclusion Postgres interdit deux séances qui se
-  chevauchent, installation comprise. Elle passe par une fonction
-  `IMMUTABLE` : une contrainte d'exclusion indexe son expression, et un
-  index refuse tout ce qui ne l'est pas.
+  chevauchent, temps hors séance compris. Elle passe par la fonction
+  `IMMUTABLE` `nivex_occupied(starts_at, ends_at, setup_minutes)` : une
+  contrainte d'exclusion indexe son expression, et un index refuse tout ce
+  qui ne l'est pas.
 - Seule la **mise en pause** ferme vraiment les réservations. Un compte
   Google injoignable ne doit pas fermer la maison : le rendez-vous
   s'écrit en base, l'agenda et les courriels suivent dès qu'ils peuvent.
   En pause, les pages `/reserver` et `/abonnement` montrent un avis et le
   téléphone au lieu du tunnel.
-- **L'installation compte des deux côtés** : `SETUP_MINUTES` s'ajoute
-  avant et après chaque rendez-vous en base comme autour des événements de
-  l'agenda, dans le calcul des créneaux comme à l'écriture. L'invitation
-  envoyée au client porte les heures réservées, et dit l'arrivée anticipée.
+- **Le temps passé hors séance se lit rendez-vous par rendez-vous**
+  (`setup_minutes`) : 0 pour toute réservation nouvelle, 15
+  (`EARLY_ARRIVAL_MINUTES`) pour les rendez-vous d'avant le 22 octobre 2026
+  et pour les abonnés à « arrivée 15 min avant ». Ces minutes s'ajoutent
+  avant et après la ligne, dans le calcul des créneaux comme à l'écriture,
+  et l'événement d'agenda commence à l'heure d'arrivée. La colonne vaut 15
+  par défaut : une ancienne version encore servie pendant un déploiement
+  n'écrit que des rendez-vous à l'ancien régime, jamais trop serrés.
+  L'invitation et le courriel disent ce que contient la séance
+  (`setupLine`) ou, à l'ancien régime, l'arrivée anticipée. L'onglet
+  Rendez-vous montre les trois temps (`sessionPhases`) et le repassage
+  effectif.
 - **L'horizon et la grille sont tenus par le serveur**, pas seulement par
   le navigateur : pas de réservation au-delà de `horizonDays`.
 - **La facturation suit le pas des créneaux** (`slotStep`, 30 min par
@@ -233,10 +265,19 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   par l'heure. Une visite annulée ne compte pas : le cycle se prolonge, les
   rangs suivants se recalculent, et une visite de remplacement est posée sur
   la grille après la toute dernière date de la série.
+- **Le montant d'un cycle** : les heures du cycle au taux horaire moins
+  `SUBSCRIBER_HOURLY_DISCOUNT_CENTS` (5 $), arrondi à 5 $ (`planCents`). Le
+  prix barré « au lieu de » est le même temps à la carte. Aucun pourcentage
+  de remise ne s'écrit.
 - **Le montant d'un cycle et les frais sont figés à la souscription** (tarif
-  garanti douze mois). Les frais : ceux de la zone pour la durée d'une visite,
-  moins `SUBSCRIBER_TRAVEL_DISCOUNT_CENTS`, jamais sous zéro, multipliés par
-  les visites du cycle. Le tout se paie à la première visite du cycle.
+  garanti douze mois). L'artisan peut corriger le montant d'un abonné
+  (« Prix garanti », `setGuaranteedPrice`) et cocher « Arrivée 15 min
+  avant » (`setEarlyArrival`) : ses visites à venir reprennent l'ancien
+  déroulement, agenda et texto de deux heures avant décalés, ou rien ne
+  change si une séance déjà posée y touche (`slot_taken`). Les frais : ceux
+  de la zone pour la durée d'une visite, moins
+  `SUBSCRIBER_TRAVEL_DISCOUNT_CENTS`, jamais sous zéro, multipliés par les
+  visites du cycle. Le tout se paie à la première visite du cycle.
   Une visite d'abonné vaut `estimate_cents = 0` ; jamais de première heure
   offerte. L'artisan peut changer à la main les frais par visite d'un abonné
   (0 $, un autre montant, ou retour aux frais de sa zone) depuis l'onglet
@@ -263,7 +304,8 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   supprime son occurrence ; un remplacement est un événement simple.
 - **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
   rappel de la veille, qui annonce le paiement à la première visite d'un
-  cycle, et courriel de fin de série à l'artisan. Chaque envoi est réservé
+  cycle et donne l'heure d'arrivée, programmation des textos de deux heures
+  avant, et courriel de fin de série à l'artisan. Chaque envoi est réservé
   en base avant de partir : un second passage, ou le bouton de l'onglet
   Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
   de conservation (`purgeExpired`, `lib/retention.ts`) : journal technique
@@ -293,6 +335,21 @@ Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
 échouer une réservation, et un compte Google débranché ne l'empêche pas de
 partir. Le rappel par texto se note dans `sms_reminded_at`, à part du
 courriel (`reminder_sent_at`). Une séance ponctuelle n'a que le texto.
+
+Les trois textos du client suivent les modèles de l'artisan, signés
+`SMS_SIGNATURE` : la confirmation (jour, date, début et fin, « Vous n'avez
+que la planche à prévoir »), le rappel de la veille (« demain …, j'arrive
+à … ») et, `SOON_TEXT_MINUTES` avant l'arrivée, « Je serai chez vous à … ».
+L'heure dite est toujours l'**arrivée** : le début de la séance, ou un quart
+d'heure plus tôt à l'ancien régime. Le texto de deux heures avant est
+**programmé chez Twilio** (`ScheduleType=fixed`), ce qui demande un service
+de messagerie (`TWILIO_MESSAGING_SERVICE_SID`) ; sans lui, il ne part pas,
+et rien d'autre ne change. Twilio accepte une échéance de quinze minutes à
+trente-cinq jours ; on s'en tient à 36 heures : le texto se programme à la
+réservation si son heure d'envoi tombe dans ce délai, sinon par la tâche
+quotidienne, qui repasse avant. L'envoi est réservé en
+base avant d'être demandé (`sms_soon_at`, `sms_soon_sid`), et il est
+décommandé chez Twilio quand la séance s'annule ou se déplace.
 
 **Seuls les numéros canadiens reçoivent des textos** (`isCanadianNumber`) :
 un autre numéro est sauté et noté `sms_skipped`, sans jamais refuser la
@@ -477,6 +534,7 @@ date dans `LEGAL_UPDATED`.
 `SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET` (ouvre la tâche
 quotidienne des abonnements), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_FROM` (les textos). Facultatives : `SMS_OWNER_TO`,
+`TWILIO_MESSAGING_SERVICE_SID` (le texto de deux heures avant),
 `ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
 `.env.example`.
 
@@ -491,8 +549,9 @@ est voulu (le détour OAuth quitte l'application) : il porte un
 dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 
-Cinq fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
-chevauchements), `booking` (courriels, durées), `provenance` (zone
+Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
+chevauchements, temps hors séance), `booking` (courriels, durées, trois
+temps), `sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan),
 `travel` (secteurs, zones, frais,
 conflits de préfixes, historique, Montréal, fiche LocalBusiness, robots,

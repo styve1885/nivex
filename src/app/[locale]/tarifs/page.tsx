@@ -8,9 +8,10 @@ import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
+import { capacitySentence, setupSentence } from "@/lib/capacity";
 import {
   ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
-  bookableOffers, cadenceText, firstTimeCents, offerCents, planCents, planFullCents,
+  bookableOffers, capacityPieces, firstTimeCents, offerCents, planCents, planFullCents, planPieces,
   type Offer, type UnitPrice,
 } from "@/lib/pricing";
 
@@ -57,7 +58,13 @@ function OfferRow({
         )}
       </div>
       <p className="text-[0.78rem] text-ink-400">{minutesToText(o.minutes, locale)}</p>
-      <p className="text-[0.88rem] font-light leading-[1.8] text-ink-500">{text.detail}</p>
+      <div>
+        <p className="text-[0.88rem] font-light leading-[1.8] text-ink-500">{text.detail}</p>
+        {/* Le volume de cette durée, tiré du seul chiffre de capacité du site. */}
+        <p className="mt-1 text-[0.72rem] uppercase tracking-[0.12em] text-gold-700">
+          {t.capacity.upTo.replace("{n}", String(capacityPieces(o.minutes)))}
+        </p>
+      </div>
       <div className="sm:text-right">
         {withOffer ? (
           <Price o={o} s={s} t={t} locale={locale} />
@@ -126,6 +133,11 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             {t.tarifs.visitNote.replace("{min}", min).replace("{travel}", travel)}
           </p>
 
+          {/* Ce que contient le temps réservé, dit avant tout montant. */}
+          <p className="mt-8 max-w-2xl text-[0.95rem] font-light leading-[1.85] text-ink-700">
+            {setupSentence(t, s, locale)}
+          </p>
+
           {s.firstHourFree && (
             <p className="mt-8 max-w-2xl border-l-2 border-gold-500 pl-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
               <span className="mr-2 text-[10px] uppercase tracking-[0.2em] text-gold-700">{t.pricing.firstFree}</span>
@@ -135,53 +147,38 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
         </div>
       </section>
 
-      {/* — La cadence, lue du moteur de créneaux — */}
+      {/* — Ce que contient une séance : sa capacité, son déroulement, les pièces — */}
       <section className="bg-linen-50 px-7 py-24 sm:px-10">
         <div className="mx-auto max-w-4xl">
           <div>
             <h2 className="font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
               {t.tarifs.cadence.title}
             </h2>
-            <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">
-              {t.tarifs.cadence.lede}
+            <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-600">
+              {capacitySentence(t, s, locale)}
+            </p>
+            <p className="mt-3 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">
+              {setupSentence(t, s, locale)}
             </p>
           </div>
 
-          <div className="mt-12 overflow-x-auto">
-            <table className="w-full min-w-[20rem] border-collapse">
-              <thead>
-                <tr className="border-b border-ink-800">
-                  <th scope="col" className="pb-3 text-left text-[0.64rem] uppercase tracking-[0.18em] text-gold-700">
-                    {t.tarifs.cadence.colType}
-                  </th>
-                  <th scope="col" className="pb-3 text-right text-[0.64rem] uppercase tracking-[0.18em] text-gold-700">
-                    {t.tarifs.cadence.colQty}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((svc) => (
-                  <tr key={svc.key} className="border-b border-gold-300/40">
-                    <td className="py-4 pr-4 align-baseline">
-                      <span className="text-[0.95rem] text-ink-700">{locale === "en" ? svc.en : svc.fr}</span>
-                      {CADENCE_NOTE[svc.key] && (
-                        <span className="mt-1 block text-[0.76rem] font-light leading-[1.6] text-ink-400">
-                          {locale === "en" ? CADENCE_NOTE[svc.key].en : CADENCE_NOTE[svc.key].fr}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 text-right align-baseline font-display text-[1.15rem] tabular-nums text-ink-800">
-                      {cadenceText(svc.minutesPerUnit, locale === "en" ? svc.unitEn : svc.unitFr, locale)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-12">
+            <p className="border-b border-ink-800 pb-3 text-[0.64rem] uppercase tracking-[0.18em] text-gold-700">
+              {t.tarifs.cadence.colType}
+            </p>
+            <ul>
+              {services.map((svc) => (
+                <li key={svc.key} className="border-b border-gold-300/40 py-4">
+                  <span className="text-[0.95rem] text-ink-700">{locale === "en" ? svc.en : svc.fr}</span>
+                  {CADENCE_NOTE[svc.key] && (
+                    <span className="mt-1 block text-[0.76rem] font-light leading-[1.6] text-ink-400">
+                      {locale === "en" ? CADENCE_NOTE[svc.key].en : CADENCE_NOTE[svc.key].fr}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
-
-          <p className="mt-6 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">
-            {t.tarifs.cadence.note}
-          </p>
         </div>
       </section>
 
@@ -226,6 +223,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               {blocks.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
             </div>
           )}
+          <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
           <p className="mt-8 border-l-2 border-gold-500 bg-linen-200/60 px-6 py-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
             {t.tarifs.blocks.minimum.replace("{min}", min)}
           </p>
@@ -243,6 +241,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <div className="mt-10 border-t border-gold-300/40">
               {bundles.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
             </div>
+            <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
           </div>
         </section>
       )}
@@ -257,6 +256,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
           <div className="mt-10 border-t border-gold-300/40">
             {ADDONS.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer={false} />)}
           </div>
+          <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
         </div>
       </section>
 
@@ -301,13 +301,21 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                 <div key={p.key} className="paper flex flex-col gap-2 p-7">
                   <h3 className="font-display text-[1.15rem] text-ink-800">{text.name}</h3>
                   <p className="text-[0.85rem] font-light leading-[1.75] text-ink-500">{text.detail}</p>
-                  <p className="mt-3 font-display text-[1.7rem] tabular-nums text-gold-700">
-                    {formatMoney(price, s.currency, locale)}
-                    <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{t.tarifs.plans.perMonth}</span>
+                  <p className="text-[0.72rem] uppercase tracking-[0.12em] text-gold-700">
+                    {t.capacity.perCycle.replace("{n}", String(planPieces(p)))}
                   </p>
-                  <p className="text-[0.75rem] font-light text-ink-400">
-                    {t.tarifs.plans.full}{locale === "en" ? ": " : "\u00a0: "}{formatMoney(full, s.currency, locale)} · {t.tarifs.plans.save}{" "}
-                    {formatMoney(full - price, s.currency, locale)}
+                  {/* « 400 $ au lieu de 440 $ » : le prix à la carte barré, et dit
+                      en toutes lettres — un lecteur d'écran n'entend pas le trait. */}
+                  <p className="mt-3 flex flex-wrap items-baseline gap-x-3 font-display text-[1.7rem] tabular-nums text-gold-700">
+                    <span>
+                      {formatMoney(price, s.currency, locale)}
+                      <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{t.tarifs.plans.perMonth}</span>
+                    </span>
+                    {full > price && (
+                      <span className="font-sans text-[0.85rem] font-light text-ink-400">
+                        {t.tarifs.plans.insteadOf} <s>{formatMoney(full, s.currency, locale)}</s>
+                      </span>
+                    )}
                   </p>
                   <Link href={`/${locale}/abonnement?formule=${p.key}`}
                     className="mt-auto self-start pt-4 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
@@ -317,7 +325,9 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               );
             })}
           </div>
-          <p className="mt-6 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">{t.tarifs.plans.cycleNote}</p>
+          <p className="mt-6 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">
+            {t.tarifs.plans.cycleNote} {t.capacity.caveat}
+          </p>
           <ul className="mt-8 grid gap-2.5">
             {t.tarifs.plans.perks.map((perk) => (
               <li key={perk} className="relative pl-6 text-[0.88rem] font-light text-ink-500">

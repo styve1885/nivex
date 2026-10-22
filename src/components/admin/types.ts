@@ -4,6 +4,8 @@ export type AdminBooking = {
   address: string; city: string; postalCode: string; notes: string | null;
   items: { key: string; label: string; qty: number }[];
   startsAt: string; endsAt: string; durationMinutes: number;
+  /* Minutes passées sur place hors de la séance : 0 aujourd'hui, 15 pour l'ancien déroulement. */
+  setupMinutes: number;
   estimateCents: number; currency: string; firstHourFree: boolean; createdAt: string;
   /* Frais de route, hors estimation : zéro pour la plupart des adresses. */
   travelFeeCents: number; travelZone: string | null;

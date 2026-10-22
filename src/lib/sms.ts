@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { logEvent } from "./db";
-import { PHONE, SETUP_MINUTES } from "./brand";
+import { PHONE, SMS_SIGNATURE } from "./brand";
+import { toWall } from "./time";
 
 /**
  * Les textos, par Twilio, en `fetch` pur.
@@ -12,11 +13,19 @@ import { PHONE, SETUP_MINUTES } from "./brand";
  *
  * Trois variables : TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (le
  * numéro acheté chez Twilio). Une quatrième, facultative, SMS_OWNER_TO, dit
- * où l'artisan reçoit les siens ; sans elle, le numéro de la maison.
+ * où l'artisan reçoit les siens ; sans elle, le numéro de la maison. Une
+ * cinquième, TWILIO_MESSAGING_SERVICE_SID, ouvre les textos programmés : le
+ * « je serai chez vous » de deux heures avant. Twilio ne programme un envoi
+ * que par un service de messagerie, jamais depuis un simple numéro.
  */
 
 export function smsConfigured(): boolean {
   return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
+}
+
+/** Les textos programmés : il faut en plus un service de messagerie chez Twilio. */
+export function smsScheduleConfigured(): boolean {
+  return smsConfigured() && Boolean(process.env.TWILIO_MESSAGING_SERVICE_SID);
 }
 
 /**
@@ -61,33 +70,36 @@ export function ownerSmsNumber(): string | null {
   return toE164(process.env.SMS_OWNER_TO || PHONE);
 }
 
-/** Envoie un texto. Vrai s'il est parti ; jamais d'exception. */
-export async function sendSms(to: string | null | undefined, body: string, ref?: string): Promise<boolean> {
-  if (!smsConfigured()) {
-    await logEvent("sms_skipped", { ref, reason: "not_configured" });
-    return false;
-  }
+/**
+ * Le numéro où écrire, ou la raison de ne pas écrire. Hors du Canada, le
+ * texto ne part pas, et rien d'autre ne change : la réservation tient, le
+ * courriel part. Seul l'indicatif est noté — il dit d'où venait le numéro
+ * sans dire à qui il appartient.
+ */
+async function recipient(to: string | null | undefined, ref?: string): Promise<string | null> {
   const number = toE164(to);
   if (!number) {
     await logEvent("sms_skipped", { ref, reason: "invalid_number" });
-    return false;
+    return null;
   }
-  /* Hors du Canada, le texto ne part pas, et rien d'autre ne change : la
-     réservation tient, le courriel part. Seul l'indicatif est noté — il dit
-     d'où venait le numéro sans dire à qui il appartient. */
   if (!isCanadianNumber(number)) {
     await logEvent("sms_skipped", { ref, reason: "not_canadian", area: number.slice(2, 5) });
-    return false;
+    return null;
   }
+  return number;
+}
+
+/** Un appel à l'API des messages : la réponse lue, ou le code d'erreur noté. */
+async function twilio(path: string, params: Record<string, string>, ref?: string): Promise<{ sid: string } | null> {
   const sid = process.env.TWILIO_ACCOUNT_SID!;
   try {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/${path}`, {
       method: "POST",
       headers: {
         authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
         "content-type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: number, From: process.env.TWILIO_FROM!, Body: body }),
+      body: new URLSearchParams(params),
     });
     if (!res.ok) {
       /* Twilio rend un code (21608 : numéro non vérifié en compte d'essai,
@@ -95,14 +107,62 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
          souvent le numéro. Le journal garde le code, pas le message. */
       const code = await res.json().then((j) => Number(j?.code) || null).catch(() => null);
       await logEvent("sms_failed", { ref, status: res.status, code });
-      return false;
+      return null;
     }
-    await logEvent("sms_sent", { ref });
-    return true;
+    const json = await res.json().catch(() => ({}));
+    return { sid: typeof json?.sid === "string" ? json.sid : "" };
   } catch (e) {
     await logEvent("sms_failed", { ref, error: String((e as Error)?.message ?? e).slice(0, 300) });
+    return null;
+  }
+}
+
+/** Envoie un texto. Vrai s'il est parti ; jamais d'exception. */
+export async function sendSms(to: string | null | undefined, body: string, ref?: string): Promise<boolean> {
+  if (!smsConfigured()) {
+    await logEvent("sms_skipped", { ref, reason: "not_configured" });
     return false;
   }
+  const number = await recipient(to, ref);
+  if (!number) return false;
+  const sent = await twilio("Messages.json", { To: number, From: process.env.TWILIO_FROM!, Body: body }, ref);
+  if (!sent) return false;
+  await logEvent("sms_sent", { ref });
+  return true;
+}
+
+/**
+ * Programme un texto chez Twilio, qui le fera partir à l'heure dite.
+ *
+ * Rend l'identifiant du message, pour pouvoir l'annuler si la séance bouge.
+ * `retry` dit si un nouvel essai a un sens : pas pour un numéro étranger ou
+ * mal saisi, qui le restera. Twilio exige un envoi entre quinze minutes et
+ * trente-cinq jours d'avance ; l'appelant s'en charge. Jamais d'exception.
+ */
+export async function scheduleSms(
+  to: string | null | undefined, body: string, sendAt: Date, ref?: string,
+): Promise<{ sid: string | null; retry: boolean }> {
+  if (!smsScheduleConfigured()) return { sid: null, retry: true };
+  const number = await recipient(to, ref);
+  if (!number) return { sid: null, retry: false };
+  const sent = await twilio("Messages.json", {
+    To: number,
+    MessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID!,
+    Body: body,
+    ScheduleType: "fixed",
+    SendAt: sendAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
+  }, ref);
+  if (!sent?.sid) return { sid: null, retry: true };
+  await logEvent("sms_scheduled", { ref, at: sendAt.toISOString() });
+  return { sid: sent.sid, retry: false };
+}
+
+/** Annule un texto programmé. Vrai si Twilio l'a retiré ; jamais d'exception. */
+export async function cancelScheduledSms(messageSid: string, ref?: string): Promise<boolean> {
+  if (!smsConfigured() || !/^SM[0-9a-f]{32}$/i.test(messageSid)) return false;
+  const done = await twilio(`Messages/${encodeURIComponent(messageSid)}.json`, { Status: "canceled" }, ref);
+  if (done) await logEvent("sms_unscheduled", { ref });
+  return Boolean(done);
 }
 
 /* ============================ Les messages ============================ */
@@ -124,6 +184,23 @@ export function smsWhen(d: Date, tz: string, locale: Locale): string {
   }).format(d);
 }
 
+/** « mardi 20 octobre » / « Tuesday, October 20 ». */
+export function smsDay(d: Date, tz: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
+    timeZone: tz, weekday: "long", day: "numeric", month: "long",
+  }).format(d);
+}
+
+/** « 12 h », « 9 h 30 » ; « 12 p.m. », « 9:30 a.m. » — à l'heure de Montréal. */
+export function smsTime(d: Date, tz: string, locale: Locale): string {
+  const { hour: h, minute: m } = toWall(d, tz);
+  const mm = String(m).padStart(2, "0");
+  if (locale === "fr") return m ? `${h} h ${mm}` : `${h} h`;
+  const suffix = h < 12 ? "a.m." : "p.m.";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m ? `${h12}:${mm} ${suffix}` : `${h12} ${suffix}`;
+}
+
 /*
  * Comment ne plus en recevoir. Dit une fois, dans la confirmation : les
  * opérateurs l'attendent, et le répéter à chaque texto ferait payer une
@@ -131,29 +208,48 @@ export function smsWhen(d: Date, tz: string, locale: Locale): string {
  */
 const STOP_LINE = { fr: " Répondez STOP pour ne plus recevoir de textos.", en: " Reply STOP to opt out." } as const;
 
+/* La signature des trois textos de la séance, posée en dernier. Leur
+   « NIVEX - » remplace le tiret cadratin des modèles : il ferait passer le
+   texto en Unicode, payé deux tranches. */
+const SIGN = ` ${SMS_SIGNATURE}`;
+
 /* Une phrase qui finit sur une heure anglaise (« 2:00 p.m. ») a déjà son
    point : on n'en ajoute pas un second. */
 const period = (s: string) => (s.endsWith(".") ? s : `${s}.`);
 
 export const SMS = {
-  /** Une séance ponctuelle vient d'être réservée. */
-  bookingConfirmed: (l: Locale, when: string, url: string) => (l === "en"
-    ? `NIVEX: your session on ${when} is confirmed. Manage it: ${url}`
-    : `NIVEX : votre séance du ${when} est confirmée. Gérer : ${url}`) + STOP_LINE[l],
+  /** Une séance ponctuelle vient d'être réservée : le jour, l'heure du début et celle de la fin. */
+  bookingConfirmed: (l: Locale, day: string, start: string, end: string) => (l === "en"
+    ? `NIVEX - Your session is confirmed for ${day}, from ${start} to ${period(end)} All you need to provide is the ironing board.`
+    : `NIVEX - Votre séance est confirmée le ${day}, de ${start} à ${end}. Vous n'avez que la planche à prévoir.`) + STOP_LINE[l] + SIGN,
 
   /** Un abonnement vient d'être posé. */
   subscriptionConfirmed: (l: Locale, plan: string, when: string, rhythm: string, url: string) => (l === "en"
     ? `NIVEX: your ${plan} subscription is in place. First visit ${when}, then ${rhythm}. Manage: ${url}`
     : `NIVEX : votre abonnement ${plan} est en place. Première visite le ${when}, puis ${rhythm}. Gérer : ${url}`) + STOP_LINE[l],
 
-  /** Le rappel de la veille. Le montant n'y figure qu'à la première visite d'un cycle à régler. */
-  reminder: (l: Locale, when: string, today: boolean, payment: string | null) => {
-    const day = today ? (l === "en" ? "today" : "aujourd'hui") : (l === "en" ? "tomorrow" : "demain");
+  /**
+   * Le rappel de la veille, ou du jour même pour une séance prise tard.
+   * `arrival` est l'heure où l'artisan sonne : le début de la séance, ou un
+   * quart d'heure avant pour un abonné resté à l'ancien déroulement. Le
+   * montant n'y figure qu'à la première visite d'un cycle à régler.
+   */
+  reminder: (l: Locale, day: string, arrival: string, today: boolean, payment: string | null) => {
     const pay = payment ? (l === "en" ? ` Payment for the cycle at this visit: ${payment}.` : ` Paiement du cycle à cette visite : ${payment}.`) : "";
-    return l === "en"
-      ? `NIVEX: reminder, your visit is ${day}, ${period(when)} We arrive ${SETUP_MINUTES} minutes early to set up.${pay}`
-      : `NIVEX : rappel, votre visite a lieu ${day}, ${when}. Nous arrivons ${SETUP_MINUTES} minutes avant pour nous installer.${pay}`;
+    if (l === "en") {
+      return today
+        ? `NIVEX - Reminder: today, ${day}, I arrive at ${period(arrival)}${pay} See you soon.${SIGN}`
+        : `NIVEX - Reminder: tomorrow, ${day}, I arrive at ${period(arrival)}${pay} See you tomorrow.${SIGN}`;
+    }
+    return today
+      ? `NIVEX - Rappel : aujourd'hui ${day}, j'arrive à ${arrival}.${pay} À tout à l'heure.${SIGN}`
+      : `NIVEX - Rappel : demain ${day}, j'arrive à ${arrival}.${pay} À demain.${SIGN}`;
   },
+
+  /** Deux heures avant l'arrivée, programmé chez Twilio. */
+  soon: (l: Locale, arrival: string) => l === "en"
+    ? `NIVEX - I will be at your door at ${period(arrival)}${SIGN}`
+    : `NIVEX - Je serai chez vous à ${arrival}.${SIGN}`,
 
   /** Une séance ponctuelle annulée par l'artisan. */
   bookingCancelled: (l: Locale, when: string) => l === "en"

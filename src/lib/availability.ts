@@ -1,7 +1,7 @@
 import type { Settings } from "./settings";
 import { freeBusy, type Busy } from "./google";
 import { ensureSchema, sql } from "./db";
-import { SETUP_MINUTES } from "./brand";
+import { EARLY_ARRIVAL_MINUTES, INSTALL_MINUTES, PACKUP_MINUTES } from "./brand";
 import {
   addDaysToKey, dateKey, formatHM, fromWall, parseDateKey, parseHM, toWall, weekdayOfKey,
 } from "./time";
@@ -33,16 +33,17 @@ export function overlaps(a: Interval, b: Interval): boolean {
 }
 
 /**
- * Le temps réellement occupé par une séance : l'installation avant, le
- * rangement après. C'est ce bloc qui ne doit en croiser aucun autre — la
- * contrainte d'exclusion de la base le dit déjà (`nivex_occupied`), et le
- * moteur de créneaux doit dire la même chose qu'elle. Sans cela, une base
- * seule (Google injoignable) laissait le tampon se faire manger par
- * l'installation, et un tampon sous trente minutes proposait des heures
- * que la contrainte refusait ensuite.
+ * Le temps réellement occupé par une séance : elle-même, plus les minutes
+ * passées sur place hors du temps réservé, avant et après (`setup_minutes`).
+ * Zéro aujourd'hui, l'installation et le rangement étant compris dans la
+ * séance ; quinze pour un rendez-vous d'avant le 22 octobre 2026 ou un
+ * abonné « arrivée 15 min avant ». C'est ce bloc qui ne doit en croiser
+ * aucun autre — la contrainte d'exclusion de la base le dit déjà
+ * (`nivex_occupied`), et le moteur de créneaux doit dire la même chose
+ * qu'elle.
  */
-export function withSetup(i: Interval): Interval {
-  return { start: i.start - SETUP_MINUTES * 60_000, end: i.end + SETUP_MINUTES * 60_000 };
+export function withSetup(i: Interval, setupMinutes: number): Interval {
+  return { start: i.start - setupMinutes * 60_000, end: i.end + setupMinutes * 60_000 };
 }
 
 /**
@@ -76,9 +77,11 @@ export function onSlotGrid(start: number, s: Settings): boolean {
  * Un créneau est retenu si :
  *  – il tient entièrement dans les heures d'ouverture du jour ;
  *  – il commence après le délai de prévenance (leadHours) ;
- *  – son installation et son rangement compris, il ne chevauche aucune
- *    occupation élargie du tampon de déplacement. Entre le rangement de
- *    l'un et l'installation de l'autre, il reste donc tout le tampon.
+ *  – le temps qu'il occupe ne chevauche aucune occupation élargie du
+ *    tampon de déplacement. Entre deux séances, il reste donc tout le tampon.
+ *
+ * `setupMinutes` : les minutes passées sur place hors de la séance, pour
+ * un abonné resté à l'ancien déroulement. Zéro par défaut.
  */
 export function computeSlots(opts: {
   fromKey: string;
@@ -87,6 +90,7 @@ export function computeSlots(opts: {
   settings: Settings;
   busy: Interval[];
   now?: Date;
+  setupMinutes?: number;
 }): DaySlots[] {
   const { settings: s, durationMinutes } = opts;
   const now = opts.now ?? new Date();
@@ -128,7 +132,7 @@ export function computeSlots(opts: {
       if (startMs < earliest) continue;
       if (startMs >= lastMs) break;
 
-      const candidate = withSetup({ start: startMs, end: endMs });
+      const candidate = withSetup({ start: startMs, end: endMs }, opts.setupMinutes ?? 0);
       if (blocked.some((b) => overlaps(candidate, b))) continue;
 
       day.slots.push({ time: formatHM(m), iso: start.toISOString() });
@@ -146,8 +150,8 @@ export function computeSlots(opts: {
  * de seule source si l'agenda ne répond pas, ou si rien n'est branché.
  *
  * Une réservation en base compte pour le temps qu'elle occupe vraiment,
- * installation et rangement compris : c'est ce que l'agenda montrerait, et
- * ce que la contrainte d'exclusion protège.
+ * avec ses propres minutes hors séance (`setup_minutes`) : c'est ce que
+ * l'agenda montrerait, et ce que la contrainte d'exclusion protège.
  */
 export async function loadBusy(opts: {
   accessToken: string | null;
@@ -167,11 +171,11 @@ export async function loadBusy(opts: {
       : Promise.resolve([] as Busy[]),
     ensureSchema()
       .then(() => sql()`
-        SELECT starts_at, ends_at FROM nivex_bookings
+        SELECT starts_at, ends_at, setup_minutes FROM nivex_bookings
         WHERE status IN ('confirmed','pending')
           AND id <> ${excludeId}
-          AND ends_at   > ${new Date(timeMin.getTime() - SETUP_MINUTES * 60_000).toISOString()}
-          AND starts_at < ${new Date(timeMax.getTime() + SETUP_MINUTES * 60_000).toISOString()}`)
+          AND ends_at   > ${new Date(timeMin.getTime() - EARLY_ARRIVAL_MINUTES * 60_000).toISOString()}
+          AND starts_at < ${new Date(timeMax.getTime() + EARLY_ARRIVAL_MINUTES * 60_000).toISOString()}`)
       .catch(() => [] as Record<string, unknown>[]),
   ]);
 
@@ -183,7 +187,7 @@ export async function loadBusy(opts: {
   const fromDb: Interval[] = (rows as Record<string, unknown>[]).map((r) => withSetup({
     start: new Date(r.starts_at as string).getTime(),
     end: new Date(r.ends_at as string).getTime(),
-  }));
+  }, Number(r.setup_minutes ?? EARLY_ARRIVAL_MINUTES) || 0));
 
   return merge([...fromGoogle, ...fromDb].filter((x) => Number.isFinite(x.start) && Number.isFinite(x.end)));
 }
@@ -217,7 +221,7 @@ export type SlotProblem = "invalid" | "lead" | "closed" | "busy";
 
 export function slotProblem(
   start: number, durationMinutes: number, busy: Interval[], s: Settings,
-  now = new Date(), opts: { checkLead?: boolean } = {},
+  now = new Date(), opts: { checkLead?: boolean; setupMinutes?: number } = {},
 ): SlotProblem | null {
   if (!Number.isFinite(start)) return "invalid";
   if ((opts.checkLead ?? true) && start < now.getTime() + s.leadHours * 3600_000 - 60_000) return "lead";
@@ -239,12 +243,17 @@ export function slotProblem(
     start: b.start - s.bufferMinutes * 60_000,
     end: b.end + s.bufferMinutes * 60_000,
   })));
-  if (blocked.some((b) => overlaps(withSetup(candidate), b))) return "busy";
+  if (blocked.some((b) => overlaps(withSetup(candidate, opts.setupMinutes ?? 0), b))) return "busy";
 
   return null;
 }
 
-/** Durée estimée à partir du panier, arrondie au pas de créneau et bornée au minimum. */
+/**
+ * Durée estimée à partir du panier : les minutes de repassage, plus
+ * l'installation et le rangement compris dans la séance, arrondies au pas de
+ * créneau et bornées au minimum. Cent dix minutes de repassage font une
+ * séance de deux heures.
+ */
 export function estimateMinutes(
   items: { key: string; qty: number }[],
   s: Settings,
@@ -253,7 +262,13 @@ export function estimateMinutes(
     const svc = s.services.find((x) => x.key === it.key && x.enabled);
     return sum + (svc ? svc.minutesPerUnit * Math.max(0, it.qty) : 0);
   }, 0);
-  if (raw <= 0) return 0;
+  return sessionMinutes(raw, s);
+}
+
+/** La séance qu'il faut pour tant de minutes de repassage ; zéro pour un panier vide. */
+export function sessionMinutes(ironing: number, s: Pick<Settings, "slotStep" | "minMinutes">): number {
+  if (ironing <= 0) return 0;
+  const raw = ironing + INSTALL_MINUTES + PACKUP_MINUTES;
   const rounded = Math.ceil(raw / s.slotStep) * s.slotStep;
   return Math.max(s.minMinutes, rounded);
 }

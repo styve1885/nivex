@@ -163,11 +163,12 @@ test("elle escompte la séance, jamais la route", () => {
   const s = { ...FALLBACK_SETTINGS };
   const avec = estimateCents(180, s, true);
   const sans = estimateCents(180, s, false);
-  assert.equal(sans, 15000);
-  assert.equal(avec, 10000, "une heure offerte sur trois");
+  assert.equal(sans, 16500, "trois heures à 55 $");
+  assert.equal(avec, 11000, "une heure offerte sur trois");
+  assert.equal(estimateCents(120, s, true), 5500, "la première séance de 2 h revient à 55 $");
   const frais = evaluateZone("J2W 1A1", 180, P).feeCents;
   assert.equal(frais, 2000, "la route ne se raccourcit pas");
-  assert.equal(avec + frais, 12000, "le total additionne, il ne compense pas");
+  assert.equal(avec + frais, 13000, "le total additionne, il ne compense pas");
 });
 
 console.log("\nCe que l'onglet « Zones et frais » peut faire");
@@ -471,9 +472,13 @@ test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avan
   assert.equal(ld.telephone, "+1 450 943-1217");
   assert.equal(ld.email, "contact@nivexrepassage.ca", "le courriel du domaine, pas le Gmail");
   assert.match(ld.url, /\/fr$/);
-  assert.equal(flat(ld.priceRange), "50 $ / h");
+  assert.equal(flat(ld.priceRange), "55 $ / h");
   assert.equal(ld.makesOffer[0].priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
   assert.equal(ld.makesOffer[0].eligibleQuantity.minValue, 2, "deux heures au minimum");
+  /* La capacité, avec sa précision, et les deux séances de la vitrine à leur prix. */
+  assert.match(flat(ld.makesOffer[0].description), /^Jusqu'à 18 pièces en 2 h, et jusqu'à 27 en 3 h, selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
+  assert.deepEqual(ld.makesOffer.slice(1, 3).map((o) => [o.price, o.description.split(".")[0]]),
+    [[110, "Jusqu'à 18 pièces"], [165, "Jusqu'à 27 pièces"]]);
   const lieux = ld.areaServed.map((x) => x.name);
   assert.equal(lieux[0], "Saint-Lambert");
   assert.equal(lieux.length, 21);
@@ -612,9 +617,10 @@ test("les documents légaux : aucune accolade ne reste, en français comme en an
 test("le prix des conditions suit la durée minimale réglée", () => {
   const article = (d) => d.legal.terms.sections.flatMap((x) => x.body).find((p) => p.includes("{entry}"));
   const prix = (s, d = fr, locale = "fr") => flat(fill(article(d), legalValues(locale, s)).join(""));
-  assert.match(prix(FALLBACK_SETTINGS), /au minimum 2 heures et se facture 100 \$\./);
-  assert.match(prix({ ...FALLBACK_SETTINGS, minMinutes: 180 }), /au minimum 3 heures et se facture 150 \$\./);
-  assert.match(prix(FALLBACK_SETTINGS, en, "en"), /2 hours at the least and is billed \$100\./);
+  assert.match(prix(FALLBACK_SETTINGS), /au minimum 2 heures et se facture 110 \$\./);
+  assert.match(prix(FALLBACK_SETTINGS), /tranche de 30 min, au même taux de 55 \$ l'heure/, "la demi-heure de plus : 27,50 $");
+  assert.match(prix({ ...FALLBACK_SETTINGS, minMinutes: 180 }), /au minimum 3 heures et se facture 165 \$\./);
+  assert.match(prix(FALLBACK_SETTINGS, en, "en"), /2 hours at the least and is billed \$110\./);
 });
 
 test("la section de la première heure offerte disparaît avec l'offre", () => {

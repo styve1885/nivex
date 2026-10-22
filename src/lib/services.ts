@@ -23,10 +23,12 @@ export type ServiceItem = {
 
 /**
  * Temps de traitement par pièce, marge de conversation et d'imprévus
- * comprise. Ces minutes ne servent pas qu'au devis : la capacité horaire
- * annoncée sur la page Tarifs en découle (`perHour`), et le site promet de
- * tenir le volume annoncé. Les gonfler d'optimisme revient donc à promettre
- * ce qu'on ne tiendra pas.
+ * comprise. Ces minutes font la durée d'une séance réservée en ligne :
+ * leur somme, plus l'installation et le rangement compris dans la séance
+ * (`sessionMinutes`). Le volume annoncé au client, lui, est un chiffre
+ * unique (`PIECES_PER_HOUR`) : des minutes très au-dessus de six par pièce
+ * en moyenne feraient compter au formulaire plus de deux heures pour les
+ * dix-huit pièces que la vitrine promet en deux.
  *
  * Valeurs relevées au chronomètre sur séance réelle, septembre 2026.
  */

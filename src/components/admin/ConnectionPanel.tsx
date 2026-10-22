@@ -13,7 +13,7 @@ export function ConnectionPanel({
 }: {
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
-  env: { database: boolean; google: boolean; sms: boolean; origin: string };
+  env: { database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; origin: string };
   link: GoogleLink;
   missingScopes: string[];
 }) {
@@ -275,6 +275,12 @@ export function ConnectionPanel({
               avec cette adresse :
             </p>
             <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/sms/incoming</code>
+            <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
+            <p className="mt-1">
+              {env.smsSchedule
+                ? "Programmé chez Twilio par votre service de messagerie : il part deux heures avant votre arrivée, et se retire si la séance est annulée ou déplacée."
+                : "Twilio ne programme un texto que par un service de messagerie. Dans la console Twilio, créez-en un sous « Messaging › Services », ajoutez-y votre numéro, laissez « Defer to sender's webhook » dans ses réglages d'intégration, puis copiez son identifiant (MG…) dans la variable TWILIO_MESSAGING_SERVICE_SID chez Vercel."}
+            </p>
           </div>
         )}
       </section>
@@ -290,6 +296,10 @@ export function ConnectionPanel({
             fail={link.reason ? `Google refuse le jeton (${link.reason}) — reconnectez le compte` : "Jeton inutilisable — reconnectez le compte"} />
           <Check ok={!settings.paused} label="Réservations ouvertes" fail="Réservations suspendues (onglet Réglages)" />
           <Check ok={env.sms} label="Textos (Twilio)" fail="Clés Twilio absentes — seuls les courriels partent" />
+          {env.sms && (
+            <Check ok={env.smsSchedule} label="Texto de deux heures avant"
+              fail="Service de messagerie Twilio absent (TWILIO_MESSAGING_SERVICE_SID) — ce texto ne part pas" />
+          )}
         </ul>
         {/* Ces adresses ne contiennent aucune espace : sans coupure permise,
             l'URI de redirection débordait de la carte sur un téléphone, et sa
