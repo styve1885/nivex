@@ -9,7 +9,8 @@ import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
-  placeMakeup, previewSeries, renewSeries, resendSubscription, scheduleInstant, setPaid, setTravelFee,
+  placeMakeup, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
+  setPaid, setTravelFee,
   SubscriptionError, type SubscriptionFull,
 } from "@/lib/subscriptions";
 
@@ -33,6 +34,8 @@ function serialise(f: SubscriptionFull, tz: string) {
     /* Le cycle en cours : tel qu'il a été encaissé s'il l'est, sinon tel qu'il se paiera. */
     amount: amountOfCycle(sub, view.currentCycle),
     feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone, currency: sub.currency,
+    /* Le prix garanti d'un cycle, hors frais, et l'arrivée de l'abonné. */
+    cycleCents: sub.cycleCents, setupMinutes: sub.setupMinutes,
     currentCycle: view.currentCycle, doneInCurrent: view.doneInCurrent,
     currentPaidAt: current?.paidAt ?? null,
     currentDueAt: currentFirst?.startsAt.toISOString() ?? null,
@@ -90,6 +93,8 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("done"), visitId: Id, done: z.boolean() }),
   z.object({ action: z.literal("paid"), id: Id, cycle: z.number().int().min(1).max(100), paid: z.boolean() }),
   z.object({ action: z.literal("fee"), id: Id, cents: z.union([z.number().int().min(0).max(50_000), z.literal("zone")]) }),
+  z.object({ action: z.literal("price"), id: Id, cents: z.number().int().min(0).max(1_000_000) }),
+  z.object({ action: z.literal("early"), id: Id, early: z.boolean() }),
   z.object({ action: z.literal("cancel"), visitId: Id }),
   z.object({ action: z.literal("move"), visitId: Id, ...When }),
   z.object({ action: z.literal("place"), id: Id, ...When }),
@@ -144,6 +149,14 @@ export async function POST(req: NextRequest) {
       case "fee": {
         const cents = await setTravelFee(a.id, a.cents, host);
         return NextResponse.json({ ok: true, cents });
+      }
+      case "price": {
+        const price = await setGuaranteedPrice(a.id, a.cents, host);
+        return NextResponse.json({ ok: true, price });
+      }
+      case "early": {
+        const minutes = await setEarlyArrival(a.id, a.early, host);
+        return NextResponse.json({ ok: true, minutes });
       }
       case "cancel": {
         const v = await findById(a.visitId);

@@ -19,7 +19,7 @@ const {
 } = await import("../src/lib/subscriptions.ts");
 const { slotProblem } = await import("../src/lib/availability.ts");
 const { SMS, smsWhen } = await import("../src/lib/sms.ts");
-const { PLANS } = await import("../src/lib/pricing.ts");
+const { PLANS, planCents, planFullCents } = await import("../src/lib/pricing.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
@@ -120,9 +120,17 @@ test("les frais d'un abonné : ceux de la zone moins la réduction, jamais sous 
   assert.equal(subscriberFeeCents(0), 0);
 });
 
-test("Exécutif à Montréal, visites de 2 h : 360 $ + (15 $ − 5 $) × 4 = 400 $", () => {
+test("à 55 $ l'heure, les formules coûtent 150, 200, 400 et 600 $, au lieu de 165, 220, 440 et 660 $", () => {
+  assert.equal(settings.hourlyRate, 5500);
+  const prix = Object.fromEntries(PLANS.map((p) => [p.key, [planCents(p, settings), planFullCents(p, settings)]]));
+  assert.deepEqual(prix, {
+    essentiel: [15000, 16500], confort: [20000, 22000], executif: [40000, 44000], "grande-famille": [60000, 66000],
+  });
+});
+
+test("Exécutif à Montréal, visites de 2 h : 400 $ + (15 $ − 5 $) × 4 = 440 $", () => {
   const q = quoteCycle(plan("executif"), settings, 1500);
-  assert.deepEqual(q, { planCents: 36000, travelCents: 4000, totalCents: 40000, feePerVisitCents: 1000 });
+  assert.deepEqual(q, { planCents: 40000, travelCents: 4000, totalCents: 44000, feePerVisitCents: 1000 });
 });
 
 test("Grande Famille à Saint-Jean, visites de 3 h : tarif réduit de la zone, moins 5 $", () => {
@@ -423,6 +431,16 @@ test("le rappel de la première visite d'un cycle annonce le paiement ; les autr
 test("le rappel d'un cycle déjà payé ne redemande rien", () => {
   const paid = flat(visitReminder({ ...base, startsAt: base.visits[4], cycle: 2, index: 1, paymentDue: false }).text);
   assert.ok(!/ouvre le cycle/.test(paid));
+});
+
+test("le rappel dit l'arrivée : à l'heure du début, ou 15 minutes avant dans l'ancien déroulement", () => {
+  const v = { ...base, startsAt: base.visits[5], cycle: 2, index: 2, paymentDue: false };
+  const neuf = flat(visitReminder({ ...v, setupMinutes: 0 }).text);
+  assert.match(neuf, /arrive à l'heure du début\. Chaque visite de 2 heures inclut l'installation et le rangement de notre matériel, 5 minutes chacun : 1 h 50 de repassage\./);
+  assert.doesNotMatch(neuf, /15 minutes/);
+  assert.match(flat(visitReminder({ ...v, setupMinutes: 15 }).text), /15 minutes avant le début de chaque visite/);
+  assert.match(flat(subscriptionConfirmation({ ...base, setupMinutes: 0 }).text), /arrive à l'heure du début/);
+  assert.match(flat(subscriptionConfirmation({ ...base, locale: "en", setupMinutes: 0 }).text), /Each visit of 2 hours includes setting up/);
 });
 
 test("l'annulation dit la date de remplacement en fin de série", () => {

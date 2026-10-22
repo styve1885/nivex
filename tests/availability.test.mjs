@@ -60,10 +60,12 @@ t("chevauchement strict", () => {
 });
 
 console.log("\nEstimation");
-t("durée = somme arrondie au pas, plancher au minimum", () => {
-  assert.equal(estimateMinutes([{ key: "shirt", qty: 5 }], settings), 120); // 30 min → plancher 120
-  assert.equal(estimateMinutes([{ key: "shirt", qty: 30 }], settings), 180); // 180 pile
-  assert.equal(estimateMinutes([{ key: "shirt", qty: 31 }], settings), 210); // 186 → 210
+t("durée = repassage + installation et rangement, arrondie au pas, plancher au minimum", () => {
+  assert.equal(estimateMinutes([{ key: "shirt", qty: 5 }], settings), 120);  // 30 + 10 → plancher 120
+  assert.equal(estimateMinutes([{ key: "shirt", qty: 18 }], settings), 120); // 108 + 10 : dix-huit pièces en 2 h
+  assert.equal(estimateMinutes([{ key: "shirt", qty: 19 }], settings), 150); // 114 + 10 → 150
+  assert.equal(estimateMinutes([{ key: "shirt", qty: 28 }], settings), 180); // 168 + 10 → 180
+  assert.equal(estimateMinutes([{ key: "shirt", qty: 29 }], settings), 210); // 174 + 10 → 210
 });
 t("ignore les prestations inconnues", () => {
   assert.equal(estimateMinutes([{ key: "inexistant", qty: 99 }], settings), 0);
@@ -124,33 +126,46 @@ t("une occupation bloque le créneau et le tampon autour", () => {
   }
 });
 
-t("le tampon est appliqué des deux côtés, installation et rangement compris, sans excès", () => {
+t("le tampon est appliqué des deux côtés, et le créneau bloqué est la séance seule", () => {
   const days = computeSlots({ ...base, busy: BUSY_FRI });
   const fri = days.find((d) => d.date === "2026-08-28");
   const times = fri.slots.map((s) => s.time);
-  // Occupation 13:00–14:00, tampon 30 min : rien entre 12:30 et 14:30, et
-  // le bloc du créneau déborde la séance de quinze minutes de chaque côté.
-  assert.ok(times.includes("10:00"), "10:00 range jusqu'à 12:15, avant le tampon");
-  assert.ok(!times.includes("10:30"), "10:30 rangerait jusqu'à 12:45, dans le tampon");
-  assert.ok(!times.includes("14:30"), "14:30 s'installerait dès 14:15, dans le tampon");
-  assert.ok(times.includes("15:00"), "15:00 s'installe à 14:45, juste après le tampon");
-  assert.ok(!times.includes("11:00"), "11:00 finirait à 13:00, en plein rendez-vous");
+  // Occupation 13:00–14:00, tampon 30 min : rien entre 12:30 et 14:30.
+  // L'installation et le rangement sont dans la séance : elle ne déborde pas.
+  assert.ok(times.includes("10:30"), "10:30 finit à 12:30, au bord du tampon");
+  assert.ok(!times.includes("11:00"), "11:00 finirait à 13:00, dans le tampon");
+  assert.ok(!times.includes("14:00"), "14:00 commencerait dans le tampon");
+  assert.ok(times.includes("14:30"), "14:30 commence juste après le tampon");
 });
 
-/* Une réservation lue en base, telle que loadBusy la rend : la séance,
-   élargie de l'installation et du rangement. */
+t("un abonné resté à l'ancien déroulement garde son quart d'heure de part et d'autre", () => {
+  const days = computeSlots({ ...base, busy: BUSY_FRI, setupMinutes: 15 });
+  const times = days.find((d) => d.date === "2026-08-28").slots.map((s) => s.time);
+  assert.ok(times.includes("10:00") && !times.includes("10:30"), "10:30 rangerait jusqu'à 12:45, dans le tampon");
+  assert.ok(!times.includes("14:30") && times.includes("15:00"), "14:30 s'installerait dès 14:15, dans le tampon");
+});
+
+/* Des réservations lues en base, telles que loadBusy les rend : la séance,
+   élargie de ses propres minutes hors séance. */
 const ROW_FRI = (() => {
   const start = fromWall({ year: 2026, month: 8, day: 28, hour: 13, minute: 0 }, TZ).getTime();
-  return withSetup({ start, end: start + 2 * 3600_000 }); // 13:00 – 15:00, bloc 12:45 – 15:15
+  return withSetup({ start, end: start + 2 * 3600_000 }, 15); // ancien déroulement : bloc 12:45 – 15:15
+})();
+const ROW_FRI_NEW = (() => {
+  const start = fromWall({ year: 2026, month: 8, day: 28, hour: 13, minute: 0 }, TZ).getTime();
+  return withSetup({ start, end: start + 2 * 3600_000 }, 0); // aujourd'hui : bloc 13:00 – 15:00
 })();
 
 t("une réservation en base laisse tout le tampon entre deux clients", () => {
-  const fri = computeSlots({ ...base, busy: [ROW_FRI] }).find((d) => d.date === "2026-08-28");
+  const fri = computeSlots({ ...base, busy: [ROW_FRI_NEW] }).find((d) => d.date === "2026-08-28");
   const times = fri.slots.map((s) => s.time);
-  // Rangement fini à 15:15, trente minutes de route : l'installation
-  // suivante commence à 15:45, la séance à 16:00. Symétrique avant.
-  assert.ok(times.includes("16:00") && !times.includes("15:30"), "après : 16:00, pas 15:30");
-  assert.ok(times.includes("10:00") && !times.includes("10:30"), "avant : 10:00, pas 10:30");
+  // Fin à 15:00, trente minutes de route : la séance suivante à 15:30.
+  assert.ok(times.includes("15:30") && !times.includes("15:00"), "après : 15:30, pas 15:00");
+  assert.ok(times.includes("10:30") && !times.includes("11:00"), "avant : 10:30, pas 11:00");
+  // Un rendez-vous de l'ancien déroulement garde son quart d'heure.
+  const old = computeSlots({ ...base, busy: [ROW_FRI] }).find((d) => d.date === "2026-08-28").slots.map((s) => s.time);
+  assert.ok(old.includes("16:00") && !old.includes("15:30"), "ancien, après : 16:00, pas 15:30");
+  assert.ok(old.includes("10:00") && !old.includes("10:30"), "ancien, avant : 10:00, pas 10:30");
 });
 
 t("sans tampon, le moteur dit la même chose que la contrainte de la base", () => {
@@ -163,6 +178,12 @@ t("sans tampon, le moteur dit la même chose que la contrainte de la base", () =
   assert.ok(times.includes("10:30") && !times.includes("11:00"), "avant : 10:30, pas 11:00");
   const quinze = fromWall({ year: 2026, month: 8, day: 28, hour: 15, minute: 0 }, TZ).getTime();
   assert.equal(slotProblem(quinze, 120, [ROW_FRI], sans, NOW), "busy");
+  // Aujourd'hui, deux séances qui se touchent pile tiennent, comme en base :
+  // 13:00–15:00 puis 15:00–17:00.
+  assert.equal(slotProblem(quinze, 120, [ROW_FRI_NEW], sans, NOW), null);
+  const onze = fromWall({ year: 2026, month: 8, day: 28, hour: 11, minute: 0 }, TZ).getTime();
+  assert.equal(slotProblem(onze, 120, [ROW_FRI_NEW], sans, NOW), null);
+  assert.equal(slotProblem(onze, 120, [ROW_FRI_NEW], sans, NOW, { setupMinutes: 15 }), "busy");
 });
 
 t("le délai de prévenance ampute le début de la journée limite", () => {

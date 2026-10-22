@@ -15,9 +15,11 @@ const { getDict } = await import("../src/lib/i18n/index.ts");
 const { slotIsFree } = await import("../src/lib/availability.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
-const { REQUEST_INBOX, PHONE, SETUP_MINUTES } = await import("../src/lib/brand.ts");
+const { REQUEST_INBOX, PHONE, INSTALL_MINUTES, PACKUP_MINUTES, EARLY_ARRIVAL_MINUTES } = await import("../src/lib/brand.ts");
 const { occupiedBlock, calendarEvent } = await import("../src/lib/bookings.ts");
-const { perHour, cadenceText, bookableOffers, BLOCKS, BUNDLES } = await import("../src/lib/pricing.ts");
+const {
+  bookableOffers, capacityPieces, ironingMinutes, planPieces, sessionPhases, BLOCKS, BUNDLES, ADDONS, PLANS,
+} = await import("../src/lib/pricing.ts");
 const { faqFill } = await import("../src/components/home/faq-fill.ts");
 const { fr } = await import("../src/lib/i18n/fr.ts");
 
@@ -181,49 +183,69 @@ test("un refus du serveur sur les coordonnées renvoie aux champs en cause", () 
 
 /* ————— Installation et rangement ————— */
 
-test("le bloc occupé déborde la séance d'un quart d'heure de chaque côté", () => {
-  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z") };
+test("aujourd'hui, le bloc occupé est la séance elle-même : l'installation et le rangement y sont compris", () => {
+  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z"), setupMinutes: 0 };
   const block = occupiedBlock(b);
-  assert.equal(block.start.toISOString(), "2026-10-05T16:45:00.000Z", "arrivée 15 min avant");
-  assert.equal(block.end.toISOString(), "2026-10-05T19:15:00.000Z", "départ 15 min après");
-  assert.equal(SETUP_MINUTES, 15);
+  assert.equal(block.start.toISOString(), "2026-10-05T17:00:00.000Z", "arrivée à l'heure du début");
+  assert.equal(block.end.toISOString(), "2026-10-05T19:00:00.000Z", "départ à l'heure de la fin");
+  assert.equal(INSTALL_MINUTES, 5);
+  assert.equal(PACKUP_MINUTES, 5);
 });
 
-test("une séance de 13 h à 15 h occupe bien 12 h 45 à 15 h 15", () => {
+test("l'ancien déroulement garde son quart d'heure : 13 h à 15 h occupe 12 h 45 à 15 h 15", () => {
   // 13 h à Montréal en octobre = 17 h UTC.
-  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z") };
+  const b = { startsAt: new Date("2026-10-05T17:00:00.000Z"), endsAt: new Date("2026-10-05T19:00:00.000Z"), setupMinutes: EARLY_ARRIVAL_MINUTES };
   const fmt = (d) => new Intl.DateTimeFormat("fr-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const block = occupiedBlock(b);
+  assert.equal(EARLY_ARRIVAL_MINUTES, 15);
   assert.equal(flat(fmt(b.startsAt)), "13 h 00");
   assert.equal(flat(fmt(block.start)), "12 h 45");
   assert.equal(flat(fmt(block.end)), "15 h 15");
 });
 
-test("deux séances collées ne peuvent pas coexister", () => {
-  const premiere = { start: Date.parse("2026-10-05T17:00:00.000Z"), end: Date.parse("2026-10-05T19:00:00.000Z") };
-  const suivante = occupiedBlock({
-    startsAt: new Date("2026-10-05T19:00:00.000Z"),
-    endsAt: new Date("2026-10-05T21:00:00.000Z"),
-  });
-  const bloque = occupiedBlock({ startsAt: new Date(premiere.start), endsAt: new Date(premiere.end) });
-  // 15 h 15 de rangement contre 14 h 45 d'installation : les deux se croisent.
-  assert.ok(suivante.start.getTime() < bloque.end.getTime(), "les deux blocs se chevauchent bien");
+test("deux séances collées : permises aujourd'hui, refusées dans l'ancien déroulement", () => {
+  const at = (iso, m) => occupiedBlock({ startsAt: new Date(iso), endsAt: new Date(Date.parse(iso) + 2 * 3600_000), setupMinutes: m });
+  const neuve = [at("2026-10-05T17:00:00.000Z", 0), at("2026-10-05T19:00:00.000Z", 0)];
+  assert.ok(neuve[1].start.getTime() >= neuve[0].end.getTime(), "13 h–15 h puis 15 h–17 h se touchent sans se croiser");
+  const ancienne = [at("2026-10-05T17:00:00.000Z", 15), at("2026-10-05T19:00:00.000Z", 15)];
+  assert.ok(ancienne[1].start.getTime() < ancienne[0].end.getTime(), "15 h 15 de rangement contre 14 h 45 d'installation");
 });
 
-/* ————— Les temps chronométrés ————— */
+test("les trois temps d'une séance de 12 h à 14 h : installation, repassage, rangement", () => {
+  const fmt = (d) => flat(new Intl.DateTimeFormat("fr-CA", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(d));
+  const start = new Date("2026-10-05T16:00:00.000Z"), end = new Date("2026-10-05T18:00:00.000Z"); // 12 h – 14 h
+  const p = sessionPhases(start, end, 0);
+  assert.deepEqual([p.install, p.ironing, p.packup].map((x) => `${fmt(x.start)} – ${fmt(x.end)}`),
+    ["12 h 00 – 12 h 05", "12 h 05 – 13 h 55", "13 h 55 – 14 h 00"]);
+  assert.equal(p.ironingMinutes, 110);
+  const old = sessionPhases(start, end, 15);
+  assert.deepEqual([old.install, old.ironing, old.packup].map((x) => `${fmt(x.start)} – ${fmt(x.end)}`),
+    ["11 h 45 – 12 h 00", "12 h 00 – 14 h 00", "14 h 00 – 14 h 15"]);
+  assert.equal(old.ironingMinutes, 120);
+});
 
-test("la cadence annoncée découle des minutes du moteur", () => {
-  const attendu = { shirt: 7, delicate: 4, suit: 3, trousers: 6, linen: 8, "linen-xl": 6, uniform: 5 };
-  for (const svc of FALLBACK_SETTINGS.services) {
-    assert.equal(perHour(svc.minutesPerUnit), attendu[svc.key], `${svc.key} : cadence horaire`);
+/* ————— La capacité, un seul chiffre ————— */
+
+test("jusqu'à 18 pièces en 2 h, 27 en 3 h ; 1 h 50 et 2 h 50 de repassage", () => {
+  assert.equal(capacityPieces(120), 18);
+  assert.equal(capacityPieces(180), 27);
+  assert.equal(capacityPieces(240), 36);
+  assert.equal(ironingMinutes(120), 110);
+  assert.equal(ironingMinutes(180), 170);
+});
+
+test("le volume d'un cycle d'abonnement découle de la même capacité", () => {
+  const vol = Object.fromEntries(PLANS.map((p) => [p.key, planPieces(p)]));
+  assert.deepEqual(vol, { essentiel: 27, confort: 36, executif: 72, "grande-famille": 108 });
+});
+
+test("aucune offre n'écrit de quantité : le volume ne vient que de la capacité", () => {
+  for (const o of [...BLOCKS, ...BUNDLES, ...ADDONS]) {
+    for (const t of [o.fr, o.en]) assert.doesNotMatch(t.detail, /\d/, `${o.key} : « ${t.detail} »`);
   }
-});
-
-test("une pièce de plus d'une heure s'annonce par son temps, pas par « 1 à l'heure »", () => {
-  assert.equal(cadenceText(8, "chemise", "fr"), "7");
-  assert.equal(cadenceText(60, "pièce", "fr"), "1");
-  assert.equal(cadenceText(90, "robe", "fr"), "1 h 30 / robe");
-  assert.equal(cadenceText(120, "", "en"), "2 hours");
+  for (const p of PLANS) {
+    for (const t of [p.fr, p.en]) assert.doesNotMatch(t.detail, /pièces|pieces|trentaine|thirty/i, `${p.key} : « ${t.detail} »`);
+  }
 });
 
 test("la grille ne propose aucune séance plus courte que la durée minimale", () => {
@@ -234,39 +256,29 @@ test("la grille ne propose aucune séance plus courte que la durée minimale", (
   assert.equal(bookableOffers(BUNDLES, settings).length, BUNDLES.length, "au minimum de deux heures, tout reste");
 });
 
-test("la foire aux questions cite la cadence des chemises, sans trou si elles sont désactivées", () => {
-  const reponse = fr.faq.items.find((x) => x.a.includes("{cadence}")).a;
-  const avec = faqFill(reponse, fr, settings, "fr");
-  assert.match(avec, /^Comptez environ 7 chemises par heure, ou 5 à 7 pièces mixtes\./);
-  assert.doesNotMatch(avec, /ajuster/, "le client ne choisit pas une durée : il change les quantités");
-  const sansChemises = { ...settings, services: settings.services.map((x) => (x.key === "shirt" ? { ...x, enabled: false } : x)) };
-  const sans = faqFill(reponse, fr, sansChemises, "fr");
-  assert.match(sans, /^Comptez environ 5 à 7 pièces mixtes par heure\./);
-  assert.doesNotMatch(sans, /chemises|\{| {2}/);
+test("la foire aux questions dit la capacité et l'installation, telles que la maison les annonce", () => {
+  const capacite = fr.faq.items.find((x) => x.a.includes("{capacity}"));
+  assert.equal(flat(capacite.q), "Combien de vêtements repassez-vous en une séance ?");
+  assert.equal(faqFill(capacite.a, fr, settings, "fr"),
+    "Jusqu'à 18 pièces en 2 h, et jusqu'à 27 en 3 h, selon la taille, le type et la matière des vêtements.");
+  const installation = fr.faq.items.find((x) => x.a.includes("{setup}"));
+  assert.equal(faqFill(installation.a, fr, settings, "fr"),
+    "Oui. Chaque séance inclut l'installation et le rangement de notre matériel, 5 minutes chacun. Une séance de 2 h comprend donc 1 h 50 de repassage. Votre artisan arrive à l'heure du début de la séance.");
+  // La durée minimale réglée déplace les deux phrases ensemble.
+  assert.match(faqFill(capacite.a, fr, { ...settings, minMinutes: 180 }, "fr"), /^Jusqu'à 27 pièces en 3 h, et jusqu'à 36 en 4 h,/);
+  const en = getDict("en");
+  assert.equal(faqFill(en.faq.items.find((x) => x.a.includes("{capacity}")).a, en, settings, "en"),
+    "Up to 18 pieces in 2 hours, and up to 27 in 3 hours, depending on the size, type and fabric of the garments.");
+  for (const item of fr.faq.items) assert.doesNotMatch(item.a, /\{cadence\}|par heure/, "plus aucune cadence par heure");
 });
 
-test("les forfaits tiennent dans leur durée, au nouveau rythme", () => {
-  const min = Object.fromEntries(FALLBACK_SETTINGS.services.map((s) => [s.key, s.minutesPerUnit]));
-  // Les exemples affichés sur la grille, recalculés.
-  const exemples = [
-    { nom: "Exécutif & Découverte", minutes: 120, panier: { shirt: 8, trousers: 4, suit: 1 }, plage: [10, 15] },
-    { nom: "Famille & Scolaire",    minutes: 180, panier: { shirt: 10, trousers: 6, uniform: 4 }, plage: [15, 22] },
-    { nom: "Garde-robe Prestige",   minutes: 240, panier: { shirt: 12, trousers: 8, suit: 3, linen: 2 }, plage: [20, 30] },
-  ];
-  for (const e of exemples) {
-    const duree = Object.entries(e.panier).reduce((t, [k, q]) => t + min[k] * q, 0);
-    const pieces = Object.values(e.panier).reduce((t, q) => t + q, 0);
-    assert.ok(duree <= e.minutes, `${e.nom} : ${duree} min pour ${e.minutes} annoncées`);
-    assert.ok(pieces >= e.plage[0] && pieces <= e.plage[1],
-      `${e.nom} : ${pieces} pièces hors de la fourchette ${e.plage.join("–")}`);
-  }
-});
-
-test("le courriel de confirmation annonce l'arrivée anticipée", () => {
+test("le courriel de confirmation dit l'arrivée à l'heure, et le temps de repassage", () => {
   const m = clientConfirmation(d);
-  assert.match(flat(m.text), /15 minutes avant le début de votre séance/);
-  assert.match(m.html, /15 minutes avant/);
-  assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /15 minutes before your session begins/);
+  assert.ok(flat(m.text).includes("Votre artisan arrive à l'heure du début. Votre séance de 2 heures inclut l'installation et le rangement de notre matériel, 5 minutes chacun : 1 h 50 de repassage."));
+  assert.doesNotMatch(m.text + m.html, /15 minutes avant/);
+  assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /arrives at the start time\. Your session of 2 hours includes setting up/);
+  /* Un rendez-vous de l'ancien déroulement garde sa phrase. */
+  assert.match(flat(clientConfirmation({ ...d, setupMinutes: 15 }).text), /15 minutes avant le début de votre séance/);
 });
 
 test("le courriel ne promet l'invitation que si elle est partie", () => {
@@ -279,18 +291,20 @@ test("le courriel ne promet l'invitation que si elle est partie", () => {
 /* ————— L'invitation d'agenda ————— */
 
 const booking = {
-  ...d, manageToken: "tok123", endsAt: new Date("2026-10-03T20:00:00.000Z"),
+  ...d, manageToken: "tok123", endsAt: new Date("2026-10-03T20:00:00.000Z"), setupMinutes: 0,
   items: [{ key: "shirt", label: "Chemises", qty: 6 }],
   travelFeeCents: 1500, travelZone: "Zone B",
   origin: { heardFrom: "facebook", referral: "julie", source: "facebook" },
 };
 const origin = "https://nivexrepassage.ca";
 
-test("l'invitation porte les heures réservées et dit l'arrivée anticipée", () => {
+test("l'invitation commence à l'heure d'arrivée, le début de la séance, et le dit", () => {
   const ev = calendarEvent(booking, origin, TZ);
-  assert.equal(ev.start, "2026-10-03T18:00:00.000Z", "14 h, l'heure de la confirmation");
+  assert.equal(ev.start, "2026-10-03T18:00:00.000Z", "14 h, l'heure de la confirmation et de l'arrivée");
   assert.equal(ev.end, "2026-10-03T20:00:00.000Z");
-  assert.match(flat(ev.description), /15 minutes avant le début de votre séance/);
+  assert.match(flat(ev.description), /installation et rangement compris/);
+  assert.match(flat(ev.description), /Votre artisan arrive à l'heure du début\. L'installation et le rangement de son matériel, 5 minutes chacun, font partie de la séance : 1 h 50 de repassage\./);
+  assert.match(flat(calendarEvent({ ...booking, setupMinutes: 15 }, origin, TZ).description), /15 minutes avant le début de votre séance/);
 });
 
 test("l'invitation ne montre ni la provenance ni l'espace artisan", () => {
@@ -310,7 +324,7 @@ test("l'invitation se lit dans la langue du client, l'artisan y garde ses repèr
   }
   const en = calendarEvent({ ...booking, locale: "en" }, origin, TZ);
   assert.match(en.summary, /In-home ironing · Claire Beaulieu/);
-  for (const bit of ["Session: Saturday, October 3, 2026", "15 minutes before your session begins",
+  for (const bit of ["Session: Saturday, October 3, 2026", "Your presser arrives at the start time",
                      "Travel fee (Zone B): $15", "Reference: NVX-ABC123", `${origin}/en/reservation/tok123`]) {
     assert.ok(flat(en.description).includes(bit), `en : « ${bit} » manquant`);
   }

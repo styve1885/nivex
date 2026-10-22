@@ -1,11 +1,13 @@
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  SERIES_NOTICE_DAYS, SETUP_MINUTES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
 /* La réduction des abonnés sur les frais de route, écrite depuis la constante. */
 const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "fr");
+/* Ce qu'un abonné paie de moins par heure, depuis la constante. */
+const HOURLY_DISCOUNT = formatMoney(SUBSCRIBER_HOURLY_DISCOUNT_CENTS, "CAD", "fr");
 /* La durée qui ouvre droit à la première heure offerte, depuis la constante
    que le moteur applique. */
 const FIRST_FREE_MIN = minutesToText(FIRST_FREE_MIN_MINUTES, "fr");
@@ -64,7 +66,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le lendemain de votre première séance, votre courriel peut aussi recevoir, une seule fois, un mot de remerciement qui vous invite à laisser un avis sur Google\u202f; répondre à ce courriel suffit pour ne plus en recevoir de ce genre. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel et tout changement de rendez-vous\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan\u202f; le site ne la conserve pas.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le lendemain de votre première séance, votre courriel peut aussi recevoir, une seule fois, un mot de remerciement qui vous invite à laisser un avis sur Google\u202f; répondre à ce courriel suffit pour ne plus en recevoir de ce genre. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel de la veille, un mot deux heures avant l'arrivée de l'artisan et tout changement de rendez-vous\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan\u202f; le site ne la conserve pas.",
         "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -90,7 +92,7 @@ const privacy: LegalDoc = {
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
-        "Twilio — achemine les textos que vous recevez (confirmation, rappel, annulation ou changement de rendez-vous) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Il transmet aussi à l'artisan le texte de vos réponses\u202f; les photos que vous y joindriez restent chez Twilio, où l'artisan les consulte. Twilio garde une copie des messages qu'il achemine.",
+        "Twilio — achemine les textos que vous recevez (confirmation, rappel, mot de deux heures avant, annulation ou changement de rendez-vous) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Le mot de deux heures avant lui est confié à l'avance, et part à l'heure dite. Il transmet aussi à l'artisan le texte de vos réponses\u202f; les photos que vous y joindriez restent chez Twilio, où l'artisan les consulte. Twilio garde une copie des messages qu'il achemine.",
         "ImprovMX — fait suivre vers la boîte de votre artisan les courriels que vous écrivez à notre adresse du domaine.",
       ],
     },
@@ -178,6 +180,7 @@ const terms: LegalDoc = {
       title: "Le service",
       body: [
         "Un artisan se déplace chez vous avec son matériel professionnel\u00a0: table active, générateur de vapeur, pattemouilles et cintres. Il repasse sur place les pièces que vous lui présentez, puis les remet sur cintres ou pliées.",
+        `L'artisan arrive à l'heure du début de la séance. L'installation et le rangement de son matériel, ${INSTALL_MINUTES} minutes chacun, font partie du temps réservé\u00a0; le reste est du repassage.`,
         "Vos vêtements ne quittent jamais votre domicile\u00a0: tout se fait sur place, devant vous.",
       ],
     },
@@ -195,7 +198,7 @@ const terms: LegalDoc = {
         "Les créneaux proposés tiennent compte de l'horaire de la maison et des rendez-vous déjà pris. Ce que vous voyez est réservable.",
         "Une séance dure au minimum {min}.",
         "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
-        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Si votre numéro est canadien, un texto la double, et un autre vous rappelle le rendez-vous la veille.",
+        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Si votre numéro est canadien, un texto la double, un autre vous rappelle le rendez-vous la veille, et un dernier vous prévient deux heures avant l'arrivée de l'artisan.",
       ],
     },
     {
@@ -395,35 +398,35 @@ export const fr = {
         serviceKey: "shirt",
         name: "Chemises impeccables",
         body: "Col, empiècement, poignets, manches, corps. Dans cet ordre, toujours. Repassées sur cintre de bois, prêtes à porter.",
-        detail: "≈ {qty} chemises par heure",
+        detail: "Sur cintre de bois",
       },
       {
         icon: "dress",
         serviceKey: "delicate",
         name: "Robes & vêtements délicats",
         body: "Soie, viscose, dentelle, plissés. Vapeur sans contact quand la fibre l'exige, pattemouille quand elle le mérite.",
-        detail: "≈ {qty} pièces par heure",
+        detail: "Vapeur sans contact",
       },
       {
         icon: "linen",
         serviceKey: "linen",
         name: "Draps & linge de maison",
         body: "Simple, deux places, queen, trois places. Les grandes tailles demandent plus de temps, et c'est compté séparément. Pliage hôtelier, arêtes vives.",
-        detail: "≈ {qty} draps deux places par heure",
+        detail: "Pliage hôtelier",
       },
       {
         icon: "suit",
         serviceKey: "suit",
         name: "Costumes & vestes",
         body: "Défroissage vapeur, remise en forme des épaules, marquage du pli de pantalon. Sans lustrage, jamais.",
-        detail: "≈ {qty} pièces par heure",
+        detail: "Sans lustrage",
       },
       {
         icon: "badge",
         serviceKey: "uniform",
         name: "Uniformes",
         body: "Scolaires et professionnels. Le lot complet de la semaine, traité d'un coup, rendu sur cintres numérotés.",
-        detail: "≈ {qty} ensembles par heure",
+        detail: "Cintres numérotés",
       },
       {
         icon: "clock",
@@ -454,7 +457,7 @@ export const fr = {
       {
         n: "3",
         title: "Rencontrez",
-        body: `Votre artisan arrive ${SETUP_MINUTES} minutes avant l'heure convenue pour s'installer, puis repasse le temps que vous avez réservé. Vous récupérez une garde-robe prête à porter, sur cintres.`,
+        body: `Votre artisan arrive à l'heure convenue. Il s'installe et range en ${INSTALL_MINUTES} minutes chacun, compris dans la séance, et repasse tout le reste du temps. Vous récupérez une garde-robe prête à porter, sur cintres.`,
       },
     ],
   },
@@ -468,7 +471,7 @@ export const fr = {
     offers: [
       {
         name: "Séance semaine",
-        /* Le nombre de pièces vient de la grille, pour la durée affichée. */
+        /* Le nombre de pièces vient de `capacityPieces`, pour la durée affichée. */
         volume: "la garde-robe complète de votre semaine",
         note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
       },
@@ -491,6 +494,16 @@ export const fr = {
       `Sur toute première réservation de ${FIRST_FREE_MIN} ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.`,
     note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
   },
+  /* La capacité d'une séance, le seul chiffre de quantité du site, et ce que
+     contient une séance. {n}, {a}, {b} : des pièces, tirées de
+     `capacityPieces` ; {da}, {db}, {min}, {ironing} : des durées. */
+  capacity: {
+    upTo: "Jusqu'à {n} pièces",
+    perCycle: "Jusqu'à {n} pièces par cycle",
+    caveat: "Le nombre de pièces varie selon la taille, le type et la matière des vêtements.",
+    sentence: "Jusqu'à {a} pièces en {da}, et jusqu'à {b} en {db}, selon la taille, le type et la matière des vêtements.",
+    setup: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun. Une séance de {min} comprend donc {ironing} de repassage.`,
+  },
   testimonials: {
     eyebrow: "Ce qu'on en dit",
     title: "Des penderies transformées.",
@@ -498,10 +511,8 @@ export const fr = {
   faq: {
     eyebrow: "Questions",
     title: "Ce qu'on nous demande.",
-    /* {cadence} : celle des chemises, lue des réglages, ou la seule moyenne
-       d'un panier mixte quand les chemises sont désactivées. */
-    cadence: "Comptez environ {shirts} chemises par heure, ou 5 à 7 pièces mixtes.",
-    cadenceMixed: "Comptez environ 5 à 7 pièces mixtes par heure.",
+    /* {capacity} et {setup} : les phrases de `capacity`, remplies depuis la
+       durée minimale réglée. */
     items: [
       {
         q: "Est-ce que vous ramassez les vêtements\u202f?",
@@ -513,7 +524,15 @@ export const fr = {
       },
       {
         q: "Combien de temps prévoir\u202f?",
-        a: "{cadence} Lors de la réservation, l'estimateur calcule la durée d'après les quantités choisies\u202f; pour la modifier, changez les quantités.",
+        a: "Lors de la réservation, l'estimateur calcule la durée d'après les quantités choisies, installation et rangement compris\u202f; pour la modifier, changez les quantités.",
+      },
+      {
+        q: "Combien de vêtements repassez-vous en une séance\u202f?",
+        a: "{capacity}",
+      },
+      {
+        q: "L'installation est-elle comprise dans la séance\u202f?",
+        a: "Oui. {setup} Votre artisan arrive à l'heure du début de la séance.",
       },
       {
         q: "Dois-je être présent pendant la séance\u202f?",
@@ -567,7 +586,8 @@ export const fr = {
     rate: "Tarif",
     rateValue: "{rate} de l'heure, soit {entry} pour une séance de {min}.",
     minimum: "Durée minimale",
-    minimumValue: "Une séance dure au moins {min}. L'artisan arrive {setup} minutes avant pour s'installer, sans frais\u00a0: le temps réservé est entièrement du repassage.",
+    /* {setup} : la phrase `capacity.setup`, remplie depuis la durée minimale. */
+    minimumValue: "Une séance dure au moins {min}. {setup}",
     travel: "Frais de déplacement",
     travelNote: "Par visite, en plus du prix de la séance.",
     /* Ajoutée seulement quand l'artisan propose l'offre. */
@@ -618,6 +638,8 @@ export const fr = {
       more: "Augmenter la quantité",
       estimate: "Estimation",
       duration: "Durée estimée",
+      /* {ironing} : la durée, moins l'installation et le rangement. */
+      ironing: "dont {ironing} de repassage",
       price: "Montant estimé",
       hours: "h",
       minutes: "min",
@@ -674,8 +696,9 @@ export const fr = {
       evening: "Soirée",
       timezone: "Fuseau\u00a0: heure de l'Est (Montréal).",
       durationLine: "Durée estimée\u00a0: {duration}",
+      /* {duration} et {ironing} : la séance estimée, et son temps de repassage. */
       setup:
-        `Votre repasseur arrive ${SETUP_MINUTES} minutes avant le début de votre séance pour s'installer, sans frais\u00a0: vos heures réservées sont entièrement consacrées au repassage.`,
+        `Votre artisan arrive à l'heure du début. Votre séance de {duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0: {ironing} de repassage.`,
       comment: "Commentaire libre (facultatif)",
       commentPlaceholder: "Une contrainte d'horaire, une heure à éviter, un accès particulier…",
     },
@@ -767,6 +790,8 @@ export const fr = {
       title: "Quelle formule\u202f?",
       hint: "Un cycle correspond aux visites de la formule réellement effectuées. Il se règle à sa première visite, sur place.",
       perCycle: "/ cycle",
+      /* Lu seulement par les lecteurs d'écran, devant le prix barré. */
+      insteadOf: "au lieu de",
       visits: "{n} × {duration}",
       noFirstHour: "L'offre «\u00a0première heure offerte\u00a0» ne s'applique pas aux abonnements.",
     },
@@ -938,13 +963,11 @@ export const fr = {
     visitNote: "minimum {min} par déplacement · {travel}",
     travelIncluded: "déplacement inclus",
     travelVaries: "frais de déplacement selon le secteur",
+    /* Ce que contient une séance : sa capacité et son déroulement, écrits
+       depuis `capacity`, puis les pièces que nous traitons. */
     cadence: {
-      title: "Notre cadence, heure par heure",
-      lede:
-        "Ces chiffres ne sont pas une promesse commerciale\u00a0: ce sont ceux que notre moteur de réservation utilise pour calculer la durée de votre séance. Ce que vous lisez ici est ce que le formulaire calculera.",
-      colType: "Type de pièce",
-      colQty: "En 1 h",
-      note: "Un panier mixte tourne autour de 5 à 7 pièces à l'heure. C'est cette moyenne qui donne les fourchettes annoncées sur chaque forfait.",
+      title: "Ce que contient une séance",
+      colType: "Ce que nous traitons, et comment",
     },
     versus: {
       title: "Ce n'est pas du repassage de ménage.",
@@ -955,7 +978,7 @@ export const fr = {
         {
           title: "Le volume",
           them: "On repasse «\u00a0ce qu'on peut\u00a0» dans le temps payé. Vous découvrez le résultat à la fin.",
-          us: "Un nombre de pièces annoncé avant de commencer. S'il n'est pas atteint de notre fait, le temps manquant ne vous est pas facturé.",
+          us: "Une capacité annoncée avant de commencer, et un temps réservé qui vous revient entièrement. S'il est écourté de notre fait, le temps manquant ne vous est pas facturé.",
         },
         {
           title: "Le matériel",
@@ -1006,9 +1029,10 @@ export const fr = {
       perMonth: "/ cycle",
       cycleNote: "Un cycle correspond aux visites de la formule réellement effectuées, soit environ quatre semaines. Il se règle à sa première visite, sur place.",
       cta: "S'abonner",
-      full: "Séances à l'unité",
-      save: "Vous économisez",
+      /* Devant le prix à la carte, barré. */
+      insteadOf: "au lieu de",
       perks: [
+        `L'heure à ${HOURLY_DISCOUNT} de moins qu'une séance à la carte, garantie à la souscription.`,
         "Vos créneaux vous sont réservés\u00a0: le même jour, à la même heure, toute l'année.",
         "Une visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille. Elle ne compte pas, et s'ajoute en fin de série.",
         "Amidon léger sur cols et poignets, inclus sans supplément.",
@@ -1019,7 +1043,7 @@ export const fr = {
     terms: {
       title: "Ce qui vaut pour toutes les séances",
       items: [
-        { dt: "Volume tenu", dd: "Le nombre de pièces annoncé sur chaque forfait est un engagement. S'il n'est pas atteint de notre fait, le temps manquant ne vous est pas facturé." },
+        { dt: "Temps tenu", dd: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0; le reste du temps réservé est du repassage. S'il est écourté de notre fait, le temps manquant ne vous est pas facturé.` },
         { dt: "Estimation et montant final", dd: "L'estimation est indicative. Le montant final suit le temps réellement passé et vous est confirmé sur place, avant de commencer." },
         { dt: "Paiement", dd: "Sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement à la réservation." },
         { dt: "Ce qu'il nous faut chez vous", dd: "Une prise électrique et environ deux mètres carrés dégagés. Rien d'autre\u00a0: le matériel professionnel arrive avec l'artisan." },

@@ -3,7 +3,9 @@ import type { Dict } from "./i18n";
 import type { Settings } from "./settings";
 import { PHONE, contactEmail } from "./brand";
 import { siteOrigin } from "./google";
-import { formatMoney } from "./time";
+import { formatMoney, minutesToText } from "./time";
+import { capacityPieces } from "./pricing";
+import { capacitySentence, setupSentence } from "./capacity";
 import { joinList, sectorsByRegion, type Sector, type ZonePolicy } from "./travel";
 
 /**
@@ -184,6 +186,8 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       {
         "@type": "Offer",
         name: t.meta.service,
+        /* La capacité et le déroulement, les mêmes phrases que la FAQ. */
+        description: `${capacitySentence(t, s, lang)} ${setupSentence(t, s, lang)}`,
         priceSpecification: {
           "@type": "UnitPriceSpecification",
           price: rate,
@@ -194,12 +198,21 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
         /* La durée minimale d'une séance, en heures. */
         eligibleQuantity: { "@type": "QuantitativeValue", minValue: minimum / 60, unitCode: "HUR" },
       },
+      /* Les deux séances de la vitrine, à leur prix et avec leur capacité :
+         la plus courte, et une heure de plus. */
+      ...[minimum, minimum + 60].map((m) => ({
+        "@type": "Offer",
+        name: `${t.meta.service} · ${minutesToText(m, lang)}`,
+        price: Math.round((m / 60) * s.hourlyRate) / 100,
+        priceCurrency: s.currency,
+        description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(m)))}. ${t.capacity.caveat}`,
+      })),
       /* Les prestations que la page d'accueil montre : une carte dont la
          prestation est désactivée dans Réglages n'est plus offerte, ni à
          l'écran ni ici. La carte « Tout se fait chez vous » n'en mesure
          aucune et reste. */
       ...t.services.items
-        .filter((x) => !x.detail.includes("{qty}") || s.services.some((v) => v.key === x.serviceKey && v.enabled))
+        .filter((x) => x.detail.includes("{zone}") || s.services.some((v) => v.key === x.serviceKey && v.enabled))
         .map((x) => ({
           "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
         })),

@@ -1,17 +1,14 @@
 import { Reveal } from "../Reveal";
 import { ServiceIcon } from "../Icons";
-import { perHour } from "@/lib/pricing";
 import { joinList, servedRegions } from "@/lib/travel";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
 /**
- * Les prestations, et ce qu'on en traite en une heure.
+ * Les prestations, et le soin que chacune reçoit.
  *
- * La cadence n'est pas écrite dans le texte : elle se déduit des minutes
- * réglées par l'artisan, comme celle de la page Tarifs. Le site promet de
- * tenir le volume annoncé — il ne peut donc pas l'annoncer d'un côté et le
- * calculer de l'autre.
+ * Aucune carte n'annonce de quantité : la capacité d'une séance se dit
+ * ailleurs, d'un seul chiffre (`capacityPieces`).
  *
  * Une prestation désactivée dans les réglages perd sa carte : le tunnel ne
  * la propose plus, la vitrine non plus. La dernière carte, qui ne vend pas
@@ -19,12 +16,10 @@ import type { Settings } from "@/lib/settings";
  * déduites des secteurs actifs comme partout ailleurs.
  */
 export function Services({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
-  const cadence = (key: string) => {
-    const svc = settings.services.find((x) => x.key === key && x.enabled);
-    return svc ? String(perHour(svc.minutesPerUnit)) : "";
-  };
+  const enabled = (key: string) => settings.services.some((x) => x.key === key && x.enabled);
   const zone = joinList(servedRegions(settings.zonePolicy, t.services.regions), locale);
-  const items = t.services.items.filter((s) => !s.detail.includes("{qty}") || cadence(s.serviceKey) !== "");
+  /* La carte « Tout se fait chez vous » ne vend pas une prestation : elle reste. */
+  const items = t.services.items.filter((s) => s.detail.includes("{zone}") || enabled(s.serviceKey));
 
   return (
     <section id="prestations" className="scroll-mt-24 bg-linen-50 py-28 sm:py-36">
@@ -48,7 +43,7 @@ export function Services({ t, locale, settings }: { t: Dict; locale: "fr" | "en"
               <h3 className="mt-6 font-display text-[1.45rem] font-normal text-ink-800">{s.name}</h3>
               <p className="mt-3 text-[0.9rem] font-light leading-[1.9] text-ink-500">{s.body}</p>
               <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-gold-600">
-                {s.detail.replace("{qty}", cadence(s.serviceKey)).replace("{zone}", zone)}
+                {s.detail.replace("{zone}", zone)}
               </p>
             </Reveal>
           ))}

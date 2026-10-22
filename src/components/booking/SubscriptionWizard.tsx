@@ -26,6 +26,8 @@ export type PlanOption = {
   /** Montant d'un cycle, au taux du jour. Le serveur le recalcule et le fige. */
   cycleCents: number;
   fullCents: number;
+  /** Le volume d'un cycle, tiré du seul chiffre de capacité du site. */
+  pieces: number;
 };
 
 export type SubscriptionConfig = {
@@ -361,9 +363,20 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                     }`}>
                     <span className="font-display text-[1.15rem] text-ink-800">{p.name}</span>
                     <span className="text-[0.8rem] font-light leading-relaxed text-ink-500">{p.detail}</span>
-                    <span className="mt-2 font-display text-[1.4rem] tabular-nums text-gold-700">
-                      {money(p.cycleCents)}
-                      <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{s.plan.perCycle}</span>
+                    <span className="text-[0.68rem] uppercase tracking-[0.12em] text-gold-700">
+                      {t.capacity.perCycle.replace("{n}", String(p.pieces))}
+                    </span>
+                    {/* « 400 $ au lieu de 440 $ » : le prix à la carte, barré. */}
+                    <span className="mt-2 flex flex-wrap items-baseline gap-x-2.5 font-display text-[1.4rem] tabular-nums text-gold-700">
+                      <span>
+                        {money(p.cycleCents)}
+                        <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{s.plan.perCycle}</span>
+                      </span>
+                      {p.fullCents > p.cycleCents && (
+                        <span className="font-sans text-[0.78rem] font-light text-ink-400">
+                          {s.plan.insteadOf} <s>{money(p.fullCents)}</s>
+                        </span>
+                      )}
                     </span>
                     <span className="text-[0.72rem] font-light text-ink-400">
                       {s.plan.visits.replace("{n}", String(p.visits)).replace("{duration}", durationText(p.minutesPerVisit))} · {p.rhythm}
@@ -372,7 +385,8 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                 );
               })}
             </div>
-            {config.firstHourFree && <p className="mt-6 text-[0.78rem] font-light text-ink-400">{s.plan.noFirstHour}</p>}
+            <p className="mt-6 text-[0.78rem] font-light text-ink-400">{t.capacity.caveat}</p>
+            {config.firstHourFree && <p className="mt-2 text-[0.78rem] font-light text-ink-400">{s.plan.noFirstHour}</p>}
           </section>
         )}
 

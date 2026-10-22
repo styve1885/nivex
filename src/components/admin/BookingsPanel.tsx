@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminBooking, AdminStats } from "./types";
+import { sessionPhases, type Phase } from "@/lib/pricing";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency, minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -12,6 +13,29 @@ function when(iso: string, tz: string) {
     timeZone: tz, weekday: "short", day: "numeric", month: "short",
     hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
+}
+
+/** « 12 h 00 », à l'heure de Montréal. */
+function hm(d: Date, tz: string) {
+  return new Intl.DateTimeFormat("fr-CA", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(d);
+}
+const span = (p: Phase, tz: string) => `${hm(p.start, tz)} – ${hm(p.end, tz)}`;
+
+/**
+ * Les trois temps d'une séance : installation, repassage, rangement. Pour
+ * un rendez-vous de l'ancien déroulement, l'installation précède l'heure
+ * réservée et le rangement la suit.
+ */
+function Phases({ b, tz }: { b: AdminBooking; tz: string }) {
+  const p = sessionPhases(new Date(b.startsAt), new Date(b.endsAt), b.setupMinutes);
+  return (
+    <Line label="Déroulement">
+      <span className="block tabular-nums">{span(p.install, tz)} · installation{b.setupMinutes > 0 ? ", avant la séance (arrivée anticipée)" : ""}</span>
+      <span className="block tabular-nums">{span(p.ironing, tz)} · repassage</span>
+      <span className="block tabular-nums">{span(p.packup, tz)} · rangement{b.setupMinutes > 0 ? ", après la séance" : ""}</span>
+      <span className="mt-1 block text-[0.78rem] text-ink-400">Repassage effectif : {duration(p.ironingMinutes)}</span>
+    </Line>
+  );
 }
 
 function duration(min: number) {
@@ -168,6 +192,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             <Line label="Téléphone"><a href={`tel:${b.clientPhone.replace(/\D/g, "")}`} className="text-gold-700 hover:underline">{b.clientPhone}</a></Line>
             <Line label="Courriel"><a href={`mailto:${b.clientEmail}`} className="break-all text-gold-700 hover:underline">{b.clientEmail}</a></Line>
             <Line label="Adresse"><a href={maps} target="_blank" rel="noopener noreferrer" className="text-gold-700 hover:underline">{b.address}, {b.city} {b.postalCode}</a></Line>
+            <Phases b={b} tz={tz} />
             <Line label="Prestations">{b.items.map((i) => `${i.label} × ${i.qty}`).join(" · ")}</Line>
             {b.notes && <Line label="Précisions"><span className="italic">{b.notes}</span></Line>}
             {b.subscription ? (

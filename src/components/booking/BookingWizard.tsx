@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
-import { FIRST_FREE_MIN_MINUTES } from "@/lib/brand";
+import { FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PACKUP_MINUTES } from "@/lib/brand";
 import type { HeardFrom } from "@/lib/attribution";
 import type { ZoneStatus } from "@/lib/travel";
 import { arrivalHint, readAttribution } from "../SiteMeasurement";
@@ -118,10 +118,13 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     [config.services, qty],
   );
 
+  /* Les minutes de repassage, plus l'installation et le rangement compris
+     dans la séance, comme `sessionMinutes` côté serveur. */
   const duration = useMemo(() => {
     const raw = chosen.reduce((sum, s) => sum + s.minutesPerUnit * s.qty, 0);
     if (raw <= 0) return 0;
-    return Math.max(config.minMinutes, Math.ceil(raw / config.slotStep) * config.slotStep);
+    const session = raw + INSTALL_MINUTES + PACKUP_MINUTES;
+    return Math.max(config.minMinutes, Math.ceil(session / config.slotStep) * config.slotStep);
   }, [chosen, config.minMinutes, config.slotStep]);
 
   /* L'offre ne joue qu'à partir de deux heures, et une seule fois par
@@ -150,11 +153,17 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     [config.locale, config.currency],
   );
 
-  const durationText = useMemo(() => {
-    const h = Math.floor(duration / 60), m = duration % 60;
+  const toText = useCallback((minutes: number) => {
+    const h = Math.floor(minutes / 60), m = minutes % 60;
     if (config.locale === "en") return h && m ? `${h} h ${m} min` : h ? `${h} hour${h > 1 ? "s" : ""}` : `${m} min`;
     return h && m ? `${h} h ${m}` : h ? `${h} heure${h > 1 ? "s" : ""}` : `${m} min`;
-  }, [duration, config.locale]);
+  }, [config.locale]);
+  const durationText = useMemo(() => toText(duration), [toText, duration]);
+  /* Le temps de repassage : la séance, moins l'installation et le rangement. */
+  const ironingText = useMemo(
+    () => toText(Math.max(0, duration - INSTALL_MINUTES - PACKUP_MINUTES)),
+    [toText, duration],
+  );
 
   /* — L'horaire de la maison, pour la durée retenue — */
   const loadSchedule = useCallback(async (from?: string) => {
@@ -449,11 +458,10 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   <li key={s.key}
                     className={`flex flex-wrap items-center gap-x-4 gap-y-3 bg-linen-50 p-4 transition-colors duration-300 sm:flex-nowrap ${n > 0 ? "bg-linen-100" : ""}`}>
                     <ServiceIcon name={s.icon} className={`h-6 w-6 flex-none transition-colors ${n > 0 ? "text-gold-600" : "text-ink-400"}`} />
+                    {/* Aucune cadence par pièce : la capacité d'une séance se dit
+                        d'un seul chiffre, sur la page Tarifs et dans la FAQ. */}
                     <div className="min-w-0 flex-1">
                       <p className="text-[0.95rem] text-ink-800">{s.label}</p>
-                      <p className="text-[11px] text-ink-400">
-                        ≈ {s.minutesPerUnit} min / {s.unit}
-                      </p>
                     </div>
                     <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
                       <button type="button" aria-label={`${t.booking.step1.less} — ${s.label}`}
@@ -487,7 +495,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             </div>
 
             <EstimateBar
-              t={t} visible={duration > 0} durationText={durationText}
+              t={t} visible={duration > 0} durationText={durationText} ironingText={ironingText}
               money={money(estimate)} firstMoney={firstFree ? money(estimateFirst) : null}
             />
             {duration === 0 && <p className="mt-6 text-center text-[0.85rem] text-ink-400">{t.booking.step1.empty}</p>}
@@ -607,7 +615,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                 <p className="mt-7 text-center text-[0.78rem] text-ink-400">{t.booking.step3.timezone}</p>
 
                 <p className="mx-auto mt-5 max-w-lg border-l-2 border-gold-400 pl-4 text-[0.84rem] font-light leading-[1.8] text-ink-600">
-                  {t.booking.step3.setup}
+                  {t.booking.step3.setup.replace("{duration}", durationText).replace("{ironing}", ironingText)}
                 </p>
 
                 <div className="mt-9 border-t border-gold-300/40 pt-8">
@@ -710,8 +718,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
 /* ============================ Sous-composants ============================ */
 
 /** `firstMoney` : le montant d'une première réservation, quand l'offre peut jouer. */
-function EstimateBar({ t, visible, durationText, money, firstMoney }: {
-  t: Dict; visible: boolean; durationText: string; money: string; firstMoney: string | null;
+function EstimateBar({ t, visible, durationText, ironingText, money, firstMoney }: {
+  t: Dict; visible: boolean; durationText: string; ironingText: string; money: string; firstMoney: string | null;
 }) {
   return (
     <div className={`mt-8 grid transition-all duration-700 ${visible ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
@@ -721,6 +729,9 @@ function EstimateBar({ t, visible, durationText, money, firstMoney }: {
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.step1.duration}</p>
             <p className="mt-1 font-display text-xl text-ink-800">{durationText}</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-ink-400">
+              {t.booking.step1.ironing.replace("{ironing}", ironingText)}
+            </p>
           </div>
           <span aria-hidden="true" className="hidden h-9 w-px bg-gold-300 sm:block" />
           <div className="text-right">

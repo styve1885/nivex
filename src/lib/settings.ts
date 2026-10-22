@@ -46,9 +46,11 @@ export type Settings = {
  * sinon, une base injoignable fait afficher au site — et à ses conditions
  * d'utilisation — un tarif que l'entreprise ne pratique plus.
  *
- * La valeur par défaut de la colonne `hourly_rate`, dans db.ts, suit celle-ci.
+ * La valeur par défaut de la colonne `hourly_rate`, dans db.ts, suit celle-ci,
+ * et la bascule de 50 $ à 55 $ du 22 octobre 2026 s'y écrit une seule fois
+ * (`tarif-2026-55`, dans `bootstrap()`).
  */
-export const DEFAULT_HOURLY_RATE = 5000;
+export const DEFAULT_HOURLY_RATE = 5500;
 
 export const DEFAULT_HOURS: DayHours[] = [
   { day: 0, enabled: false, open: "07:00", close: "22:00" }, // dimanche — fermé par défaut

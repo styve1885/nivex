@@ -1,5 +1,5 @@
 import type { Settings } from "./settings";
-import { minutesToText } from "./time";
+import { INSTALL_MINUTES, PACKUP_MINUTES, PIECES_PER_HOUR, SUBSCRIBER_HOURLY_DISCOUNT_CENTS } from "./brand";
 
 /**
  * La grille tarifaire.
@@ -11,6 +11,10 @@ import { minutesToText } from "./time";
  *
  * Les prix à la pièce, eux, sont fixes : ils s'appliquent à un ajout ponctuel,
  * pas à un panier, et ne suivent donc pas le taux horaire.
+ *
+ * Aucune offre n'écrit de quantité : le volume d'une durée se lit de
+ * `capacityPieces`, le seul chiffre de pièces du site. Un « 10 à 15 pièces »
+ * écrit ici finirait par contredire le « jusqu'à 18 pièces » de la FAQ.
  */
 
 type Text = { name: string; tag?: string; detail: string };
@@ -22,73 +26,62 @@ export const BLOCKS: Offer[] = [
   {
     key: "decouverte", minutes: 120,
     fr: { name: "Exécutif & Découverte",
-          detail: "10 à 15 pièces. Par exemple : 8 chemises, 4 pantalons et 1 veston." },
+          detail: "Les chemises, pantalons et vestons de la semaine, ou une première séance pour faire connaissance." },
     en: { name: "Executive & Discovery",
-          detail: "10 to 15 pieces. For instance: 8 shirts, 4 pairs of trousers and 1 jacket." },
+          detail: "The week's shirts, trousers and jackets, or a first session to get acquainted." },
   },
   {
     key: "famille", minutes: 180,
     fr: { name: "Famille & Scolaire",
-          detail: "15 à 22 pièces. Par exemple : 10 chemises, 6 pantalons et 4 uniformes scolaires." },
+          detail: "Chemises, pantalons et uniformes scolaires de toute la maisonnée." },
     en: { name: "Family & School",
-          detail: "15 to 22 pieces. For instance: 10 shirts, 6 pairs of trousers and 4 school uniforms." },
+          detail: "Shirts, trousers and school uniforms for the whole household." },
   },
   {
     key: "prestige", minutes: 240,
     fr: { name: "Garde-robe Prestige",
-          detail: "20 à 30 pièces. Par exemple : 12 chemises, 8 pantalons, 3 vestons et 2 pièces de linge de maison." },
+          detail: "Chemises, pantalons, vestons et linge de maison : la garde-robe entière remise en ordre." },
     en: { name: "Prestige Wardrobe",
-          detail: "20 to 30 pieces. For instance: 12 shirts, 8 pairs of trousers, 3 jackets and 2 pieces of household linen." },
+          detail: "Shirts, trousers, jackets and household linen: the whole wardrobe put back in order." },
   },
 ];
-
-/**
- * Le volume d'une séance de cette durée, tel que la grille le publie
- * (« 10 à 15 pièces ») ; null quand la grille n'a pas de bloc de cette
- * durée. L'accueil le reprend : une durée qui suit le minimum réglé ne doit
- * pas garder le volume d'une autre.
- */
-export function blockPieces(minutes: number, locale: "fr" | "en"): string | null {
-  const b = BLOCKS.find((x) => x.minutes === minutes);
-  return b ? (locale === "en" ? b.en : b.fr).detail.split(".")[0] : null;
-}
 
 /** Forfaits composés : un panier type, déjà chiffré. */
 export const BUNDLES: Offer[] = [
   {
     key: "grand-foyer", minutes: 180,
     fr: { name: "Grand Foyer", tag: "Familles, lits multiples",
-          detail: "4 parures complètes et 8 linges de maison, soit 24 pièces : draps-housses, housses de couette, taies, nappes et serviettes." },
+          detail: "Parures complètes et linge de maison : draps-housses, housses de couette, taies, nappes et serviettes." },
     en: { name: "Full Household", tag: "Families, several beds",
-          detail: "4 complete bed sets and 8 pieces of household linen — 24 pieces in all: fitted sheets, duvet covers, pillowcases, tablecloths and napkins." },
+          detail: "Complete bed sets and household linen: fitted sheets, duvet covers, pillowcases, tablecloths and napkins." },
   },
   {
     key: "reception", minutes: 120,
     fr: { name: "Prestige Réception", tag: "Linge délicat",
-          detail: "2 parures haut de gamme et 2 grandes nappes de réception. Lin, coton d'Égypte, broderies : vapeur sans contact." },
+          detail: "Parures haut de gamme et grandes nappes de réception. Lin, coton d'Égypte, broderies : vapeur sans contact." },
     en: { name: "Reception Linen", tag: "Delicate linen",
-          detail: "2 fine bed sets and 2 large dining tablecloths. Linen, Egyptian cotton, embroidery: contactless steam." },
+          detail: "Fine bed sets and large dining tablecloths. Linen, Egyptian cotton, embroidery: contactless steam." },
   },
   {
     key: "duo", minutes: 120,
     fr: { name: "Duo Garde-robe & Literie", tag: "Vêtements et lit",
-          detail: "8 vêtements courants et 2 parures complètes — la chambre entière en une visite." },
+          detail: "Vêtements courants et parures complètes — la chambre entière en une visite." },
     en: { name: "Wardrobe & Bedding Duo", tag: "Clothes and bed",
-          detail: "8 everyday garments and 2 complete bed sets — the whole bedroom in one visit." },
+          detail: "Everyday garments and complete bed sets — the whole bedroom in one visit." },
   },
   {
     key: "rentree", minutes: 120,
     fr: { name: "Rentrée & Écoles privées", tag: "Enfants, scolaire",
-          detail: "Jusqu'à 10 ensembles d'uniforme, soit la semaine complète de deux enfants. Jupes plissées, chemises, blazers, sur cintres numérotés." },
+          detail: "Les uniformes de la semaine pour toute la fratrie. Jupes plissées, chemises, blazers, sur cintres numérotés." },
     en: { name: "Back to School", tag: "Children, uniforms",
-          detail: "Up to 10 uniform sets — a full week for two children. Pleated skirts, shirts, blazers, on numbered hangers." },
+          detail: "The week's uniforms for all the children. Pleated skirts, shirts, blazers, on numbered hangers." },
   },
   {
     key: "affaires", minutes: 180,
     fr: { name: "Garde-robe Affaires", tag: "Professionnels",
-          detail: "10 chemises, 2 complets et 3 pantalons, amidon léger sur cols et poignets compris." },
+          detail: "Chemises, complets et pantalons, amidon léger sur cols et poignets compris." },
     en: { name: "Business Wardrobe", tag: "Professionals",
-          detail: "10 shirts, 2 suits and 3 pairs of trousers, light starch on collars and cuffs included." },
+          detail: "Shirts, suits and trousers, light starch on collars and cuffs included." },
   },
 ];
 
@@ -97,30 +90,30 @@ export const ADDONS: Offer[] = [
   {
     key: "douce-nuit", minutes: 90,
     fr: { name: "Pack Douce Nuit", tag: "Solo ou couple",
-          detail: "2 parures complètes : 2 draps-housses, 2 housses de couette et 4 taies." },
+          detail: "Parures complètes : draps-housses, housses de couette et taies." },
     en: { name: "Good Night Pack", tag: "Single or couple",
-          detail: "2 complete bed sets: 2 fitted sheets, 2 duvet covers and 4 pillowcases." },
+          detail: "Complete bed sets: fitted sheets, duvet covers and pillowcases." },
   },
   {
     key: "panier-bebe", minutes: 60,
     fr: { name: "Panier Bébé", tag: "Tout-petits",
-          detail: "Jusqu'à 15 pièces bébé ou enfant : bodys, pyjamas, draps de berceau, gigoteuses." },
+          detail: "Pièces bébé ou enfant : bodys, pyjamas, draps de berceau, gigoteuses." },
     en: { name: "Baby Basket", tag: "Little ones",
-          detail: "Up to 15 baby or toddler pieces: bodysuits, pyjamas, crib sheets, sleep sacks." },
+          detail: "Baby or toddler pieces: bodysuits, pyjamas, crib sheets, sleep sacks." },
   },
   {
     key: "enfant-plus", minutes: 60,
     fr: { name: "Enfant supplémentaire", tag: "Forfait Rentrée",
-          detail: "5 ensembles d'uniforme de plus, pour un troisième enfant et au-delà." },
+          detail: "Les ensembles d'uniforme d'un troisième enfant et au-delà." },
     en: { name: "Additional Child", tag: "Back to School package",
-          detail: "5 more uniform sets, for a third child and beyond." },
+          detail: "The uniform sets of a third child and beyond." },
   },
   {
     key: "prolongation", minutes: 60,
     fr: { name: "Prolongation", tag: "Décidée sur place",
-          detail: "5 à 7 pièces de plus, si le panier est plus gros que prévu." },
+          detail: "Une heure de plus, si le panier est plus gros que prévu." },
     en: { name: "Extra hour", tag: "Decided on the spot",
-          detail: "5 to 7 more pieces, if the basket turns out bigger than expected." },
+          detail: "One more hour, if the basket turns out bigger than expected." },
   },
 ];
 
@@ -157,30 +150,28 @@ export type Plan = {
   minutesPerVisit: number;
   /** Rythme des visites, en semaines : 1 chaque semaine, 2 aux deux semaines… */
   everyWeeks: number;
-  /** Remise sur le tarif horaire, de 0 à 1. */
-  discount: number;
   fr: { name: string; detail: string };
   en: { name: string; detail: string };
 };
 
 export const PLANS: Plan[] = [
   {
-    key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4, discount: 0.07,
+    key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
     fr: { name: "Essentiel", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison." },
     en: { name: "Essential", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets." },
   },
   {
-    key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2, discount: 0.075,
-    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — une trentaine de pièces par cycle." },
-    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — around thirty pieces per cycle." },
+    key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
+    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour." },
+    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — everyday clothes kept current." },
   },
   {
-    key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1, discount: 0.10,
+    key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
     fr: { name: "Exécutif", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour." },
     en: { name: "Executive", detail: "Four 2-hour visits, one a week — the work wardrobe kept current." },
   },
   {
-    key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1, discount: 0.12,
+    key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
     fr: { name: "Grande Famille", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison." },
     en: { name: "Large Family", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house." },
   },
@@ -198,10 +189,14 @@ export function firstTimeCents(o: Offer, s: Settings): number {
   return Math.max(0, offerCents(o, s) - s.hourlyRate);
 }
 
-/** Montant d'un cycle d'abonnement, arrondi au multiple de 5 $ le plus proche. */
+/**
+ * Montant d'un cycle d'abonnement : ses heures au tarif abonné, soit le taux
+ * horaire moins `SUBSCRIBER_HOURLY_DISCOUNT_CENTS`, arrondi au multiple de
+ * 5 $ le plus proche. À 55 $ l'heure : 150, 200, 400 et 600 $.
+ */
 export function planCents(p: Plan, s: Settings): number {
-  const full = (p.visits * p.minutesPerVisit / 60) * s.hourlyRate;
-  return Math.round((full * (1 - p.discount)) / 500) * 500;
+  const rate = Math.max(0, s.hourlyRate - SUBSCRIBER_HOURLY_DISCOUNT_CENTS);
+  return Math.round(((p.visits * p.minutesPerVisit / 60) * rate) / 500) * 500;
 }
 
 /** Le plus bas montant par cycle de la gamme — le « à partir de » annoncé. */
@@ -214,30 +209,59 @@ export function planFullCents(p: Plan, s: Settings): number {
   return Math.round((p.visits * p.minutesPerVisit / 60) * s.hourlyRate);
 }
 
-/**
- * Combien de pièces d'un type par heure.
- *
- * Lu directement du moteur de créneaux : la cadence annoncée au client est
- * celle que le tunnel de réservation utilise pour calculer sa durée.
- * Arrondi vers le bas — on promet ce qu'on tient.
- */
-export function perHour(minutesPerUnit: number): number {
-  return Math.max(1, Math.floor(60 / minutesPerUnit));
+/** Le volume d'une formule sur un cycle : ses visites, à la capacité de leur durée. */
+export function planPieces(p: Pick<Plan, "visits" | "minutesPerVisit">): number {
+  return p.visits * capacityPieces(p.minutesPerVisit);
 }
 
 /**
- * Ce que la page Tarifs inscrit sous « En 1 h ».
- *
- * Le nombre de pièces tant qu'il en tient au moins une dans l'heure ;
- * au-delà, le temps d'une pièce. Une prestation ajoutée de quatre-vingt-dix
- * minutes la pièce s'afficherait sinon « 1 » par heure, quand le tunnel en
- * réserve une heure et demie.
+ * Jusqu'à combien de pièces tiennent dans une séance de cette durée :
+ * 18 en deux heures, 27 en trois. Arrondi vers le bas — on promet ce qu'on
+ * tient. Le texte l'accompagne toujours de « selon la taille, le type et la
+ * matière des vêtements ».
  */
-export function cadenceText(minutesPerUnit: number, unit: string, locale: "fr" | "en"): string {
-  if (minutesPerUnit <= 60) return String(perHour(minutesPerUnit));
-  const time = minutesToText(minutesPerUnit, locale);
-  return unit.trim() ? `${time} / ${unit.trim()}` : time;
+export function capacityPieces(minutes: number): number {
+  return Math.max(0, Math.floor((minutes * PIECES_PER_HOUR) / 60));
 }
+
+/** Le temps de repassage d'une séance : sa durée, moins l'installation et le rangement. */
+export function ironingMinutes(minutes: number): number {
+  return Math.max(0, minutes - INSTALL_MINUTES - PACKUP_MINUTES);
+}
+
+export type Phase = { start: Date; end: Date };
+
+/**
+ * Les trois temps d'une séance, tels que l'espace artisan les affiche. Sans
+ * dépendance : l'onglet Rendez-vous, un composant client, s'en sert.
+ *
+ * Aujourd'hui : installation pendant les cinq premières minutes, repassage,
+ * rangement pendant les cinq dernières. Dans l'ancien déroulement
+ * (`setupMinutes` > 0), l'installation précède la séance, le rangement la
+ * suit, et tout le temps réservé est du repassage.
+ */
+export function sessionPhases(startsAt: Date, endsAt: Date, setupMinutes: number): {
+  install: Phase; ironing: Phase; packup: Phase; ironingMinutes: number;
+} {
+  const s = startsAt.getTime(), e = endsAt.getTime();
+  const at = (ms: number) => new Date(ms);
+  if (setupMinutes > 0) {
+    return {
+      install: { start: at(s - setupMinutes * 60_000), end: at(s) },
+      ironing: { start: at(s), end: at(e) },
+      packup: { start: at(e), end: at(e + setupMinutes * 60_000) },
+      ironingMinutes: Math.round((e - s) / 60_000),
+    };
+  }
+  const a = s + INSTALL_MINUTES * 60_000, b = Math.max(a, e - PACKUP_MINUTES * 60_000);
+  return {
+    install: { start: at(s), end: at(a) },
+    ironing: { start: at(a), end: at(b) },
+    packup: { start: at(b), end: at(e) },
+    ironingMinutes: Math.round((b - a) / 60_000),
+  };
+}
+
 
 /**
  * Les offres que le tunnel peut encore produire : aucune plus courte que la
@@ -248,7 +272,7 @@ export function bookableOffers(offers: Offer[], s: Settings): Offer[] {
   return offers.filter((o) => o.minutes >= s.minMinutes);
 }
 
-/** Précisions de métier, par prestation du moteur. */
+/** Précisions de métier, par prestation du moteur. Aucune ne compte de pièces. */
 export const CADENCE_NOTE: Record<string, { fr: string; en: string }> = {
   shirt:    { fr: "Col, empiècement, poignets, manches, corps — dans cet ordre, toujours.",
               en: "Collar, yoke, cuffs, sleeves, body — in that order, always." },

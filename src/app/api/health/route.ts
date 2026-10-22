@@ -3,7 +3,7 @@ import { ensureSchema, isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { getSettings, settingsReadError } from "@/lib/settings";
 import { REQUEST_INBOX } from "@/lib/brand";
-import { smsConfigured } from "@/lib/sms";
+import { smsConfigured, smsScheduleConfigured } from "@/lib/sms";
 import { activeSectors } from "@/lib/travel";
 import { requireOwner } from "@/lib/session";
 
@@ -72,6 +72,7 @@ export async function GET() {
       sessionSecret: Boolean(process.env.SESSION_SECRET || process.env.ENCRYPTION_KEY),
       setupCode: Boolean(process.env.ADMIN_SETUP_CODE),
       sms: smsConfigured(),
+      smsSchedule: smsScheduleConfigured(),
       cron: Boolean(process.env.CRON_SECRET),
     },
     /* Le texte brut d'une erreur de base peut nommer un hôte ou une table :

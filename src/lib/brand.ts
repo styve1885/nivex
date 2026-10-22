@@ -53,18 +53,50 @@ export const NEQ = "2282362666";
 export const REQUEST_INBOX = "nivexrepassage@gmail.com";
 
 /**
- * Installation avant la séance, rangement après, en minutes.
+ * Installation et rangement du matériel, en minutes, compris dans la séance.
  *
- * Le bloc réservé par le client est entièrement du repassage : l'artisan
- * arrive avant et repart après, et ce temps ne lui est pas facturé. Il
- * doit pourtant être bloqué, sinon deux séances collées se chevauchent
- * dans la vraie vie tout en paraissant libres dans l'agenda.
+ * Depuis le 22 octobre 2026, l'artisan arrive à l'heure du début : les cinq
+ * premières minutes servent à s'installer, les cinq dernières à ranger, et
+ * le reste du temps réservé est du repassage. Une séance de deux heures en
+ * compte donc une heure cinquante. Le créneau bloqué est la séance, ni plus
+ * ni moins : ces minutes n'en débordent pas.
  *
- * Cette constante gouverne trois choses : l'étendue de l'événement inscrit
- * à l'agenda, la contrainte de non-chevauchement en base, et la phrase
- * annoncée au client. Les trois ne peuvent donc pas se contredire.
+ * Elles gouvernent la durée tirée d'un panier (les minutes de repassage,
+ * plus celles-ci), les trois temps de l'espace artisan et la phrase dite au
+ * client. Les textes écrivent « 5 minutes chacun » : deux valeurs
+ * différentes demanderaient de les réécrire.
  */
-export const SETUP_MINUTES = 15;
+export const INSTALL_MINUTES = 5;
+export const PACKUP_MINUTES = 5;
+
+/**
+ * L'ancien déroulement : arrivée un quart d'heure avant, départ un quart
+ * d'heure après, hors du temps réservé.
+ *
+ * Il vaut encore pour les rendez-vous pris avant le changement, et pour les
+ * abonnés dont la case « arrivée 15 min avant » est cochée. Leur colonne
+ * `setup_minutes` le porte, ligne par ligne : ce temps reste bloqué autour
+ * de leurs séances, en base comme dans l'agenda, et leurs rappels donnent
+ * l'heure d'arrivée. Une séance d'aujourd'hui y vaut zéro.
+ */
+export const EARLY_ARRIVAL_MINUTES = 15;
+
+/**
+ * La capacité annoncée, en pièces par heure de séance : jusqu'à 18 pièces
+ * en deux heures, jusqu'à 27 en trois, toujours « selon la taille, le type
+ * et la matière des vêtements ».
+ *
+ * C'est le seul chiffre de quantité du site. `capacityPieces` en tire chaque
+ * volume — séances, forfaits, abonnements, foire aux questions, données
+ * structurées — pour qu'aucune page n'en avance un autre.
+ */
+export const PIECES_PER_HOUR = 9;
+
+/** Le texto « je serai chez vous » part ce nombre de minutes avant l'arrivée. */
+export const SOON_TEXT_MINUTES = 120;
+
+/** La signature des textos aux clients : le prénom de l'artisan. */
+export const SMS_SIGNATURE = "Styve";
 
 export const PHONE = "+1 450 943 1217";
 export const PHONE_HREF = "tel:+14509431217";
@@ -108,6 +140,13 @@ export const TERM_ALERT_DAYS = 30;
  * en retour.
  */
 export const SUBSCRIBER_TRAVEL_DISCOUNT_CENTS = 500;
+
+/**
+ * Un abonné paie l'heure ce montant de moins que la séance à la carte, en
+ * cents : à 55 $ l'heure, 50 $. Le prix d'une formule en découle
+ * (`planCents`), arrondi aux 5 $, puis se fige à la souscription.
+ */
+export const SUBSCRIBER_HOURLY_DISCOUNT_CENTS = 500;
 
 /**
  * Une visite annulée est remplacée en fin de série, au même jour et à la

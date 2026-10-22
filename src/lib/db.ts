@@ -1,5 +1,4 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { SETUP_MINUTES } from "./brand";
 import { DEFAULT_ZONE_POLICY } from "./travel";
 import { DATACENTER_CITIES, PERSONAL_PATH } from "./attribution";
 
@@ -59,7 +58,7 @@ async function bootstrap() {
       calendar_id     text        NOT NULL DEFAULT 'primary',
       timezone        text        NOT NULL DEFAULT 'America/Toronto',
       business_name   text        NOT NULL DEFAULT 'NIVEX',
-      hourly_rate     integer     NOT NULL DEFAULT 5000,   -- suit DEFAULT_HOURLY_RATE (settings.ts)
+      hourly_rate     integer     NOT NULL DEFAULT 5500,   -- suit DEFAULT_HOURLY_RATE (settings.ts)
       currency        text        NOT NULL DEFAULT 'CAD',
       min_minutes     integer     NOT NULL DEFAULT 120,
       buffer_minutes  integer     NOT NULL DEFAULT 30,
@@ -133,40 +132,44 @@ async function bootstrap() {
     END $$`;
 
   /*
-   * L'artisan s'installe un quart d'heure avant et range un quart d'heure
-   * après. Deux séances qui se touchent pile — 13 h–15 h puis 15 h–17 h —
-   * ne se chevauchent pas sur le papier, mais se chevauchent dans la vraie
-   * vie : il range chez l'un pendant qu'il devrait s'installer chez
-   * l'autre. La garde porte donc sur le temps réellement occupé.
+   * Le temps réellement occupé par une séance, ligne par ligne.
    *
-   * Elle passe par une fonction déclarée IMMUTABLE parce qu'une contrainte
-   * d'exclusion indexe son expression, et qu'un index refuse tout ce qui
-   * ne l'est pas. Or `timestamptz - interval` est seulement STABLE aux
-   * yeux de Postgres : l'intervalle pourrait contenir des mois ou des
-   * jours, dont la durée dépend du fuseau. Ici il ne contient que des
-   * minutes, qui durent la même chose partout — la déclaration est donc
-   * exacte, et non un passe-droit.
+   * `setup_minutes` dit combien de minutes l'artisan passe sur place hors du
+   * temps réservé, avant et après la séance. Zéro depuis le 22 octobre 2026 :
+   * l'installation et le rangement sont compris dans la séance, et le créneau
+   * bloqué est la séance elle-même. Quinze pour les rendez-vous pris avant,
+   * et pour les abonnés dont la case « arrivée 15 min avant » est cochée :
+   * deux séances qui se touchent pile — 13 h–15 h puis 15 h–17 h — se
+   * chevaucheraient dans la vraie vie, l'artisan rangeant chez l'un pendant
+   * qu'il devrait s'installer chez l'autre.
+   *
+   * La valeur par défaut reste quinze : une ligne écrite sans la préciser —
+   * par l'ancienne version, le temps d'un déploiement — garde le déroulement
+   * qu'on lui a promis. Le code d'aujourd'hui l'écrit toujours.
+   */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS setup_minutes integer NOT NULL DEFAULT 15`;
+
+  /*
+   * La garde porte sur ce temps occupé. Elle passe par une fonction déclarée
+   * IMMUTABLE parce qu'une contrainte d'exclusion indexe son expression, et
+   * qu'un index refuse tout ce qui ne l'est pas. Or `timestamptz - interval`
+   * est seulement STABLE aux yeux de Postgres : l'intervalle pourrait
+   * contenir des mois ou des jours, dont la durée dépend du fuseau. Ici il ne
+   * contient que des minutes, qui durent la même chose partout — la
+   * déclaration est donc exacte, et non un passe-droit.
    *
    * Tout ceci est un confort, pas une fondation : la ligne de défense qui
-   * compte reste la contrainte simple posée plus haut. Un échec ici ne
-   * doit donc jamais empêcher le site de démarrer.
+   * compte reste la contrainte simple posée plus haut. Un échec ici ne doit
+   * donc jamais empêcher le site de démarrer.
    */
   try {
-    /* Les minutes sont écrites en toutes lettres : à l'intérieur d'un corps
-       de fonction, un paramètre ne s'interpole pas — il s'y confondrait avec
-       les arguments de la fonction elle-même. Si la constante change, on ne
-       pose rien plutôt que de poser une garde mensongère. */
-    if (SETUP_MINUTES !== 15) {
-      throw new Error(`SETUP_MINUTES vaut ${SETUP_MINUTES} ; nivex_occupied est écrite pour 15 minutes.`);
-    }
-
     await q`
-      CREATE OR REPLACE FUNCTION nivex_occupied(starts_at timestamptz, ends_at timestamptz)
+      CREATE OR REPLACE FUNCTION nivex_occupied(starts_at timestamptz, ends_at timestamptz, setup_minutes integer)
       RETURNS tstzrange
       LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $fn$
         SELECT tstzrange(
-          starts_at - make_interval(mins => 15),
-          ends_at   + make_interval(mins => 15)
+          starts_at - make_interval(mins => setup_minutes),
+          ends_at   + make_interval(mins => setup_minutes)
         )
       $fn$`;
 
@@ -177,13 +180,19 @@ async function bootstrap() {
     await q`
       DO $$ BEGIN
         ALTER TABLE nivex_bookings
-          ADD CONSTRAINT nivex_bookings_no_overlap_setup
-          EXCLUDE USING gist (nivex_occupied(starts_at, ends_at) WITH &&)
+          ADD CONSTRAINT nivex_bookings_no_overlap_occupied
+          EXCLUDE USING gist (nivex_occupied(starts_at, ends_at, setup_minutes) WITH &&)
           WHERE (status IN ('confirmed', 'pending'));
       EXCEPTION
         WHEN duplicate_object THEN NULL;
         WHEN duplicate_table  THEN NULL;
       END $$`;
+
+    /* L'ancienne garde comptait un quart d'heure autour de toute séance. Elle
+       ne tombe qu'une fois la nouvelle en place : si celle-ci échoue, le
+       `catch` saute ces lignes et l'ancienne reste. */
+    await q`ALTER TABLE nivex_bookings DROP CONSTRAINT IF EXISTS nivex_bookings_no_overlap_setup`;
+    await q`DROP FUNCTION IF EXISTS nivex_occupied(timestamptz, timestamptz)`;
   } catch (e) {
     /* Une base sans droit de créer des fonctions, une version de Postgres
        récalcitrante, des rendez-vous déjà trop serrés : aucune de ces
@@ -440,6 +449,43 @@ async function bootstrap() {
      relancer. */
   await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS review_url      text`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS review_asked_at timestamptz`;
+
+  /* L'arrivée d'un abonné : quinze minutes avant pour ceux d'avant le
+     22 octobre 2026 (voir `setup_minutes` plus haut), zéro pour les autres.
+     Ses visites à venir en héritent. */
+  await q`ALTER TABLE nivex_subscriptions ADD COLUMN IF NOT EXISTS setup_minutes integer NOT NULL DEFAULT 15`;
+
+  /* Le texto « je serai chez vous », programmé chez Twilio deux heures avant
+     l'arrivée : l'heure prévue réserve l'envoi, l'identifiant du message
+     permet de l'annuler quand la séance bouge. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_at  timestamptz`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_sid text`;
+
+  /*
+   * Les migrations de données qui ne s'écrivent qu'une fois.
+   *
+   * Un réglage enregistré l'emporte sur le code, et `bootstrap()` repasse à
+   * chaque instance froide : une mise à jour écrite ici sans garde
+   * ramènerait sa valeur chaque fois que l'artisan la change. Le nom inscrit
+   * dans cette table la rend unique, et l'écriture se fait dans la même
+   * instruction que l'inscription.
+   */
+  await q`
+    CREATE TABLE IF NOT EXISTS nivex_migrations (
+      name       text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now()
+    )`;
+
+  /* Le taux horaire passe de 50 $ à 55 $ le 22 octobre 2026. Seulement s'il
+     valait encore 50 $ : un autre taux est un choix de l'artisan. */
+  await q`
+    WITH done AS (
+      INSERT INTO nivex_migrations (name) VALUES ('tarif-2026-55')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name
+    )
+    UPDATE nivex_settings SET hourly_rate = 5500, updated_at = now()
+    WHERE id = 1 AND hourly_rate = 5000 AND EXISTS (SELECT 1 FROM done)`;
 }
 
 /* La note de la bascule, écrite depuis la grille qu'elle pose. */

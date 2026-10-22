@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Reveal } from "../Reveal";
 import { CheckIcon, ArrowIcon } from "../Icons";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { blockPieces, cheapestPlanCents } from "@/lib/pricing";
+import { capacityPieces, cheapestPlanCents } from "@/lib/pricing";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
@@ -10,7 +10,7 @@ import type { Settings } from "@/lib/settings";
  * La vitrine tarifaire.
  *
  * On y vend une séance, jamais un taux : le montant se lit « 2 heures —
- * 100 $ », et la durée n'apparaît que comme repère de déroulement.
+ * 110 $ », et la durée n'apparaît que comme repère de déroulement.
  *
  * La plus courte séance annoncée est la durée minimale d'un déplacement,
  * telle que réglée par l'artisan : la vitrine ne peut donc pas proposer
@@ -27,9 +27,10 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
      suivrait le minimum. L'abonnement n'affiche que son prix. */
   const shortest = Math.max(settings.minMinutes, 120);
   const durations = [minutesToText(shortest, locale), minutesToText(shortest + 60, locale), ""];
-  /* Le volume suit la durée, lu sur la grille de la page Tarifs ; sans bloc
-     de cette durée, la carte n'avance pas de chiffre. */
-  const pieces = [blockPieces(shortest, locale), blockPieces(shortest + 60, locale), null];
+  /* Le volume suit la durée, tiré du seul chiffre de capacité du site, et
+     la précision qui l'accompagne toujours se lit sous les cartes. */
+  const upTo = (minutes: number) => t.capacity.upTo.replace("{n}", String(capacityPieces(minutes)));
+  const pieces = [upTo(shortest), upTo(shortest + 60), null];
   const volume = (text: string, i: number) =>
     pieces[i] ? `${pieces[i]} — ${text}` : text.charAt(0).toUpperCase() + text.slice(1);
   const amounts = [
@@ -65,6 +66,8 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
             </Reveal>
           ))}
         </div>
+
+        <p className="mt-6 text-center text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
 
         {settings.firstHourFree && (
           <Reveal delay={120} className="mx-auto mt-12 max-w-2xl border border-gold-400/60 bg-linen-100/70 px-7 py-6 text-center">
