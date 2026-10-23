@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BookingInput, BookingError, createBooking } from "@/lib/bookings";
+import { BookingInput, BookingError, bookedUnits, createBooking } from "@/lib/bookings";
 import { ensureSchema, logEvent, sql } from "@/lib/db";
 import { demoSettings, isDemo } from "@/lib/demo";
-import { estimateCents, estimateMinutes } from "@/lib/availability";
+import { estimateCents } from "@/lib/availability";
+import { sessionLength } from "@/lib/pricing";
+import { estimateRange } from "@/lib/items";
 import { bookingRef, token } from "@/lib/crypto";
 import { SettingsUnavailableError } from "@/lib/settings";
 import { phoneKey } from "@/lib/subscriptions";
@@ -35,13 +37,17 @@ export async function POST(req: NextRequest) {
   if (isDemo()) {
     const settings = demoSettings();
     const start = new Date(parsed.data.startsAt);
-    const durationMinutes = estimateMinutes(parsed.data.items, settings);
+    const durationMinutes = sessionLength(settings);
+    const units = bookedUnits(parsed.data.units, parsed.data.locale);
+    const cents = estimateCents(durationMinutes, settings, settings.firstHourFree)
+      + units.reduce((sum, u) => sum + (u.cents ?? 0) * u.qty, 0);
     return NextResponse.json({
       ok: true, demo: true, ref: bookingRef(), manageToken: token(24),
       startsAt: start.toISOString(),
       endsAt: new Date(start.getTime() + durationMinutes * 60_000).toISOString(),
       durationMinutes,
-      estimateCents: estimateCents(durationMinutes, settings, settings.firstHourFree),
+      estimateCents: cents,
+      estimateToCents: estimateRange(units, cents).high,
       currency: settings.currency,
       firstHourFree: settings.firstHourFree,
       emailSent: false, calendarAdded: false,
@@ -83,6 +89,8 @@ export async function POST(req: NextRequest) {
       endsAt: booking.endsAt.toISOString(),
       durationMinutes: booking.durationMinutes,
       estimateCents: booking.estimateCents,
+      /* Le haut de la fourchette, quand une pièce à l'unité a un prix variable. */
+      estimateToCents: estimateRange(booking.items, booking.estimateCents).high,
       currency: booking.currency,
       firstHourFree: booking.firstHourFree,
       travelFeeCents: booking.travelFeeCents,

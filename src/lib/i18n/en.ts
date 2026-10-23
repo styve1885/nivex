@@ -31,7 +31,7 @@ const privacy: LegalDoc = {
         "What you hand us yourself, at the moment you hand it over, and a few technical measurements, each described below. This site follows no one around and buys data from no one.",
       ],
       list: [
-        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the services and quantities you chose, the time slot you kept, and the notes you write yourself.",
+        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the session and any single pieces you chose, the time slot you kept, and the notes you write yourself.",
         "Subscription — the same details as a booking, plus the plan you chose, the day and time of your visits, the visits completed and the cycles paid.",
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
@@ -49,7 +49,7 @@ const privacy: LegalDoc = {
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
         "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, the reminder the day before, a note two hours before the artisan arrives and any change to an appointment; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone; the site does not keep it.",
-        "The services you chose are how we book the right length of time and pack the right equipment.",
+        "The session and any single pieces you chose are how we book the right time slot and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
         "The visit log and the booking's origin serve to know which way of making ourselves known works — a card handed out in a neighbourhood, a recommendation, a post, a search — so that nothing is spent at random. They are never used to solicit you, to contact you again, or to sort you.",
@@ -187,6 +187,7 @@ const terms: LegalDoc = {
       title: "The price",
       body: [
         "A session lasts {min} at the least and is billed {entry}. Beyond that, time is added in steps of {step}, at the same rate of {rate} per hour. Applicable taxes, if any, are added to that amount.",
+        "Single pieces you add to a session are billed at the prices published on the pricing page.",
         "The estimate shown while booking is indicative: it follows from what you declared. The final amount is set by the time actually spent, and it is confirmed to you on site before the session begins. You are never committed to an amount you have not seen.",
         "If the work asked for goes beyond what was foreseen, we say so before carrying on. Whether to extend or to stop there is your call.",
       ],
@@ -286,6 +287,9 @@ export const en: Dict = {
     title: "In-home ironing in Saint-Lambert and Longueuil — NIVEX",
     description:
       "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery.",
+    prices: "Subscriptions from {plan} per cycle, a session of {min} for {price}.",
+    plan: "{name} subscription",
+    extraHour: "One more hour, decided on site",
     offer: "First hour on the house.",
     ogAlt: "NIVEX — Prestige in-home ironing",
   },
@@ -309,56 +313,22 @@ export const en: Dict = {
     emailHref: "mailto:contact@nivexrepassage.ca",
   },
   hero: {
-    eyebrow: "In-home ironing · Saint-Lambert · Longueuil",
+    eyebrow: "In-home ironing · Montreal · South Shore",
     titleTop: "Give your wardrobe",
     titleBottom: "the care it deserves.",
     onSite:
       "We iron your clothes and bed linen on site, in your home. No pickup, no delivery: nothing leaves your home.",
-    lede:
-      "A craftsman comes to you, press and high-precision steam in hand. You carry nothing, you fold nothing. You open your closet, and everything hangs straight.",
     ctaPrimary: "Book a session",
     ctaSecondary: "Read the story",
-    offer: "Your first hour of ironing is on the house.",
+    offer: "Your first hour is on the house, once, on your first booking.",
     scroll: "Scroll",
   },
-  marquee: [
-    "Flawless shirts",
-    "Dresses & delicates",
-    "Fine household linen",
-    "Suits & jackets, sharp",
-    "School & work uniforms",
-    "Everything happens at your home",
-  ],
   marqueeControl: { pause: "Pause scrolling", play: "Resume scrolling" },
   story: {
     eyebrow: "The story",
     title: "White, the way it was on day one.",
-    chapters: [
-      {
-        num: "I",
-        title: "A gesture we forgot",
-        body:
-          "There was a time when Sunday evening was for ironing. The iron hissed, steam rose, and the whole week took shape on a wooden board. That gesture didn't vanish because it stopped mattering. It vanished because time did.",
-      },
-      {
-        num: "II",
-        title: "What a crease says",
-        body:
-          "A wrinkled garment doesn't betray carelessness — it betrays a calendar. But the person across from you doesn't know that. The collar that falls straight, the shoulder that holds, the crease that sits: that is what speaks before you do, at the interview and at the first date alike.",
-      },
-      {
-        num: "III",
-        title: "The name",
-        body:
-          "NIVEX comes from the Latin nix, nivis — snow. That kind of white isn't negotiable: it is clean, frank, with no memory of the day before. It is the state we return your fabrics to, one piece at a time.",
-      },
-      {
-        num: "IV",
-        title: "At your place, nowhere else",
-        body:
-          "We don't take your clothes hostage in a van. The workshop comes to you: professional press, calibrated steam, pressing cloths, hangers. You stay home. So do your clothes. And when we leave, the closet is in order.",
-      },
-    ],
+    body:
+      "People used to iron on Sunday evenings. The ritual didn't disappear because it was useless: time ran out. NIVEX, from the Latin word for “snow”, brings it back to your home, with six years of dry-cleaning experience. We come with the press, the steam and the hangers, we iron on site, and your clothes never leave your home.",
     signature: "Styve",
     signatureRole: "Master presser, founder of NIVEX",
     quote:
@@ -367,51 +337,12 @@ export const en: Dict = {
   services: {
     eyebrow: "Services",
     title: "Every fabric has its temperature.",
-    lede:
-      "We don't press silk the way we press uniform cotton. Each piece gets the setting, the pressure and the steam it calls for.",
     items: [
-      {
-        icon: "shirt",
-        serviceKey: "shirt",
-        name: "Immaculate shirts",
-        body: "Collar, yoke, cuffs, sleeves, body. In that order, always. Pressed on a wooden hanger, ready to wear.",
-        detail: "On wooden hangers",
-      },
-      {
-        icon: "dress",
-        serviceKey: "delicate",
-        name: "Dresses & delicates",
-        body: "Silk, viscose, lace, pleats. Contactless steam when the fibre demands it, a pressing cloth when it deserves one.",
-        detail: "Contactless steam",
-      },
-      {
-        icon: "linen",
-        serviceKey: "linen",
-        name: "Sheets & household linen",
-        body: "Single, double, queen, king. The larger sizes take longer, and they are counted separately. Hotel folding, sharp edges.",
-        detail: "Hotel folding",
-      },
-      {
-        icon: "suit",
-        serviceKey: "suit",
-        name: "Suits & jackets",
-        body: "Steam relaxing, shoulders reshaped, trouser crease marked. Never any shine.",
-        detail: "Never any shine",
-      },
-      {
-        icon: "badge",
-        serviceKey: "uniform",
-        name: "Uniforms",
-        body: "School and professional. The whole week's set, handled in one go, returned on numbered hangers.",
-        detail: "Numbered hangers",
-      },
-      {
-        icon: "clock",
-        serviceKey: "trousers",
-        name: "Everything happens at your home",
-        body: "Nothing leaves your home. Your craftsman arrives with his steam, his iron and his hangers, works in front of you, and tidies up before leaving.",
-        detail: "{zone}",
-      },
+      { icon: "shirt", name: "Shirts", body: "Collar, cuffs and placket crisp, returned on a hanger." },
+      { icon: "suit", name: "Suits and jackets", body: "Sharp creases, shoulders and lapels intact." },
+      { icon: "dress", name: "Dresses and delicate pieces", body: "The right temperature for silk, linen and wool." },
+      { icon: "badge", name: "School and work uniforms", body: "Ready for the whole week." },
+      { icon: "linen", name: "Sheets and household linen", body: "Bed sets, duvet covers, tablecloths and napkins." },
     ],
     regions: { south: "South Shore", montreal: "Montreal" },
   },
@@ -438,33 +369,16 @@ export const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "For the result, not the minute.",
-    lede:
-      "You choose the pieces and have the ironing board ready; we bring everything else. The amount is confirmed on site before we begin.",
-    offers: [
-      {
-        name: "Week session",
-        volume: "your whole week's wardrobe",
-        note: "The most requested format, and the shortest visit we make.",
-      },
-      {
-        name: "Family session",
-        volume: "shirts, trousers, school uniforms",
-        note: "For a household, or a fortnight in one go.",
-      },
-      {
-        name: "Subscription",
-        volume: "Regular visits, reserved time slots",
-        note: "Rate guaranteed twelve months.",
-      },
-    ],
-    planFrom: "from {price} per cycle",
-    button: "Put my session together",
-    seeAll: "See the full price list",
+    title: "Four subscriptions, a rate guaranteed for twelve months.",
+    planLine: "{detail}, up to {n} pieces",
+    perCycle: "/ cycle",
+    insteadOf: "instead of",
+    subscribe: "Subscribe",
+    trial: "To try us once: a session of {min}, {price}.",
+    seeAll: "See single-piece prices",
     firstFree: "First hour free",
     firstFreeConditions:
       `On any first booking of ${FIRST_FREE_MIN} or more. One use per customer. Not applicable to subscriptions or single pieces.`,
-    note: "The estimate shown is indicative. The final amount is confirmed on site, before we start.",
   },
   capacity: {
     upTo: "Up to {n} pieces",
@@ -490,36 +404,24 @@ export const en: Dict = {
         a: "The board, yes; the rest, no. Your craftsman arrives with the professional kit: steam generator, iron, pressing cloths, hangers. Have your ironing board ready, along with a power outlet and roughly two square metres.",
       },
       {
-        q: "How much time should I plan for?",
-        a: "During booking, the estimator works out the duration from the quantities you choose, setting up and packing away included; to change it, change the quantities.",
-      },
-      {
         q: "How many garments do you iron in a session?",
         a: "{capacity}",
-      },
-      {
-        q: "Is setting up included in the session?",
-        a: "Yes. {setup} Your craftsman arrives at the start time of the session.",
       },
       {
         q: "Do I have to be there during the session?",
         a: "Ideally to let us in and see us out. In between, go about your day. Some clients leave for work after opening the door: we arrange it in advance.",
       },
       {
-        q: "What about fragile pieces?",
-        a: "Every fibre is identified before treatment. Silk, lace, cashmere and pleats are worked with contactless steam or under a pressing cloth. If we have any doubt about a piece, we ask you before touching it.",
-      },
-      {
         q: "Which areas do you serve?",
-        a: "{zone} The travel fee depends on the area and on the length of the session; the full table is on the pricing page. Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs if anything.",
+        a: "{zone} Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
       },
       {
         q: "How does payment work?",
-        a: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment is required to book online.",
+        a: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment is required online. A subscription is paid at the first visit of each cycle.",
       },
       {
         q: "Can I cancel or reschedule?",
-        a: `Yes. A session can be cancelled freely up to ${CANCEL_WINDOW_HOURS} hours before the appointment, from the personal link in your confirmation email, without calling us. To move it, call us at ${PHONE} within the same window. For a subscriber, each visit can be cancelled or moved online until 11:59 p.m. the day before.`,
+        a: `Yes. A session can be cancelled online up to ${CANCEL_WINDOW_HOURS} hours before, from the link in your confirmation email; to move it, call us at ${PHONE} within the same window. A subscriber's visit can be cancelled or moved online until 11:59 p.m. the day before.`,
       },
     ],
   },
@@ -587,21 +489,29 @@ export const en: Dict = {
   booking: {
     title: "Book a session",
     lede: "Four steps, two minutes. You pick your hour, the confirmation goes out at once.",
-    steps: ["Services", "Address", "Time slot", "Confirm"],
+    steps: ["Choice", "Address", "Time slot", "Confirm"],
     progress: "Progress",
     step1: {
-      title: "What are we handling?",
-      hint: "Select what applies and adjust the quantities. The estimate updates on its own.",
+      title: "What would you like to book?",
+      hint: "The session to try us once, or a subscription for a regular service.",
+      session: "A session of {min}",
+      sessionNote: "To try us once.",
+      planNext: "You will then pick the day and time of your first visit.",
+      planCta: "Continue to the subscription",
+      units: "Single pieces (optional)",
+      unitsHint: "A piece added to your session, at the listed price.",
+      unitsShow: "Add single pieces",
+      unitsHide: "Hide single pieces",
+      unitsTotal: "including single pieces: {amount}",
       qty: "Quantity",
       less: "Decrease quantity",
       more: "Increase quantity",
       estimate: "Estimate",
-      duration: "Estimated duration",
+      duration: "Duration",
       ironing: "including {ironing} of ironing",
       price: "Estimated amount",
       hours: "h",
       minutes: "min",
-      empty: "Select at least one service to continue.",
       firstFreeApplied: "First hour free applied",
       firstFreeIfFirst: "First booking: {amount}, first hour free",
       notes: "Anything we should know? (optional)",
@@ -651,7 +561,7 @@ export const en: Dict = {
       afternoon: "Afternoon",
       evening: "Evening",
       timezone: "Timezone: Eastern (Montreal).",
-      durationLine: "Estimated duration: {duration}",
+      durationLine: "Session length: {duration}",
       setup:
         `Your presser arrives at the start time. Your session of {duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: {ironing} of ironing.`,
       comment: "Anything to add? (optional)",
@@ -836,21 +746,6 @@ export const en: Dict = {
     admin: "Craftsman login",
     craft: "Made with care on the South Shore",
   },
-  protocol: {
-    eyebrow: "The protocol",
-    title: "The order isn't improvised.",
-    lede:
-      "A badly ironed shirt isn't a badly heated one: it's a shirt ironed out of order. Every finished part would be creased again by the next. Here is the sequence — the one that never changes.",
-    steps: [
-      { n: "01", title: "The collar",  body: "Underside first, from the points toward the centre. Never the reverse: that's how you avoid the false crease that never leaves." },
-      { n: "02", title: "The yoke",    body: "The upper back, laid over the nose of the board. One shoulder, then the other, without ever crushing the seam." },
-      { n: "03", title: "The cuffs",   body: "Opened flat, inside then outside. The iron works around the buttons — never over them." },
-      { n: "04", title: "The sleeves", body: "We follow the existing crease, we don't invent a new one. A sleeve holds one memory; we respect it." },
-      { n: "05", title: "The body",    body: "Front buttoned, then the back, rotating the shirt around the board rather than flipping it." },
-      { n: "06", title: "The steam",   body: "A final contactless pass. The fibre relaxes, the shape sets, and shine never appears." },
-      { n: "07", title: "The hanger",  body: "Wood, immediately. The fabric cools into shape — that's where the work holds, or where it's lost." },
-    ],
-  },
   contact: {
     eyebrow: "Get in touch",
     title: "A question before you book?",
@@ -900,63 +795,19 @@ export const en: Dict = {
   },
   tarifs: {
     eyebrow: "Pricing",
-    title: "What a session at your place amounts to.",
-    lede:
-      "We don't sell “ironing”: we sell a measured pace, the same from one session to the next. Here is what it costs, what it covers, and what separates it from a helping hand.",
-    headline: "A session of {min} — {price}",
-    visitNote: "minimum {min} per visit · {travel}",
-    travelIncluded: "travel included",
-    travelVaries: "travel fee depends on your area",
-    cadence: {
-      title: "What a session holds",
-      colType: "What we handle, and how",
-    },
-    versus: {
-      title: "This is not household ironing.",
-      lede: "Five differences, and they show on the garment.",
-      elsewhere: "Elsewhere",
-      here: "At NIVEX",
-      rows: [
-        {
-          title: "The volume",
-          them: "Whatever can be done in the time paid for. You find out how far it got at the end.",
-          us: "A capacity stated before we start, and booked time that is entirely yours. If it is cut short through our own doing, the missing time isn't billed.",
-        },
-        {
-          title: "The equipment",
-          them: "Your iron, your steam, your hangers. The result depends on what you happen to own.",
-          us: "Professional steam generator, iron, pressing cloths and wooden hangers brought along. You provide the board, an outlet and two square metres.",
-        },
-        {
-          title: "The order of work",
-          them: "Piece after piece, in basket order. What's finished creases again under the next one.",
-          us: "A seven-step protocol per shirt, and an order of passage that keeps finished pieces from creasing.",
-        },
-        {
-          title: "Delicate pieces",
-          them: "One setting for everything. Silk, pleats and cashmere sometimes come away marked.",
-          us: "Fibre tested every time, care label followed, contactless steam. In case of doubt we ask you before touching the piece.",
-        },
-        {
-          title: "What you're left with",
-          them: "A pile on the bed, and a verbal arrangement.",
-          us: "An orderly wardrobe, an invoice, a link to manage your appointment, and our written liability for damage.",
-        },
+    title: "In-home ironing prices.",
+    metaDescription:
+      "In-home ironing: subscriptions from {from} to {to} per cycle, a session of {min} for {price}, single-piece prices and travel fees by area.",
+    trial: "For a first try: a session of {min}, {price}.",
+    trialCta: "Book the session",
+    conditions: {
+      title: "Conditions",
+      extraHour: "One more hour, decided on site: {rate}.",
+      items: [
+        "Payment on site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking.",
+        "You provide the ironing board, one power outlet and about two square metres of clear floor; the artisan brings the rest.",
+        `A session can be cancelled at no charge up to ${CANCEL_WINDOW_HOURS} hours before; a subscriber's visit, until 11:59 p.m. the day before.`,
       ],
-    },
-    blocks: {
-      title: "The sessions",
-      lede: "A length, a volume, an amount. Nothing to work out.",
-      minimum:
-        "Minimum {min} per visit. Add-ons and single pieces attach to a session already booked — on their own they don't warrant a trip.",
-    },
-    bundles: {
-      title: "Set packages",
-      lede: "A typical basket, already costed.",
-    },
-    addons: {
-      title: "Add-ons to your session",
-      lede: "Alongside a session already booked, with no second trip.",
     },
     units: {
       title: "Single pieces",
@@ -982,13 +833,6 @@ export const en: Dict = {
       ],
     },
     terms: {
-      title: "What holds for every session",
-      items: [
-        { dt: "Time honoured", dd: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each; the rest of the booked time is ironing. If it is cut short through our own doing, the missing time isn't billed.` },
-        { dt: "Estimate and final amount", dd: "The estimate is indicative. The final amount follows the time actually spent and is confirmed to you on site, before we begin." },
-        { dt: "Payment", dd: "On site, at the end of the session: cash, Interac e-transfer or card. No prepayment when booking." },
-        { dt: "What we need at your place", dd: "Your ironing board, one power outlet and about two square metres of clear floor. The rest of the equipment arrives with the artisan." },
-      ],
       travel: "Travel fee",
       travelFree: "No travel fee",
       travelFlat: "{fee} per visit",
@@ -999,10 +843,6 @@ export const en: Dict = {
     },
     firstFreeLabel: "First session",
     insteadOf: "instead of",
-    cta: {
-      title: "Put your session together.",
-      body: "The booking flow uses exactly these figures: you tick your services, it works out the duration and the amount, and confirms the hour you pick.",
-    },
   },
   beforeAfter: {
     eyebrow: "The result",
@@ -1024,40 +864,23 @@ export const en: Dict = {
       { key: "veste", name: "Lined jacket",
         altBefore: "Lined jacket before pressing",
         altAfter: "Lined jacket after pressing" },
-      { key: "velours", name: "Corduroy trousers",
-        altBefore: "Corduroy trousers before pressing",
-        altAfter: "Corduroy trousers after pressing" },
     ],
   },
   gallery: {
-    eyebrow: "The pieces",
-    title: "What passes through our hands.",
-    lede:
-      "A wool suit is not handled like a cotton overshirt, nor a pleated skirt like a dinner jacket. Here is the kind of piece we receive, and the care each one calls for.",
     photos: {
       gilet: {
-        name: "Waistcoats & suits",
-        detail: "Checked wool, notched lapels. Shoulders reshaped, contactless steam, never any shine.",
         alt: "Checked wool suit waistcoat hanging on a wooden hanger",
       },
       veston: {
-        name: "Tailored blazers",
-        detail: "The lapel is creased at its edge, never flattened. Black wool must take on no sheen.",
         alt: "Black tailored blazer shown on a mannequin",
       },
       chemises: {
-        name: "Shirts & overshirts",
-        detail: "Collar, yoke, cuffs, sleeves, body — in that order, so nothing creases again.",
         alt: "Two beige cotton overshirts hanging side by side",
       },
       ceremonie: {
-        name: "Ceremony wear",
-        detail: "Satin piping worked around, never over; trouser crease set under a pressing cloth.",
         alt: "Midnight blue dinner jacket with satin piping, on a hanger",
       },
       uniformes: {
-        name: "School uniforms",
-        detail: "Pleated skirts are taken pleat by pleat. Returned on hangers numbered per child.",
         alt: "Blue school uniforms hanging on a rail",
       },
     },

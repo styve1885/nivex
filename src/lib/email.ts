@@ -1,6 +1,7 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, INSTALL_MINUTES, PHONE, PHONE_HREF } from "./brand";
 import { ironingMinutes } from "./pricing";
+import { estimateRange, itemText, moneyRange, type ItemLike } from "./items";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -32,7 +33,8 @@ export type BookingEmailData = {
   city: string;
   postalCode: string;
   notes?: string | null;
-  items: { label: string; qty: number }[];
+  /* La séance et ses pièces à l'unité (prix compris), ou l'ancien panier. */
+  items: ItemLike[];
   startsAt: Date;
   durationMinutes: number;
   /* Minutes d'arrivée anticipée : absentes ou nulles aujourd'hui, l'artisan
@@ -181,12 +183,20 @@ const T = {
   },
 } as const;
 
-function itemsHtml(items: { label: string; qty: number }[]): string {
-  return items.map((i) => `${esc(i.label)} <span style="color:${MUTED};">× ${i.qty}</span>`).join("<br>");
+function itemsHtml(d: BookingEmailData): string {
+  const money = (c: number) => formatMoney(c, d.currency, d.locale);
+  return d.items.map((i) => esc(itemText(i, money))).join("<br>");
 }
 
-function itemsText(items: { label: string; qty: number }[]): string {
-  return items.map((i) => `  · ${i.label} × ${i.qty}`).join("\n");
+function itemsText(d: BookingEmailData): string {
+  const money = (c: number) => formatMoney(c, d.currency, d.locale);
+  return d.items.map((i) => `  · ${itemText(i, money)}`).join("\n");
+}
+
+/** L'estimation, en fourchette quand une pièce à l'unité a un prix variable ; `plus` : les frais de route. */
+function estimateText(d: BookingEmailData, plus = 0): string {
+  const { low, high } = estimateRange(d.items, d.estimateCents);
+  return moneyRange(low + plus, high + plus, (c) => formatMoney(c, d.currency, d.locale));
 }
 
 /**
@@ -209,7 +219,7 @@ function travelRowsHtml(d: BookingEmailData, t: TravelLabels): string {
   const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
   return (
     row(label, esc(formatMoney(fee, d.currency, d.locale))) +
-    row(t.total, `<strong>${esc(formatMoney(d.estimateCents + fee, d.currency, d.locale))}</strong>`)
+    row(t.total, `<strong>${esc(estimateText(d, fee))}</strong>`)
   );
 }
 
@@ -219,7 +229,7 @@ function travelRowsText(d: BookingEmailData, t: TravelLabels): string[] {
   const label = d.travelZone ? `${t.travel} (${d.travelZone})` : t.travel;
   return [
     `${label}: ${formatMoney(fee, d.currency, d.locale)}`,
-    `${t.total}: ${formatMoney(d.estimateCents + fee, d.currency, d.locale)}`,
+    `${t.total}: ${estimateText(d, fee)}`,
   ];
 }
 
@@ -227,7 +237,7 @@ export function clientConfirmation(d: BookingEmailData) {
   const t = T[d.locale];
   const when = formatDateTime(d.startsAt, d.timezone, d.locale);
   const dur = minutesToText(d.durationMinutes, d.locale);
-  const money = formatMoney(d.estimateCents, d.currency, d.locale);
+  const money = estimateText(d);
   const intro = d.invited === false ? t.introNoInvite : t.intro;
 
   const inner = `
@@ -237,7 +247,7 @@ export function clientConfirmation(d: BookingEmailData) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       ${row(t.when, `<strong style="font-size:16px;">${esc(when)}</strong>`)}
       ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
-      ${row(t.what, itemsHtml(d.items))}
+      ${row(t.what, itemsHtml(d))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
       ${travelRowsHtml(d, t)}
@@ -270,7 +280,7 @@ export function clientConfirmation(d: BookingEmailData) {
     t.hi(d.clientName.split(" ")[0]), "", intro, "",
     `${t.when}: ${when}`,
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
-    `${t.what}:`, itemsText(d.items),
+    `${t.what}:`, itemsText(d),
     `${t.duration}: ${dur}`,
     `${t.estimate}: ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
     ...travelRowsText(d, t),
@@ -355,7 +365,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
   const fr = { ...d, locale: "fr" as const };
   const when = formatDateTime(d.startsAt, d.timezone, "fr");
   const dur = minutesToText(d.durationMinutes, "fr");
-  const money = formatMoney(d.estimateCents, d.currency, "fr");
+  const money = estimateText(fr);
   const maps = `https://maps.google.com/?q=${encodeURIComponent(`${d.address}, ${d.city}, QC ${d.postalCode}`)}`;
 
   const inner = `
@@ -367,7 +377,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${row(t.phone, `<a href="tel:${esc(d.clientPhone.replace(/[^\d+]/g, ""))}" style="color:${GOLD};text-decoration:none;">${esc(d.clientPhone)}</a>`)}
       ${row(t.email, `<a href="mailto:${esc(d.clientEmail)}" style="color:${GOLD};text-decoration:none;">${esc(d.clientEmail)}</a>`)}
       ${row(t.where, `<a href="${esc(maps)}" style="color:${GOLD};text-decoration:none;">${esc(`${d.address}, ${d.city} ${d.postalCode}`)}</a>`)}
-      ${row(t.what, itemsHtml(d.items))}
+      ${row(t.what, itemsHtml(d))}
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
       ${travelRowsHtml(fr, t)}
@@ -382,7 +392,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     cancelled ? t.ownerCancelIntro : t.ownerIntro, "",
     `${t.when}: ${when}`, `${t.client}: ${d.clientName}`,
     `${t.phone}: ${d.clientPhone}`, `${t.email}: ${d.clientEmail}`,
-    `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d.items),
+    `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
     ...travelRowsText(fr, t),
     d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,

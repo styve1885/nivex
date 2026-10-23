@@ -1,5 +1,7 @@
 import type { Settings } from "./settings";
-import { INSTALL_MINUTES, PACKUP_MINUTES, PIECES_PER_HOUR, SUBSCRIBER_HOURLY_DISCOUNT_CENTS } from "./brand";
+import {
+  INSTALL_MINUTES, MIN_SESSION_MINUTES, PACKUP_MINUTES, PIECES_PER_HOUR, SUBSCRIBER_HOURLY_DISCOUNT_CENTS,
+} from "./brand";
 
 /**
  * La grille tarifaire.
@@ -18,6 +20,22 @@ import { INSTALL_MINUTES, PACKUP_MINUTES, PIECES_PER_HOUR, SUBSCRIBER_HOURLY_DIS
  */
 
 type Text = { name: string; tag?: string; detail: string };
+
+/**
+ * Ce que la page Tarifs publie en plus des abonnements, de la séance de deux
+ * heures et des pièces à l'unité.
+ *
+ * Les séances, les forfaits, les ajouts, le contenu d'une séance et la
+ * comparaison avec le repassage de ménage ont quitté la vitrine le
+ * 23 octobre 2026 : le site ne vend plus que les abonnements, la séance
+ * d'essai et les pièces à l'unité. Leurs définitions restent ici, leurs
+ * textes dans i18n/retired.ts, pour pouvoir les remettre : il suffit de
+ * repasser leur drapeau à `true` (voir RetiredSections). Le tunnel, lui, ne
+ * les a jamais réservés : une offre se vendait au temps.
+ */
+export const PUBLISHED: Record<"contents" | "difference" | "blocks" | "bundles" | "addons", boolean> = {
+  contents: false, difference: false, blocks: false, bundles: false, addons: false,
+};
 
 export type Offer = { key: string; minutes: number; fr: Text; en: Text };
 
@@ -119,27 +137,40 @@ export const ADDONS: Offer[] = [
 
 /* ============================ Prix à la pièce ============================ */
 
-export type UnitPrice = { cents: number; toCents?: number; fr: string; en: string };
+/**
+ * Une pièce à l'unité. La clé est ce que le tunnel envoie et ce que la
+ * réservation garde : elle ne change jamais, même si le libellé change.
+ * `toCents` : le haut de la fourchette d'une pièce au prix variable.
+ */
+export type UnitPrice = { key: string; cents: number; toCents?: number; fr: string; en: string };
 
 export const UNIT_LINEN: UnitPrice[] = [
-  { cents: 2800, fr: "Parure Queen ou King complète", en: "Complete Queen or King set" },
-  { cents: 2200, fr: "Parure simple ou double complète", en: "Complete single or double set" },
-  { cents: 1400, fr: "Housse de couette seule", en: "Duvet cover alone" },
-  { cents: 800,  fr: "Drap plat ou drap-housse", en: "Flat sheet or fitted sheet" },
-  { cents: 1200, toCents: 1800, fr: "Nappe de réception", en: "Dining tablecloth" },
-  { cents: 600,  fr: "Draps de berceau et gigoteuse", en: "Crib sheets and sleep sack" },
-  { cents: 300,  fr: "Serviette de table", en: "Table napkin" },
+  { key: "parure-grand-lit", cents: 2800, fr: "Parure Queen ou King complète", en: "Complete Queen or King set" },
+  { key: "parure-lit", cents: 2200, fr: "Parure simple ou double complète", en: "Complete single or double set" },
+  { key: "housse-couette", cents: 1400, fr: "Housse de couette seule", en: "Duvet cover alone" },
+  { key: "drap", cents: 800,  fr: "Drap plat ou drap-housse", en: "Flat sheet or fitted sheet" },
+  { key: "nappe", cents: 1200, toCents: 1800, fr: "Nappe de réception", en: "Dining tablecloth" },
+  { key: "berceau", cents: 600,  fr: "Draps de berceau et gigoteuse", en: "Crib sheets and sleep sack" },
+  { key: "serviette", cents: 300,  fr: "Serviette de table", en: "Table napkin" },
 ];
 
 export const UNIT_GARMENTS: UnitPrice[] = [
-  { cents: 3000, fr: "Complet 2 pièces (veston, pantalon)", en: "Two-piece suit (jacket, trousers)" },
-  { cents: 4000, fr: "Complet 3 pièces (veston, gilet, pantalon)", en: "Three-piece suit (jacket, waistcoat, trousers)" },
-  { cents: 3500, toCents: 4500, fr: "Robe de soirée ou cocktail", en: "Evening or cocktail dress" },
-  { cents: 6500, toCents: 8500, fr: "Robe de gala, cérémonie ou mariée", en: "Gala, ceremony or wedding dress" },
-  { cents: 3200, fr: "Manteau en laine ou cachemire", en: "Wool or cashmere coat" },
-  { cents: 1000, fr: "Chemise en soie pure ou en lin pur", en: "Pure silk or pure linen shirt" },
-  { cents: 500,  fr: "Chemise ou robe d'enfant", en: "Child's shirt or dress" },
+  { key: "complet-2", cents: 3000, fr: "Complet 2 pièces (veston, pantalon)", en: "Two-piece suit (jacket, trousers)" },
+  { key: "complet-3", cents: 4000, fr: "Complet 3 pièces (veston, gilet, pantalon)", en: "Three-piece suit (jacket, waistcoat, trousers)" },
+  { key: "robe-soiree", cents: 3500, toCents: 4500, fr: "Robe de soirée ou cocktail", en: "Evening or cocktail dress" },
+  { key: "robe-gala", cents: 6500, toCents: 8500, fr: "Robe de gala, cérémonie ou mariée", en: "Gala, ceremony or wedding dress" },
+  { key: "manteau", cents: 3200, fr: "Manteau en laine ou cachemire", en: "Wool or cashmere coat" },
+  { key: "chemise-soie-lin", cents: 1000, fr: "Chemise en soie pure ou en lin pur", en: "Pure silk or pure linen shirt" },
+  { key: "chemise-enfant", cents: 500,  fr: "Chemise ou robe d'enfant", en: "Child's shirt or dress" },
 ];
+
+/** Toutes les pièces à l'unité, linge puis vêtements : l'ordre de la page Tarifs. */
+export const UNIT_PRICES: UnitPrice[] = [...UNIT_LINEN, ...UNIT_GARMENTS];
+
+/** Une pièce à l'unité par sa clé, ou rien si la clé n'existe pas (ou plus). */
+export function unitByKey(key: string): UnitPrice | undefined {
+  return UNIT_PRICES.find((u) => u.key === key);
+}
 
 /* ============================ Abonnements ============================ */
 
@@ -150,34 +181,57 @@ export type Plan = {
   minutesPerVisit: number;
   /** Rythme des visites, en semaines : 1 chaque semaine, 2 aux deux semaines… */
   everyWeeks: number;
-  fr: { name: string; detail: string };
-  en: { name: string; detail: string };
+  /* `short` : la même formule en une ligne, pour l'accueil et le tunnel. */
+  fr: { name: string; detail: string; short: string };
+  en: { name: string; detail: string; short: string };
 };
 
 export const PLANS: Plan[] = [
   {
     key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
-    fr: { name: "Essentiel", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison." },
-    en: { name: "Essential", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets." },
+    fr: { name: "Essentiel", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison.",
+          short: "1 visite de 3 h toutes les 4 semaines" },
+    en: { name: "Essential", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets.",
+          short: "One 3-hour visit every 4 weeks" },
   },
   {
     key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
-    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour." },
-    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — everyday clothes kept current." },
+    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour.",
+          short: "2 visites de 2 h, aux deux semaines" },
+    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — everyday clothes kept current.",
+          short: "Two 2-hour visits, every other week" },
   },
   {
     key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
-    fr: { name: "Exécutif", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour." },
-    en: { name: "Executive", detail: "Four 2-hour visits, one a week — the work wardrobe kept current." },
+    fr: { name: "Exécutif", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour.",
+          short: "4 visites de 2 h, une par semaine" },
+    en: { name: "Executive", detail: "Four 2-hour visits, one a week — the work wardrobe kept current.",
+          short: "Four 2-hour visits, one a week" },
   },
   {
     key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
-    fr: { name: "Grande Famille", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison." },
-    en: { name: "Large Family", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house." },
+    fr: { name: "Grande Famille", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison.",
+          short: "4 visites de 3 h, une par semaine" },
+    en: { name: "Large Family", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house.",
+          short: "Four 3-hour visits, one a week" },
   },
 ];
 
 /* ============================ Calculs ============================ */
+
+/**
+ * La séance qui se réserve en ligne : la durée minimale réglée, deux heures
+ * par défaut, jamais moins. C'est la seule séance ponctuelle du tunnel ; une
+ * heure de plus se décide sur place, au taux horaire.
+ */
+export function sessionLength(s: Pick<Settings, "minMinutes">): number {
+  return Math.max(s.minMinutes, MIN_SESSION_MINUTES);
+}
+
+/** Son prix plein, au taux horaire en vigueur : 110 $ à 55 $ l'heure. */
+export function sessionPriceCents(s: Pick<Settings, "minMinutes" | "hourlyRate">): number {
+  return Math.round((sessionLength(s) / 60) * s.hourlyRate);
+}
 
 /** Montant d'une offre, au taux horaire en vigueur. */
 export function offerCents(o: Offer, s: Settings): number {
@@ -194,18 +248,18 @@ export function firstTimeCents(o: Offer, s: Settings): number {
  * horaire moins `SUBSCRIBER_HOURLY_DISCOUNT_CENTS`, arrondi au multiple de
  * 5 $ le plus proche. À 55 $ l'heure : 150, 200, 400 et 600 $.
  */
-export function planCents(p: Plan, s: Settings): number {
+export function planCents(p: Plan, s: Pick<Settings, "hourlyRate">): number {
   const rate = Math.max(0, s.hourlyRate - SUBSCRIBER_HOURLY_DISCOUNT_CENTS);
   return Math.round(((p.visits * p.minutesPerVisit / 60) * rate) / 500) * 500;
 }
 
 /** Le plus bas montant par cycle de la gamme — le « à partir de » annoncé. */
-export function cheapestPlanCents(s: Settings): number {
+export function cheapestPlanCents(s: Pick<Settings, "hourlyRate">): number {
   return Math.min(...PLANS.map((p) => planCents(p, s)));
 }
 
 /** Montant du même volume, sans abonnement. */
-export function planFullCents(p: Plan, s: Settings): number {
+export function planFullCents(p: Plan, s: Pick<Settings, "hourlyRate">): number {
   return Math.round((p.visits * p.minutesPerVisit / 60) * s.hourlyRate);
 }
 

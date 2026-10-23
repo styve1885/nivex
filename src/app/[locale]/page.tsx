@@ -3,11 +3,8 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { contactEmail } from "@/lib/brand";
 import { Hero } from "@/components/home/Hero";
-import { Marquee } from "@/components/home/Marquee";
 import { Story } from "@/components/home/Story";
 import { Services } from "@/components/home/Services";
-import { Gallery } from "@/components/home/Gallery";
-import { Protocol } from "@/components/home/Protocol";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
@@ -44,16 +41,18 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
 
+      {/* L'ordre du 23 octobre 2026, pour un accueil deux fois plus court.
+          Le ruban (Marquee), la galerie (Gallery, dont les photos vivent
+          maintenant sous les prestations) et le protocole (Protocol) ont
+          quitté la page ; leurs composants et leurs textes restent, pour
+          pouvoir les remettre. */}
       <Hero t={t} locale={locale} settings={settings} />
-      <Marquee t={t} />
-      <Story t={t} />
-      <Services t={t} locale={locale} settings={settings} />
-      <Gallery t={t} />
-      <Protocol t={t} />
       <HowItWorks t={t} />
+      <Services t={t} />
       <BeforeAfter t={t} />
       <BeforeAfterBanner t={t} />
       <Pricing t={t} locale={locale} settings={settings} />
+      <Story t={t} />
       <Faq t={t} settings={pub} locale={locale} />
       <Contact t={t} locale={locale} businessEmail={contactEmail()}
         settings={{ hours: settings.hours, zonePolicy: settings.zonePolicy }} />

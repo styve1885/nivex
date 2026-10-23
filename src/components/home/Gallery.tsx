@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Reveal } from "../Reveal";
+import { getRetired } from "@/lib/i18n/retired";
 import type { Dict } from "@/lib/i18n";
 
 /**
@@ -19,21 +20,24 @@ const PHOTOS = [
   { key: "uniformes", src: "/travaux/uniformes-scolaires.jpg", w: 858,  h: 1040 },
 ] as const;
 
-export function Gallery({ t }: { t: Dict }) {
+/* Retirée de l'accueil le 23 octobre 2026 : ses photos se montrent sous les
+   prestations. Ses titres et ses légendes vivent dans retired.ts. */
+export function Gallery({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
+  const r = getRetired(locale).gallery;
   return (
     <section id="pieces" className="scroll-mt-24 bg-linen-50 py-28 sm:py-36">
       <div className="mx-auto max-w-7xl px-7 sm:px-10">
         <Reveal className="max-w-2xl">
-          <p className="eyebrow">{t.gallery.eyebrow}</p>
+          <p className="eyebrow">{r.eyebrow}</p>
           <h2 className="mt-5 font-display text-4xl font-light leading-tight text-ink-800 sm:text-5xl">
-            {t.gallery.title}
+            {r.title}
           </h2>
-          <p className="mt-6 text-[0.97rem] font-light leading-[1.95] text-ink-500">{t.gallery.lede}</p>
+          <p className="mt-6 text-[0.97rem] font-light leading-[1.95] text-ink-500">{r.lede}</p>
         </Reveal>
 
         <ul className="mt-14 grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
           {PHOTOS.map((photo, i) => {
-            const text = t.gallery.photos[photo.key];
+            const text = { ...t.gallery.photos[photo.key], ...r.photos[photo.key] };
             return (
               <Reveal key={photo.key} as="li" delay={i * 60}>
                 <div className="overflow-hidden border border-gold-300/50 bg-linen-100">

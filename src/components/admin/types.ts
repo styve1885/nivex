@@ -2,7 +2,8 @@ export type AdminBooking = {
   id: string; ref: string; status: string;
   clientName: string; clientEmail: string; clientPhone: string;
   address: string; city: string; postalCode: string; notes: string | null;
-  items: { key: string; label: string; qty: number }[];
+  /* La séance et ses pièces à l'unité, ou le panier d'un rendez-vous d'avant (voir items.ts). */
+  items: { key: string; label: string; qty: number; cents?: number; toCents?: number }[];
   startsAt: string; endsAt: string; durationMinutes: number;
   /* Minutes passées sur place hors de la séance : 0 aujourd'hui, 15 pour l'ancien déroulement. */
   setupMinutes: number;

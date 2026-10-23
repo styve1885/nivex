@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
      Montréal : une phrase écrite à la main finirait par nommer un secteur
      fermé. L'offre n'y figure que si l'artisan la propose. */
   const s = await getSettings();
-  const description = metaDescription(t, s.zonePolicy, locale === "en" ? "en" : "fr", s.firstHourFree);
+  const description = metaDescription(t, s.zonePolicy, locale === "en" ? "en" : "fr", s.firstHourFree, s);
 
   return {
     ...siteMetadata,

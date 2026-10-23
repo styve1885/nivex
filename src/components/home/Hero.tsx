@@ -61,10 +61,9 @@ export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; se
           {t.hero.onSite}
         </p>
 
-        <p className="mx-auto mt-5 max-w-xl text-[0.98rem] font-light leading-[1.85] text-ink-500 animate-rise sm:text-base"
-          style={{ animationDelay: "640ms" }}>
-          {t.hero.lede}
-        </p>
+        {/* La phrase longue de l'artisan (`hero.lede`) a quitté l'accueil le
+            23 octobre 2026 : ce que fait la maison tient dans les deux
+            phrases ci-dessus. */}
 
         <div className="mt-11 flex flex-col items-center justify-center gap-4 animate-rise sm:flex-row"
           style={{ animationDelay: "720ms" }}>
@@ -74,18 +73,14 @@ export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; se
           <Link href="#histoire" className="btn btn-ghost w-full sm:w-auto">{t.hero.ctaSecondary}</Link>
         </div>
 
-        {/* Bandeau de l'offre — repris du cintre de porte. Il suit le réglage
-            de l'artisan, comme la grille : une offre retirée ne s'annonce plus. */}
+        {/* La ligne de l'offre — reprise du cintre de porte. Elle suit le
+            réglage de l'artisan, comme la grille : une offre retirée ne
+            s'annonce plus. Ses conditions complètes sont sur la page Tarifs. */}
         {settings.firstHourFree && (
-          <div className="mx-auto mt-12 max-w-md border border-gold-400/60 px-7 py-4 animate-fade"
+          <p className="mx-auto mt-12 max-w-md border border-gold-400/60 px-7 py-4 text-[0.9rem] font-light leading-[1.7] text-gold-700 animate-fade"
             style={{ animationDelay: "860ms" }}>
-            <p className="text-[11px] uppercase leading-relaxed tracking-[0.16em] text-gold-700">
-              {t.hero.offer}
-            </p>
-            <p className="mt-2.5 text-[0.78rem] font-light leading-[1.7] text-ink-500">
-              {t.pricing.firstFreeConditions}
-            </p>
-          </div>
+            {t.hero.offer}
+          </p>
         )}
       </div>
 

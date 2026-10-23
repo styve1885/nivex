@@ -277,7 +277,7 @@ export function SettingsPanel({ initial, origin, onDirty }: {
 
       {/* — Prestations — */}
       <Card title="Prestations et durées"
-        hint="La durée par unité sert à estimer le temps d'une séance, et c'est elle qui donne la cadence annoncée sur le site. Ajustez-la selon votre rythme réel.">
+        hint="Depuis le 23 octobre 2026, le formulaire de réservation ne propose plus ces prestations : la séance en ligne dure la durée minimale réglée plus haut, avec les pièces à l'unité en option. Elles restent ici, avec leurs durées, pour pouvoir les remettre.">
         {drift.length > 0 && (
           <div className="mb-6 border border-gold-400/60 bg-linen-100 px-5 py-4">
             <p className="text-[0.88rem] text-ink-800">
@@ -340,8 +340,7 @@ export function SettingsPanel({ initial, origin, onDirty }: {
           Ajouter une prestation
         </button>
         <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-          Une prestation ajoutée apparaît dans le formulaire de réservation et dans la cadence de la page Tarifs dès
-          l&apos;enregistrement. Celles d&apos;origine ne se retirent pas : désactivez-les avec l&apos;interrupteur.
+          Celles d&apos;origine ne se retirent pas : désactivez-les avec l&apos;interrupteur.
         </p>
       </Card>
 

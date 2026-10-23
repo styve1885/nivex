@@ -18,23 +18,16 @@ export function Story({ t }: { t: Dict }) {
           <div className="rule-diamond mx-auto mt-8 max-w-[14rem]" aria-hidden="true"><span className="text-[10px]">◆</span></div>
         </Reveal>
 
-        <div className="mt-20 space-y-20">
-          {t.story.chapters.map((c, i) => (
-            <Reveal key={c.num} as="article" delay={i * 90}
-              className="grid gap-6 sm:grid-cols-[auto_1fr] sm:gap-10">
-              <div className="flex sm:flex-col sm:items-center">
-                <span className="font-display text-5xl font-light leading-none text-gold-400 sm:text-6xl">{c.num}</span>
-                <span aria-hidden="true" className="ml-5 mt-4 h-px flex-1 bg-gold-300/50 sm:ml-0 sm:mt-6 sm:h-full sm:w-px sm:flex-none" />
-              </div>
-              <div>
-                <h3 className="font-display text-2xl font-normal text-ink-800 sm:text-[1.7rem]">{c.title}</h3>
-                <p className="mt-4 text-[0.97rem] font-light leading-[2] text-ink-500">{c.body}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+        {/* La version courte, depuis le 23 octobre 2026. Les quatre chapitres
+            de la version longue restent dans `story.chapters`, pour pouvoir
+            les remettre. */}
+        <Reveal delay={90}>
+          <p className="mx-auto mt-14 max-w-2xl text-center text-[0.97rem] font-light leading-[2] text-ink-500">
+            {t.story.body}
+          </p>
+        </Reveal>
 
-        <Reveal delay={120} className="mt-24 grid items-center gap-12 sm:grid-cols-[minmax(0,21rem)_1fr] sm:gap-14">
+        <Reveal delay={120} className="mt-20 grid items-center gap-12 sm:grid-cols-[minmax(0,21rem)_1fr] sm:gap-14">
           <Photo
             src="/artisan/nivex-portrait-principal.jpg"
             alt={t.photos.portrait}

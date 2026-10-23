@@ -2,87 +2,35 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowIcon } from "@/components/Icons";
-import { getDict, isLocale, type Dict } from "@/lib/i18n";
+import { getDict, isLocale } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, servedText } from "@/lib/travel";
-import { pageMeta } from "@/lib/seo";
+import { pageMeta, tarifsDescription } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
-import { capacitySentence, setupSentence } from "@/lib/capacity";
+import { RetiredSections } from "@/components/tarifs/RetiredSections";
+import { setupSentence } from "@/lib/capacity";
 import {
-  ADDONS, BLOCKS, BUNDLES, CADENCE_NOTE, PLANS, UNIT_GARMENTS, UNIT_LINEN,
-  bookableOffers, capacityPieces, firstTimeCents, offerCents, planCents, planFullCents, planPieces,
-  type Offer, type UnitPrice,
+  PLANS, UNIT_GARMENTS, UNIT_LINEN, planCents, planFullCents, planPieces, sessionLength, sessionPriceCents,
+  type UnitPrice,
 } from "@/lib/pricing";
 
-// Le taux horaire, la durée minimale et le catalogue se règlent depuis /admin :
+// Le taux horaire, la durée minimale et les zones se règlent depuis /admin :
 // la page se relit au même rythme que l'accueil.
 export const revalidate = 300;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return pageMeta(t, locale, "/tarifs", t.tarifs.eyebrow, t.tarifs.lede);
-}
-
-/** Le prix d'une offre : plein, et la première séance à côté si l'heure est offerte. */
-function Price({ o, s, t, locale }: { o: Offer; s: Settings; t: Dict; locale: "fr" | "en" }) {
-  const full = formatMoney(offerCents(o, s), s.currency, locale);
-  if (!s.firstHourFree) {
-    return <span className="font-display text-[1.35rem] text-ink-800">{full}</span>;
-  }
-  return (
-    <span className="flex flex-col items-start gap-0.5 sm:items-end">
-      <span className="font-display text-[1.35rem] text-gold-700">
-        {formatMoney(firstTimeCents(o, s), s.currency, locale)}
-      </span>
-      {/* Le trait ne se lit pas : un lecteur d'écran entendrait deux prix
-          côte à côte. « au lieu de » dit lequel ne vaut plus. */}
-      <span className="text-[0.72rem] text-ink-400">
-        <span className="sr-only">{t.tarifs.insteadOf} </span><s>{full}</s> · {t.tarifs.firstFreeLabel}
-      </span>
-    </span>
-  );
-}
-
-function OfferRow({
-  o, s, t, locale, withOffer,
-}: { o: Offer; s: Settings; t: Dict; locale: "fr" | "en"; withOffer: boolean }) {
-  const text = locale === "en" ? o.en : o.fr;
-  return (
-    <div className="grid gap-2 border-b border-gold-300/40 py-6 sm:grid-cols-[13rem_4.5rem_1fr_auto] sm:items-center sm:gap-5">
-      <div>
-        <p className="font-display text-[1.08rem] leading-snug text-ink-800">{text.name}</p>
-        {text.tag && (
-          <p className="mt-1 text-[0.68rem] uppercase tracking-[0.12em] text-ink-400">{text.tag}</p>
-        )}
-      </div>
-      <p className="text-[0.78rem] text-ink-400">{minutesToText(o.minutes, locale)}</p>
-      <div>
-        <p className="text-[0.88rem] font-light leading-[1.8] text-ink-500">{text.detail}</p>
-        {/* Le volume de cette durée, tiré du seul chiffre de capacité du site. */}
-        <p className="mt-1 text-[0.72rem] uppercase tracking-[0.12em] text-gold-700">
-          {t.capacity.upTo.replace("{n}", String(capacityPieces(o.minutes)))}
-        </p>
-      </div>
-      <div className="sm:text-right">
-        {withOffer ? (
-          <Price o={o} s={s} t={t} locale={locale} />
-        ) : (
-          <span className="font-display text-[1.35rem] text-ink-800">
-            {formatMoney(offerCents(o, s), s.currency, locale)}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  const s = await getSettingsStrict();
+  return pageMeta(t, locale, "/tarifs", t.tarifs.eyebrow, tarifsDescription(t, s, locale === "en" ? "en" : "fr"));
 }
 
 function UnitList({ items, s, locale }: { items: UnitPrice[]; s: Settings; locale: "fr" | "en" }) {
   return (
     <ul>
       {items.map((u) => (
-        <li key={u.fr} className="flex items-baseline justify-between gap-4 border-b border-gold-300/40 py-3">
+        <li key={u.key} className="flex items-baseline justify-between gap-4 border-b border-gold-300/40 py-3">
           <span className="text-[0.9rem] font-light text-ink-600">{locale === "en" ? u.en : u.fr}</span>
           <span className="whitespace-nowrap font-display text-[1rem] tabular-nums text-ink-800">
             {formatMoney(u.cents, s.currency, locale)}
@@ -94,198 +42,45 @@ function UnitList({ items, s, locale }: { items: UnitPrice[]; s: Settings; local
   );
 }
 
+/**
+ * La page Tarifs, dans l'ordre du 23 octobre 2026 : les abonnements, la
+ * séance d'essai, les pièces à l'unité, les frais de déplacement, la première
+ * heure offerte et cinq conditions. Les sections retirées attendent dans
+ * RetiredSections, éteintes par `PUBLISHED`.
+ *
+ * Aucun montant n'est récité : tout sort des réglages en vigueur, comme dans
+ * le tunnel, l'accueil et les données structurées.
+ */
 export default async function TarifsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
   const t = getDict(locale);
   const s = await getSettingsStrict();
-  /* Le titre annonce la plus courte séance possible, au prix qu'elle coûte :
-     annoncer le taux horaire seul laisserait croire qu'une heure se réserve.
-     Sa durée, le minimum par déplacement et le prix sortent du même calcul,
-     comme sur la page Montréal : aucun des trois ne peut contredire l'autre. */
-  const shortest = Math.max(s.minMinutes, 120);
-  const min = minutesToText(shortest, locale);
-  const entry = formatMoney(Math.round((shortest / 60) * s.hourlyRate), s.currency, locale);
-  const services = s.services.filter((x) => x.enabled);
-  const fees = feeTable(s.zonePolicy, locale, (c) => formatMoney(c, s.currency, locale));
-  /* « Déplacement inclus » ne se dit que si aucune zone desservie n'a de frais. */
-  const travel = fees.length > 0 && fees.every((f) => f.free) ? t.tarifs.travelIncluded : t.tarifs.travelVaries;
-  /* Les séances et les forfaits que le tunnel peut encore réserver. */
-  const blocks = bookableOffers(BLOCKS, s);
-  const bundles = bookableOffers(BUNDLES, s);
+  const money = (cents: number) => formatMoney(cents, s.currency, locale);
+  const fees = feeTable(s.zonePolicy, locale, money);
+  const trial = t.tarifs.trial
+    .replace("{min}", minutesToText(sessionLength(s), locale))
+    .replace("{price}", money(sessionPriceCents(s)));
+  const conditions = [
+    t.tarifs.conditions.extraHour.replace("{rate}", money(s.hourlyRate)),
+    setupSentence(t, s, locale),
+    ...t.tarifs.conditions.items,
+  ];
 
   return (
     <div className="bg-linen-100">
       {/* — En-tête — */}
-      <section className="px-7 pb-20 pt-36 sm:px-10 sm:pt-40">
+      <section className="px-7 pb-16 pt-36 sm:px-10 sm:pt-40">
         <div className="mx-auto max-w-4xl">
           <p className="eyebrow">{t.tarifs.eyebrow}</p>
           <h1 className="mt-5 max-w-2xl font-display text-4xl font-light leading-tight text-ink-800 sm:text-5xl">
             {t.tarifs.title}
           </h1>
-          <p className="mt-7 max-w-2xl text-[1.02rem] font-light leading-[1.9] text-ink-600">{t.tarifs.lede}</p>
-
-          <p className="mt-12 font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-            {t.tarifs.headline.replace("{min}", min).replace("{price}", entry)}
-          </p>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.2em] text-ink-500">
-            {t.tarifs.visitNote.replace("{min}", min).replace("{travel}", travel)}
-          </p>
-
-          {/* Ce que contient le temps réservé, dit avant tout montant. */}
-          <p className="mt-8 max-w-2xl text-[0.95rem] font-light leading-[1.85] text-ink-700">
-            {setupSentence(t, s, locale)}
-          </p>
-
-          {s.firstHourFree && (
-            <p className="mt-8 max-w-2xl border-l-2 border-gold-500 pl-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
-              <span className="mr-2 text-[10px] uppercase tracking-[0.2em] text-gold-700">{t.pricing.firstFree}</span>
-              {t.pricing.firstFreeConditions}
-            </p>
-          )}
         </div>
       </section>
 
-      {/* — Ce que contient une séance : sa capacité, son déroulement, les pièces — */}
-      <section className="bg-linen-50 px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <h2 className="font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-              {t.tarifs.cadence.title}
-            </h2>
-            <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-600">
-              {capacitySentence(t, s, locale)}
-            </p>
-            <p className="mt-3 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">
-              {setupSentence(t, s, locale)}
-            </p>
-          </div>
-
-          <div className="mt-12">
-            <p className="border-b border-ink-800 pb-3 text-[0.64rem] uppercase tracking-[0.18em] text-gold-700">
-              {t.tarifs.cadence.colType}
-            </p>
-            <ul>
-              {services.map((svc) => (
-                <li key={svc.key} className="border-b border-gold-300/40 py-4">
-                  <span className="text-[0.95rem] text-ink-700">{locale === "en" ? svc.en : svc.fr}</span>
-                  {CADENCE_NOTE[svc.key] && (
-                    <span className="mt-1 block text-[0.76rem] font-light leading-[1.6] text-ink-400">
-                      {locale === "en" ? CADENCE_NOTE[svc.key].en : CADENCE_NOTE[svc.key].fr}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* — La différence — */}
-      <section className="px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <h2 className="font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">
-              {t.tarifs.versus.title}
-            </h2>
-            <p className="mt-4 text-[0.95rem] font-light text-ink-500">{t.tarifs.versus.lede}</p>
-          </div>
-
-          <div className="mt-12 border-t border-gold-300/40">
-            {t.tarifs.versus.rows.map((row) => (
-              <div key={row.title}
-                className="grid gap-3 border-b border-gold-300/40 py-6 sm:grid-cols-[11rem_1fr_1fr] sm:gap-6">
-                <h3 className="font-display text-[1.05rem] text-ink-800">{row.title}</h3>
-                <p className="text-[0.88rem] font-light leading-[1.8] text-ink-400">
-                  <span className="mr-1.5 text-[0.66rem] uppercase tracking-[0.14em]">{t.tarifs.versus.elsewhere} —</span>
-                  {row.them}
-                </p>
-                <p className="text-[0.88rem] font-light leading-[1.8] text-ink-600">
-                  <span className="mr-1.5 text-[0.66rem] uppercase tracking-[0.14em] text-gold-700">{t.tarifs.versus.here} —</span>
-                  {row.us}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* — Blocs horaires — */}
-      <section className="bg-linen-50 px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <p className="eyebrow">{t.tarifs.blocks.title}</p>
-            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.blocks.lede}</h2>
-          </div>
-          {blocks.length > 0 && (
-            <div className="mt-10 border-t border-gold-300/40">
-              {blocks.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-            </div>
-          )}
-          <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
-          <p className="mt-8 border-l-2 border-gold-500 bg-linen-200/60 px-6 py-5 text-[0.88rem] font-light leading-[1.8] text-ink-600">
-            {t.tarifs.blocks.minimum.replace("{min}", min)}
-          </p>
-        </div>
-      </section>
-
-      {/* — Forfaits composés — */}
-      {bundles.length > 0 && (
-        <section className="px-7 py-24 sm:px-10">
-          <div className="mx-auto max-w-4xl">
-            <div>
-              <p className="eyebrow">{t.tarifs.bundles.title}</p>
-              <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.bundles.lede}</h2>
-            </div>
-            <div className="mt-10 border-t border-gold-300/40">
-              {bundles.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer />)}
-            </div>
-            <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
-          </div>
-        </section>
-      )}
-
-      {/* — Ajouts — */}
-      <section className="bg-linen-50 px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <p className="eyebrow">{t.tarifs.addons.title}</p>
-            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.addons.lede}</h2>
-          </div>
-          <div className="mt-10 border-t border-gold-300/40">
-            {ADDONS.map((o) => <OfferRow key={o.key} o={o} s={s} t={t} locale={locale} withOffer={false} />)}
-          </div>
-          <p className="mt-4 text-[0.78rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
-        </div>
-      </section>
-
-      {/* — Pièces à l'unité — */}
-      <section className="px-7 py-24 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <div>
-            <p className="eyebrow">{t.tarifs.units.title}</p>
-            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.units.lede}</h2>
-          </div>
-          <div className="mt-10 grid gap-12 sm:grid-cols-2 sm:gap-14">
-            <div>
-              <h3 className="border-b border-ink-800 pb-2 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-gold-700">
-                {t.tarifs.units.linen}
-              </h3>
-              <UnitList items={UNIT_LINEN} s={s} locale={locale} />
-            </div>
-            <div>
-              <h3 className="border-b border-ink-800 pb-2 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-gold-700">
-                {t.tarifs.units.garments}
-              </h3>
-              <UnitList items={UNIT_GARMENTS} s={s} locale={locale} />
-            </div>
-          </div>
-          <p className="mt-8 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">{t.tarifs.units.note}</p>
-        </div>
-      </section>
-
-      {/* — Abonnements — */}
+      {/* — a) Abonnements — */}
       <section className="bg-linen-50 px-7 py-24 sm:px-10">
         <div className="mx-auto max-w-4xl">
           <div>
@@ -308,12 +103,12 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       en toutes lettres — un lecteur d'écran n'entend pas le trait. */}
                   <p className="mt-3 flex flex-wrap items-baseline gap-x-3 font-display text-[1.7rem] tabular-nums text-gold-700">
                     <span>
-                      {formatMoney(price, s.currency, locale)}
+                      {money(price)}
                       <span className="ml-1.5 font-sans text-[0.72rem] font-light text-ink-400">{t.tarifs.plans.perMonth}</span>
                     </span>
                     {full > price && (
                       <span className="font-sans text-[0.85rem] font-light text-ink-400">
-                        {t.tarifs.plans.insteadOf} <s>{formatMoney(full, s.currency, locale)}</s>
+                        {t.tarifs.plans.insteadOf} <s>{money(full)}</s>
                       </span>
                     )}
                   </p>
@@ -339,13 +134,48 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
         </div>
       </section>
 
-      {/* — Modalités — */}
-      <section className="px-7 py-24 sm:px-10">
+      {/* — b) La séance d'essai, en une ligne — */}
+      <section className="px-7 py-16 sm:px-10">
+        <div className="paper mx-auto flex max-w-4xl flex-col items-start gap-5 px-7 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-9">
+          <p className="font-display text-[1.35rem] font-light leading-snug text-ink-800">{trial}</p>
+          <Link href={`/${locale}/reserver`} className="btn flex-none !py-3.5 !px-6 !text-[10px]">
+            {t.tarifs.trialCta}<ArrowIcon />
+          </Link>
+        </div>
+      </section>
+
+      <RetiredSections t={t} s={s} locale={locale} />
+
+      {/* — c) Pièces à l'unité — */}
+      <section className="bg-linen-50 px-7 py-24 sm:px-10">
         <div className="mx-auto max-w-4xl">
           <div>
-            <h2 className="font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.terms.title}</h2>
+            <p className="eyebrow">{t.tarifs.units.title}</p>
+            <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.units.lede}</h2>
           </div>
-          {/* De quoi vérifier avant de lire les conditions, plutôt qu'après. */}
+          <div className="mt-10 grid gap-12 sm:grid-cols-2 sm:gap-14">
+            <div>
+              <h3 className="border-b border-ink-800 pb-2 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-gold-700">
+                {t.tarifs.units.linen}
+              </h3>
+              <UnitList items={UNIT_LINEN} s={s} locale={locale} />
+            </div>
+            <div>
+              <h3 className="border-b border-ink-800 pb-2 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-gold-700">
+                {t.tarifs.units.garments}
+              </h3>
+              <UnitList items={UNIT_GARMENTS} s={s} locale={locale} />
+            </div>
+          </div>
+          <p className="mt-8 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">{t.tarifs.units.note}</p>
+        </div>
+      </section>
+
+      {/* — d) Frais de déplacement par zone — */}
+      <section className="px-7 py-24 sm:px-10">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.terms.travel}</h2>
+          {/* De quoi vérifier son adresse avant de lire les montants. */}
           <div className="paper mt-10 px-7 py-8 sm:px-9">
             <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
               {servedText(s.zonePolicy, locale, t.zoneText)}
@@ -357,75 +187,64 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <ZoneChecker t={{ brand: t.brand, zoneCheck: t.zoneCheck }} locale={locale} className="mt-6" />
           </div>
 
-          <dl className="mt-10 border-t border-gold-300/40">
-            {t.tarifs.terms.items.map((item) => (
-              <div key={item.dt} className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
-                <dt className="font-display text-[1rem] text-ink-800">{item.dt}</dt>
-                <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">{item.dd}</dd>
-              </div>
-            ))}
-
-            {/* Les frais de route, écrits depuis les réglages en vigueur et
-                non récités : changer un montant depuis /admin change cette
-                page, sinon les conditions publiées finiraient par
-                contredire ce que le tunnel facture. */}
-            {fees.length > 0 && (
-              <div className="grid gap-1.5 border-b border-gold-300/40 py-5 sm:grid-cols-[15rem_1fr] sm:gap-6">
-                <dt className="font-display text-[1rem] text-ink-800">{t.tarifs.terms.travel}</dt>
-                <dd className="text-[0.88rem] font-light leading-[1.8] text-ink-500">
-                  {/* Une zone par ligne, avec ses secteurs et ses deux tarifs.
-                      Le seuil est propre à chaque zone, d'où une phrase par
-                      tarif plutôt qu'un en-tête de colonne commun. Rien n'est
-                      récité : tout vient de l'onglet « Zones et frais ». */}
-                  <ul className="divide-y divide-gold-300/30 border-y border-gold-300/40">
-                    {fees.map((f) => (
-                      <li key={f.key} className="grid gap-2 py-4 sm:grid-cols-[1fr_auto] sm:gap-6">
-                        <div>
-                          <p className="font-display text-[1rem] text-ink-800">{f.zone}</p>
-                          <p className="mt-1 text-[0.8rem] leading-relaxed text-ink-400">{f.sectors.join(", ")}</p>
-                        </div>
-                        <div className="text-[0.85rem] tabular-nums text-ink-700 sm:text-right">
-                          {f.free ? (
-                            <p>{t.tarifs.terms.travelFree}</p>
-                          ) : f.short === f.long ? (
-                            <p>{t.tarifs.terms.travelFlat.replace("{fee}", f.short)}</p>
-                          ) : (
-                            <>
-                              <p>{t.tarifs.terms.travelShort.replace("{fee}", f.short).replace("{hours}", f.threshold)}</p>
-                              <p>{t.tarifs.terms.travelLong.replace("{fee}", f.long).replace("{hours}", f.threshold)}</p>
-                            </>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <span className="mt-4 block text-ink-400">
-                    {t.tarifs.terms.travelNote}{s.firstHourFree ? ` ${t.tarifs.terms.travelNoteOffer}` : null}
-                  </span>
-                </dd>
-              </div>
-            )}
-          </dl>
+          {/* Une zone par ligne, avec ses secteurs et ses deux tarifs, écrits
+              depuis l'onglet « Zones et frais » : changer un montant depuis
+              /admin change cette page, sans quoi elle finirait par contredire
+              ce que le tunnel facture. Le seuil est propre à chaque zone. */}
+          {fees.length > 0 && (
+            <>
+              <ul className="mt-10 divide-y divide-gold-300/30 border-y border-gold-300/40">
+                {fees.map((f) => (
+                  <li key={f.key} className="grid gap-2 py-5 sm:grid-cols-[1fr_auto] sm:gap-6">
+                    <div>
+                      <p className="font-display text-[1.05rem] text-ink-800">{f.zone}</p>
+                      <p className="mt-1 text-[0.8rem] leading-relaxed text-ink-400">{f.sectors.join(", ")}</p>
+                    </div>
+                    <div className="text-[0.88rem] tabular-nums text-ink-700 sm:text-right">
+                      {f.free ? (
+                        <p>{t.tarifs.terms.travelFree}</p>
+                      ) : f.short === f.long ? (
+                        <p>{t.tarifs.terms.travelFlat.replace("{fee}", f.short)}</p>
+                      ) : (
+                        <>
+                          <p>{t.tarifs.terms.travelShort.replace("{fee}", f.short).replace("{hours}", f.threshold)}</p>
+                          <p>{t.tarifs.terms.travelLong.replace("{fee}", f.long).replace("{hours}", f.threshold)}</p>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-5 max-w-2xl text-[0.8rem] font-light leading-relaxed text-ink-400">
+                {t.tarifs.terms.travelNote}{s.firstHourFree ? ` ${t.tarifs.terms.travelNoteOffer}` : null}
+              </p>
+            </>
+          )}
         </div>
       </section>
 
-      {/* — Appel à l'action — */}
-      <section className="bg-ink-900 px-7 py-24 text-linen-200 sm:px-10">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="font-display text-3xl font-light leading-tight text-linen-100 sm:text-4xl">
-            {t.tarifs.cta.title}
-          </h2>
-          <p className="mt-5 max-w-xl text-[0.95rem] font-light leading-[1.9] text-linen-300/85">
-            {t.tarifs.cta.body}
+      {/* — e) La première heure offerte, tant que l'artisan la propose — */}
+      {s.firstHourFree && (
+        <section className="bg-linen-50 px-7 py-16 sm:px-10">
+          <p className="mx-auto max-w-4xl border-l-2 border-gold-500 pl-5 text-[0.92rem] font-light leading-[1.8] text-ink-600">
+            <span className="mr-2 text-[10px] uppercase tracking-[0.2em] text-gold-700">{t.pricing.firstFree}</span>
+            {t.pricing.firstFreeConditions}
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-6">
-            <Link href={`/${locale}/reserver`} className="btn btn-gold">
-              {t.cta.button}<ArrowIcon />
-            </Link>
-            <a href={t.brand.phoneHref} className="text-[0.95rem] text-gold-300 transition-colors hover:text-gold-200">
-              {t.brand.phone}
-            </a>
-          </div>
+        </section>
+      )}
+
+      {/* — f) Conditions, cinq points au plus — */}
+      <section className="px-7 py-24 sm:px-10">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.conditions.title}</h2>
+          <ul className="mt-10 border-t border-gold-300/40">
+            {conditions.map((c) => (
+              <li key={c} className="relative border-b border-gold-300/40 py-5 pl-7 text-[0.92rem] font-light leading-[1.8] text-ink-600">
+                <span aria-hidden="true" className="absolute left-0 top-[1.55rem] text-[0.7rem] text-gold-500">◇</span>
+                {c}
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </div>

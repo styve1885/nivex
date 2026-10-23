@@ -75,13 +75,19 @@ export function BeforeAfter({ t }: { t: Dict }) {
   );
 }
 
-/** Le bandeau pleine largeur, et la phrase qu'il porte. */
+/**
+ * Le bandeau pleine largeur, et la phrase qu'il porte.
+ *
+ * L'image est recadrée sur les pièces blanches : la photo d'origine
+ * (bandeau-penderie-16x9.jpg, gardée dans le dépôt) montrait aussi le
+ * pantalon de velours, retiré du site le 23 octobre 2026.
+ */
 export function BeforeAfterBanner({ t }: { t: Dict }) {
   return (
     <section className="relative isolate">
       <div className="relative h-[46vh] min-h-[280px] w-full sm:h-[56vh]">
         <Image
-          src="/images/avant-apres/bandeau-penderie-16x9.jpg"
+          src="/images/avant-apres/bandeau-chemises-16x9.jpg"
           alt={t.beforeAfter.bannerAlt}
           fill sizes="100vw" loading="lazy"
           className="object-cover object-center"

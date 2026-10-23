@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminBooking, AdminStats } from "./types";
 import { sessionPhases, type Phase } from "@/lib/pricing";
+import { estimateRange, itemText, moneyRange } from "@/lib/items";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency, minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -152,6 +153,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   }
 
   const maps = `https://maps.google.com/?q=${encodeURIComponent(`${b.address}, ${b.city}, QC ${b.postalCode}`)}`;
+  /* L'estimation en fourchette, quand une pièce à l'unité a un prix variable. */
+  const range = estimateRange(b.items, b.estimateCents);
 
   return (
     <li className={`border border-gold-300/40 bg-linen-50 transition-opacity ${cancelled ? "opacity-50" : ""}`}>
@@ -179,7 +182,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
           <span className="hidden text-[10px] uppercase tracking-[0.14em] text-gold-700 sm:block">Abonnement</span>
         ) : (
           <span className="hidden text-[0.85rem] tabular-nums text-ink-600 sm:block">
-            {money(b.estimateCents + b.travelFeeCents, b.currency)}
+            {moneyRange(range.low + b.travelFeeCents, range.high + b.travelFeeCents, (c) => money(c, b.currency))}
           </span>
         )}
         <span aria-hidden="true" className={`text-gold-500 transition-transform duration-500 ${open ? "rotate-180" : ""}`}>⌄</span>
@@ -193,13 +196,15 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             <Line label="Courriel"><a href={`mailto:${b.clientEmail}`} className="break-all text-gold-700 hover:underline">{b.clientEmail}</a></Line>
             <Line label="Adresse"><a href={maps} target="_blank" rel="noopener noreferrer" className="text-gold-700 hover:underline">{b.address}, {b.city} {b.postalCode}</a></Line>
             <Phases b={b} tz={tz} />
-            <Line label="Prestations">{b.items.map((i) => `${i.label} × ${i.qty}`).join(" · ")}</Line>
+            <Line label="Prestations">
+              <span className="whitespace-pre-line">{b.items.map((i) => itemText(i, (c) => money(c, b.currency))).join("\n")}</span>
+            </Line>
             {b.notes && <Line label="Précisions"><span className="italic">{b.notes}</span></Line>}
             {b.subscription ? (
               <Line label="Montant">Réglé avec le cycle — voir l&apos;onglet Abonnés.</Line>
             ) : (
             <Line label="Estimation">
-              {money(b.estimateCents, b.currency)}
+              {moneyRange(range.low, range.high, (c) => money(c, b.currency))}
               {b.firstHourFree && <span className="ml-2 text-[10px] uppercase tracking-wider text-gold-600">1re heure offerte</span>}
             </Line>
             )}
@@ -212,7 +217,9 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                   )}
                 </Line>
                 <Line label="Total">
-                  <strong className="font-medium">{money(b.estimateCents + b.travelFeeCents, b.currency)}</strong>
+                  <strong className="font-medium">
+                    {moneyRange(range.low + b.travelFeeCents, range.high + b.travelFeeCents, (c) => money(c, b.currency))}
+                  </strong>
                 </Line>
               </>
             )}

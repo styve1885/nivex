@@ -6,7 +6,7 @@ import {
   bookingGroup, clip, heardFromText, isHeardFrom, isStoredHeardFrom, referrerHost, refName,
   type SourceGroup, type StoredHeardFrom,
 } from "./attribution";
-import { estimateCents, estimateMinutes, loadBusy, slotIsFree } from "./availability";
+import { estimateCents, loadBusy, slotIsFree } from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
@@ -15,7 +15,8 @@ import { canSubscriberChange } from "./cycles";
 import {
   cancelScheduledSms, ownerSmsNumber, scheduleSms, sendSms, SMS, smsDay, smsScheduleConfigured, smsTime, smsWhen,
 } from "./sms";
-import { ironingMinutes } from "./pricing";
+import { ironingMinutes, sessionLength, unitByKey } from "./pricing";
+import { SESSION_KEY, UNIT_PREFIX, estimateRange, itemText, moneyRange, type BookedItem } from "./items";
 import {
   contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX, SOON_TEXT_MINUTES,
 } from "./brand";
@@ -26,7 +27,12 @@ const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
 
 export const BookingInput = z.object({
   locale: z.enum(["fr", "en"]).default("fr"),
-  items: z.array(z.object({ key: z.string().min(1).max(40), qty: z.number().int().min(1).max(200) })).min(1).max(20),
+  /* La séance d'essai se réserve seule : sa durée et son prix viennent des
+     réglages, jamais du navigateur. Les pièces à l'unité s'y ajoutent ; le
+     navigateur n'en envoie que les clés et les quantités, relues contre la
+     grille. L'ancien panier de prestations (`items`) n'est plus lu : une page
+     restée ouverte qui l'enverrait encore réserve la séance, sans plus. */
+  units: z.array(z.object({ key: z.string().min(1).max(40), qty: z.number().int().min(1).max(50) })).max(30).default([]),
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().toLowerCase().email().max(160),
   phone: z.string().trim().min(7).max(40),
@@ -69,7 +75,9 @@ export type Booking = {
   id: string; ref: string; manageToken: string; locale: "fr" | "en"; status: string;
   clientName: string; clientEmail: string; clientPhone: string;
   address: string; city: string; postalCode: string; notes: string | null;
-  items: { key: string; label: string; qty: number }[];
+  /* La séance et ses pièces à l'unité, ou le panier d'un rendez-vous d'avant :
+     voir items.ts. */
+  items: BookedItem[];
   startsAt: Date; endsAt: Date; durationMinutes: number;
   /* Les minutes passées sur place hors du temps réservé, avant et après :
      0 aujourd'hui, 15 pour l'ancien déroulement (voir db.ts). */
@@ -183,13 +191,11 @@ export async function createBooking(input: BookingInputType, host?: string | nul
 
   const accessToken = await ownerAccessToken().catch(() => null);
 
-  // On ne fait jamais confiance aux durées ni aux prix venus du navigateur.
-  const known = new Set(settings.services.filter((s) => s.enabled).map((s) => s.key));
-  const items = input.items.filter((i) => known.has(i.key));
-  if (items.length === 0) throw new BookingError("unknown_service");
-
-  const durationMinutes = estimateMinutes(items, settings);
-  if (durationMinutes <= 0) throw new BookingError("unknown_service");
+  /* On ne fait jamais confiance aux durées ni aux prix venus du navigateur :
+     la séance dure la durée minimale réglée — c'est la seule qui se réserve
+     en ligne —, et chaque pièce à l'unité reprend le prix de la grille. */
+  const durationMinutes = sessionLength(settings);
+  const units = bookedUnits(input.units, input.locale);
 
   const start = new Date(input.startsAt);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
@@ -207,7 +213,10 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     settings.firstHourFree
     && durationMinutes >= FIRST_FREE_MIN_MINUTES
     && (await isFirstBooking(input.email));
-  const cents = estimateCents(durationMinutes, settings, firstHourFree);
+  /* L'heure offerte escompte la séance, jamais les pièces à l'unité ; le bas
+     de leur fourchette entre dans l'estimation, le haut se lit des lignes. */
+  const cents = estimateCents(durationMinutes, settings, firstHourFree)
+    + units.reduce((sum, u) => sum + (u.cents ?? 0) * u.qty, 0);
 
   /* La zone, décidée ici et jamais reprise du navigateur — comme la durée et
      le prix. Le tunnel a déjà posé la même question en chemin, mais c'est cet
@@ -217,10 +226,10 @@ export async function createBooking(input: BookingInputType, host?: string | nul
   const verdict = evaluateZone(input.postalCode, durationMinutes, settings.zonePolicy);
   if (!bookable(verdict)) throw new BookingError("out_of_area");
 
-  const labelled = items.map((i) => {
-    const svc = settings.services.find((s) => s.key === i.key)!;
-    return { key: i.key, label: input.locale === "en" ? svc.en : svc.fr, qty: i.qty };
-  });
+  const labelled: BookedItem[] = [
+    { key: SESSION_KEY, label: sessionLabel(durationMinutes, input.locale), qty: 1 },
+    ...units,
+  ];
 
   const ref = bookingRef();
   const manageToken = token(24);
@@ -307,6 +316,32 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     calendar: Boolean(booking.googleEventId), email: booking.emailSent,
   });
   return booking;
+}
+
+/** « Séance de 2 heures », dans la langue du client : la ligne de la séance d'essai. */
+export function sessionLabel(minutes: number, locale: "fr" | "en"): string {
+  return locale === "en" ? `Session of ${minutesToText(minutes, "en")}` : `Séance de ${minutesToText(minutes, "fr")}`;
+}
+
+/**
+ * Les pièces à l'unité demandées, relues contre la grille : libellé dans la
+ * langue du client et prix figés à la réservation. Une clé inconnue est
+ * laissée de côté, une clé répétée additionne ses quantités, et rien ne passe
+ * cinquante pièces d'un même article.
+ */
+export function bookedUnits(input: { key: string; qty: number }[], locale: "fr" | "en"): BookedItem[] {
+  const qty = new Map<string, number>();
+  for (const u of input) {
+    if (!unitByKey(u.key) || !(u.qty > 0)) continue;
+    qty.set(u.key, Math.min(50, (qty.get(u.key) ?? 0) + Math.floor(u.qty)));
+  }
+  return [...qty].map(([key, n]) => {
+    const unit = unitByKey(key)!;
+    return {
+      key: `${UNIT_PREFIX}${key}`, label: locale === "en" ? unit.en : unit.fr, qty: n,
+      cents: unit.cents, ...(unit.toCents ? { toCents: unit.toCents } : {}),
+    };
+  });
 }
 
 /**
@@ -517,6 +552,7 @@ export function calendarEvent(b: Booking, origin: string, tz: string): {
   const l = b.locale === "en" ? "en" : "fr";
   const t = EVENT_TEXT[l];
   const money = (cents: number) => formatMoney(cents, b.currency, l);
+  const range = estimateRange(b.items, b.estimateCents);
   const lines: string[] = [
     t.kv(t.session, `${formatDateTime(b.startsAt, tz, l)} — ${t.ironing(minutesToText(b.durationMinutes, l))}.`),
     b.setupMinutes > 0 ? t.early(b.setupMinutes) : t.setup(minutesToText(ironingMinutes(b.durationMinutes), l)),
@@ -527,13 +563,13 @@ export function calendarEvent(b: Booking, origin: string, tz: string): {
     t.kv(t.email, b.clientEmail),
     "",
     t.kv(t.items, ""),
-    ...b.items.map((i) => `  • ${i.label} × ${i.qty}`),
-    t.kv(t.estimate, `${money(b.estimateCents)}${b.firstHourFree ? ` (${t.free})` : ""}`),
+    ...b.items.map((i) => `  • ${itemText(i, money)}`),
+    t.kv(t.estimate, `${moneyRange(range.low, range.high, money)}${b.firstHourFree ? ` (${t.free})` : ""}`),
   ];
   if (b.travelFeeCents > 0) {
     lines.push(
       t.kv(`${t.travel}${b.travelZone ? ` (${b.travelZone})` : ""}`, money(b.travelFeeCents)),
-      t.kv(t.total, money(b.estimateCents + b.travelFeeCents)),
+      t.kv(t.total, moneyRange(range.low + b.travelFeeCents, range.high + b.travelFeeCents, money)),
     );
   }
   if (b.notes) lines.push("", t.kv(t.notes, b.notes));
@@ -556,7 +592,7 @@ function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
   return {
     ref: b.ref, locale: b.locale, clientName: b.clientName, clientEmail: b.clientEmail,
     clientPhone: b.clientPhone, address: b.address, city: b.city, postalCode: b.postalCode,
-    notes: b.notes, items: b.items.map((i) => ({ label: i.label, qty: i.qty })),
+    notes: b.notes, items: b.items,
     startsAt: b.startsAt, durationMinutes: b.durationMinutes, setupMinutes: b.setupMinutes, estimateCents: b.estimateCents,
     currency: b.currency, firstHourFree: b.firstHourFree, timezone: s.timezone,
     travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,

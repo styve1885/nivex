@@ -57,13 +57,16 @@ export function SiteHeader({ t, locale }: { t: Pick<Dict, "nav" | "brand">; loca
      il resterait devant la section demandée. */
   const close = () => setOpen(false);
 
+  /* Les sections de l'accueil, dans l'ordre de la page. « Tarifs » mène à
+     la section des abonnements ; la grille complète (pièces à l'unité,
+     frais) est à un clic de là, et au pied de chaque page. */
   const home = `/${locale}`;
   const links = [
-    { href: `${home}#histoire`, label: t.nav.story },
-    { href: `${home}#prestations`, label: t.nav.services },
     { href: `${home}#deroulement`, label: t.nav.how },
+    { href: `${home}#prestations`, label: t.nav.services },
+    { href: `${home}#tarifs`, label: t.nav.pricing },
+    { href: `${home}#histoire`, label: t.nav.story },
     { href: `${home}#questions`, label: t.nav.faq },
-    { href: `${home}/tarifs`, label: t.nav.pricing },
     { href: `${home}#contact`, label: t.nav.contact },
   ];
 
