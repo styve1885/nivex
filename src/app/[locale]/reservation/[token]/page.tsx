@@ -6,6 +6,7 @@ import { getSettings } from "@/lib/settings";
 import { canSelfCancel, findByManageToken } from "@/lib/bookings";
 import { findSubscription } from "@/lib/subscriptions";
 import { formatDateTime, formatMoney, minutesToText } from "@/lib/time";
+import { estimateRange, itemText, moneyRange } from "@/lib/items";
 import { Mark } from "@/components/Logo";
 import { CancelButton } from "@/components/booking/CancelButton";
 
@@ -47,6 +48,8 @@ export default async function ManagePage({
   }
 
   const cancelled = b.status === "cancelled";
+  const money = (c: number) => formatMoney(c, b.currency, locale);
+  const range = estimateRange(b.items, b.estimateCents);
   const past = b.startsAt.getTime() < Date.now();
   const statusLabel = cancelled
     ? t.manage.status.cancelled
@@ -72,11 +75,11 @@ export default async function ManagePage({
               strike={cancelled} big />
             <Row label={t.booking.step1.duration} value={minutesToText(b.durationMinutes, locale)} />
             <Row label={t.booking.step4.where} value={`${b.address}, ${b.city} ${b.postalCode}`} />
-            <Row label={t.booking.step4.what} value={b.items.map((i) => `${i.label} × ${i.qty}`).join(" · ")} />
+            <Row label={t.booking.step4.what} value={b.items.map((i) => itemText(i, money)).join("\n")} />
             <Row label={t.booking.step4.who} value={`${b.clientName} · ${b.clientPhone}`} />
             {b.notes && <Row label={t.booking.step1.notes} value={b.notes} />}
             <Row label={t.booking.step4.total}
-              value={formatMoney(b.estimateCents, b.currency, locale)}
+              value={moneyRange(range.low, range.high, money)}
               hint={b.firstHourFree ? t.booking.step1.firstFreeApplied : undefined} />
             {/* Les frais de route, à part de l'estimation, et le total : ce
                 que le client a confirmé et ce que dit son courriel. Rien en
@@ -87,7 +90,7 @@ export default async function ManagePage({
                   value={formatMoney(b.travelFeeCents, b.currency, locale)}
                   hint={b.firstHourFree ? t.booking.step4.travelHint : undefined} />
                 <Row label={t.booking.step4.grandTotal}
-                  value={formatMoney(b.estimateCents + b.travelFeeCents, b.currency, locale)} />
+                  value={moneyRange(range.low + b.travelFeeCents, range.high + b.travelFeeCents, money)} />
               </>
             )}
             <Row label={t.booking.success.ref} value={b.ref} mono />
@@ -119,7 +122,7 @@ function Row({ label, value, hint, strike, big, mono }: {
   return (
     <div className="grid gap-1 py-4 sm:grid-cols-[9rem_1fr] sm:gap-5">
       <dt className="text-[10px] uppercase tracking-[0.18em] text-ink-400">{label}</dt>
-      <dd className={`leading-relaxed text-ink-800 ${big ? "font-display text-xl" : "text-[0.93rem]"} ${
+      <dd className={`whitespace-pre-line leading-relaxed text-ink-800 ${big ? "font-display text-xl" : "text-[0.93rem]"} ${
         strike ? "line-through opacity-60" : ""} ${mono ? "font-mono tracking-wider" : ""}`}>
         {value}
         {hint && <span className="mt-0.5 block text-[10px] uppercase tracking-[0.14em] text-gold-600">{hint}</span>}

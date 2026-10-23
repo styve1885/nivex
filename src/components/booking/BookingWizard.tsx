@@ -2,8 +2,10 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ServiceIcon, ArrowIcon, CheckIcon } from "../Icons";
+import { useRouter } from "next/navigation";
+import { ArrowIcon, CheckIcon } from "../Icons";
 import { FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PACKUP_MINUTES } from "@/lib/brand";
+import { moneyRange } from "@/lib/items";
 import type { HeardFrom } from "@/lib/attribution";
 import type { ZoneStatus } from "@/lib/travel";
 import { arrivalHint, readAttribution } from "../SiteMeasurement";
@@ -16,15 +18,21 @@ import type { Dict } from "@/lib/i18n";
 
 /* ============================ Types ============================ */
 
-type Service = { key: string; icon: string; label: string; unit: string; minutesPerUnit: number };
+/** Une pièce à l'unité, telle que la grille la publie : prix, et haut de fourchette s'il varie. */
+type Unit = { key: string; label: string; cents: number; toCents?: number; group: "linen" | "garments" };
+/** Un abonnement, déjà chiffré par le serveur : il se poursuit dans son propre tunnel. */
+type PlanChoice = { key: string; name: string; line: string; cents: number; fullCents: number };
 
 export type WizardConfig = {
   locale: "fr" | "en";
-  services: Service[];
+  /** La séance d'essai : la durée minimale réglée, son prix plein et sa capacité. */
+  sessionMinutes: number;
+  sessionCents: number;
+  sessionPieces: number;
+  units: Unit[];
+  plans: PlanChoice[];
   hourlyRate: number;
   currency: string;
-  minMinutes: number;
-  slotStep: number;
   firstHourFree: boolean;
   timezone: string;
   /** La phrase des secteurs desservis, écrite par le serveur depuis les réglages. */
@@ -56,8 +64,12 @@ const STEP_TITLES = ["s1", "s2", "s3", "s4"];
 /* ============================ Composant ============================ */
 
 export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
+  /* « session », ou la clé d'un abonnement : celui-ci se poursuit sur /abonnement. */
+  const [choice, setChoice] = useState<string>("session");
   const [qty, setQty] = useState<Record<string, number>>({});
+  const [showUnits, setShowUnits] = useState(false);
   const [notes, setNotes] = useState("");
 
   const [name, setName] = useState("");
@@ -104,7 +116,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
      offerte, frais —, pas l'estimation du navigateur. */
   const [done, setDone] = useState<{
     ref: string; manageToken: string; slot: string; emailSent: boolean;
-    estimateCents: number | null; firstHourFree: boolean; travelFeeCents: number;
+    estimateCents: number | null; estimateToCents: number | null; firstHourFree: boolean; travelFeeCents: number;
   } | null>(null);
 
   const topRef = useRef<HTMLDivElement>(null);
@@ -113,19 +125,16 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const shownRef = useRef<string | null>(null);
 
   /* — Estimation locale : miroir du calcul serveur, qui fait foi — */
+  /* La séance d'essai dure la durée minimale réglée : c'est la seule qui se
+     réserve en ligne. Les pièces à l'unité s'y ajoutent sans l'allonger. */
+  const duration = config.sessionMinutes;
   const chosen = useMemo(
-    () => config.services.map((s) => ({ ...s, qty: qty[s.key] ?? 0 })).filter((s) => s.qty > 0),
-    [config.services, qty],
+    () => config.units.map((u) => ({ ...u, qty: qty[u.key] ?? 0 })).filter((u) => u.qty > 0),
+    [config.units, qty],
   );
-
-  /* Les minutes de repassage, plus l'installation et le rangement compris
-     dans la séance, comme `sessionMinutes` côté serveur. */
-  const duration = useMemo(() => {
-    const raw = chosen.reduce((sum, s) => sum + s.minutesPerUnit * s.qty, 0);
-    if (raw <= 0) return 0;
-    const session = raw + INSTALL_MINUTES + PACKUP_MINUTES;
-    return Math.max(config.minMinutes, Math.ceil(session / config.slotStep) * config.slotStep);
-  }, [chosen, config.minMinutes, config.slotStep]);
+  /* Le bas et le haut des pièces choisies : trois ont un prix variable. */
+  const unitsLow = chosen.reduce((sum, u) => sum + u.cents * u.qty, 0);
+  const unitsHigh = chosen.reduce((sum, u) => sum + (u.toCents ?? u.cents) * u.qty, 0);
 
   /* L'offre ne joue qu'à partir de deux heures, et une seule fois par
      client. Le navigateur ne connaît pas l'historique du client : seul le
@@ -134,14 +143,12 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
      éventualité ; l'écran de fin reprend ce que le serveur a décidé. */
   const firstFree = config.firstHourFree && duration >= FIRST_FREE_MIN_MINUTES;
 
-  const estimate = useMemo(
-    () => Math.round((duration / 60) * config.hourlyRate),
-    [duration, config.hourlyRate],
-  );
-  const estimateFirst = useMemo(
-    () => Math.round((Math.max(0, duration - 60) / 60) * config.hourlyRate),
-    [duration, config.hourlyRate],
-  );
+  /* L'heure offerte escompte la séance, jamais les pièces à l'unité. */
+  const sessionFirst = Math.round((Math.max(0, duration - 60) / 60) * config.hourlyRate);
+  const estimate = config.sessionCents + unitsLow;
+  const estimateHigh = config.sessionCents + unitsHigh;
+  const estimateFirst = sessionFirst + unitsLow;
+  const estimateFirstHigh = sessionFirst + unitsHigh;
 
 
   const money = useCallback(
@@ -165,13 +172,12 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     [toText, duration],
   );
 
-  /* — L'horaire de la maison, pour la durée retenue — */
+  /* — L'horaire de la maison, pour la séance d'essai : sans panier, le
+     serveur prend la durée minimale réglée — la même que createBooking. — */
   const loadSchedule = useCallback(async (from?: string) => {
-    if (duration <= 0) return;
     setLoadingSlots(true);
     try {
-      const items = chosen.map((x) => `${x.key}:${x.qty}`).join(",");
-      const p = new URLSearchParams({ items, days: "14" });
+      const p = new URLSearchParams({ days: "14" });
       if (from) p.set("from", from);
       const res = await fetch(`/api/schedule?${p}`, { cache: "no-store" });
       const data: Schedule = await res.json();
@@ -182,14 +188,11 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     } finally {
       setLoadingSlots(false);
     }
-  }, [chosen, duration]);
+  }, []);
 
-  /* Changer le panier change la durée, donc les heures praticables : les
-     choix déjà faits ne tiennent plus. On les retire là où le panier
-     change, plutôt que d'y revenir par un effet. */
+  /* Une pièce à l'unité ne change pas la durée : l'heure retenue tient. */
   const setQuantity = useCallback((key: string, n: number) => {
-    setQty((q) => ({ ...q, [key]: Math.max(0, Math.min(200, n)) }));
-    setSlot(null);
+    setQty((q) => ({ ...q, [key]: Math.max(0, Math.min(50, n)) }));
   }, []);
 
   /* Une étape qui s'ouvre : on remonte en tête, et le focus passe à son
@@ -229,7 +232,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
   const travelLoading = Boolean(travelKey) && heldTravel?.key !== travelKey;
 
   const travelCents = travel?.feeCents ?? 0;
-  const total = estimate + travelCents;
+  const total = moneyRange(estimate + travelCents, estimateHigh + travelCents, money);
   const zoneLabel = travel ? (config.locale === "en" ? travel.labelEn : travel.labelFr) : null;
   const travelLabel = zoneLabel ? `${t.booking.step4.travelFee} (${zoneLabel})` : t.booking.step4.travelFee;
 
@@ -264,7 +267,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     && !outOfZone && !travelLoading;
 
   const canContinue =
-    step === 0 ? duration > 0
+    step === 0 ? true
       : step === 1 ? step2Valid
         : step === 2 ? Boolean(slot)
           : consent;
@@ -292,7 +295,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           locale: config.locale,
-          items: chosen.map((s) => ({ key: s.key, qty: s.qty })),
+          units: chosen.map((u) => ({ key: u.key, qty: u.qty })),
           name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(),
           address: address.trim(), city: city.trim(), postalCode: postal.trim().toUpperCase(),
           notes: [notes.trim(), comment.trim()].filter(Boolean).join("\n") || undefined,
@@ -345,6 +348,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
         slot: slotText(data.startsAt ?? slot),
         emailSent: data.emailSent === true,
         estimateCents: typeof data.estimateCents === "number" ? data.estimateCents : null,
+        estimateToCents: typeof data.estimateToCents === "number" ? data.estimateToCents : null,
         firstHourFree: data.firstHourFree === true,
         travelFeeCents: typeof data.travelFeeCents === "number" ? data.travelFeeCents : travelCents,
       });
@@ -379,7 +383,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             {done.estimateCents !== null && (
               <>
                 <p className="mt-8 text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.step4.total}</p>
-                <p className="mt-2 font-display text-2xl tabular-nums text-ink-800">{money(done.estimateCents)}</p>
+                <p className="mt-2 font-display text-2xl tabular-nums text-ink-800">
+                  {moneyRange(done.estimateCents, done.estimateToCents ?? done.estimateCents, money)}
+                </p>
                 {done.firstHourFree && (
                   <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-gold-600">{t.booking.step1.firstFreeApplied}</p>
                 )}
@@ -394,7 +400,10 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                     </div>
                     <div className="flex items-baseline justify-between gap-6 text-ink-800">
                       <dt className="text-left">{t.booking.step4.grandTotal}</dt>
-                      <dd className="flex-none tabular-nums">{money(done.estimateCents + done.travelFeeCents)}</dd>
+                      <dd className="flex-none tabular-nums">
+                        {moneyRange(done.estimateCents + done.travelFeeCents,
+                          (done.estimateToCents ?? done.estimateCents) + done.travelFeeCents, money)}
+                      </dd>
                     </div>
                   </dl>
                 )}
@@ -442,63 +451,92 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
           </p>
         )}
 
-        {/* ————— Étape 1 : prestations ————— */}
+        {/* ————— Étape 1 : la séance d'essai, ou un abonnement ————— */}
         {step === 0 && (
           <section aria-labelledby="s1">
             <h2 id="s1" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{t.booking.step1.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light text-ink-500">{t.booking.step1.hint}</p>
 
-            <ul className="mt-8 space-y-px bg-gold-300/30">
-              {config.services.map((s) => {
-                const n = qty[s.key] ?? 0;
-                return (
-                  /* Au téléphone, les quantités passent sous l'intitulé :
-                     sur une même ligne, il ne resterait au nom que trente
-                     pixels, un mot par ligne, jusque sous le bouton « − ». */
-                  <li key={s.key}
-                    className={`flex flex-wrap items-center gap-x-4 gap-y-3 bg-linen-50 p-4 transition-colors duration-300 sm:flex-nowrap ${n > 0 ? "bg-linen-100" : ""}`}>
-                    <ServiceIcon name={s.icon} className={`h-6 w-6 flex-none transition-colors ${n > 0 ? "text-gold-600" : "text-ink-400"}`} />
-                    {/* Aucune cadence par pièce : la capacité d'une séance se dit
-                        d'un seul chiffre, sur la page Tarifs et dans la FAQ. */}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[0.95rem] text-ink-800">{s.label}</p>
-                    </div>
-                    <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
-                      <button type="button" aria-label={`${t.booking.step1.less} — ${s.label}`}
-                        onClick={() => setQuantity(s.key, n - 1)}
-                        disabled={n === 0}
-                        className="flex h-9 w-9 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900 disabled:opacity-30">
-                        −
-                      </button>
-                      <input
-                        type="number" min={0} max={200} value={n}
-                        aria-label={`${s.label} — ${t.booking.step1.qty}`}
-                        onChange={(e) => setQuantity(s.key, Number(e.target.value) || 0)}
-                        className="h-9 w-12 border-y border-gold-300/60 bg-linen-50 text-center text-sm tabular-nums text-ink-800 [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <button type="button" aria-label={`${t.booking.step1.more} — ${s.label}`}
-                        onClick={() => setQuantity(s.key, n + 1)}
-                        className="flex h-9 w-9 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900">
-                        +
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            {/* Cinq choix, et rien d'autre : la séance d'essai, puis les quatre
+                abonnements. Un abonnement se poursuit dans son propre tunnel. */}
+            <fieldset className="mt-8">
+              <legend className="sr-only">{t.booking.step1.title}</legend>
+              <div className="space-y-px bg-gold-300/30">
+                <Choice name="choice" value="session" checked={choice === "session"} onPick={setChoice}
+                  title={t.booking.step1.session.replace("{min}", durationText)}
+                  line={`${t.booking.step1.sessionNote} ${t.capacity.upTo.replace("{n}", String(config.sessionPieces))}.`}
+                  price={money(config.sessionCents)}
+                  hint={firstFree ? t.booking.step1.firstFreeIfFirst.replace("{amount}", money(sessionFirst)) : undefined} />
+                {config.plans.map((p) => (
+                  <Choice key={p.key} name="choice" value={p.key} checked={choice === p.key} onPick={setChoice}
+                    title={p.name} line={p.line}
+                    price={`${money(p.cents)} ${t.pricing.perCycle}`}
+                    struck={p.fullCents > p.cents ? { label: t.pricing.insteadOf, amount: money(p.fullCents) } : undefined} />
+                ))}
+              </div>
+            </fieldset>
+            <p className="mt-3 text-[0.75rem] font-light leading-relaxed text-ink-400">{t.capacity.caveat}</p>
 
-            <div className="mt-8">
-              <label className="label" htmlFor="notes">{t.booking.step1.notes}</label>
-              <textarea id="notes" rows={3} value={notes} maxLength={1000}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t.booking.step1.notesPlaceholder} className="field resize-none" />
-            </div>
+            {choice !== "session" ? (
+              <p className="mt-8 border-l-2 border-gold-400 pl-4 text-[0.88rem] font-light leading-[1.8] text-ink-600">
+                {t.booking.step1.planNext}
+              </p>
+            ) : (
+              <>
+                {/* Les pièces à l'unité, repliées : la plupart des séances n'en ont pas. */}
+                <div className="mt-8 border-t border-gold-300/40 pt-6">
+                  <button type="button" onClick={() => setShowUnits((v) => !v)}
+                    aria-expanded={showUnits || chosen.length > 0} aria-controls="units"
+                    className="text-[11px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
+                    {showUnits || chosen.length > 0 ? t.booking.step1.unitsHide : t.booking.step1.unitsShow}
+                  </button>
+                  {(showUnits || chosen.length > 0) && (
+                    <div id="units" className="mt-5">
+                      <p className="text-[0.95rem] text-ink-800">{t.booking.step1.units}</p>
+                      <p className="mt-1 text-[0.8rem] font-light text-ink-500">{t.booking.step1.unitsHint}</p>
+                      {(["linen", "garments"] as const).map((g) => (
+                        <div key={g} className="mt-6">
+                          <h3 className="border-b border-ink-800 pb-2 text-[0.64rem] font-medium uppercase tracking-[0.2em] text-gold-700">
+                            {g === "linen" ? t.tarifs.units.linen : t.tarifs.units.garments}
+                          </h3>
+                          <ul>
+                            {config.units.filter((u) => u.group === g).map((u) => {
+                              const n = qty[u.key] ?? 0;
+                              return (
+                                <li key={u.key}
+                                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-gold-300/40 py-3">
+                                  <span className="min-w-0 flex-1 text-[0.88rem] font-light text-ink-700">
+                                    {u.label}
+                                    <span className="ml-2 whitespace-nowrap tabular-nums text-ink-400">
+                                      {moneyRange(u.cents, u.toCents ?? u.cents, money)}
+                                    </span>
+                                  </span>
+                                  <QtyStepper value={n} label={u.label} t={t} onChange={(v) => setQuantity(u.key, v)} />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-            <EstimateBar
-              t={t} visible={duration > 0} durationText={durationText} ironingText={ironingText}
-              money={money(estimate)} firstMoney={firstFree ? money(estimateFirst) : null}
-            />
-            {duration === 0 && <p className="mt-6 text-center text-[0.85rem] text-ink-400">{t.booking.step1.empty}</p>}
+                <div className="mt-8">
+                  <label className="label" htmlFor="notes">{t.booking.step1.notes}</label>
+                  <textarea id="notes" rows={3} value={notes} maxLength={1000}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t.booking.step1.notesPlaceholder} className="field resize-none" />
+                </div>
+
+                <EstimateBar
+                  t={t} durationText={durationText} ironingText={ironingText}
+                  money={moneyRange(estimate, estimateHigh, money)}
+                  firstMoney={firstFree ? moneyRange(estimateFirst, estimateFirstHigh, money) : null}
+                  unitsMoney={chosen.length > 0 ? moneyRange(unitsLow, unitsHigh, money) : null}
+                />
+              </>
+            )}
           </section>
         )}
 
@@ -641,8 +679,11 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <dl className="mt-8 divide-y divide-gold-300/40 border-y border-gold-300/40">
               <Row label={t.booking.step4.when} value={slotText(slot)} />
               <Row label={t.booking.step4.where} value={`${address}, ${city} ${postal}`} />
-              <Row label={t.booking.step4.what} value={chosen.map((s) => `${s.label} × ${s.qty}`).join(" · ")} />
-              <Row label={t.booking.step1.duration} value={durationText} />
+              <Row label={t.booking.step4.what}
+                value={[
+                  t.booking.step1.session.replace("{min}", durationText),
+                  ...chosen.map((u) => `${u.label} × ${u.qty} · ${moneyRange(u.cents * u.qty, (u.toCents ?? u.cents) * u.qty, money)}`),
+                ].join("\n")} />
               <Row label={t.booking.step4.who} value={[name, phone, email.trim()].filter(Boolean).join(" · ")} />
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
               {comment.trim() && <Row label={t.booking.step3.comment} value={comment.trim()} />}
@@ -651,13 +692,15 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   value={t.booking.step2.heardFromOptions[heardFrom]
                     + (heardFrom === "recommandation" && referredBy.trim() ? ` (${referredBy.trim()})` : "")} />
               )}
-              <Row label={t.booking.step4.total} value={money(estimate)}
-                hint={firstFree ? t.booking.step1.firstFreeIfFirst.replace("{amount}", money(estimateFirst)) : undefined} />
+              <Row label={t.booking.step4.total} value={moneyRange(estimate, estimateHigh, money)}
+                hint={firstFree
+                  ? t.booking.step1.firstFreeIfFirst.replace("{amount}", moneyRange(estimateFirst, estimateFirstHigh, money))
+                  : undefined} />
               {travel && travel.feeCents > 0 && (
                 <Row label={travelLabel} value={money(travel.feeCents)}
                   hint={config.firstHourFree ? t.booking.step4.travelHint : undefined} />
               )}
-              {travel && travel.feeCents > 0 && <Row label={t.booking.step4.grandTotal} value={money(total)} />}
+              {travel && travel.feeCents > 0 && <Row label={t.booking.step4.grandTotal} value={total} />}
             </dl>
 
             <p className="mt-8 text-[0.8rem] font-light leading-[1.8] text-ink-500">{t.booking.legal.data}</p>
@@ -697,11 +740,15 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   return;
                 }
                 setError(null);
+                if (step === 0 && choice !== "session") {
+                  router.push(`/${config.locale}/abonnement?formule=${encodeURIComponent(choice)}`);
+                  return;
+                }
                 if (step === 1) loadSchedule(rangeStart ?? undefined);
                 setStep((s) => s + 1);
               }}
               className="btn aria-disabled:opacity-40 aria-disabled:after:hidden">
-              {t.booking.next}<ArrowIcon />
+              {step === 0 && choice !== "session" ? t.booking.step1.planCta : t.booking.next}<ArrowIcon />
             </button>
           ) : (
             <button type="button" onClick={submit} disabled={!consent || submitting} className="btn btn-gold">
@@ -717,14 +764,16 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
 
 /* ============================ Sous-composants ============================ */
 
-/** `firstMoney` : le montant d'une première réservation, quand l'offre peut jouer. */
-function EstimateBar({ t, visible, durationText, ironingText, money, firstMoney }: {
-  t: Dict; visible: boolean; durationText: string; ironingText: string; money: string; firstMoney: string | null;
+/**
+ * `firstMoney` : le montant d'une première réservation, quand l'offre peut
+ * jouer ; `unitsMoney` : ce que pèsent les pièces à l'unité, s'il y en a.
+ */
+function EstimateBar({ t, durationText, ironingText, money, firstMoney, unitsMoney }: {
+  t: Dict; durationText: string; ironingText: string; money: string; firstMoney: string | null; unitsMoney: string | null;
 }) {
   return (
-    <div className={`mt-8 grid transition-all duration-700 ${visible ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
-      style={{ transitionTimingFunction: "var(--ease-silk)" }}>
-      <div className="overflow-hidden">
+    <div className="mt-8">
+      <div>
         <div className="flex flex-wrap items-center justify-between gap-4 border border-gold-400/60 bg-linen-50/70 px-6 py-5">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.step1.duration}</p>
@@ -737,6 +786,11 @@ function EstimateBar({ t, visible, durationText, ironingText, money, firstMoney 
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.step1.price}</p>
             <p className="mt-1 font-display text-xl text-ink-800">{money}</p>
+            {unitsMoney && (
+              <p className="text-[10px] uppercase tracking-[0.14em] text-ink-400">
+                {t.booking.step1.unitsTotal.replace("{amount}", unitsMoney)}
+              </p>
+            )}
             {firstMoney && (
               <p className="text-[10px] uppercase tracking-[0.14em] text-gold-600">
                 {t.booking.step1.firstFreeIfFirst.replace("{amount}", firstMoney)}
@@ -746,6 +800,68 @@ function EstimateBar({ t, visible, durationText, ironingText, money, firstMoney 
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Un choix de la première étape : la séance d'essai ou un abonnement, avec
+ * son prix. Sous le prix : le montant d'une première séance (`hint`), ou le
+ * prix à la carte barré d'un abonnement (`struck`), dit en toutes lettres.
+ */
+function Choice({ name, value, checked, onPick, title, line, price, hint, struck }: {
+  name: string; value: string; checked: boolean; onPick: (v: string) => void;
+  title: string; line: string; price: string; hint?: string; struck?: { label: string; amount: string };
+}) {
+  return (
+    <label className={`flex cursor-pointer items-start gap-4 p-5 transition-colors duration-300 ${checked ? "bg-linen-100" : "bg-linen-50 hover:bg-linen-100/60"}`}>
+      <input type="radio" name={name} value={value} checked={checked} onChange={() => onPick(value)}
+        className="mt-1.5 h-4 w-4 flex-none accent-[var(--color-gold-500)]" />
+      {/* Au téléphone, le prix passe sous le titre : à côté, il ne laissait
+          au titre qu'un mot par ligne. */}
+      <span className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[1fr_auto] sm:gap-x-6">
+        <span className="min-w-0">
+          <span className="block font-display text-[1.15rem] leading-snug text-ink-800">{title}</span>
+          <span className="mt-1 block text-[0.84rem] font-light leading-[1.6] text-ink-500">{line}</span>
+        </span>
+        <span className="sm:text-right">
+          <span className="block whitespace-nowrap font-display text-[1.15rem] tabular-nums text-ink-800">{price}</span>
+          {struck && (
+            <span className="block whitespace-nowrap text-[0.75rem] font-light text-ink-400">
+              {struck.label} <s>{struck.amount}</s>
+            </span>
+          )}
+          {hint && (
+            <span className="mt-0.5 block text-[10px] uppercase leading-snug tracking-[0.12em] text-gold-600 sm:ml-auto sm:max-w-[12rem]">
+              {hint}
+            </span>
+          )}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/** Moins, la quantité, plus : de zéro à cinquante pièces d'un même article. */
+function QtyStepper({ value, label, t, onChange }: {
+  value: number; label: string; t: Dict; onChange: (n: number) => void;
+}) {
+  return (
+    <span className="flex flex-none items-center gap-1">
+      <button type="button" aria-label={`${t.booking.step1.less} — ${label}`}
+        onClick={() => onChange(value - 1)} disabled={value === 0}
+        className="flex h-8 w-8 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900 disabled:opacity-30">
+        −
+      </button>
+      <input type="number" min={0} max={50} value={value}
+        aria-label={`${label} — ${t.booking.step1.qty}`}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        className="h-8 w-11 border-y border-gold-300/60 bg-linen-50 text-center text-sm tabular-nums text-ink-800 [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none" />
+      <button type="button" aria-label={`${t.booking.step1.more} — ${label}`}
+        onClick={() => onChange(value + 1)} disabled={value >= 50}
+        className="flex h-8 w-8 items-center justify-center border border-gold-300/60 text-ink-600 transition-colors hover:border-gold-500 hover:text-ink-900 disabled:opacity-30">
+        +
+      </button>
+    </span>
   );
 }
 
@@ -955,7 +1071,7 @@ export function Row({ label, value, hint }: { label: string; value: string; hint
   return (
     <div className="grid gap-1 py-4 sm:grid-cols-[10rem_1fr] sm:gap-4">
       <dt className="text-[10px] uppercase tracking-[0.18em] text-ink-400">{label}</dt>
-      <dd className="text-[0.93rem] leading-relaxed text-ink-800">
+      <dd className="whitespace-pre-line text-[0.93rem] leading-relaxed text-ink-800">
         {value}
         {hint && <span className="mt-0.5 block text-[10px] uppercase tracking-[0.14em] text-gold-600">{hint}</span>}
       </dd>

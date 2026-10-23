@@ -200,8 +200,8 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
       {/* — Appel à l'action — */}
       <section className="bg-ink-900 px-7 py-24 text-linen-200 sm:px-10">
         <div className="mx-auto max-w-4xl">
-          <h2 className="font-display text-3xl font-light leading-tight text-linen-100 sm:text-4xl">{t.tarifs.cta.title}</h2>
-          <p className="mt-5 max-w-xl text-[0.95rem] font-light leading-[1.9] text-linen-300/85">{t.tarifs.cta.body}</p>
+          <h2 className="font-display text-3xl font-light leading-tight text-linen-100 sm:text-4xl">{t.cta.titlePlain}</h2>
+          <p className="mt-5 max-w-xl text-[0.95rem] font-light leading-[1.9] text-linen-300/85">{t.cta.body}</p>
           <div className="mt-9 flex flex-wrap items-center gap-6">
             <Link href={`/${locale}/reserver`} className="btn btn-gold">{t.cta.button}<ArrowIcon /></Link>
             <a href={t.brand.phoneHref} className="text-[0.95rem] text-gold-300 transition-colors hover:text-gold-200">

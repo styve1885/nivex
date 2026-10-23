@@ -1,17 +1,22 @@
+import { getRetired } from "@/lib/i18n/retired";
 import type { Dict } from "@/lib/i18n";
 import { MarqueeTrack } from "./MarqueeTrack";
 
-/** Ruban défilant — la liste des prestations, comme un ourlet cousu. */
-export function Marquee({ t }: { t: Dict }) {
+/**
+ * Ruban défilant — la liste des prestations, comme un ourlet cousu. Retiré
+ * de l'accueil le 23 octobre 2026 ; sa liste vit dans retired.ts.
+ */
+export function Marquee({ t, locale }: { t: Dict; locale: "fr" | "en" }) {
+  const list = getRetired(locale).marquee;
   /* La liste est écrite deux fois pour que la boucle se referme sans
      couture. La copie ne sert qu'à l'œil : un lecteur d'écran n'entend la
      liste qu'une fois. */
-  const items = [...t.marquee, ...t.marquee];
+  const items = [...list, ...list];
   return (
     <div className="marquee relative overflow-hidden border-y border-gold-300/40 bg-linen-50 py-5">
       <MarqueeTrack pause={t.marqueeControl.pause} play={t.marqueeControl.play}>
         {items.map((label, i) => (
-          <span key={i} aria-hidden={i >= t.marquee.length || undefined}
+          <span key={i} aria-hidden={i >= list.length || undefined}
             className="flex items-center gap-10 text-[11px] uppercase tracking-[0.26em] text-ink-500">
             {label}<span className="text-gold-400" aria-hidden="true">◆</span>
           </span>

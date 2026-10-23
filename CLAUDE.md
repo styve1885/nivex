@@ -49,7 +49,10 @@ Les chiffres visibles par le client se déduisent des réglages, jamais
 d'une constante dans un texte. La règle s'est payée plusieurs fois : une
 page qui récite de mémoire finit par contredire le moteur.
 
-- **Prix** : depuis `settings.hourlyRate`, via `src/lib/pricing.ts`.
+- **Prix** : depuis `settings.hourlyRate`, via `src/lib/pricing.ts` — un
+  cycle d'abonnement par `planCents`, la séance d'essai par
+  `sessionLength` et `sessionPriceCents`. Seuls les prix à la pièce
+  (`UNIT_PRICES`) sont des constantes : ils ne suivent pas le taux.
 - **Capacité** (pièces par séance) : `capacityPieces(minutes)`, depuis
   `PIECES_PER_HOUR`, mis en phrases par `lib/capacity.ts`. C'est le **seul**
   chiffre de quantité affiché : aucune page ne cite plus de pièces à l'heure
@@ -92,6 +95,11 @@ ramènerait au prochain chargement ; elles se désactivent.
   fer, pattemouilles, cintres). Le texto de confirmation le rappelle.
 - La première heure est offerte à partir de deux heures réservées, une
   fois par client, jamais sur les abonnements.
+- **Le site ne vend que trois choses** (depuis le 23 octobre 2026) : les
+  quatre abonnements, la séance d'essai de deux heures et les pièces à
+  l'unité. Une heure de plus se décide sur place, au taux horaire. Les
+  anciennes séances de trois et quatre heures, les forfaits et les ajouts
+  ne paraissent plus nulle part.
 
 ## Comment le site est fait
 
@@ -151,6 +159,8 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
 | `lib/services.ts` | Les prestations par défaut et leurs types, sans dépendance : l'admin les importe sans tirer le pilote de base dans le navigateur |
 | `lib/retention.ts` | Les durées de conservation promises par la politique, tenues par la tâche quotidienne |
+| `lib/items.ts` | Les lignes d'une réservation (séance, pièces à l'unité, ancien panier) et l'estimation en fourchette, sans dépendance |
+| `lib/llms.ts` | Le fichier `/llms.txt`, écrit depuis les réglages et les dictionnaires |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
@@ -164,6 +174,38 @@ instruction (CTE `INSERT … ON CONFLICT DO NOTHING RETURNING`), si bien
 qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
 remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 50 $ à 55 $, seulement s'il valait encore 50 $.
+
+### La vitrine, et ce qui en a été retiré
+
+L'accueil suit l'ordre du 23 octobre 2026, deux fois plus court qu'avant :
+héros, déroulement, prestations (cinq cartes d'une phrase, puis les photos
+de la galerie sans légende), avant/après, tarifs (les quatre abonnements et
+la séance d'essai en une ligne), l'histoire en version courte, sept
+questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
+les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
+reste à un clic, et au pied de chaque page.
+
+La page Tarifs tient dans cet ordre : abonnements, séance d'essai, pièces à
+l'unité, frais de déplacement par zone (avec la vérification du code
+postal), première heure offerte, cinq conditions au plus.
+
+**Rien de retiré n'est effacé : c'est masqué, pour pouvoir le remettre.**
+- Les séances, les forfaits, les ajouts, le contenu d'une séance et la
+  comparaison avec le repassage de ménage : drapeaux de `PUBLISHED`
+  (`lib/pricing.ts`), rendus par `RetiredSections` quand on les rallume.
+- Le ruban (`Marquee`), le protocole (`Protocol`) et la galerie en section
+  (`Gallery`) : composants gardés, simplement plus rendus par
+  `app/[locale]/page.tsx`.
+- Leurs textes, et tous les autres textes retirés (les trois questions, les
+  six anciennes cartes, les chapitres de l'histoire, le pantalon de velours,
+  les anciennes offres), vivent dans `lib/i18n/retired.ts`, **jamais dans
+  les dictionnaires** : un dictionnaire part en entier vers les composants
+  clients de la page (questions, contact, tunnels), et ce qui y dort se lit
+  dans la source HTML — là où un assistant le trouverait. Un test y veille.
+- Le pantalon de velours paraissait aussi sur la photo du bandeau et sur
+  l'image de partage : `bandeau-chemises-16x9.jpg` et
+  `app/opengraph-image.jpg` sont recadrés sur les pièces blanches, la photo
+  d'origine reste dans `public/images/avant-apres/`.
 
 ### L'espace artisan
 
@@ -191,13 +233,26 @@ l'onglet Messages, sur demande de son auteur.
 
 ## Le tunnel de réservation
 
-Quatre étapes : prestations, adresse, créneau, confirmation. La durée se
-déduit du panier ; le client ne choisit jamais une durée directement.
+Quatre étapes : formule, adresse, créneau, confirmation. La première ne
+propose que la séance d'essai et les quatre abonnements ; un abonnement
+passe la main à `/abonnement?formule=…`. La séance dure la durée minimale
+réglée (`sessionLength`), sans panier : le client ne choisit jamais une
+durée. Les pièces à l'unité s'y ajoutent en option, à leur prix de grille,
+sans l'allonger.
 
 **Le navigateur ne décide de rien.** Il calcule une estimation pour
-l'afficher, mais `createBooking` recalcule tout — durée, prix, zone,
-frais — à partir des réglages en base. Un panier trafiqué ne donne pas un
-prix trafiqué.
+l'afficher, mais `createBooking` recalcule tout — durée, prix, pièces
+(`bookedUnits`, qui relit chaque clé contre la grille), zone, frais — à
+partir des réglages en base. Un panier trafiqué ne donne pas un prix
+trafiqué.
+
+Une réservation garde ses lignes dans `items` : `session`, puis
+`unit:<clé>` avec le prix figé. `estimate_cents` garde le bas de la
+fourchette (heure offerte déduite de la séance seulement) ; le haut se
+déduit des pièces au prix variable (`estimateRange`). Les rendez-vous d'avant
+gardent les lignes de l'ancien panier (« Chemises × 13 ») et s'affichent
+comme avant. Les prestations de Réglages ne servent plus au tunnel ; elles
+restent, avec leurs durées, pour pouvoir les remettre.
 
 Les gardes posées là, et pourquoi :
 
@@ -420,10 +475,19 @@ rond paient déjà le tarif réduit.
 ## Moteurs de recherche et assistants
 
 La fiche `LocalBusiness` (`lib/seo.ts`) est la même sur l'accueil et sur la
-page Montréal : nom, téléphone, site, taux horaire et durée minimale lus des
-réglages, secteurs dans `areaServed` (Rive-Sud, puis Montréal, un quartier
-de l'île portant Montréal comme localité). La description de l'accueil
-nomme les cinq premiers secteurs de la Rive-Sud, puis Montréal.
+page Montréal : nom, téléphone, site, secteurs dans `areaServed` (Rive-Sud,
+puis Montréal, un quartier de l'île portant Montréal comme localité), et
+exactement les offres des pages, aux mêmes prix : la séance d'essai, l'heure
+de plus, les quatre abonnements, les cinq prestations, et les pièces à
+l'unité dans `hasOfferCatalog`. La description de l'accueil nomme les cinq
+premiers secteurs de la Rive-Sud, puis Montréal, et dit les prix (dès
+150 $ par cycle, séance de 2 heures à 110 $) ; celle de Tarifs
+(`tarifsDescription`) l'éventail des abonnements.
+
+`/llms.txt` (`app/llms.txt/route.ts`, `lib/llms.ts`) résume la maison pour
+les assistants, en français puis en anglais : prix, pièces à l'unité, zones
+et frais, conditions, les sept questions et leurs réponses. Rien n'y est
+écrit à la main, et il se régénère comme les pages.
 
 `robots.txt` nomme Googlebot, Bingbot, OAI-SearchBot, PerplexityBot et
 Claude-SearchBot. Un robot qui trouve son nom ignore le groupe `*` : chaque
@@ -551,11 +615,12 @@ pas.
 
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements, temps hors séance), `booking` (courriels, durées, trois
-temps), `sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
+temps, séance d'essai, pièces à l'unité, foire aux questions),
+`sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan),
 `travel` (secteurs, zones, frais,
-conflits de préfixes, historique, Montréal, fiche LocalBusiness, robots,
-plan du site), `subscription`
+conflits de préfixes, historique, Montréal, fiche LocalBusiness,
+descriptions, llms.txt, robots, plan du site), `subscription`
 (grille des dates, rang des visites, montants, délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 

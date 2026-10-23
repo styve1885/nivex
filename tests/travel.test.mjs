@@ -19,7 +19,9 @@ const {
 const { legalValues, legalSections, fill } = await import("../src/components/LegalDocument.tsx");
 const { openingLine } = await import("../src/components/home/opening-line.ts");
 const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
-const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd } = await import("../src/lib/seo.ts");
+const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd, tarifsDescription } = await import("../src/lib/seo.ts");
+const { llmsText } = await import("../src/lib/llms.ts");
+const { retiredFr } = await import("../src/lib/i18n/retired.ts");
 const { default: robots } = await import("../src/app/robots.ts");
 const { default: sitemap } = await import("../src/app/sitemap.ts");
 const { middleware } = await import("../src/middleware.ts");
@@ -473,12 +475,28 @@ test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avan
   assert.equal(ld.email, "contact@nivexrepassage.ca", "le courriel du domaine, pas le Gmail");
   assert.match(ld.url, /\/fr$/);
   assert.equal(flat(ld.priceRange), "55 $ / h");
-  assert.equal(ld.makesOffer[0].priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
-  assert.equal(ld.makesOffer[0].eligibleQuantity.minValue, 2, "deux heures au minimum");
-  /* La capacité, avec sa précision, et les deux séances de la vitrine à leur prix. */
-  assert.match(flat(ld.makesOffer[0].description), /^Jusqu'à 18 pièces en 2 h, et jusqu'à 27 en 3 h, selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
-  assert.deepEqual(ld.makesOffer.slice(1, 3).map((o) => [o.price, o.description.split(".")[0]]),
-    [[110, "Jusqu'à 18 pièces"], [165, "Jusqu'à 27 pièces"]]);
+  /* Les offres de la vitrine, à leur prix : la séance d'essai, l'heure de
+     plus, puis les quatre abonnements. Plus de séance de trois heures. */
+  const [essai, heure, ...reste] = ld.makesOffer;
+  assert.equal(essai.price, 110);
+  assert.match(flat(essai.name), /2 heures$/);
+  assert.match(flat(essai.description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
+  assert.equal(heure.name, "Une heure de plus, décidée sur place");
+  assert.equal(heure.priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
+  assert.equal(heure.priceSpecification.unitCode, "HUR");
+  const abonnements = reste.filter((o) => typeof o.price === "number");
+  assert.deepEqual(abonnements.map((o) => [o.name, o.price]),
+    [["Abonnement Essentiel", 150], ["Abonnement Confort", 200], ["Abonnement Exécutif", 400], ["Abonnement Grande Famille", 600]]);
+  assert.match(flat(abonnements[2].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
+  assert.ok(!ld.makesOffer.some((o) => o.price === 165), "la séance de trois heures n'est plus publiée");
+  /* Les cinq cartes des prestations, puis les quatorze pièces à l'unité. */
+  assert.deepEqual(reste.filter((o) => o.itemOffered).map((o) => o.itemOffered.name),
+    ["Chemises", "Complets et vestons", "Robes et pièces délicates", "Uniformes scolaires et de travail", "Draps et linge de maison"]);
+  const pieces = ld.hasOfferCatalog.itemListElement;
+  assert.equal(pieces.length, 14);
+  assert.deepEqual([pieces[0].itemOffered.name, pieces[0].price], ["Parure Queen ou King complète", 28]);
+  const nappe = pieces.find((x) => x.itemOffered.name === "Nappe de réception");
+  assert.deepEqual([nappe.priceSpecification.minPrice, nappe.priceSpecification.maxPrice], [12, 18]);
   const lieux = ld.areaServed.map((x) => x.name);
   assert.equal(lieux[0], "Saint-Lambert");
   assert.equal(lieux.length, 21);
@@ -575,11 +593,39 @@ test("le français garde ses espaces insécables : avant : ; ? et dans les guill
   const chaines = [];
   const lire = (v) => (typeof v === "string" ? chaines.push(v) : v && typeof v === "object" && Object.values(v).forEach(lire));
   lire(fr);
+  lire(retiredFr);
   assert.deepEqual(chaines.filter((s) => / [:;?!»]|« /.test(s)), []);
   assert.ok(chaines.length > 300, "tout le dictionnaire est relu");
 });
 
 console.log("\nCe que la vitrine écrit depuis les réglages");
+
+test("les descriptions disent les prix de la page, tirés des réglages", () => {
+  assert.match(flat(metaDescription(fr, P, "fr", true, FALLBACK_SETTINGS)),
+    /pas de livraison\. Abonnements dès 150 \$ par cycle, séance de 2 heures à 110 \$\. Première heure offerte\.$/);
+  assert.match(flat(metaDescription(en, P, "en", false, FALLBACK_SETTINGS)),
+    /no delivery\. Subscriptions from \$150 per cycle, a session of 2 hours for \$110\.$/);
+  assert.match(flat(metaDescription(fr, P, "fr", false, { ...FALLBACK_SETTINGS, hourlyRate: 6000 })),
+    /dès 165 \$ par cycle, séance de 2 heures à 120 \$\.$/, "un autre taux change tout d'un coup");
+  assert.equal(flat(tarifsDescription(fr, FALLBACK_SETTINGS, "fr")),
+    "Repassage à domicile : abonnements de 150 $ à 600 $ par cycle, séance de 2 heures à 110 $, prix à la pièce et frais de déplacement par zone.");
+  assert.equal(tarifsDescription(en, FALLBACK_SETTINGS, "en"),
+    "In-home ironing: subscriptions from $150 to $600 per cycle, a session of 2 hours for $110, single-piece prices and travel fees by area.");
+});
+
+test("llms.txt : les mêmes prix, zones et questions que les pages, dans les deux langues", () => {
+  const txt = flat(llmsText({ ...FALLBACK_SETTINGS, zonePolicy: P }));
+  for (const bit of [
+    "# NIVEX — Repassage à domicile", "Abonnement Exécutif : 400 $ / cycle (au lieu de 440 $)",
+    "Pour un premier essai : la séance de 2 heures, 110 $.", "Une heure de plus, décidée sur place : 55 $.",
+    "Nappe de réception : 12 $ – 18 $", "Secteurs desservis : Saint-Lambert",
+    "### Faut-il fournir la planche et le fer ?", "### Puis-je annuler ou déplacer mon rendez-vous ?",
+    "# NIVEX — In-home ironing", "Executive subscription: $400 / cycle (instead of $440)",
+    "For a first try: a session of 2 hours, $110.", "### Can I cancel or reschedule?",
+  ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
+  assert.equal((txt.match(/^### /gm) ?? []).length, 14, "sept questions par langue");
+  assert.doesNotMatch(txt, /\{|!|Découverte|Grand Foyer|Douce Nuit|Prolongation|velours|Corduroy/);
+});
 
 test("la description n'annonce la première heure que si l'artisan l'offre", () => {
   assert.match(metaDescription(fr, P, "fr", true), /pas de livraison\. Première heure offerte\.$/);

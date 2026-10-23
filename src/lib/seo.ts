@@ -4,8 +4,10 @@ import type { Settings } from "./settings";
 import { PHONE, contactEmail } from "./brand";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
-import { capacityPieces } from "./pricing";
-import { capacitySentence, setupSentence } from "./capacity";
+import {
+  PLANS, UNIT_PRICES, capacityPieces, cheapestPlanCents, planCents, planPieces, sessionLength, sessionPriceCents,
+} from "./pricing";
+import { setupSentence } from "./capacity";
 import { joinList, sectorsByRegion, type Sector, type ZonePolicy } from "./travel";
 
 /**
@@ -121,17 +123,42 @@ export function phoneDisplay(): string {
 /**
  * La description de l'accueil : les cinq premiers secteurs de la Rive-Sud,
  * dans l'ordre de l'onglet « Zones et frais », puis Montréal s'il est
- * desservi. La première heure offerte ne s'y ajoute que tant que l'artisan
- * la propose : un extrait de recherche ne promet pas ce que le tunnel refuse.
+ * desservi. Avec les réglages (`prices`), elle dit aussi les prix de la
+ * page — le plus bas montant par cycle et la séance d'essai —, que les
+ * assistants reprennent tels quels. La première heure offerte ne s'y ajoute
+ * que tant que l'artisan la propose : un extrait de recherche ne promet pas
+ * ce que le tunnel refuse.
  */
-export function metaDescription(t: Dict, policy: ZonePolicy, lang: Lang, firstHourFree: boolean): string {
+export function metaDescription(
+  t: Dict, policy: ZonePolicy, lang: Lang, firstHourFree: boolean,
+  prices?: Pick<Settings, "hourlyRate" | "minMinutes" | "currency">,
+): string {
   const { south, montreal } = sectorsByRegion(policy);
   const places = [
     ...south.slice(0, 5).map((s) => nameOf(s, lang)),
     ...(montreal.length ? [lang === "en" ? "Montreal" : "Montréal"] : []),
   ];
-  const text = t.meta.description.replace("{places}", joinList(places, lang));
-  return firstHourFree ? `${text} ${t.meta.offer}` : text;
+  const parts = [t.meta.description.replace("{places}", joinList(places, lang))];
+  if (prices) {
+    const money = (c: number) => formatMoney(c, prices.currency, lang);
+    parts.push(t.meta.prices
+      .replace("{plan}", money(cheapestPlanCents(prices)))
+      .replace("{min}", minutesToText(sessionLength(prices), lang))
+      .replace("{price}", money(sessionPriceCents(prices))));
+  }
+  if (firstHourFree) parts.push(t.meta.offer);
+  return parts.join(" ");
+}
+
+/** La description de la page Tarifs : l'éventail des abonnements, la séance d'essai, le reste de la grille. */
+export function tarifsDescription(t: Dict, s: Pick<Settings, "hourlyRate" | "minMinutes" | "currency">, lang: Lang): string {
+  const money = (c: number) => formatMoney(c, s.currency, lang);
+  const cycles = PLANS.map((p) => planCents(p, s));
+  return t.tarifs.metaDescription
+    .replace("{from}", money(Math.min(...cycles)))
+    .replace("{to}", money(Math.max(...cycles)))
+    .replace("{min}", minutesToText(sessionLength(s), lang))
+    .replace("{price}", money(sessionPriceCents(s)));
 }
 
 /**
@@ -155,7 +182,7 @@ function place(s: Sector, montreal: boolean, lang: Lang) {
 export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
   const origin = siteOrigin();
   const { south, montreal } = sectorsByRegion(s.zonePolicy);
-  const minimum = Math.max(s.minMinutes, 120);
+  const session = sessionLength(s);
   const rate = s.hourlyRate / 100;
 
   return {
@@ -163,7 +190,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     "@type": "LocalBusiness",
     "@id": `${origin}/#nivex`,
     name: "NIVEX",
-    description: metaDescription(t, s.zonePolicy, lang, s.firstHourFree),
+    description: metaDescription(t, s.zonePolicy, lang, s.firstHourFree, s),
     slogan: t.brand.tagline,
     url: `${origin}/${lang}`,
     image: `${origin}/opengraph-image.jpg`,
@@ -182,12 +209,22 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       dayOfWeek: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day],
       opens: h.open, closes: h.close,
     })),
+    /* Ce que montrent l'accueil et la page Tarifs, aux mêmes prix : la
+       séance d'essai, l'heure de plus décidée sur place, puis les quatre
+       abonnements au prix d'un cycle. Rien de ce que la vitrine a retiré
+       (séances de trois et quatre heures, forfaits, ajouts) n'y figure. */
     makesOffer: [
       {
         "@type": "Offer",
-        name: t.meta.service,
-        /* La capacité et le déroulement, les mêmes phrases que la FAQ. */
-        description: `${capacitySentence(t, s, lang)} ${setupSentence(t, s, lang)}`,
+        name: `${t.meta.service} · ${minutesToText(session, lang)}`,
+        price: sessionPriceCents(s) / 100,
+        priceCurrency: s.currency,
+        /* La capacité et le déroulement, les mêmes phrases que la page. */
+        description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(session)))}. ${t.capacity.caveat} ${setupSentence(t, s, lang)}`,
+      },
+      {
+        "@type": "Offer",
+        name: t.meta.extraHour,
         priceSpecification: {
           "@type": "UnitPriceSpecification",
           price: rate,
@@ -195,28 +232,34 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
           unitCode: "HUR",
           unitText: lang === "en" ? "hour" : "heure",
         },
-        /* La durée minimale d'une séance, en heures. */
-        eligibleQuantity: { "@type": "QuantitativeValue", minValue: minimum / 60, unitCode: "HUR" },
       },
-      /* Les deux séances de la vitrine, à leur prix et avec leur capacité :
-         la plus courte, et une heure de plus. */
-      ...[minimum, minimum + 60].map((m) => ({
-        "@type": "Offer",
-        name: `${t.meta.service} · ${minutesToText(m, lang)}`,
-        price: Math.round((m / 60) * s.hourlyRate) / 100,
-        priceCurrency: s.currency,
-        description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(m)))}. ${t.capacity.caveat}`,
+      ...PLANS.map((p) => {
+        const text = lang === "en" ? p.en : p.fr;
+        return {
+          "@type": "Offer",
+          name: t.meta.plan.replace("{name}", text.name),
+          price: planCents(p, s) / 100,
+          priceCurrency: s.currency,
+          description: `${text.detail} ${t.capacity.perCycle.replace("{n}", String(planPieces(p)))}. ${t.capacity.caveat}`,
+        };
+      }),
+      /* Les cinq cartes des prestations, telles que l'accueil les montre. */
+      ...t.services.items.map((x) => ({
+        "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
       })),
-      /* Les prestations que la page d'accueil montre : une carte dont la
-         prestation est désactivée dans Réglages n'est plus offerte, ni à
-         l'écran ni ici. La carte « Tout se fait chez vous » n'en mesure
-         aucune et reste. */
-      ...t.services.items
-        .filter((x) => x.detail.includes("{zone}") || s.services.some((v) => v.key === x.serviceKey && v.enabled))
-        .map((x) => ({
-          "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
-        })),
     ],
+    /* Les pièces à l'unité de la page Tarifs, une fourchette quand le prix varie. */
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: t.tarifs.units.title,
+      itemListElement: UNIT_PRICES.map((u) => ({
+        "@type": "Offer",
+        itemOffered: { "@type": "Service", name: lang === "en" ? u.en : u.fr },
+        ...(u.toCents
+          ? { priceSpecification: { "@type": "PriceSpecification", minPrice: u.cents / 100, maxPrice: u.toCents / 100, priceCurrency: s.currency } }
+          : { price: u.cents / 100, priceCurrency: s.currency }),
+      })),
+    },
   };
 }
 

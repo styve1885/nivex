@@ -49,7 +49,7 @@ const privacy: LegalDoc = {
         "Ce que vous nous donnez vous-même, au moment où vous le donnez, et quelques mesures techniques, décrites une à une ci-dessous. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
       ],
       list: [
-        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), les prestations et quantités choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
+        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), la séance et les pièces à l'unité choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
         "Abonnement — les mêmes renseignements qu'une réservation, plus la formule choisie, le jour et l'heure de vos visites, les visites effectuées et les cycles réglés.",
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site\u00a0: une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
@@ -67,7 +67,7 @@ const privacy: LegalDoc = {
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
         "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre, et à vous rappeler chaque visite la veille. Le lendemain de votre première séance, votre courriel peut aussi recevoir, une seule fois, un mot de remerciement qui vous invite à laisser un avis sur Google\u202f; répondre à ce courriel suffit pour ne plus en recevoir de ce genre. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, le rappel de la veille, un mot deux heures avant l'arrivée de l'artisan et tout changement de rendez-vous\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan\u202f; le site ne la conserve pas.",
-        "Les prestations choisies servent à réserver la bonne durée dans l'agenda et à préparer le matériel.",
+        "La séance et les pièces à l'unité choisies servent à réserver le bon créneau dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
         "Le journal des visites et la provenance servent à savoir quel moyen de se faire connaître fonctionne — une carte distribuée dans un quartier, une recommandation, une publication, une recherche — afin de ne pas dépenser au hasard. Ils ne servent jamais à vous démarcher, ni à vous recontacter, ni à vous classer.",
@@ -205,6 +205,7 @@ const terms: LegalDoc = {
       title: "Le prix",
       body: [
         "Une séance dure au minimum {min} et se facture {entry}. Au-delà, le temps s'ajoute par tranche de {step}, au même taux de {rate} l'heure. Les taxes applicables, s'il y a lieu, s'ajoutent à ce montant.",
+        "Les pièces à l'unité que vous ajoutez à une séance se facturent au prix de la grille publiée sur la page Tarifs.",
         "L'estimation affichée pendant la réservation est indicative\u00a0: elle découle de ce que vous avez déclaré. Le montant final est établi selon le temps réellement passé, et il vous est confirmé sur place avant que la séance commence. Vous n'êtes jamais engagé sur un montant que vous n'avez pas vu.",
         "Si le travail demandé dépasse ce qui était prévu, nous vous le disons avant de continuer. C'est vous qui décidez de prolonger ou d'en rester là.",
       ],
@@ -307,6 +308,12 @@ export const fr = {
        ne s'y ajoute que tant que l'artisan la propose. */
     description:
       "Repassage à domicile à {places}. Nous repassons vos vêtements et votre literie sur place, chez vous\u00a0: pas de collecte, pas de livraison.",
+    /* {plan} : le plus bas montant par cycle ; {min} et {price} : la séance
+       d'essai. Les trois viennent des réglages, comme sur la page. */
+    prices: "Abonnements dès {plan} par cycle, séance de {min} à {price}.",
+    /* Les noms des offres dans les données structurées. */
+    plan: "Abonnement {name}",
+    extraHour: "Une heure de plus, décidée sur place",
     offer: "Première heure offerte.",
     ogAlt: "NIVEX — Repassage à domicile de prestige",
   },
@@ -330,57 +337,24 @@ export const fr = {
     emailHref: "mailto:contact@nivexrepassage.ca",
   },
   hero: {
-    eyebrow: "Repassage à domicile · Saint-Lambert · Longueuil",
+    eyebrow: "Repassage à domicile · Montréal · Rive-Sud",
     titleTop: "Offrez à votre garde-robe",
     titleBottom: "le soin qu'elle mérite.",
     onSite:
       "Nous repassons vos vêtements et votre literie sur place, chez vous. Pas de collecte, pas de livraison\u00a0: rien ne quitte votre domicile.",
-    lede:
-      "Un artisan se déplace chez vous, avec sa presse et sa vapeur de haute précision. Vous ne déplacez rien, vous ne pliez rien. Vous ouvrez votre penderie, et tout y est droit.",
     ctaPrimary: "Réserver une séance",
     ctaSecondary: "Découvrir l'histoire",
-    offer: "Votre première heure de repassage offerte.",
+    offer: "Votre première heure est offerte, une seule fois, sur votre première réservation.",
     scroll: "Faites défiler",
   },
-  marquee: [
-    "Chemises impeccables",
-    "Robes & vêtements délicats",
-    "Linge de maison haut de gamme",
-    "Costumes & vestes parfaits",
-    "Uniformes scolaires & professionnels",
-    "Tout se fait chez vous",
-  ],
   /* Le ruban défile sans fin : un bouton doit pouvoir l'arrêter. */
   marqueeControl: { pause: "Arrêter le défilement", play: "Reprendre le défilement" },
   story: {
     eyebrow: "L'histoire",
     title: "Le blanc, comme au premier jour.",
-    chapters: [
-      {
-        num: "I",
-        title: "Un geste qu'on a oublié",
-        body:
-          "Il fut un temps où l'on repassait le dimanche soir. Le fer chuintait, la vapeur montait, et la semaine entière prenait forme sur une planche de bois. Ce geste-là n'a pas disparu parce qu'il était inutile. Il a disparu parce que le temps, lui, s'est effacé.",
-      },
-      {
-        num: "II",
-        title: "Ce que le pli raconte",
-        body:
-          "Un vêtement froissé ne trahit pas votre négligence — il trahit votre agenda. Mais celui qui vous fait face ne le sait pas. Le col qui tombe droit, l'épaule qui tient, le revers qui marque\u00a0: voilà ce qui parle avant vous, à l'entretien d'embauche comme au premier rendez-vous.",
-      },
-      {
-        num: "III",
-        title: "Le nom",
-        body:
-          "NIVEX vient du latin nix, nivis — la neige. Ce blanc-là ne se négocie pas\u00a0: il est net, franc, sans mémoire du jour précédent. C'est l'état que nous rendons à vos tissus, l'un après l'autre.",
-      },
-      {
-        num: "IV",
-        title: "Chez vous, pas ailleurs",
-        body:
-          "Nous ne prenons pas vos vêtements en otage dans un camion. L'atelier vient à vous\u00a0: presse professionnelle, vapeur calibrée, pattemouilles, cintres. Vous restez chez vous. Vos vêtements aussi. Et quand nous repartons, la penderie est en ordre.",
-      },
-    ],
+    /* La version courte, seule à l'accueil depuis le 23 octobre 2026. */
+    body:
+      "Autrefois, on repassait le dimanche soir. Ce geste n'a pas disparu parce qu'il était inutile\u00a0: c'est le temps qui manque. NIVEX, du latin pour «\u00a0neige\u00a0», le ramène chez vous, avec six ans de métier dans le nettoyage à sec. Nous venons avec la presse, la vapeur et les cintres, nous repassons sur place, et vos vêtements ne quittent jamais votre domicile.",
     signature: "Styve",
     signatureRole: "Artisan du repassage, fondateur de NIVEX",
     /* Les guillemets font partie de la citation : chaque langue a les siens. */
@@ -390,51 +364,14 @@ export const fr = {
   services: {
     eyebrow: "Les prestations",
     title: "Chaque tissu a sa température.",
-    lede:
-      "Nous ne repassons pas une soie comme un coton d'uniforme. Chaque pièce reçoit le réglage, la pression et la vapeur qui lui conviennent.",
+    /* Cinq cartes, une phrase chacune. Elles disent le soin, pas une
+       prestation du moteur : aucune ne dépend de Réglages. */
     items: [
-      {
-        icon: "shirt",
-        serviceKey: "shirt",
-        name: "Chemises impeccables",
-        body: "Col, empiècement, poignets, manches, corps. Dans cet ordre, toujours. Repassées sur cintre de bois, prêtes à porter.",
-        detail: "Sur cintre de bois",
-      },
-      {
-        icon: "dress",
-        serviceKey: "delicate",
-        name: "Robes & vêtements délicats",
-        body: "Soie, viscose, dentelle, plissés. Vapeur sans contact quand la fibre l'exige, pattemouille quand elle le mérite.",
-        detail: "Vapeur sans contact",
-      },
-      {
-        icon: "linen",
-        serviceKey: "linen",
-        name: "Draps & linge de maison",
-        body: "Simple, deux places, queen, trois places. Les grandes tailles demandent plus de temps, et c'est compté séparément. Pliage hôtelier, arêtes vives.",
-        detail: "Pliage hôtelier",
-      },
-      {
-        icon: "suit",
-        serviceKey: "suit",
-        name: "Costumes & vestes",
-        body: "Défroissage vapeur, remise en forme des épaules, marquage du pli de pantalon. Sans lustrage, jamais.",
-        detail: "Sans lustrage",
-      },
-      {
-        icon: "badge",
-        serviceKey: "uniform",
-        name: "Uniformes",
-        body: "Scolaires et professionnels. Le lot complet de la semaine, traité d'un coup, rendu sur cintres numérotés.",
-        detail: "Cintres numérotés",
-      },
-      {
-        icon: "clock",
-        serviceKey: "trousers",
-        name: "Tout se fait chez vous",
-        body: "Rien ne quitte votre domicile. Votre artisan vient avec sa vapeur, son fer et ses cintres, travaille devant vous, et range avant de partir.",
-        detail: "{zone}",
-      },
+      { icon: "shirt", name: "Chemises", body: "Col, poignets et plastron nets, rendues sur cintre." },
+      { icon: "suit", name: "Complets et vestons", body: "Plis marqués, épaules et revers intacts." },
+      { icon: "dress", name: "Robes et pièces délicates", body: "La bonne température pour la soie, le lin et la laine." },
+      { icon: "badge", name: "Uniformes scolaires et de travail", body: "Prêts pour toute la semaine." },
+      { icon: "linen", name: "Draps et linge de maison", body: "Parures, housses, nappes et serviettes de table." },
     ],
     /* {zone} : les régions qui ont au moins un secteur actif, dans l'ordre
        de la maison — la Rive-Sud, puis Montréal. */
@@ -463,36 +400,19 @@ export const fr = {
   },
   pricing: {
     eyebrow: "Tarification",
-    title: "Au résultat, pas à la minute.",
-    lede:
-      "Vous choisissez les pièces et prévoyez la planche, nous apportons tout le reste. Le montant est confirmé sur place avant de commencer.",
-    /* Les durées des deux séances ne s'écrivent pas ici : elles suivent la
-       durée minimale réglée, comme leurs montants (voir Pricing). */
-    offers: [
-      {
-        name: "Séance semaine",
-        /* Le nombre de pièces vient de `capacityPieces`, pour la durée affichée. */
-        volume: "la garde-robe complète de votre semaine",
-        note: "Le format le plus demandé, et la durée minimale d'un déplacement.",
-      },
-      {
-        name: "Séance famille",
-        volume: "chemises, pantalons, uniformes scolaires",
-        note: "Pour une maisonnée, ou deux semaines d'un coup.",
-      },
-      {
-        name: "Abonnement",
-        volume: "Visites régulières, créneaux réservés",
-        note: "Tarif garanti douze mois.",
-      },
-    ],
-    planFrom: "à partir de {price} par cycle",
-    button: "Composer ma séance",
-    seeAll: "Voir la grille complète",
+    title: "Quatre abonnements, un tarif garanti douze mois.",
+    /* Sous chaque carte : {detail}, la formule en une ligne, et {n}, son
+       volume par cycle, tiré de `capacityPieces`. */
+    planLine: "{detail}, jusqu'à {n} pièces",
+    perCycle: "/ cycle",
+    insteadOf: "au lieu de",
+    subscribe: "S'abonner",
+    /* {min} et {price} : la séance d'essai, depuis les réglages. */
+    trial: "Pour essayer une fois\u00a0: la séance de {min}, {price}.",
+    seeAll: "Voir les prix à la pièce",
     firstFree: "Première heure offerte",
     firstFreeConditions:
       `Sur toute première réservation de ${FIRST_FREE_MIN} ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.`,
-    note: "L'estimation affichée est indicative. Le montant final est confirmé sur place, avant de commencer.",
   },
   /* La capacité d'une séance, le seul chiffre de quantité du site, et ce que
      contient une séance. {n}, {a}, {b} : des pièces, tirées de
@@ -511,8 +431,9 @@ export const fr = {
   faq: {
     eyebrow: "Questions",
     title: "Ce qu'on nous demande.",
-    /* {capacity} et {setup} : les phrases de `capacity`, remplies depuis la
-       durée minimale réglée. */
+    /* Sept questions, deux ou trois phrases chacune. {capacity} : la phrase
+       de `capacity`, remplie depuis la durée minimale réglée ; {zone} : les
+       secteurs actifs. Les données structurées reprennent ces réponses. */
     items: [
       {
         q: "Est-ce que vous ramassez les vêtements\u202f?",
@@ -523,36 +444,24 @@ export const fr = {
         a: "La planche, oui\u00a0; le reste, non. Votre artisan arrive avec le matériel professionnel\u00a0: générateur de vapeur, fer, pattemouilles, cintres. Prévoyez votre planche à repasser, une prise électrique et environ deux mètres carrés.",
       },
       {
-        q: "Combien de temps prévoir\u202f?",
-        a: "Lors de la réservation, l'estimateur calcule la durée d'après les quantités choisies, installation et rangement compris\u202f; pour la modifier, changez les quantités.",
-      },
-      {
         q: "Combien de vêtements repassez-vous en une séance\u202f?",
         a: "{capacity}",
-      },
-      {
-        q: "L'installation est-elle comprise dans la séance\u202f?",
-        a: "Oui. {setup} Votre artisan arrive à l'heure du début de la séance.",
       },
       {
         q: "Dois-je être présent pendant la séance\u202f?",
         a: "Idéalement pour l'accueil et le départ. Entre les deux, vous vaquez à vos occupations. Certains clients partent travailler après nous avoir ouvert\u00a0: il suffit d'en convenir d'avance.",
       },
       {
-        q: "Et les pièces fragiles\u202f?",
-        a: "Chaque fibre est identifiée avant traitement. Soie, dentelle, cachemire et plissés sont travaillés à la vapeur sans contact ou sous pattemouille. En cas de doute sur une pièce, nous vous consultons avant d'y toucher.",
-      },
-      {
         q: "Quelles zones desservez-vous\u202f?",
-        a: "{zone} Les frais de déplacement dépendent de la zone et de la durée de la séance\u202f; la grille complète est sur la page Tarifs. Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que le déplacement coûte s'il y a lieu.",
+        a: "{zone} Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
       },
       {
         q: "Comment se fait le paiement\u202f?",
-        a: "Sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement n'est demandé lors de la réservation en ligne.",
+        a: "Sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement n'est demandé en ligne. Un abonnement se règle à la première visite de chaque cycle.",
       },
       {
         q: "Puis-je annuler ou déplacer mon rendez-vous\u202f?",
-        a: `Oui. Une séance s'annule librement jusqu'à ${CANCEL_WINDOW_HOURS} heures avant le rendez-vous, depuis le lien personnel du courriel de confirmation, sans nous appeler. Pour la déplacer, appelez-nous au ${PHONE} dans le même délai. Pour un abonné, chaque visite s'annule ou se déplace en ligne jusqu'à 23 h 59 la veille.`,
+        a: `Oui. Une séance s'annule en ligne jusqu'à ${CANCEL_WINDOW_HOURS} heures avant, depuis le lien de votre courriel de confirmation\u00a0; pour la déplacer, appelez-nous au ${PHONE} dans le même délai. Une visite d'abonné s'annule ou se déplace en ligne jusqu'à 23 h 59 la veille.`,
       },
     ],
   },
@@ -628,22 +537,33 @@ export const fr = {
   booking: {
     title: "Réserver une séance",
     lede: "Quatre étapes, deux minutes. Vous choisissez votre heure, la confirmation part aussitôt.",
-    steps: ["Prestations", "Adresse", "Créneau", "Confirmation"],
+    steps: ["Formule", "Adresse", "Créneau", "Confirmation"],
     progress: "Progression",
     step1: {
-      title: "Que devons-nous traiter\u202f?",
-      hint: "Sélectionnez ce qui vous concerne, ajustez les quantités. L'estimation se met à jour toute seule.",
+      title: "Que souhaitez-vous réserver\u202f?",
+      hint: "La séance pour essayer une fois, ou un abonnement pour un service régulier.",
+      /* {min} : la durée de la séance d'essai, depuis les réglages. */
+      session: "La séance de {min}",
+      sessionNote: "Pour essayer une fois.",
+      /* Un abonnement se poursuit dans son propre tunnel. */
+      planNext: "Vous choisirez ensuite le jour et l'heure de votre première visite.",
+      planCta: "Continuer vers l'abonnement",
+      units: "Pièces à l'unité (optionnel)",
+      unitsHint: "Une pièce ajoutée à votre séance, au prix de la grille.",
+      unitsShow: "Ajouter des pièces à l'unité",
+      unitsHide: "Masquer les pièces à l'unité",
+      /* {amount} : le total des pièces à l'unité, en fourchette s'il y a lieu. */
+      unitsTotal: "dont pièces à l'unité\u00a0: {amount}",
       qty: "Quantité",
       less: "Diminuer la quantité",
       more: "Augmenter la quantité",
       estimate: "Estimation",
-      duration: "Durée estimée",
+      duration: "Durée",
       /* {ironing} : la durée, moins l'installation et le rangement. */
       ironing: "dont {ironing} de repassage",
       price: "Montant estimé",
       hours: "h",
       minutes: "min",
-      empty: "Sélectionnez au moins une prestation pour continuer.",
       firstFreeApplied: "Première heure offerte appliquée",
       /* Le navigateur ne sait pas si le client a déjà réservé : seul le
          serveur le lit. Le montant offert reste donc une éventualité. */
@@ -695,7 +615,7 @@ export const fr = {
       afternoon: "Après-midi",
       evening: "Soirée",
       timezone: "Fuseau\u00a0: heure de l'Est (Montréal).",
-      durationLine: "Durée estimée\u00a0: {duration}",
+      durationLine: "Durée de la séance\u00a0: {duration}",
       /* {duration} et {ironing} : la séance estimée, et son temps de repassage. */
       setup:
         `Votre artisan arrive à l'heure du début. Votre séance de {duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0: {ironing} de repassage.`,
@@ -887,21 +807,6 @@ export const fr = {
     admin: "Espace artisan",
     craft: "Fait avec soin sur la Rive-Sud",
   },
-  protocol: {
-    eyebrow: "Le protocole",
-    title: "L'ordre ne s'improvise pas.",
-    lede:
-      "Une chemise mal repassée n'est pas une chemise mal chauffée\u00a0: c'est une chemise repassée dans le désordre. Chaque pièce déjà finie serait refroissée par la suivante. Voici la marche à suivre, celle qu'on ne change jamais.",
-    steps: [
-      { n: "01", title: "Le col",        body: "À l'envers d'abord, de la pointe vers le centre. Jamais l'inverse\u00a0: c'est ainsi qu'on évite le faux pli qui ne part plus." },
-      { n: "02", title: "L'empiècement", body: "Le haut du dos, posé sur la pointe de la planche. Une épaule, puis l'autre, sans jamais écraser la couture." },
-      { n: "03", title: "Les poignets",  body: "Ouverts à plat, envers puis endroit. Le fer contourne les boutons — il ne passe jamais dessus." },
-      { n: "04", title: "Les manches",   body: "On suit l'arête existante, on n'en crée pas une nouvelle. Une manche a une seule mémoire\u202f; on la respecte." },
-      { n: "05", title: "Le corps",      body: "Devant boutonné, puis le dos, en faisant tourner la pièce autour de la planche plutôt qu'en la retournant." },
-      { n: "06", title: "La vapeur",     body: "Passage final sans contact. La fibre se détend, la tenue se fixe, le lustre ne vient jamais." },
-      { n: "07", title: "Le cintre",     body: "Bois, immédiatement. Le tissu refroidit en forme — c'est là que le travail tient, ou qu'il se perd." },
-    ],
-  },
   contact: {
     eyebrow: "Nous écrire",
     title: "Une question avant de réserver\u202f?",
@@ -954,67 +859,25 @@ export const fr = {
   },
   tarifs: {
     eyebrow: "Tarification",
-    title: "Ce qu'une séance chez vous représente.",
-    lede:
-      "Nous ne vendons pas «\u00a0du repassage\u00a0»\u00a0: nous vendons une cadence mesurée, la même d'une séance à l'autre. Voici ce qu'elle vaut, ce qu'elle traite, et ce qui la sépare d'un coup de main.",
-    /* {min} : la plus courte séance proposée, celle que coûte {price}. */
-    headline: "La séance de {min} — {price}",
-    /* {travel} : inclus seulement si aucune zone desservie n'a de frais. */
-    visitNote: "minimum {min} par déplacement · {travel}",
-    travelIncluded: "déplacement inclus",
-    travelVaries: "frais de déplacement selon le secteur",
-    /* Ce que contient une séance : sa capacité et son déroulement, écrits
-       depuis `capacity`, puis les pièces que nous traitons. */
-    cadence: {
-      title: "Ce que contient une séance",
-      colType: "Ce que nous traitons, et comment",
-    },
-    versus: {
-      title: "Ce n'est pas du repassage de ménage.",
-      lede: "Cinq différences, et elles se voient sur le vêtement.",
-      elsewhere: "Ailleurs",
-      here: "Chez NIVEX",
-      rows: [
-        {
-          title: "Le volume",
-          them: "On repasse «\u00a0ce qu'on peut\u00a0» dans le temps payé. Vous découvrez le résultat à la fin.",
-          us: "Une capacité annoncée avant de commencer, et un temps réservé qui vous revient entièrement. S'il est écourté de notre fait, le temps manquant ne vous est pas facturé.",
-        },
-        {
-          title: "Le matériel",
-          them: "Votre fer, votre vapeur, vos cintres. Le résultat dépend de ce que vous possédez.",
-          us: "Générateur de vapeur professionnel, fer, pattemouilles et cintres de bois apportés. Vous fournissez la planche, une prise et deux mètres carrés.",
-        },
-        {
-          title: "L'ordre de travail",
-          them: "Pièce après pièce, dans l'ordre du panier. Ce qui est fini se refroisse sous la suivante.",
-          us: "Un protocole en sept temps par chemise, et un ordre de passage qui empêche le refroissage.",
-        },
-        {
-          title: "Les pièces fragiles",
-          them: "Même réglage pour tout. Une soie, un plissé ou un cachemire y laissent parfois une marque.",
-          us: "Test de fibre systématique, étiquette d'entretien respectée, vapeur sans contact. En cas de doute, nous vous consultons avant de toucher la pièce.",
-        },
-        {
-          title: "Ce qui vous reste",
-          them: "Une pile sur le lit, et un arrangement verbal.",
-          us: "Une penderie en ordre, une facture, un lien pour gérer votre rendez-vous, et notre responsabilité écrite en cas de dommage.",
-        },
+    title: "Tarifs du repassage à domicile.",
+    /* La description lue par les moteurs et les assistants : {from} et {to},
+       le plus bas et le plus haut montant par cycle ; {min} et {price}, la
+       séance d'essai. Tout vient des réglages, comme sur la page. */
+    metaDescription:
+      "Repassage à domicile\u00a0: abonnements de {from} à {to} par cycle, séance de {min} à {price}, prix à la pièce et frais de déplacement par zone.",
+    /* La séance d'essai, en une ligne : {min} et {price} viennent des réglages. */
+    trial: "Pour un premier essai\u00a0: la séance de {min}, {price}.",
+    trialCta: "Réserver la séance",
+    /* Cinq points au plus. Le premier dit le taux horaire ({rate}), le
+       deuxième est la phrase `capacity.setup` ; viennent ensuite ceux-ci. */
+    conditions: {
+      title: "Conditions",
+      extraHour: "Une heure de plus, décidée sur place\u00a0: {rate}.",
+      items: [
+        "Paiement sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement à la réservation.",
+        "Vous prévoyez la planche à repasser, une prise électrique et environ deux mètres carrés dégagés\u00a0; l'artisan apporte le reste.",
+        `Une séance s'annule sans frais jusqu'à ${CANCEL_WINDOW_HOURS} heures avant\u00a0; une visite d'abonné, jusqu'à 23 h 59 la veille.`,
       ],
-    },
-    blocks: {
-      title: "Les séances",
-      lede: "Une durée, un volume, un montant. Rien à calculer.",
-      minimum:
-        "Minimum {min} par déplacement. Les ajouts et les pièces à l'unité se greffent à une séance déjà réservée — seuls, ils ne justifient pas un déplacement.",
-    },
-    bundles: {
-      title: "Forfaits composés",
-      lede: "Un panier type, déjà chiffré.",
-    },
-    addons: {
-      title: "Ajouts à votre séance",
-      lede: "En complément d'une séance déjà réservée, sans second déplacement.",
     },
     units: {
       title: "Pièces à l'unité",
@@ -1040,14 +903,9 @@ export const fr = {
         `Tarif garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles.`,
       ],
     },
+    /* Les frais de déplacement par zone. L'ancienne liste « Ce qui vaut pour
+       toutes les séances » est dans retired.ts : les conditions la reprennent. */
     terms: {
-      title: "Ce qui vaut pour toutes les séances",
-      items: [
-        { dt: "Temps tenu", dd: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0; le reste du temps réservé est du repassage. S'il est écourté de notre fait, le temps manquant ne vous est pas facturé.` },
-        { dt: "Estimation et montant final", dd: "L'estimation est indicative. Le montant final suit le temps réellement passé et vous est confirmé sur place, avant de commencer." },
-        { dt: "Paiement", dd: "Sur place, à la fin de la séance\u00a0: comptant, virement Interac ou carte. Aucun prépaiement à la réservation." },
-        { dt: "Ce qu'il nous faut chez vous", dd: "Votre planche à repasser, une prise électrique et environ deux mètres carrés dégagés. Le reste du matériel arrive avec l'artisan." },
-      ],
       travel: "Frais de déplacement",
       travelFree: "Sans frais de déplacement",
       travelFlat: "{fee} par visite",
@@ -1059,10 +917,6 @@ export const fr = {
     firstFreeLabel: "Première séance",
     /* Lu seulement par les lecteurs d'écran, devant le prix barré. */
     insteadOf: "au lieu de",
-    cta: {
-      title: "Composez votre séance.",
-      body: "Le tunnel de réservation reprend exactement ces chiffres\u00a0: vous cochez vos prestations, il calcule la durée et le montant, et confirme l'heure que vous choisissez.",
-    },
   },
   beforeAfter: {
     eyebrow: "Le résultat",
@@ -1084,40 +938,26 @@ export const fr = {
       { key: "veste", name: "Veste doublée",
         altBefore: "Veste doublée avant repassage",
         altAfter: "Veste doublée après repassage" },
-      { key: "velours", name: "Pantalon de velours",
-        altBefore: "Pantalon de velours avant repassage",
-        altAfter: "Pantalon de velours après repassage" },
     ],
   },
+  /* La galerie n'est plus une section de l'accueil depuis le 23 octobre
+     2026 : ses photos se montrent sous les prestations, avec leur seul
+     texte de remplacement. Ses titres et ses légendes sont dans retired.ts. */
   gallery: {
-    eyebrow: "Les pièces",
-    title: "Ce qui passe entre nos mains.",
-    lede:
-      "Un complet de laine ne se traite pas comme une surchemise de coton, ni une jupe plissée comme un smoking. Voici le genre de pièces que nous recevons, et le soin que chacune réclame.",
     photos: {
       gilet: {
-        name: "Gilets & complets",
-        detail: "Laine à carreaux, revers à cran. Épaules remises en forme, vapeur sans contact, aucun lustrage.",
         alt: "Gilet de complet en laine à carreaux, suspendu à un cintre de bois",
       },
       veston: {
-        name: "Vestons de tailleur",
-        detail: "Le revers se marque au bord, jamais à plat. Une laine noire ne doit prendre aucune brillance.",
         alt: "Veston de tailleur noir présenté sur un mannequin",
       },
       chemises: {
-        name: "Chemises & surchemises",
-        detail: "Col, empiècement, poignets, manches, corps — dans cet ordre, pour que rien ne se refroisse.",
         alt: "Deux surchemises de coton beige suspendues côte à côte",
       },
       ceremonie: {
-        name: "Tenues de cérémonie",
-        detail: "Passepoil satiné contourné au fer, pli du pantalon repris sous pattemouille.",
         alt: "Smoking bleu nuit à passepoil satiné, sur cintre",
       },
       uniformes: {
-        name: "Uniformes scolaires",
-        detail: "Les jupes plissées se reprennent pli par pli. Rendus sur cintres numérotés par enfant.",
         alt: "Uniformes scolaires bleus suspendus à une tringle",
       },
     },

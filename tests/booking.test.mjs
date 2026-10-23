@@ -16,12 +16,16 @@ const { slotIsFree } = await import("../src/lib/availability.ts");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall } = await import("../src/lib/time.ts");
 const { REQUEST_INBOX, PHONE, INSTALL_MINUTES, PACKUP_MINUTES, EARLY_ARRIVAL_MINUTES } = await import("../src/lib/brand.ts");
-const { occupiedBlock, calendarEvent } = await import("../src/lib/bookings.ts");
+const { occupiedBlock, calendarEvent, bookedUnits, sessionLabel } = await import("../src/lib/bookings.ts");
 const {
   bookableOffers, capacityPieces, ironingMinutes, planPieces, sessionPhases, BLOCKS, BUNDLES, ADDONS, PLANS,
+  PUBLISHED, UNIT_PRICES, sessionLength, sessionPriceCents,
 } = await import("../src/lib/pricing.ts");
+const { estimateRange, itemText, moneyRange } = await import("../src/lib/items.ts");
+const { setupSentence } = await import("../src/lib/capacity.ts");
 const { faqFill } = await import("../src/components/home/faq-fill.ts");
 const { fr } = await import("../src/lib/i18n/fr.ts");
+const { retiredFr, retiredEn } = await import("../src/lib/i18n/retired.ts");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -256,14 +260,41 @@ test("la grille ne propose aucune séance plus courte que la durée minimale", (
   assert.equal(bookableOffers(BUNDLES, settings).length, BUNDLES.length, "au minimum de deux heures, tout reste");
 });
 
-test("la foire aux questions dit la capacité et l'installation, telles que la maison les annonce", () => {
+test("la foire aux questions : sept questions, dans l'ordre demandé, deux ou trois phrases chacune", () => {
+  const en = getDict("en");
+  assert.deepEqual(fr.faq.items.map((x) => flat(x.q)), [
+    "Est-ce que vous ramassez les vêtements ?",
+    "Faut-il fournir la planche et le fer ?",
+    "Combien de vêtements repassez-vous en une séance ?",
+    "Dois-je être présent pendant la séance ?",
+    "Quelles zones desservez-vous ?",
+    "Comment se fait le paiement ?",
+    "Puis-je annuler ou déplacer mon rendez-vous ?",
+  ]);
+  assert.equal(en.faq.items.length, 7, "l'anglais suit le français");
+  /* Les trois retirées restent, pour pouvoir les remettre — hors du
+     dictionnaire, qui part en entier vers les composants clients. */
+  assert.deepEqual(retiredFr.faq.map((x) => flat(x.q)),
+    ["Combien de temps prévoir ?", "L'installation est-elle comprise dans la séance ?", "Et les pièces fragiles ?"]);
+  assert.equal(retiredEn.faq.length, 3);
+  /* Deux ou trois phrases, une fois remplies : la zone desservie en compte deux. */
+  for (const t of [fr, en]) {
+    for (const item of t.faq.items) {
+      const a = faqFill(item.a, t, settings, t === fr ? "fr" : "en");
+      const phrases = a.split(/(?<=[.?])\s+(?=[A-ZÀ-Ü«“])/).length;
+      assert.ok(phrases <= 3, `${item.q} : ${phrases} phrases`);
+    }
+  }
+});
+
+test("la foire aux questions dit la capacité, et Tarifs le temps d'installation", () => {
   const capacite = fr.faq.items.find((x) => x.a.includes("{capacity}"));
   assert.equal(flat(capacite.q), "Combien de vêtements repassez-vous en une séance ?");
   assert.equal(faqFill(capacite.a, fr, settings, "fr"),
     "Jusqu'à 18 pièces en 2 h, et jusqu'à 27 en 3 h, selon la taille, le type et la matière des vêtements.");
-  const installation = fr.faq.items.find((x) => x.a.includes("{setup}"));
-  assert.equal(faqFill(installation.a, fr, settings, "fr"),
-    "Oui. Chaque séance inclut l'installation et le rangement de notre matériel, 5 minutes chacun. Une séance de 2 h comprend donc 1 h 50 de repassage. Votre artisan arrive à l'heure du début de la séance.");
+  assert.ok(!fr.faq.items.some((x) => x.a.includes("{setup}")), "la question de l'installation est retirée");
+  assert.equal(setupSentence(fr, settings, "fr"),
+    "Chaque séance inclut l'installation et le rangement de notre matériel, 5 minutes chacun. Une séance de 2 h comprend donc 1 h 50 de repassage.");
   // La durée minimale réglée déplace les deux phrases ensemble.
   assert.match(faqFill(capacite.a, fr, { ...settings, minMinutes: 180 }, "fr"), /^Jusqu'à 27 pièces en 3 h, et jusqu'à 36 en 4 h,/);
   const en = getDict("en");
@@ -286,6 +317,93 @@ test("le courriel ne promet l'invitation que si elle est partie", () => {
   assert.match(clientConfirmation({ ...d, invited: true }).text, /invitation a été ajoutée/);
   assert.ok(!/invitation/i.test(clientConfirmation({ ...d, invited: false }).text));
   assert.ok(!/invitation/i.test(clientConfirmation({ ...d, locale: "en", invited: false }).text));
+});
+
+/* ————— La séance d'essai et les pièces à l'unité ————— */
+
+test("la séance d'essai dure la durée minimale réglée, jamais moins de deux heures", () => {
+  assert.equal(sessionLength(settings), 120);
+  assert.equal(sessionPriceCents(settings), 11000, "110 $ à 55 $ l'heure");
+  assert.equal(sessionLength({ minMinutes: 180 }), 180);
+  assert.equal(sessionPriceCents({ minMinutes: 180, hourlyRate: 5500 }), 16500);
+  assert.equal(sessionLength({ minMinutes: 60 }), 120, "jamais de séance d'une heure");
+  assert.equal(sessionLabel(120, "fr"), "Séance de 2 heures");
+  assert.equal(sessionLabel(120, "en"), "Session of 2 hours");
+});
+
+test("les pièces à l'unité se relisent contre la grille : prix figé, clé inconnue écartée", () => {
+  const u = bookedUnits([
+    { key: "parure-grand-lit", qty: 1 }, { key: "nappe", qty: 2 }, { key: "inconnue", qty: 3 },
+    { key: "parure-grand-lit", qty: 2 }, { key: "serviette", qty: 49 }, { key: "serviette", qty: 5 },
+  ], "fr");
+  assert.deepEqual(u, [
+    { key: "unit:parure-grand-lit", label: "Parure Queen ou King complète", qty: 3, cents: 2800 },
+    { key: "unit:nappe", label: "Nappe de réception", qty: 2, cents: 1200, toCents: 1800 },
+    { key: "unit:serviette", label: "Serviette de table", qty: 50, cents: 300 },
+  ]);
+  assert.equal(bookedUnits([{ key: "robe-gala", qty: 1 }], "en")[0].label, "Gala, ceremony or wedding dress");
+  assert.deepEqual(bookedUnits([], "fr"), []);
+  /* Chaque pièce de la page Tarifs a sa clé, et aucune ne se répète. */
+  const keys = UNIT_PRICES.map((x) => x.key);
+  assert.equal(new Set(keys).size, 14);
+});
+
+test("une ligne de réservation s'écrit avec son prix, en fourchette s'il varie", () => {
+  const money = (c) => flat(new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", minimumFractionDigits: c % 100 ? 2 : 0 }).format(c / 100));
+  assert.equal(itemText({ key: "session", label: "Séance de 2 heures", qty: 1 }, money), "Séance de 2 heures");
+  assert.equal(itemText({ key: "unit:nappe", label: "Nappe de réception", qty: 2, cents: 1200, toCents: 1800 }, money),
+    "Nappe de réception × 2 · 24 $ – 36 $");
+  assert.equal(itemText({ key: "unit:drap", label: "Drap plat ou drap-housse", qty: 3, cents: 800 }, money),
+    "Drap plat ou drap-housse × 3 · 24 $");
+  /* Un rendez-vous d'avant garde l'écriture de l'ancien panier. */
+  assert.equal(itemText({ key: "shirt", label: "Chemises", qty: 6 }, money), "Chemises × 6");
+  assert.equal(itemText({ label: "Chemises", qty: 6 }, money), "Chemises × 6");
+  const items = [{ key: "session", label: "S", qty: 1 }, { key: "unit:nappe", label: "N", qty: 2, cents: 1200, toCents: 1800 }];
+  assert.deepEqual(estimateRange(items, 5500 + 2400), { low: 7900, high: 9100 });
+  assert.deepEqual(estimateRange([{ label: "Chemises", qty: 6 }], 5000), { low: 5000, high: 5000 });
+  assert.equal(moneyRange(7900, 9100, money), "79 $ – 91 $");
+  assert.equal(moneyRange(7900, 7900, money), "79 $");
+});
+
+test("la confirmation d'une séance d'essai liste ses pièces, et l'estimation en fourchette", () => {
+  const essai = {
+    ...d, estimateCents: 5500 + 2400, firstHourFree: true, travelFeeCents: 1500, travelZone: "Zone B",
+    items: [
+      { key: "session", label: "Séance de 2 heures", qty: 1 },
+      { key: "unit:nappe", label: "Nappe de réception", qty: 2, cents: 1200, toCents: 1800 },
+    ],
+  };
+  const m = clientConfirmation(essai);
+  for (const bit of ["Séance de 2 heures", "Nappe de réception × 2 · 24 $ – 36 $", "Estimation: 79 $ – 91 $", "Total estimé: 94 $ – 106 $"]) {
+    assert.ok(flat(m.text).includes(bit), `« ${bit} » manquant`);
+  }
+  assert.ok(flat(m.html).includes("Nappe de réception × 2 · 24 $ – 36 $"));
+  const o = ownerNotification(essai);
+  assert.ok(flat(o.text).includes("Estimation: 79 $ – 91 $"));
+  /* Sans pièce au prix variable, un seul montant. */
+  assert.ok(flat(clientConfirmation({ ...essai, items: essai.items.slice(0, 1), estimateCents: 5500 }).text).includes("Estimation: 55 $"));
+});
+
+test("les formules retirées ne se publient plus, mais restent définies", () => {
+  assert.deepEqual(Object.values(PUBLISHED), [false, false, false, false, false]);
+  assert.equal(BLOCKS.length + BUNDLES.length + ADDONS.length, 12, "les douze offres sont gardées");
+  assert.ok(retiredFr.tarifs.blocks && retiredFr.tarifs.bundles && retiredFr.tarifs.addons && retiredFr.tarifs.versus,
+    "leurs textes aussi");
+});
+
+test("aucun texte retiré ne dort dans les dictionnaires, qui partent vers le navigateur", () => {
+  /* Un dictionnaire est sérialisé dans la page pour les composants clients :
+     ce qui y dort se lirait dans la source, et un assistant le trouverait. */
+  const en = getDict("en");
+  for (const t of [fr, en]) {
+    const tout = JSON.stringify(t);
+    for (const mot of ["velours", "Corduroy", "Séance semaine", "Week session", "Grand Foyer", "Douce Nuit",
+      "Prolongation", "ne s'improvise pas", "isn't improvised", "Composer ma séance", "Put my session together",
+      "Combien de temps prévoir", "How much time should I plan"]) {
+      assert.ok(!tout.includes(mot), `« ${mot} » est encore dans le dictionnaire`);
+    }
+  }
+  assert.deepEqual(Object.keys(retiredEn), Object.keys(retiredFr), "l'anglais des textes retirés suit le français");
 });
 
 /* ————— L'invitation d'agenda ————— */
