@@ -1,12 +1,10 @@
 import type { Dict, LegalDoc } from "./fr";
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
-/* The subscriber reduction on travel fees, written from the constant. */
-const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "en");
 /* What a subscriber pays less per hour, from the constant. */
 const HOURLY_DISCOUNT = formatMoney(SUBSCRIBER_HOURLY_DISCOUNT_CENTS, "CAD", "en");
 /* The length that qualifies for the free first hour, from the constant the engine applies. */
@@ -221,7 +219,7 @@ const terms: LegalDoc = {
         "A subscription reserves your visits on the same day and at the same time, at the plan's rhythm: every week, every other week or every four weeks. Those slots are offered to nobody else.",
         `A cycle is the plan's number of visits actually completed — four, two or one. A cancelled visit, on your side or ours, does not count: the cycle runs on to the next visit, and a replacement visit is added at the end of the series. If a cycle is not finished ${CYCLE_MAX_WEEKS} weeks after its first visit, we call you to agree on what comes next.`,
         `The amount of a cycle is set when you subscribe and guaranteed for twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles. It is paid at the first visit of the cycle, on site. We call you ${SERIES_NOTICE_DAYS} days before a series ends to confirm the next one.`,
-        `The travel fee for your area, if there is one, is reduced by ${DISCOUNT} per visit for a subscriber, never below zero, and is paid with the cycle.{suboffer}`,
+        "The travel fee for your area, if there is one, applies to every visit according to its length, as for a session, and is paid with the cycle.{suboffer}",
       ],
     },
     {
@@ -413,7 +411,7 @@ export const en: Dict = {
       },
       {
         q: "Which areas do you serve?",
-        a: "{zone} Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
+        a: "{zone} {check}",
       },
       {
         q: "How does payment work?",
@@ -435,6 +433,9 @@ export const en: Dict = {
   zoneText: {
     served: "Areas served: {list}.",
     montreal: "In Montreal: {list}.",
+    montrealFree: "No travel fees in Montreal.",
+    check: "Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
+    checkMontrealFree: "No travel fees in Montreal; elsewhere, enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
     none: "Online booking is closed for every area at the moment. Call us.",
   },
   montreal: {
@@ -445,6 +446,9 @@ export const en: Dict = {
       "NIVEX irons your clothes and bed linen on site, in your home, in Montreal. No pickup, no delivery: nothing leaves your home.",
     areasTitle: "Neighbourhoods served",
     areasLede: "The craftsman travels to these neighbourhoods with his equipment. Enter your postal code to check your address and see the travel fee.",
+    areasLedeFree: "The craftsman travels to these neighbourhoods with his equipment. Enter your postal code to check your address.",
+    free: "No travel fees in Montreal",
+    freeDetail: "Whatever the length of the session, subscriptions included.",
     none: `No Montreal neighbourhood is open to online booking at the moment. Call us at ${PHONE}.`,
     conditionsTitle: "Terms in Montreal",
     conditionsLede: "The same as on the {link} page, drawn from the same settings.",
@@ -456,7 +460,7 @@ export const en: Dict = {
     travelNote: "Per visit, on top of the session price.",
     travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
     feesOffer: "The first hour on the house never covers it.",
-    feesFree: "Nothing: the Montreal neighbourhoods we serve have no travel fee.",
+    feesFree: "No travel fees in Montreal, whatever the length of the session, subscriptions included.",
     faqTitle: "Questions about Montreal",
     faq: [
       {
@@ -656,8 +660,7 @@ export const en: Dict = {
     },
     address: {
       title: "Where do we meet you?",
-      travelReduced: "Travel fee, subscriber rate: {fee} per visit, instead of {full}.",
-      travelZero: "For a subscriber, the travel fee for your area drops to zero.",
+      travelFee: "Travel fee: {fee} per visit.",
       cycleTotal: "Total per cycle, fees included: {total}.",
     },
     slot: {
@@ -828,7 +831,6 @@ export const en: Dict = {
         "Your slots are kept for you: the same day, at the same time, all year.",
         "A visit can be cancelled or moved at no charge until 11:59 p.m. the day before. It does not count, and is added at the end of the series.",
         "Light starch on collars and cuffs, included at no extra cost.",
-        `Travel fee reduced by ${DISCOUNT} per visit.`,
         `Rate guaranteed twelve months, that is ${TERM_SERIES} series of ${SERIES_CYCLES} cycles.`,
       ],
     },
@@ -838,8 +840,13 @@ export const en: Dict = {
       travelFlat: "{fee} per visit",
       travelShort: "{fee} for a session under {hours}",
       travelLong: "{fee} for a session of {hours} or more",
-      travelNote: `The fee depends on the area and on the length of the session. It is added to the price and applies to every visit; for a subscriber, it is reduced by ${DISCOUNT} per visit, never below zero, and is paid with the cycle.`,
+      travelNote: "The fee depends on the area and on the length of the session. It is added to the price and applies to every visit, subscriptions included; a subscriber pays it with the cycle.",
       travelNoteOffer: "The first-hour-free offer does not cover it and never reduces it.",
+      cycleTitle: "Subscriptions in {zone}, per cycle",
+      cycleLine: "{plan}: {price} + {travel} travel, i.e. {visits}\u00a0×\u00a0{fee}",
+      cycleLineFree: "{plan}: {price}, no travel fee",
+      visitOne: "1\u00a0visit",
+      visitMany: "{n}\u00a0visits",
     },
     firstFreeLabel: "First session",
     insteadOf: "instead of",

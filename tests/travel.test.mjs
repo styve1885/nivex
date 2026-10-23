@@ -14,8 +14,10 @@ const {
   evaluateZone, zoneFor, bookable, feeTable, postalHead, servedText, googleList, sectorNames,
   activePrefixes, thresholdText, policyProblems, describeChanges, orderedSectors, joinList,
   isMontrealSector, montrealNames, montrealFees, sectorsByRegion, servedRegions,
-  DEFAULT_ZONE_POLICY,
+  montrealTravelFree, feeZones, mergeZonesAB, zoneFeeCents, DEFAULT_ZONE_POLICY,
 } = await import("../src/lib/travel.ts");
+const { faqFill } = await import("../src/components/home/faq-fill.ts");
+const { cycleTravel, cycleTravelText } = await import("../src/lib/pricing.ts");
 const { legalValues, legalSections, fill } = await import("../src/components/LegalDocument.tsx");
 const { openingLine } = await import("../src/components/home/opening-line.ts");
 const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
@@ -40,6 +42,28 @@ const P = DEFAULT_ZONE_POLICY;
 const COURT = 120;   // 2 h
 const LONG = 180;    // 3 h pile
 
+/* La grille à trois zones que la production portait jusqu'au 23 octobre
+   2026, dans l'ordre de son tableau : la zone A sans frais, la zone B
+   (Montréal, Chambly, Candiac, La Prairie) à 15 $ et 10 $, la zone C
+   (Saint-Jean) à 25 $ et 20 $. Elle sert de départ à la migration, et à
+   éprouver le moteur avec plus de deux zones. */
+const ORDRE_AVANT = ["saint-lambert", "vieux-longueuil", "longueuil", "greenfield-park", "saint-hubert", "brossard",
+  "boucherville", "saint-bruno", "sainte-julie", "varennes", "ile-des-soeurs", "verdun", "vieux-montreal", "westmount",
+  "outremont", "centre-ville", "plateau", "chambly", "candiac", "la-prairie", "saint-jean"];
+const ZONE_AVANT = (key, ile) => (key === "saint-jean" ? "c" : ile || ["chambly", "candiac", "la-prairie"].includes(key) ? "b" : "a");
+const TROIS = {
+  version: 2,
+  zones: [
+    { key: "a", nameFr: "Zone A", nameEn: "Zone A", shortFeeCents: 0, longFeeCents: 0, thresholdMinutes: 180 },
+    { key: "b", nameFr: "Zone B", nameEn: "Zone B", shortFeeCents: 1500, longFeeCents: 1000, thresholdMinutes: 180 },
+    { key: "c", nameFr: "Zone C", nameEn: "Zone C", shortFeeCents: 2500, longFeeCents: 2000, thresholdMinutes: 180 },
+  ],
+  sectors: ORDRE_AVANT.map((k) => {
+    const s = P.sectors.find((x) => x.key === k);
+    return { ...s, prefixes: [...s.prefixes], zoneKey: ZONE_AVANT(k, isMontrealSector(s)) };
+  }),
+};
+
 console.log("\nLes secteurs, Rive-Sud d'abord, Montréal ensuite");
 
 test("vingt et un secteurs : Saint-Lambert en tête, puis la Rive-Sud, puis Montréal", () => {
@@ -51,18 +75,18 @@ test("vingt et un secteurs : Saint-Lambert en tête, puis la Rive-Sud, puis Mont
     "Centre-ville de Montréal", "Le Plateau-Mont-Royal",
   ]);
   const parZone = (k) => P.sectors.filter((s) => s.zoneKey === k).length;
-  assert.equal(parZone("a"), 10);
-  assert.equal(parZone("b"), 10);
-  assert.equal(parZone("c"), 1);
+  assert.equal(parZone("a"), 20);
+  assert.equal(parZone("b"), 1);
+  assert.deepEqual(P.zones.map((z) => z.key), ["a", "b"], "plus de zone C");
 });
 
 test("chaque préfixe tombe dans sa zone", () => {
   const attendu = {
     a: ["J4G", "J4H", "J4J", "J4K", "J4L", "J4M", "J4N", "J3Y", "J3Z", "J4T", "J4V", "J4P", "J4R", "J4S",
-        "J4W", "J4X", "J4Y", "J4Z", "J4B", "J3V", "J3E", "J3X"],
-    b: ["H3E", "H4G", "H4H", "H2Y", "H3Y", "H3Z", "H2V", "H3A", "H3B", "H3G", "H3H",
+        "J4W", "J4X", "J4Y", "J4Z", "J4B", "J3V", "J3E", "J3X",
+        "H3E", "H4G", "H4H", "H2Y", "H3Y", "H3Z", "H2V", "H3A", "H3B", "H3G", "H3H",
         "H3C", "H2Z", "H2L", "H2X", "H2J", "H2T", "H2W", "H2H", "J3L", "J5R"],
-    c: ["J2W", "J2X", "J2Y", "J3A", "J3B"],
+    b: ["J2W", "J2X", "J2Y", "J3A", "J3B"],
   };
   for (const [zone, codes] of Object.entries(attendu)) {
     for (const code of codes) assert.equal(evaluateZone(`${code} 1A1`, COURT, P).zoneKey, zone, `${code} devrait être en zone ${zone.toUpperCase()}`);
@@ -74,16 +98,16 @@ test("la grille par défaut ne pose aucun problème, et aucun préfixe dans deux
   assert.deepEqual(policyProblems(P), []);
 });
 
-test("J3L — Chambly, et Carignan avec elle — paie les frais de la zone B", () => {
-  assert.equal(evaluateZone("J3L 1A1", COURT, P).zoneKey, "b");
-  assert.equal(evaluateZone("J3L 1A1", COURT, P).feeCents, 1500);
-  assert.equal(evaluateZone("J3L 1A1", LONG, P).feeCents, 1000);
+test("J3L — Chambly, et Carignan avec elle — est en zone A, sans frais", () => {
+  assert.equal(evaluateZone("J3L 1A1", COURT, P).zoneKey, "a");
+  assert.equal(evaluateZone("J3L 1A1", COURT, P).feeCents, 0);
+  assert.equal(evaluateZone("J3L 1A1", LONG, P).feeCents, 0);
 });
 
-test("J5R, partagé par Candiac et La Prairie, paie les frais de la zone B", () => {
-  assert.equal(evaluateZone("J5R 1A1", COURT, P).zoneKey, "b");
-  assert.equal(evaluateZone("J5R 1A1", COURT, P).feeCents, 1500);
-  assert.equal(evaluateZone("J5R 1A1", LONG, P).feeCents, 1000);
+test("J5R, partagé par Candiac et La Prairie, est en zone A, sans frais", () => {
+  assert.equal(evaluateZone("J5R 1A1", COURT, P).zoneKey, "a");
+  assert.equal(evaluateZone("J5R 1A1", COURT, P).feeCents, 0);
+  assert.equal(evaluateZone("J5R 1A1", LONG, P).feeCents, 0);
   const deux = P.sectors.filter((s) => s.prefixes.includes("J5R")).map((s) => s.nameFr);
   assert.deepEqual(deux, ["Candiac", "La Prairie"]);
 });
@@ -92,10 +116,10 @@ console.log("\nLes six codes de la vérification, en 2 h et en 3 h");
 
 const VERIF = [
   ["J4J 1A1", "a", 0, 0],
-  ["J5R 1A1", "b", 1500, 1000],
-  ["H3E 1A1", "b", 1500, 1000],
-  ["H3B 1A1", "b", 1500, 1000],
-  ["J2W 1A1", "c", 2500, 2000],
+  ["J5R 1A1", "a", 0, 0],
+  ["H3E 1A1", "a", 0, 0],
+  ["H3B 1A1", "a", 0, 0],
+  ["J2W 1A1", "b", 1500, 1000],
 ];
 
 test("frais de la zone selon la durée réservée", () => {
@@ -124,14 +148,14 @@ test("H1A est hors zone, en 2 h comme en 3 h", () => {
 console.log("\nLe seuil est atteint, non dépassé, et propre à chaque zone");
 
 test("trois heures tout rond paient déjà le tarif réduit", () => {
-  assert.equal(evaluateZone("H3E 1A1", 179, P).feeCents, 1500, "179 min : tarif plein");
-  assert.equal(evaluateZone("H3E 1A1", 180, P).feeCents, 1000, "180 min : tarif réduit");
-  assert.equal(evaluateZone("J2W 1A1", 179, P).feeCents, 2500);
-  assert.equal(evaluateZone("J2W 1A1", 180, P).feeCents, 2000);
+  assert.equal(evaluateZone("J2W 1A1", 179, P).feeCents, 1500, "179 min : tarif plein");
+  assert.equal(evaluateZone("J2W 1A1", 180, P).feeCents, 1000, "180 min : tarif réduit");
+  assert.equal(evaluateZone("J2W 1A1", 179, TROIS).feeCents, 2500, "l'ancienne zone C suivait la même règle");
+  assert.equal(evaluateZone("J2W 1A1", 180, TROIS).feeCents, 2000);
 });
 
 test("un seuil changé sur une zone ne touche pas les autres", () => {
-  const p = clone(P);
+  const p = clone(TROIS);
   p.zones.find((z) => z.key === "c").thresholdMinutes = 240;
   assert.equal(evaluateZone("J2W 1A1", 180, p).feeCents, 2500, "3 h est court en zone C");
   assert.equal(evaluateZone("J2W 1A1", 240, p).feeCents, 2000);
@@ -154,7 +178,7 @@ test("un code postal incomplet est hors zone, jamais deviné", () => {
 
 test("l'espacement et la casse n'y changent rien", () => {
   for (const code of ["h3e1a1", "H3E 1A1", "h3e-1a1", " H3E1A1 "]) {
-    assert.equal(evaluateZone(code, COURT, P).zoneKey, "b", `${code} devrait être reconnu`);
+    assert.equal(evaluateZone(code, COURT, P).zoneKey, "a", `${code} devrait être reconnu`);
     assert.equal(postalHead(code), "H3E");
   }
 });
@@ -169,8 +193,8 @@ test("elle escompte la séance, jamais la route", () => {
   assert.equal(avec, 11000, "une heure offerte sur trois");
   assert.equal(estimateCents(120, s, true), 5500, "la première séance de 2 h revient à 55 $");
   const frais = evaluateZone("J2W 1A1", 180, P).feeCents;
-  assert.equal(frais, 2000, "la route ne se raccourcit pas");
-  assert.equal(avec + frais, 13000, "le total additionne, il ne compense pas");
+  assert.equal(frais, 1000, "la route ne se raccourcit pas");
+  assert.equal(avec + frais, 12000, "le total additionne, il ne compense pas");
 });
 
 console.log("\nCe que l'onglet « Zones et frais » peut faire");
@@ -186,14 +210,14 @@ test("un secteur désactivé cesse d'être desservi, les autres non", () => {
 test("désactiver La Prairie laisse J5R desservi par Candiac", () => {
   const p = clone(P);
   p.sectors.find((s) => s.key === "la-prairie").enabled = false;
-  assert.equal(evaluateZone("J5R 1A1", COURT, p).zoneKey, "b");
+  assert.equal(evaluateZone("J5R 1A1", COURT, p).zoneKey, "a");
 });
 
 test("un secteur qui change de zone change de tarif", () => {
   const p = clone(P);
-  p.sectors.find((s) => s.key === "verdun").zoneKey = "c";
-  assert.equal(evaluateZone("H4G 1A1", COURT, p).feeCents, 2500);
-  assert.equal(evaluateZone("H3E 1A1", COURT, p).feeCents, 1500, "les voisins ne bougent pas");
+  p.sectors.find((s) => s.key === "verdun").zoneKey = "b";
+  assert.equal(evaluateZone("H4G 1A1", COURT, p).feeCents, 1500);
+  assert.equal(evaluateZone("H3E 1A1", COURT, p).feeCents, 0, "les voisins ne bougent pas");
 });
 
 test("une zone créée prend ses propres tarifs", () => {
@@ -207,22 +231,22 @@ test("une zone créée prend ses propres tarifs", () => {
 
 test("un préfixe dans deux zones est refusé, en nommant les deux secteurs", () => {
   const p = clone(P);
-  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "a", enabled: true });
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: true });
   const pb = policyProblems(p);
   assert.equal(pb.length, 1);
-  assert.match(pb[0], /J3L est dans deux zones à la fois : Chambly \(Zone B\) et Carignan \(Zone A\)/);
+  assert.match(pb[0], /J3L est dans deux zones à la fois : Chambly \(Zone A\) et Carignan \(Zone B\)/);
 });
 
 test("le même conflit est toléré tant que l'un des deux secteurs est inactif", () => {
   const p = clone(P);
-  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "a", enabled: false });
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: false });
   assert.deepEqual(policyProblems(p), []);
-  assert.equal(evaluateZone("J3L 1A1", COURT, p).zoneKey, "b");
+  assert.equal(evaluateZone("J3L 1A1", COURT, p).zoneKey, "a");
 });
 
-test("Carignan peut s'ajouter en zone B, à côté de Chambly", () => {
+test("Carignan peut s'ajouter en zone A, à côté de Chambly", () => {
   const p = clone(P);
-  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "b", enabled: true });
+  p.sectors.push({ key: "carignan", nameFr: "Carignan", nameEn: "Carignan", prefixes: ["J3L"], zoneKey: "a", enabled: true });
   assert.deepEqual(policyProblems(p), [], "même préfixe, même zone : permis");
 });
 
@@ -267,12 +291,12 @@ test("les bornes du serveur se signalent pendant la saisie, avec le nom en cause
 
 test("un nom anglais laissé vide suit le français, jusque dans le tunnel", () => {
   const p = clone(P);
-  p.zones[1].nameFr = "Zone Montréal";
-  p.zones[1].nameEn = "";
+  p.zones[0].nameFr = "Zone Montréal";
+  p.zones[0].nameEn = "";
   p.sectors.find((s) => s.key === "verdun").nameEn = "";
   assert.equal(evaluateZone("H4G 1A1", COURT, p).labelEn, "Zone Montréal", "le libellé anglais des frais");
   assert.ok(sectorNames(p, "en").includes("Verdun"));
-  assert.equal(feeTable(p, "en", (c) => `$${c / 100}`)[1].zone, "Zone Montréal");
+  assert.equal(feeTable(p, "en", (c) => `$${c / 100}`)[0].zone, "Zone Montréal");
 });
 
 /* Ce que l'artisan tape dans l'onglet : virgule ou point, et rien de deviné.
@@ -308,7 +332,7 @@ test("l'ordre suit les zones, puis le tableau", () => {
   const p = clone(P);
   const sj = p.sectors.pop();
   p.sectors.unshift(sj);                 // Saint-Jean en tête du tableau…
-  assert.equal(orderedSectors(p).at(-1).key, "saint-jean", "…mais toujours après les zones A et B");
+  assert.equal(orderedSectors(p).at(-1).key, "saint-jean", "…mais toujours après la zone A");
 });
 
 console.log("\nLecture de ce qui est enregistré");
@@ -403,17 +427,18 @@ test("la liste pour Google : un secteur actif par ligne, dans l'ordre", () => {
 test("le tableau des frais montre chaque zone, ses secteurs et ses deux tarifs", () => {
   const money = (c) => `${Math.round(c / 100)} $`;
   const rows = feeTable(P, "fr", money);
-  assert.deepEqual(rows.map((r) => r.zone), ["Zone A", "Zone B", "Zone C"]);
+  assert.deepEqual(rows.map((r) => r.zone), ["Zone A", "Zone B"], "plus de zone C");
   assert.equal(rows[0].free, true);
-  assert.equal(rows[0].sectors.length, 10);
+  assert.equal(rows[0].sectors.length, 20);
   assert.deepEqual(rows[0].sectors.slice(0, 5), ["Saint-Lambert", "Vieux-Longueuil", "Longueuil", "Greenfield Park", "Saint-Hubert"]);
-  assert.deepEqual(rows[1].sectors.slice(0, 3), ["Chambly", "Candiac", "La Prairie"], "la Rive-Sud d'abord, dans la zone aussi");
-  assert.equal(rows[1].sectors.at(-1), "Le Plateau-Mont-Royal", "les quartiers de l'île ensuite");
-  assert.equal(rows[1].sectors.length, 10);
+  assert.deepEqual(rows[0].sectors.slice(10, 13), ["Chambly", "Candiac", "La Prairie"], "la Rive-Sud d'abord, dans la zone aussi");
+  assert.equal(rows[0].sectors[13], "L'Île-des-Sœurs", "les quartiers de l'île ensuite");
+  assert.equal(rows[0].sectors.at(-1), "Le Plateau-Mont-Royal");
+  assert.equal(rows[1].free, false);
+  assert.deepEqual(rows[1].sectors, ["Saint-Jean-sur-Richelieu"]);
   assert.deepEqual({ short: rows[1].short, long: rows[1].long, threshold: rows[1].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
-  assert.deepEqual(rows[2].sectors, ["Saint-Jean-sur-Richelieu"]);
   assert.equal(feeTable(P, "en", money)[1].threshold, "3 hours");
-  assert.ok(feeTable(P, "en", money)[1].sectors.includes("Old Montreal"));
+  assert.ok(feeTable(P, "en", money)[0].sectors.includes("Old Montreal"));
 });
 
 test("le seuil s'écrit comme on le dit", () => {
@@ -443,15 +468,44 @@ test("les quartiers de Montréal : les sept secteurs de l'île, et eux seuls", (
   assert.equal(sectorsByRegion(P).south.some(isMontrealSector), false);
 });
 
-test("les frais de Montréal : ceux de la zone B, sans Chambly ni Candiac", () => {
+test("les frais de Montréal : la zone A, sans frais, et ses seuls quartiers de l'île", () => {
   const money = (c) => `${Math.round(c / 100)} $`;
   const rows = montrealFees(P, "fr", money);
   assert.equal(rows.length, 1);
-  assert.deepEqual({ short: rows[0].short, long: rows[0].long, threshold: rows[0].threshold }, { short: "15 $", long: "10 $", threshold: "3 h" });
+  assert.equal(rows[0].zone, "Zone A");
+  assert.equal(rows[0].free, true);
+  assert.equal(rows[0].sectors.length, 7);
   assert.ok(!rows[0].sectors.includes("Chambly"));
   const p = clone(P);
-  p.sectors.find((x) => x.key === "verdun").zoneKey = "c";
+  p.sectors.find((x) => x.key === "verdun").zoneKey = "b";
   assert.equal(montrealFees(p, "fr", money).length, 2, "deux zones, deux lignes");
+});
+
+test("« Aucuns frais de déplacement à Montréal » tient tant que la grille le dit", () => {
+  assert.equal(montrealTravelFree(P), true);
+  assert.equal(montrealTravelFree(TROIS), false, "l'ancienne zone B facturait Montréal");
+  const p = clone(P);
+  p.sectors.find((x) => x.key === "verdun").zoneKey = "b";
+  assert.equal(montrealTravelFree(p), false, "un seul quartier payant suffit à la retirer");
+  const q = clone(P);
+  for (const x of q.sectors) if (isMontrealSector(x)) x.enabled = false;
+  assert.equal(montrealTravelFree(q), false, "sans quartier desservi, rien à annoncer");
+  const r = clone(P);
+  r.zones[0].longFeeCents = 500;
+  assert.equal(montrealTravelFree(r), false, "des frais à partir du seuil sont des frais");
+});
+
+test("la réponse sur les zones le dit à l'accueil, et se tait si un quartier paie", () => {
+  const zone = (t) => t.faq.items.find((f) => f.a.includes("{zone}")).a;
+  const s = { ...FALLBACK_SETTINGS, zonePolicy: P };
+  const f = flat(faqFill(zone(fr), fr, s, "fr"));
+  assert.ok(f.includes("Le Plateau-Mont-Royal. Aucuns frais de déplacement à Montréal ; ailleurs, entrez votre code postal"), f);
+  assert.ok(flat(faqFill(zone(en), en, s, "en")).includes("Plateau-Mont-Royal. No travel fees in Montreal; elsewhere, enter your postal code"));
+  const p = clone(P);
+  p.sectors.find((x) => x.key === "verdun").zoneKey = "b";
+  const g = flat(faqFill(zone(fr), fr, { ...s, zonePolicy: p }, "fr"));
+  assert.ok(g.includes("et Verdun. Entrez votre code postal"), g);
+  assert.ok(!g.includes("Aucuns frais") && !g.includes("{"), g);
 });
 
 console.log("\nCe que lisent les moteurs et les assistants");
@@ -484,7 +538,7 @@ test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avan
   assert.equal(heure.name, "Une heure de plus, décidée sur place");
   assert.equal(heure.priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
   assert.equal(heure.priceSpecification.unitCode, "HUR");
-  const abonnements = reste.filter((o) => typeof o.price === "number");
+  const abonnements = reste.filter((o) => o.name?.startsWith("Abonnement"));
   assert.deepEqual(abonnements.map((o) => [o.name, o.price]),
     [["Abonnement Essentiel", 150], ["Abonnement Confort", 200], ["Abonnement Exécutif", 400], ["Abonnement Grande Famille", 600]]);
   assert.match(flat(abonnements[2].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
@@ -492,6 +546,16 @@ test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avan
   /* Les cinq cartes des prestations, puis les quatorze pièces à l'unité. */
   assert.deepEqual(reste.filter((o) => o.itemOffered).map((o) => o.itemOffered.name),
     ["Chemises", "Complets et vestons", "Robes et pièces délicates", "Uniformes scolaires et de travail", "Draps et linge de maison"]);
+  /* Les frais de déplacement, une offre par zone, avec ses secteurs. */
+  const route = reste.filter((o) => o.name?.startsWith("Frais de déplacement"));
+  assert.deepEqual(route.map((o) => o.name), ["Frais de déplacement · Zone A", "Frais de déplacement · Zone B"]);
+  assert.equal(route[0].price, 0, "la zone A ne facture rien");
+  assert.equal(route[0].areaServed.length, 20);
+  assert.ok(route[0].areaServed.some((x) => x.name === "Verdun" && x.address.addressLocality === "Montréal"), "Montréal en zone A");
+  assert.deepEqual(route[1].areaServed.map((x) => x.name), ["Saint-Jean-sur-Richelieu"]);
+  assert.deepEqual([route[1].priceSpecification.minPrice, route[1].priceSpecification.maxPrice], [10, 15]);
+  assert.equal(flat(route[1].description), "15 $ pour une séance de moins de 3 h, 10 $ pour une séance de 3 h ou plus.");
+  assert.ok(!JSON.stringify(ld).includes("Zone C"));
   const pieces = ld.hasOfferCatalog.itemListElement;
   assert.equal(pieces.length, 14);
   assert.deepEqual([pieces[0].itemOffered.name, pieces[0].price], ["Parure Queen ou King complète", 28]);
@@ -620,10 +684,15 @@ test("llms.txt : les mêmes prix, zones et questions que les pages, dans les deu
     "Pour un premier essai : la séance de 2 heures, 110 $.", "Une heure de plus, décidée sur place : 55 $.",
     "Nappe de réception : 12 $ – 18 $", "Secteurs desservis : Saint-Lambert",
     "### Faut-il fournir la planche et le fer ?", "### Puis-je annuler ou déplacer mon rendez-vous ?",
+    "Aucuns frais de déplacement à Montréal.", "- Zone B (Saint-Jean-sur-Richelieu) : 15 $ pour une séance de moins de 3 h",
+    "### Abonnements en Zone B, par cycle", "- Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
+    "- Essentiel : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
     "# NIVEX — In-home ironing", "Executive subscription: $400 / cycle (instead of $440)",
     "For a first try: a session of 2 hours, $110.", "### Can I cancel or reschedule?",
+    "No travel fees in Montreal.", "### Subscriptions in Zone B, per cycle", "- Executive: $400 + $60 travel, i.e. 4 visits × $15",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
-  assert.equal((txt.match(/^### /gm) ?? []).length, 14, "sept questions par langue");
+  assert.equal((txt.match(/^### /gm) ?? []).length, 16, "sept questions et une zone payante par langue");
+  assert.doesNotMatch(txt, /Zone C|réduits de|reduced by/);
   assert.doesNotMatch(txt, /\{|!|Découverte|Grand Foyer|Douce Nuit|Prolongation|velours|Corduroy/);
 });
 
@@ -704,7 +773,7 @@ test("l'horaire du bloc Contact garde ses heures, et la semaine commence le lund
 console.log("\nL'historique");
 
 test("chaque changement s'écrit en une ligne lisible", () => {
-  const p = clone(P);
+  const p = clone(TROIS);
   p.zones.find((z) => z.key === "b").shortFeeCents = 2000;
   p.zones.find((z) => z.key === "c").thresholdMinutes = 240;
   p.sectors.find((s) => s.key === "verdun").zoneKey = "c";
@@ -712,7 +781,7 @@ test("chaque changement s'écrit en une ligne lisible", () => {
   p.sectors.find((s) => s.key === "outremont").enabled = false;
   p.sectors = p.sectors.filter((s) => s.key !== "candiac");
   p.sectors.push({ key: "laval", nameFr: "Laval", nameEn: "Laval", prefixes: ["H7A"], zoneKey: "c", enabled: true });
-  const l = describeChanges(P, p);
+  const l = describeChanges(TROIS, p);
   assert.ok(l.includes("Zone « Zone B » : frais sous le seuil 15 $ → 20 $."));
   assert.ok(l.includes("Zone « Zone C » : seuil 3 h → 4 h."));
   assert.ok(l.includes("Secteur « Verdun » : Zone B → Zone C."));
@@ -731,6 +800,82 @@ test("monter un secteur se note comme un changement d'ordre, et rien d'autre", (
 
 test("rien de changé, rien de noté", () => {
   assert.deepEqual(describeChanges(P, clone(P)), []);
+});
+
+console.log("\nDeux zones au lieu de trois (23 octobre 2026)");
+
+test("la migration donne exactement la grille du code : zone A réunie et sans frais, Saint-Jean en zone B", () => {
+  const apres = mergeZonesAB(clone(TROIS));
+  assert.deepEqual(apres, P, "même zones, mêmes secteurs, même ordre");
+  assert.deepEqual(apres.zones.map((z) => [z.key, z.shortFeeCents, z.longFeeCents, z.thresholdMinutes]),
+    [["a", 0, 0, 180], ["b", 1500, 1000, 180]]);
+  assert.deepEqual(policyProblems(apres), [], "aucun préfixe dans deux zones");
+});
+
+test("la migration note chaque secteur déplacé, et la zone C supprimée", () => {
+  const l = describeChanges(TROIS, mergeZonesAB(clone(TROIS)));
+  assert.equal(l.length, 12);
+  assert.ok(l.includes("Zone « Zone C » supprimée."));
+  assert.ok(l.includes("Secteur « Verdun » : Zone B → Zone A."));
+  assert.ok(l.includes("Secteur « La Prairie » : Zone B → Zone A."));
+  assert.ok(l.includes("Secteur « Saint-Jean-sur-Richelieu » : Zone C → Zone B."));
+  assert.ok(!l.includes("Ordre des secteurs modifié."));
+});
+
+test("la migration ne repasse pas, et ne touche à rien d'autre qu'aux trois zones", () => {
+  assert.equal(mergeZonesAB(P), null, "sans zone C, rien à faire");
+  assert.equal(mergeZonesAB(mergeZonesAB(clone(TROIS))), null, "un second passage ne fait rien");
+  for (const rien of [null, undefined, 42, "x", {}, { version: 1, zones: [], sectors: [] }, { version: 2, zones: "a", sectors: [] }]) {
+    assert.equal(mergeZonesAB(rien), null, JSON.stringify(rien));
+  }
+  /* Ce que l'artisan a réglé reste : les noms, un secteur inactif, une zone
+     de plus, l'ordre de chaque groupe. */
+  const p = clone(TROIS);
+  p.zones[0].nameFr = "Rive-Sud et Montréal";
+  p.sectors.find((s) => s.key === "westmount").enabled = false;
+  p.zones.push({ key: "d", nameFr: "Laval", nameEn: "Laval", shortFeeCents: 3000, longFeeCents: 2500, thresholdMinutes: 180 });
+  p.sectors.push({ key: "laval", nameFr: "Laval", nameEn: "Laval", prefixes: ["H7A"], zoneKey: "d", enabled: true });
+  const q = mergeZonesAB(p);
+  assert.equal(q.zones[0].nameFr, "Rive-Sud et Montréal");
+  assert.equal(q.sectors.find((s) => s.key === "westmount").enabled, false);
+  assert.equal(q.sectors.find((s) => s.key === "westmount").zoneKey, "a");
+  assert.deepEqual(q.zones.find((z) => z.key === "d"), p.zones.find((z) => z.key === "d"));
+  assert.equal(q.sectors.find((s) => s.key === "laval").zoneKey, "d");
+  /* Des frais de l'ancienne zone B changés à la main ne survivent pas : la
+     nouvelle zone B prend ceux qui ont été décidés. */
+  const r = clone(TROIS);
+  r.zones[1].shortFeeCents = 2000;
+  r.zones[0].longFeeCents = 500;
+  const s = mergeZonesAB(r);
+  assert.deepEqual([s.zones[0].shortFeeCents, s.zones[0].longFeeCents], [0, 0]);
+  assert.deepEqual([s.zones[1].shortFeeCents, s.zones[1].longFeeCents], [1500, 1000]);
+});
+
+test("les zones payantes : la seule zone B, avec Saint-Jean", () => {
+  const z = feeZones(P);
+  assert.deepEqual(z.map((x) => [x.zone.key, x.sectors.map((s) => s.nameFr)]), [["b", ["Saint-Jean-sur-Richelieu"]]]);
+  assert.equal(zoneFeeCents(z[0].zone, 120), 1500);
+  assert.equal(zoneFeeCents(z[0].zone, 180), 1000);
+  const p = clone(P);
+  p.sectors.find((s) => s.key === "saint-jean").enabled = false;
+  assert.deepEqual(feeZones(p), [], "une zone sans secteur actif ne se détaille pas");
+});
+
+test("le coût d'un cycle en zone B : chaque visite paie les frais de sa durée", () => {
+  const zoneB = P.zones.find((z) => z.key === "b");
+  const money = (c) => `${Math.round(c / 100)} $`;
+  const lignes = cycleTravel(zoneB, FALLBACK_SETTINGS).map((c) => flat(cycleTravelText(c, fr, "fr", money)));
+  assert.deepEqual(lignes, [
+    "Essentiel : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
+    "Confort : 200 $ + 30 $ de déplacement, soit 2 visites × 15 $",
+    "Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
+    "Grande Famille : 600 $ + 40 $ de déplacement, soit 4 visites × 10 $",
+  ]);
+  const usd = (c) => `$${Math.round(c / 100)}`;
+  assert.equal(flat(cycleTravelText(cycleTravel(zoneB, FALLBACK_SETTINGS)[2], en, "en", usd)),
+    "Executive: $400 + $60 travel, i.e. 4 visits × $15");
+  const gratuite = cycleTravel(P.zones.find((z) => z.key === "a"), FALLBACK_SETTINGS)[0];
+  assert.equal(flat(cycleTravelText(gratuite, fr, "fr", money)), "Essentiel : 150 $, sans frais de déplacement");
 });
 
 console.log("\nDans les courriels");

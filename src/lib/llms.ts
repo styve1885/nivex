@@ -3,13 +3,13 @@ import type { Settings } from "./settings";
 import { CONTACT_EMAIL, PHONE } from "./brand";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
-import { feeTable, servedText } from "./travel";
+import { feeTable, feeZones, montrealTravelFree, servedText } from "./travel";
 import { setupSentence } from "./capacity";
 import { metaDescription } from "./seo";
 import { faqFill } from "@/components/home/faq-fill";
 import {
-  PLANS, UNIT_GARMENTS, UNIT_LINEN, planCents, planFullCents, planPieces, sessionLength, sessionPriceCents,
-  type UnitPrice,
+  PLANS, UNIT_GARMENTS, UNIT_LINEN, cycleTravel, cycleTravelText, planCents, planFullCents, planPieces,
+  sessionLength, sessionPriceCents, type UnitPrice,
 } from "./pricing";
 
 /**
@@ -49,6 +49,14 @@ function section(s: Settings, lang: "fr" | "en"): string {
     return `- ${f.zone} (${f.sectors.join(", ")}) : ${price}`;
   });
 
+  /* Le coût d'un cycle dans chaque zone payante, comme sur la page Tarifs. */
+  const cycles = feeZones(s.zonePolicy).flatMap(({ zone }) => [
+    `### ${t.tarifs.terms.cycleTitle.replace("{zone}", lang === "en" ? zone.nameEn || zone.nameFr : zone.nameFr)}`,
+    "",
+    ...cycleTravel(zone, s).map((c) => `- ${cycleTravelText(c, t, lang, money)}`),
+    "",
+  ]);
+
   const faq = t.faq.items.map((f) => `### ${f.q}\n\n${faqFill(f.a, t, s, lang)}`);
 
   const lines = [
@@ -74,11 +82,13 @@ function section(s: Settings, lang: "fr" | "en"): string {
     `## ${t.tarifs.terms.travel}`,
     "",
     servedText(s.zonePolicy, lang, t.zoneText),
+    ...(montrealTravelFree(s.zonePolicy) ? ["", t.zoneText.montrealFree] : []),
     "",
     ...fees,
     "",
     t.tarifs.terms.travelNote,
     "",
+    ...cycles,
     `## ${t.tarifs.conditions.title}`,
     "",
     ...t.tarifs.conditions.items.map((c) => `- ${c}`),

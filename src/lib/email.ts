@@ -665,7 +665,7 @@ const S = {
     cycleNote: (n: number) => n === 1
       ? "Un cycle correspond à une visite effectuée. Il se règle à cette visite, sur place : comptant, virement Interac ou carte."
       : `Un cycle correspond à ${n} visites effectuées. Il se règle à la première visite du cycle, sur place : comptant, virement Interac ou carte. Une visite annulée ne compte pas : le cycle se prolonge jusqu'à la suivante.`,
-    travelNote: (fee: string) => `Les frais de déplacement de votre zone sont réduits pour les abonnés : ${fee} par visite.`,
+    travelNote: (fee: string) => `Frais de déplacement de votre zone : ${fee} par visite, réglés avec le cycle.`,
     arrival: (m: number, duration: string, ironing: string) => m > 0
       ? `Votre repasseur arrive ${m} minutes avant le début de chaque visite pour s'installer, sans frais.`
       : `Votre artisan arrive à l'heure du début. Chaque visite de ${duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun : ${ironing} de repassage.`,
@@ -706,7 +706,7 @@ const S = {
     cycleNote: (n: number) => n === 1
       ? "A cycle is one completed visit. It is paid at that visit, on site: cash, Interac e-Transfer or card."
       : `A cycle is ${n} completed visits. It is paid at the first visit of the cycle, on site: cash, Interac e-Transfer or card. A cancelled visit does not count: the cycle simply runs on to the next one.`,
-    travelNote: (fee: string) => `The travel fee for your area is reduced for subscribers: ${fee} per visit.`,
+    travelNote: (fee: string) => `Travel fee for your area: ${fee} per visit, paid with the cycle.`,
     arrival: (m: number, duration: string, ironing: string) => m > 0
       ? `Your presser arrives ${m} minutes before each visit begins to set up, at no charge.`
       : `Your presser arrives at the start time. Each visit of ${duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: ${ironing} of ironing.`,

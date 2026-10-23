@@ -8,7 +8,7 @@ import {
   PLANS, UNIT_PRICES, capacityPieces, cheapestPlanCents, planCents, planPieces, sessionLength, sessionPriceCents,
 } from "./pricing";
 import { setupSentence } from "./capacity";
-import { joinList, sectorsByRegion, type Sector, type ZonePolicy } from "./travel";
+import { isMontrealSector, joinList, sectorsByRegion, thresholdText, type Sector, type ZonePolicy } from "./travel";
 
 /**
  * Ce que les moteurs et les assistants lisent du commerce.
@@ -178,6 +178,44 @@ function place(s: Sector, montreal: boolean, lang: Lang) {
   };
 }
 
+/**
+ * Les frais de déplacement, une offre par zone qui a des secteurs actifs,
+ * avec les secteurs qu'elle couvre : zéro pour une zone sans frais —
+ * Montréal y est —, sinon ses deux tarifs selon la durée, comme le tableau
+ * de la page Tarifs. Tout vient de l'onglet « Zones et frais ».
+ */
+function travelOffers(t: Dict, s: Settings, lang: Lang) {
+  const { south, montreal } = sectorsByRegion(s.zonePolicy);
+  const actifs = [...south, ...montreal];
+  const money = (c: number) => formatMoney(c, s.currency, lang);
+  const terms = t.tarifs.terms;
+  return s.zonePolicy.zones
+    .map((z) => ({ z, sectors: actifs.filter((x) => x.zoneKey === z.key) }))
+    .filter(({ sectors }) => sectors.length > 0)
+    .map(({ z, sectors }) => {
+      const base = {
+        "@type": "Offer",
+        name: `${terms.travel} · ${lang === "en" ? z.nameEn || z.nameFr : z.nameFr}`,
+        areaServed: sectors.map((x) => place(x, isMontrealSector(x), lang)),
+      };
+      if (z.shortFeeCents === z.longFeeCents) {
+        return { ...base, price: z.shortFeeCents / 100, priceCurrency: s.currency };
+      }
+      const hours = thresholdText(z.thresholdMinutes, lang);
+      return {
+        ...base,
+        description: `${terms.travelShort.replace("{fee}", money(z.shortFeeCents)).replace("{hours}", hours)}, `
+          + `${terms.travelLong.replace("{fee}", money(z.longFeeCents)).replace("{hours}", hours)}.`,
+        priceSpecification: {
+          "@type": "PriceSpecification",
+          minPrice: Math.min(z.shortFeeCents, z.longFeeCents) / 100,
+          maxPrice: Math.max(z.shortFeeCents, z.longFeeCents) / 100,
+          priceCurrency: s.currency,
+        },
+      };
+    });
+}
+
 /** La fiche LocalBusiness, la même sur l'accueil et sur la page Montréal. */
 export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
   const origin = siteOrigin();
@@ -210,8 +248,9 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       opens: h.open, closes: h.close,
     })),
     /* Ce que montrent l'accueil et la page Tarifs, aux mêmes prix : la
-       séance d'essai, l'heure de plus décidée sur place, puis les quatre
-       abonnements au prix d'un cycle. Rien de ce que la vitrine a retiré
+       séance d'essai, l'heure de plus décidée sur place, les quatre
+       abonnements au prix d'un cycle, les prestations, puis les frais de
+       déplacement de chaque zone. Rien de ce que la vitrine a retiré
        (séances de trois et quatre heures, forfaits, ajouts) n'y figure. */
     makesOffer: [
       {
@@ -247,6 +286,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       ...t.services.items.map((x) => ({
         "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
       })),
+      ...travelOffers(t, s, lang),
     ],
     /* Les pièces à l'unité de la page Tarifs, une fourchette quand le prix varie. */
     hasOfferCatalog: {

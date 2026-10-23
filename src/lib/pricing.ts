@@ -1,7 +1,9 @@
 import type { Settings } from "./settings";
+import type { Dict } from "./i18n";
 import {
   INSTALL_MINUTES, MIN_SESSION_MINUTES, PACKUP_MINUTES, PIECES_PER_HOUR, SUBSCRIBER_HOURLY_DISCOUNT_CENTS,
 } from "./brand";
+import { zoneFeeCents, type Zone } from "./travel";
 
 /**
  * La grille tarifaire.
@@ -266,6 +268,37 @@ export function planFullCents(p: Plan, s: Pick<Settings, "hourlyRate">): number 
 /** Le volume d'une formule sur un cycle : ses visites, à la capacité de leur durée. */
 export function planPieces(p: Pick<Plan, "visits" | "minutesPerVisit">): number {
   return p.visits * capacityPieces(p.minutesPerVisit);
+}
+
+export type CycleTravel = { plan: Plan; planCents: number; feeCents: number; travelCents: number };
+
+/**
+ * Un cycle de chaque formule dans une zone qui facture le déplacement : le
+ * montant de la formule, puis les frais de chaque visite selon sa durée.
+ * Le même calcul que la souscription (`quoteCycle`), au taux du jour ; la
+ * page Tarifs et /llms.txt l'écrivent pour chaque zone payante.
+ */
+export function cycleTravel(zone: Zone, s: Pick<Settings, "hourlyRate">): CycleTravel[] {
+  return PLANS.map((plan) => {
+    const feeCents = zoneFeeCents(zone, plan.minutesPerVisit);
+    return { plan, planCents: planCents(plan, s), feeCents, travelCents: feeCents * plan.visits };
+  });
+}
+
+/** « Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $ ». */
+export function cycleTravelText(
+  c: CycleTravel, t: Dict, locale: "fr" | "en", money: (cents: number) => string,
+): string {
+  const terms = t.tarifs.terms;
+  const name = locale === "en" ? c.plan.en.name : c.plan.fr.name;
+  if (c.travelCents <= 0) return terms.cycleLineFree.replace("{plan}", name).replace("{price}", money(c.planCents));
+  const visits = c.plan.visits === 1 ? terms.visitOne : terms.visitMany.replace("{n}", String(c.plan.visits));
+  return terms.cycleLine
+    .replace("{plan}", name)
+    .replace("{price}", money(c.planCents))
+    .replace("{travel}", money(c.travelCents))
+    .replace("{visits}", visits)
+    .replace("{fee}", money(c.feeCents));
 }
 
 /**

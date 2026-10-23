@@ -7,7 +7,7 @@ import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { setupSentence } from "@/lib/capacity";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { montrealFees, montrealNames, type FeeRow } from "@/lib/travel";
+import { montrealFees, montrealNames, montrealTravelFree, type FeeRow } from "@/lib/travel";
 import { faqJsonLd, localBusinessJsonLd, pageMeta } from "@/lib/seo";
 
 /*
@@ -76,6 +76,8 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
   const money = (c: number) => formatMoney(c, s.currency, locale);
   const quartiers = montrealNames(s.zonePolicy, locale);
   const fees = montrealFees(s.zonePolicy, locale, money);
+  /* « Aucuns frais de déplacement à Montréal », tant que la grille le dit. */
+  const free = montrealTravelFree(s.zonePolicy);
 
   /* La plus courte séance possible, au prix qu'elle coûte : le même calcul
      que l'en-tête de la page Tarifs. */
@@ -100,6 +102,12 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
             {m.title}
           </h1>
           <p className="mt-7 max-w-2xl text-[1.05rem] leading-[1.85] text-ink-700">{m.lede}</p>
+          {free && (
+            <div className="mt-9 max-w-2xl border border-gold-400/60 bg-linen-50 px-7 py-5">
+              <p className="font-display text-[1.5rem] leading-snug text-ink-800 sm:text-[1.7rem]">{m.free}</p>
+              <p className="mt-1.5 text-[0.88rem] font-light leading-[1.7] text-ink-500">{m.freeDetail}</p>
+            </div>
+          )}
           <div className="mt-10 flex flex-wrap items-center gap-6">
             <Link href={`/${locale}/reserver`} className="btn">{m.cta}<ArrowIcon /></Link>
             <a href={t.brand.phoneHref} className="text-[0.95rem] text-gold-700 transition-colors hover:text-gold-600">
@@ -115,7 +123,9 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
           <h2 className="font-display text-3xl font-light leading-tight text-ink-800 sm:text-4xl">{m.areasTitle}</h2>
           {quartiers.length > 0 ? (
             <>
-              <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">{m.areasLede}</p>
+              <p className="mt-5 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">
+                {free ? m.areasLedeFree : m.areasLede}
+              </p>
               <ul className="mt-10 grid gap-x-10 gap-y-3 sm:grid-cols-2">
                 {quartiers.map((q) => (
                   <li key={q} className="relative border-b border-gold-300/40 pb-3 pl-6 font-display text-[1.2rem] text-ink-800">
@@ -155,7 +165,9 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
             </Row>
             {fees.length > 0 && (
               <Row dt={m.travel}>
-                {fees.length === 1 ? (
+                {free ? (
+                  <span className="block text-ink-700">{m.free}.</span>
+                ) : fees.length === 1 ? (
                   <span className="block text-ink-700">{feeSentence(fees[0], t)}</span>
                 ) : (
                   <ul className="space-y-3">

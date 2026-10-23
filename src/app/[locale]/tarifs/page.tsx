@@ -5,14 +5,14 @@ import { ArrowIcon } from "@/components/Icons";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
-import { feeTable, servedText } from "@/lib/travel";
+import { feeTable, feeZones, servedText } from "@/lib/travel";
 import { pageMeta, tarifsDescription } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import { RetiredSections } from "@/components/tarifs/RetiredSections";
 import { setupSentence } from "@/lib/capacity";
 import {
-  PLANS, UNIT_GARMENTS, UNIT_LINEN, planCents, planFullCents, planPieces, sessionLength, sessionPriceCents,
-  type UnitPrice,
+  PLANS, UNIT_GARMENTS, UNIT_LINEN, cycleTravel, cycleTravelText, planCents, planFullCents, planPieces,
+  sessionLength, sessionPriceCents, type UnitPrice,
 } from "@/lib/pricing";
 
 // Le taux horaire, la durée minimale et les zones se règlent depuis /admin :
@@ -220,6 +220,24 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
               </p>
             </>
           )}
+
+          {/* Le coût d'un cycle d'abonnement dans chaque zone qui facture la
+              route : la formule, plus les frais de chaque visite selon sa
+              durée — le calcul de la souscription, au taux du jour. */}
+          {feeZones(s.zonePolicy).map(({ zone }) => (
+            <div key={zone.key} className="mt-12">
+              <h3 className="border-b border-ink-800 pb-2 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-gold-700">
+                {t.tarifs.terms.cycleTitle.replace("{zone}", locale === "en" ? zone.nameEn || zone.nameFr : zone.nameFr)}
+              </h3>
+              <ul>
+                {cycleTravel(zone, s).map((c) => (
+                  <li key={c.plan.key} className="border-b border-gold-300/40 py-3 text-[0.9rem] font-light tabular-nums text-ink-600">
+                    {cycleTravelText(c, t, locale, money)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </section>
 
