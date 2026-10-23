@@ -179,7 +179,8 @@ remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 
 L'accueil suit l'ordre du 23 octobre 2026, deux fois plus court qu'avant :
 héros, déroulement, prestations (cinq cartes d'une phrase, puis les photos
-de la galerie sans légende), avant/après, tarifs (les quatre abonnements et
+de la galerie sans légende), avant/après (la chemise blanche et le pantalon
+de complet), tarifs (les quatre abonnements et
 la séance d'essai en une ligne), l'histoire en version courte, sept
 questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
 les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
@@ -197,8 +198,9 @@ postal), première heure offerte, cinq conditions au plus.
   (`Gallery`) : composants gardés, simplement plus rendus par
   `app/[locale]/page.tsx`.
 - Leurs textes, et tous les autres textes retirés (les trois questions, les
-  six anciennes cartes, les chapitres de l'histoire, le pantalon de velours,
-  les anciennes offres), vivent dans `lib/i18n/retired.ts`, **jamais dans
+  six anciennes cartes, les chapitres de l'histoire, les paires avant/après
+  du pantalon de velours, du t-shirt et de la veste doublée, les anciennes
+  offres), vivent dans `lib/i18n/retired.ts`, **jamais dans
   les dictionnaires** : un dictionnaire part en entier vers les composants
   clients de la page (questions, contact, tunnels), et ce qui y dort se lit
   dans la source HTML — là où un assistant le trouverait. Un test y veille.

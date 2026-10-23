@@ -141,11 +141,18 @@ export const retiredFr = {
       a: "Chaque fibre est identifiée avant traitement. Soie, dentelle, cachemire et plissés sont travaillés à la vapeur sans contact ou sous pattemouille. En cas de doute sur une pièce, nous vous consultons avant d'y toucher.",
     },
   ],
-  /* La paire « avant, après » du pantalon de velours. */
+  /* Les paires « avant, après » retirées : le pantalon de velours (le
+     23 octobre 2026), le t-shirt en coton et la veste doublée. */
   beforeAfter: [
     { key: "velours", name: "Pantalon de velours",
       altBefore: "Pantalon de velours avant repassage",
       altAfter: "Pantalon de velours après repassage" },
+    { key: "t-shirt", name: "T-shirt en coton",
+      altBefore: "T-shirt en coton avant repassage",
+      altAfter: "T-shirt en coton après repassage" },
+    { key: "veste", name: "Veste doublée",
+      altBefore: "Veste doublée avant repassage",
+      altAfter: "Veste doublée après repassage" },
   ],
   /* Le protocole en sept temps (Protocol). */
   protocol: {
@@ -397,11 +404,18 @@ export const retiredEn: Retired = {
       a: "Every fibre is identified before treatment. Silk, lace, cashmere and pleats are worked with contactless steam or under a pressing cloth. If we have any doubt about a piece, we ask you before touching it.",
     },
   ],
-  /* La paire « avant, après » du pantalon de velours. */
+  /* Les paires « avant, après » retirées : le pantalon de velours (le
+     23 octobre 2026), le t-shirt en coton et la veste doublée. */
   beforeAfter: [
     { key: "velours", name: "Corduroy trousers",
       altBefore: "Corduroy trousers before pressing",
       altAfter: "Corduroy trousers after pressing" },
+    { key: "t-shirt", name: "Cotton t-shirt",
+      altBefore: "Cotton t-shirt before pressing",
+      altAfter: "Cotton t-shirt after pressing" },
+    { key: "veste", name: "Lined jacket",
+      altBefore: "Lined jacket before pressing",
+      altAfter: "Lined jacket after pressing" },
   ],
   /* Le protocole en sept temps (Protocol). */
   protocol: {
