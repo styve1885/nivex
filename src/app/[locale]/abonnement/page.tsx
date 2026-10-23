@@ -6,7 +6,7 @@ import { servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
 import { PLANS, planCents, planFullCents, planPieces } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
-import { SERIES_CYCLES, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS } from "@/lib/brand";
+import { SERIES_CYCLES } from "@/lib/brand";
 import { SubscriptionWizard, type SubscriptionConfig } from "@/components/booking/SubscriptionWizard";
 import { PausedNotice } from "@/components/booking/PausedNotice";
 import { LEGAL_UPDATED } from "@/components/LegalDocument";
@@ -60,7 +60,6 @@ export default async function SubscribePage({
     })),
     currency: s.currency,
     timezone: s.timezone,
-    discountCents: SUBSCRIBER_TRAVEL_DISCOUNT_CENTS,
     firstHourFree: s.firstHourFree,
     seriesCycles: SERIES_CYCLES,
     initialPlan: sp.formule ?? null,

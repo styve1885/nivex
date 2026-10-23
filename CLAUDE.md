@@ -173,7 +173,8 @@ Une migration de données qui ne doit passer qu'**une fois** s'inscrit dans
 instruction (CTE `INSERT … ON CONFLICT DO NOTHING RETURNING`), si bien
 qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
 remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
-50 $ à 55 $, seulement s'il valait encore 50 $.
+50 $ à 55 $, seulement s'il valait encore 50 $. `zones-2026-ab` a ramené
+la grille à deux zones (plus bas, « Zones et frais de déplacement »).
 
 ### La vitrine, et ce qui en a été retiré
 
@@ -188,7 +189,9 @@ reste à un clic, et au pied de chaque page.
 
 La page Tarifs tient dans cet ordre : abonnements, séance d'essai, pièces à
 l'unité, frais de déplacement par zone (avec la vérification du code
-postal), première heure offerte, cinq conditions au plus.
+postal, puis, pour chaque zone payante, le coût d'un cycle de chaque
+abonnement : « Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites ×
+15 $ », `cycleTravel`), première heure offerte, cinq conditions au plus.
 
 **Rien de retiré n'est effacé : c'est masqué, pour pouvoir le remettre.**
 - Les séances, les forfaits, les ajouts, le contenu d'une séance et la
@@ -332,9 +335,11 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   avant » (`setEarlyArrival`) : ses visites à venir reprennent l'ancien
   déroulement, agenda et texto de deux heures avant décalés, ou rien ne
   change si une séance déjà posée y touche (`slot_taken`). Les frais : ceux
-  de la zone pour la durée d'une visite, moins
-  `SUBSCRIBER_TRAVEL_DISCOUNT_CENTS`, jamais sous zéro, multipliés par les
-  visites du cycle. Le tout se paie à la première visite du cycle.
+  de la zone pour la durée d'une visite, comme pour une séance, multipliés
+  par les visites du cycle — en zone B, 15 $ par visite de 2 h (Confort,
+  Exécutif), 10 $ par visite de 3 h (Essentiel, Grande Famille). Jusqu'au
+  23 octobre 2026, un abonné payait 5 $ de moins par visite ; ceux d'avant
+  gardent leurs frais figés. Le tout se paie à la première visite du cycle.
   Une visite d'abonné vaut `estimate_cents = 0` ; jamais de première heure
   offerte. L'artisan peut changer à la main les frais par visite d'un abonné
   (0 $, un autre montant, ou retour aux frais de sa zone) depuis l'onglet
@@ -429,9 +434,21 @@ conservé : ni le texte, ni le numéro.
 
 Deux étages, dans `lib/travel.ts`. Des **secteurs** (Saint-Lambert, Verdun,
 Candiac… une vingtaine, ceux du profil Google), chacun reconnu aux trois premiers
-caractères du code postal, rattachés à des **zones** (A, B, C) qui portent
-les deux tarifs et leur propre seuil. Un code hors de tout secteur actif ne
-peut pas réserver en ligne : le client est invité à appeler.
+caractères du code postal, rattachés à des **zones** qui portent les deux
+tarifs et leur propre seuil. Un code hors de tout secteur actif ne peut pas
+réserver en ligne : le client est invité à appeler.
+
+**Deux zones depuis le 23 octobre 2026.** La zone A, sans frais, réunit
+l'ancienne A et l'ancienne B : la Rive-Sud proche, Chambly, Candiac, La
+Prairie et tous les quartiers de Montréal. La zone B est l'ancienne C :
+Saint-Jean-sur-Richelieu, à 15 $ sous trois heures et 10 $ à partir de trois
+heures. Il n'y a plus de zone C. La production y est passée par la
+migration unique `zones-2026-ab` (`mergeZonesAB`, dans `bootstrap()`), qui
+ne transforme la grille que si elle porte encore les zones a, b et c, et
+seulement si personne ne l'a enregistrée entre la lecture et l'écriture ;
+elle note chaque secteur déplacé dans `nivex_zone_history`. Les
+réservations et les abonnements déjà pris gardent les frais et le nom de
+zone qu'ils portent.
 
 - Tout se règle dans l'onglet « Zones et frais », et s'écrit dans
   `travel_policy` (forme `version: 2`) par `saveZonePolicy`, **seulement
@@ -455,7 +472,13 @@ peut pas réserver en ligne : le client est invité à appeler.
   secteur que la maison met en avant, et l'ordre se tient depuis l'onglet.
 - La page `/montreal` liste les quartiers de l'île et leurs frais
   (`montrealFees`), avec la durée minimale et le tarif de la page Tarifs.
-  Rien n'y est écrit à la main.
+  Rien n'y est écrit à la main. Tant qu'aucun quartier de l'île ne paie de
+  déplacement (`montrealTravelFree`), « Aucuns frais de déplacement à
+  Montréal » paraît en tête de la page, dans ses conditions, dans sa
+  question sur les frais, en tête de la dernière phrase de la réponse sur
+  les zones de l'accueil (`{check}`, qui garde ainsi ses trois phrases) et
+  dans `/llms.txt` ; la phrase s'efface d'elle-même si
+  l'onglet remet un quartier dans une zone payante.
 - L'ancienne colonne `service_area` n'est plus lue du tout. Elle reste en
   base, sans effet.
 - La bascule vers les secteurs est écrite une fois par `bootstrap()` : toute
@@ -480,15 +503,17 @@ La fiche `LocalBusiness` (`lib/seo.ts`) est la même sur l'accueil et sur la
 page Montréal : nom, téléphone, site, secteurs dans `areaServed` (Rive-Sud,
 puis Montréal, un quartier de l'île portant Montréal comme localité), et
 exactement les offres des pages, aux mêmes prix : la séance d'essai, l'heure
-de plus, les quatre abonnements, les cinq prestations, et les pièces à
-l'unité dans `hasOfferCatalog`. La description de l'accueil nomme les cinq
+de plus, les quatre abonnements, les cinq prestations, les frais de
+déplacement de chaque zone avec ses secteurs (zéro en zone A), et les pièces
+à l'unité dans `hasOfferCatalog`. La description de l'accueil nomme les cinq
 premiers secteurs de la Rive-Sud, puis Montréal, et dit les prix (dès
 150 $ par cycle, séance de 2 heures à 110 $) ; celle de Tarifs
 (`tarifsDescription`) l'éventail des abonnements.
 
 `/llms.txt` (`app/llms.txt/route.ts`, `lib/llms.ts`) résume la maison pour
 les assistants, en français puis en anglais : prix, pièces à l'unité, zones
-et frais, conditions, les sept questions et leurs réponses. Rien n'y est
+et frais (avec le coût d'un cycle en zone payante, et Montréal sans frais),
+conditions, les sept questions et leurs réponses. Rien n'y est
 écrit à la main, et il se régénère comme les pages.
 
 `robots.txt` nomme Googlebot, Bingbot, OAI-SearchBot, PerplexityBot et

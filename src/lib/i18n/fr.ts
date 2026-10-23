@@ -1,11 +1,9 @@
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, TERM_SERIES,
+  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
-/* La réduction des abonnés sur les frais de route, écrite depuis la constante. */
-const DISCOUNT = formatMoney(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, "CAD", "fr");
 /* Ce qu'un abonné paie de moins par heure, depuis la constante. */
 const HOURLY_DISCOUNT = formatMoney(SUBSCRIBER_HOURLY_DISCOUNT_CENTS, "CAD", "fr");
 /* La durée qui ouvre droit à la première heure offerte, depuis la constante
@@ -239,7 +237,7 @@ const terms: LegalDoc = {
         "Un abonnement réserve vos visites au même jour et à la même heure, au rythme de la formule\u00a0: chaque semaine, aux deux semaines ou toutes les quatre semaines. Ces créneaux ne sont proposés à personne d'autre.",
         `Un cycle correspond au nombre de visites de la formule réellement effectuées — quatre, deux ou une. Une visite annulée, de votre côté ou du nôtre, ne compte pas\u00a0: le cycle se prolonge jusqu'à la visite suivante, et une visite de remplacement est ajoutée en fin de série. Un cycle qui n'est pas terminé ${CYCLE_MAX_WEEKS} semaines après sa première visite nous amène à vous appeler pour convenir de la suite.`,
         `Le montant d'un cycle est fixé à la souscription et garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles. Il se règle à la première visite du cycle, sur place. Nous vous appelons ${SERIES_NOTICE_DAYS} jours avant la fin d'une série pour confirmer la suivante.`,
-        `Les frais de déplacement de votre zone, s'il y en a, sont réduits de ${DISCOUNT} par visite pour un abonné, sans jamais descendre sous zéro, et se règlent avec le cycle.{suboffer}`,
+        "Les frais de déplacement de votre zone, s'il y en a, s'appliquent à chaque visite selon sa durée, comme pour une séance, et se règlent avec le cycle.{suboffer}",
       ],
     },
     {
@@ -453,7 +451,7 @@ export const fr = {
       },
       {
         q: "Quelles zones desservez-vous\u202f?",
-        a: "{zone} Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
+        a: "{zone} {check}",
       },
       {
         q: "Comment se fait le paiement\u202f?",
@@ -477,6 +475,13 @@ export const fr = {
   zoneText: {
     served: "Secteurs desservis\u00a0: {list}.",
     montreal: "À Montréal\u00a0: {list}.",
+    /* Tant qu'aucun quartier de l'île ne paie de déplacement
+       (`montrealTravelFree`) : /llms.txt, et la fin de la réponse sur les
+       zones de la foire aux questions ({check}), qui tient ainsi en trois
+       phrases. */
+    montrealFree: "Aucuns frais de déplacement à Montréal.",
+    check: "Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
+    checkMontrealFree: "Aucuns frais de déplacement à Montréal\u00a0; ailleurs, entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
     none: "La réservation en ligne est fermée pour tous les secteurs en ce moment. Appelez-nous.",
   },
   /* La page Montréal. Les montants, la durée minimale et les délais y sont
@@ -489,6 +494,12 @@ export const fr = {
       "NIVEX repasse vos vêtements et votre literie sur place, chez vous, à Montréal. Pas de collecte, pas de livraison\u00a0: rien ne quitte votre domicile.",
     areasTitle: "Quartiers desservis",
     areasLede: "L'artisan se déplace dans ces quartiers avec son matériel. Entrez votre code postal pour vérifier votre adresse et connaître les frais.",
+    /* La même, quand aucun quartier de l'île ne paie de déplacement. */
+    areasLedeFree: "L'artisan se déplace dans ces quartiers avec son matériel. Entrez votre code postal pour vérifier votre adresse.",
+    /* Bien en vue en haut de la page, tant qu'aucun quartier de l'île ne paie
+       de déplacement (`montrealTravelFree`). */
+    free: "Aucuns frais de déplacement à Montréal",
+    freeDetail: "Quelle que soit la durée de la séance, abonnements compris.",
     none: `Aucun quartier de Montréal n'est ouvert à la réservation en ligne pour le moment. Appelez-nous au ${PHONE}.`,
     conditionsTitle: "Conditions à Montréal",
     conditionsLede: "Les mêmes que sur la page {link}, tirées des mêmes réglages.",
@@ -504,7 +515,7 @@ export const fr = {
     /* {offer} de la réponse sur les frais, même condition. */
     feesOffer: "La première heure offerte ne les couvre jamais.",
     /* La réponse sur les frais ({fees}), quand aucun quartier desservi n'en a. */
-    feesFree: "Rien\u00a0: les quartiers de Montréal desservis n'ont pas de frais de déplacement.",
+    feesFree: "Aucuns frais de déplacement à Montréal, quelle que soit la durée de la séance, abonnements compris.",
     faqTitle: "Questions sur Montréal",
     faq: [
       {
@@ -717,8 +728,7 @@ export const fr = {
     },
     address: {
       title: "Où vous rejoignons-nous\u202f?",
-      travelReduced: "Frais de déplacement, tarif abonné\u00a0: {fee} par visite, au lieu de {full}.",
-      travelZero: "Pour un abonné, les frais de déplacement de votre zone tombent à zéro.",
+      travelFee: "Frais de déplacement\u00a0: {fee} par visite.",
       cycleTotal: "Total d'un cycle, frais compris\u00a0: {total}.",
     },
     slot: {
@@ -899,7 +909,6 @@ export const fr = {
         "Vos créneaux vous sont réservés\u00a0: le même jour, à la même heure, toute l'année.",
         "Une visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille. Elle ne compte pas, et s'ajoute en fin de série.",
         "Amidon léger sur cols et poignets, inclus sans supplément.",
-        `Frais de déplacement réduits de ${DISCOUNT} par visite.`,
         `Tarif garanti douze mois, soit ${TERM_SERIES} séries de ${SERIES_CYCLES} cycles.`,
       ],
     },
@@ -911,8 +920,16 @@ export const fr = {
       travelFlat: "{fee} par visite",
       travelShort: "{fee} pour une séance de moins de {hours}",
       travelLong: "{fee} pour une séance de {hours} ou plus",
-      travelNote: `Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix et s'appliquent à chaque visite\u202f; pour un abonné, ils sont réduits de ${DISCOUNT} par visite, sans descendre sous zéro, et se règlent avec le cycle.`,
+      travelNote: "Les frais dépendent de la zone et de la durée de la séance. Ils s'ajoutent au prix et s'appliquent à chaque visite, abonnés compris\u202f; un abonné les règle avec son cycle.",
       travelNoteOffer: "L'offre «\u00a0première heure offerte\u00a0» ne les couvre pas et ne les réduit jamais.",
+      /* Le coût d'un cycle d'abonnement dans une zone qui facture le
+         déplacement : {zone}, puis une ligne par formule, frais de chaque
+         visite selon sa durée. {visits} est `visitOne` ou `visitMany`. */
+      cycleTitle: "Abonnements en {zone}, par cycle",
+      cycleLine: "{plan}\u00a0: {price} + {travel} de déplacement, soit {visits}\u00a0×\u00a0{fee}",
+      cycleLineFree: "{plan}\u00a0: {price}, sans frais de déplacement",
+      visitOne: "1\u00a0visite",
+      visitMany: "{n}\u00a0visites",
     },
     firstFreeLabel: "Première séance",
     /* Lu seulement par les lecteurs d'écran, devant le prix barré. */

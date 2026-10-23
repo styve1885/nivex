@@ -67,12 +67,19 @@ export const PREFIX_RE = /^[A-Z]\d[A-Z]$/;
 const sector = (key: string, nameFr: string, nameEn: string, zoneKey: string, prefixes: string[]): Sector =>
   ({ key, nameFr, nameEn, prefixes, zoneKey, enabled: true });
 
+/*
+ * Deux zones depuis le 23 octobre 2026. La zone A, sans frais, réunit
+ * l'ancienne A et l'ancienne B : la Rive-Sud proche, Chambly, Candiac, La
+ * Prairie et les quartiers de Montréal. La zone B est l'ancienne C :
+ * Saint-Jean-sur-Richelieu, à 15 $ sous trois heures et 10 $ à partir de
+ * trois heures. La production y est passée par la migration `zones-2026-ab`
+ * (db.ts, `mergeZonesAB`).
+ */
 export const DEFAULT_ZONE_POLICY: ZonePolicy = {
   version: POLICY_VERSION,
   zones: [
     { key: "a", nameFr: "Zone A", nameEn: "Zone A", shortFeeCents: 0, longFeeCents: 0, thresholdMinutes: 180 },
     { key: "b", nameFr: "Zone B", nameEn: "Zone B", shortFeeCents: 1500, longFeeCents: 1000, thresholdMinutes: 180 },
-    { key: "c", nameFr: "Zone C", nameEn: "Zone C", shortFeeCents: 2500, longFeeCents: 2000, thresholdMinutes: 180 },
   ],
   sectors: [
     /* Saint-Lambert d'abord, toujours : c'est le secteur que la maison met en
@@ -89,23 +96,59 @@ export const DEFAULT_ZONE_POLICY: ZonePolicy = {
     sector("saint-bruno", "Saint-Bruno-de-Montarville", "Saint-Bruno-de-Montarville", "a", ["J3V"]),
     sector("sainte-julie", "Sainte-Julie", "Sainte-Julie", "a", ["J3E"]),
     sector("varennes", "Varennes", "Varennes", "a", ["J3X"]),
-    sector("ile-des-soeurs", "L'Île-des-Sœurs", "Nuns' Island", "b", ["H3E"]),
-    sector("verdun", "Verdun", "Verdun", "b", ["H4G", "H4H"]),
-    sector("vieux-montreal", "Vieux-Montréal", "Old Montreal", "b", ["H2Y"]),
-    sector("westmount", "Westmount", "Westmount", "b", ["H3Y", "H3Z"]),
-    sector("outremont", "Outremont", "Outremont", "b", ["H2V"]),
-    sector("centre-ville", "Centre-ville de Montréal", "Downtown Montreal", "b",
-      ["H3A", "H3B", "H3G", "H3H", "H3C", "H2Z", "H2L", "H2X"]),
-    sector("plateau", "Le Plateau-Mont-Royal", "Plateau-Mont-Royal", "b", ["H2J", "H2T", "H2W", "H2H"]),
     /* J3L couvre aussi Carignan, et J5R à la fois Candiac et La Prairie : le
-       code postal ne sépare pas ces villes, qui paient donc ensemble les frais
-       de la zone B. La grille suit celle réglée en production le 17 octobre. */
-    sector("chambly", "Chambly", "Chambly", "b", ["J3L"]),
-    sector("candiac", "Candiac", "Candiac", "b", ["J5R"]),
-    sector("la-prairie", "La Prairie", "La Prairie", "b", ["J5R"]),
-    sector("saint-jean", "Saint-Jean-sur-Richelieu", "Saint-Jean-sur-Richelieu", "c", ["J2W", "J2X", "J2Y", "J3A", "J3B"]),
+       code postal ne sépare pas ces villes, qui restent donc dans la même
+       zone. */
+    sector("chambly", "Chambly", "Chambly", "a", ["J3L"]),
+    sector("candiac", "Candiac", "Candiac", "a", ["J5R"]),
+    sector("la-prairie", "La Prairie", "La Prairie", "a", ["J5R"]),
+    sector("ile-des-soeurs", "L'Île-des-Sœurs", "Nuns' Island", "a", ["H3E"]),
+    sector("verdun", "Verdun", "Verdun", "a", ["H4G", "H4H"]),
+    sector("vieux-montreal", "Vieux-Montréal", "Old Montreal", "a", ["H2Y"]),
+    sector("westmount", "Westmount", "Westmount", "a", ["H3Y", "H3Z"]),
+    sector("outremont", "Outremont", "Outremont", "a", ["H2V"]),
+    sector("centre-ville", "Centre-ville de Montréal", "Downtown Montreal", "a",
+      ["H3A", "H3B", "H3G", "H3H", "H3C", "H2Z", "H2L", "H2X"]),
+    sector("plateau", "Le Plateau-Mont-Royal", "Plateau-Mont-Royal", "a", ["H2J", "H2T", "H2W", "H2H"]),
+    sector("saint-jean", "Saint-Jean-sur-Richelieu", "Saint-Jean-sur-Richelieu", "b", ["J2W", "J2X", "J2Y", "J3A", "J3B"]),
   ],
 };
+
+/**
+ * La grille du 23 octobre 2026, à partir de celle que la production portait.
+ *
+ * La zone A absorbe la zone B et ne facture plus de déplacement ; la zone C
+ * devient la zone B, à 15 $ sous trois heures et 10 $ à partir de trois
+ * heures. Elle s'écrit pour les clés que la bascule du 17 octobre a posées
+ * (a, b, c) et ne touche à rien d'autre : les noms, les secteurs inactifs et
+ * l'ordre de chaque groupe restent ceux de l'artisan. Dans la zone A réunie,
+ * l'ancienne B vient après l'ancienne A, la Rive-Sud avant les quartiers de
+ * l'île. Sans zone c — grille déjà changée, à la main ou par un passage
+ * précédent —, elle ne rend rien.
+ *
+ * Elle lit la colonne telle quelle, sans `readZonePolicy` : `db.ts` ne peut
+ * pas importer les réglages, qui l'importent.
+ */
+export function mergeZonesAB(stored: unknown): ZonePolicy | null {
+  if (!stored || typeof stored !== "object") return null;
+  const p = stored as Partial<ZonePolicy>;
+  if (p.version !== POLICY_VERSION || !Array.isArray(p.zones) || !Array.isArray(p.sectors)) return null;
+  const keys = new Set(p.zones.map((z) => z?.key));
+  if (!keys.has("a") || !keys.has("b") || !keys.has("c")) return null;
+
+  const zones = p.zones
+    .filter((z) => z.key !== "c")
+    .map((z) => (z.key === "a" ? { ...z, shortFeeCents: 0, longFeeCents: 0 }
+      : z.key === "b" ? { ...z, shortFeeCents: 1500, longFeeCents: 1000, thresholdMinutes: 180 }
+        : z));
+  const ile = (s: Sector) => Array.isArray(s.prefixes) && isMontrealSector(s);
+  const rang = (s: Sector) => (s.zoneKey === "a" ? 0 : s.zoneKey === "b" ? (ile(s) ? 2 : 1) : 3);
+  const sectors = p.sectors
+    .map((s, i) => ({ s, i, r: rang(s) }))
+    .sort((x, y) => x.r - y.r || x.i - y.i)
+    .map(({ s }) => (s.zoneKey === "b" ? { ...s, zoneKey: "a" } : s.zoneKey === "c" ? { ...s, zoneKey: "b" } : s));
+  return { version: POLICY_VERSION, zones, sectors };
+}
 
 /* ============================ Verdict ============================ */
 
@@ -175,7 +218,7 @@ export function evaluateZone(
   const z = zoneFor(postal, policy);
   if (!z) return OUT_OF_ZONE;
 
-  const cents = Math.max(0, Math.round(durationMinutes >= z.thresholdMinutes ? z.longFeeCents : z.shortFeeCents));
+  const cents = zoneFeeCents(z, durationMinutes);
 
   return {
     status: cents > 0 ? "fee" : "free",
@@ -188,6 +231,11 @@ export function evaluateZone(
     longFeeCents: z.longFeeCents,
     thresholdMinutes: z.thresholdMinutes,
   };
+}
+
+/** Les frais d'une zone pour une durée : le tarif court sous le seuil, le long dès qu'il est atteint. */
+export function zoneFeeCents(z: Zone, durationMinutes: number): number {
+  return Math.max(0, Math.round(durationMinutes >= z.thresholdMinutes ? z.longFeeCents : z.shortFeeCents));
 }
 
 /** La réservation en ligne peut-elle aboutir ? */
@@ -312,6 +360,38 @@ export function montrealFees(
       long: money(z.longFeeCents),
       threshold: thresholdText(z.thresholdMinutes, locale),
     }));
+}
+
+/**
+ * Montréal sans frais de déplacement : au moins un quartier de l'île est
+ * desservi, et aucun ne paie la route, quelle que soit la durée.
+ *
+ * C'est la condition de la phrase « Aucuns frais de déplacement à Montréal »
+ * (page Montréal, foire aux questions, /llms.txt) : si l'onglet « Zones et
+ * frais » remet un quartier dans une zone payante, elle disparaît d'elle-même
+ * au lieu de contredire le tunnel.
+ */
+export function montrealTravelFree(policy: ZonePolicy): boolean {
+  const { montreal } = sectorsByRegion(policy);
+  return montreal.length > 0 && montreal.every((s) => {
+    const z = policy.zones.find((x) => x.key === s.zoneKey);
+    return Boolean(z) && z!.shortFeeCents === 0 && z!.longFeeCents === 0;
+  });
+}
+
+/**
+ * Les zones qui facturent le déplacement et ont au moins un secteur actif,
+ * dans l'ordre de l'onglet, chacune avec ses secteurs (la Rive-Sud d'abord).
+ * Ce sont celles pour lesquelles la page Tarifs détaille le coût d'un cycle
+ * d'abonnement.
+ */
+export function feeZones(policy: ZonePolicy): { zone: Zone; sectors: Sector[] }[] {
+  const { south, montreal } = sectorsByRegion(policy);
+  const actifs = [...south, ...montreal];
+  return policy.zones
+    .filter((z) => z.shortFeeCents > 0 || z.longFeeCents > 0)
+    .map((zone) => ({ zone, sectors: actifs.filter((s) => s.zoneKey === zone.key) }))
+    .filter(({ sectors }) => sectors.length > 0);
 }
 
 /** Ce que l'artisan colle dans sa fiche Google : un secteur actif par ligne, dans l'ordre. */
@@ -489,7 +569,7 @@ const dollars = (cents: number) => {
  * Ce qui a changé entre deux grilles, une ligne par changement.
  *
  * C'est l'historique de l'onglet « Zones et frais » : de quoi retrouver,
- * des mois plus tard, quand Verdun est passé en zone C et à quel tarif.
+ * des mois plus tard, quand Verdun est passé en zone A et à quel tarif.
  */
 export function describeChanges(before: ZonePolicy, after: ZonePolicy): string[] {
   const out: string[] = [];

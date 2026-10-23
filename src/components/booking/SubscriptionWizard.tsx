@@ -35,8 +35,6 @@ export type SubscriptionConfig = {
   plans: PlanOption[];
   currency: string;
   timezone: string;
-  /** Réduction des abonnés sur les frais de route, par visite. */
-  discountCents: number;
   /** L'offre « première heure offerte » existe-t-elle ? Sans elle, inutile de dire qu'elle ne s'applique pas ici. */
   firstHourFree: boolean;
   seriesCycles: number;
@@ -171,8 +169,9 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
     return () => { abandonne = true; };
   }, [travelKey, postalKey, plan]);
 
-  const zoneFee = travel?.feeCents ?? 0;
-  const feePerVisit = Math.max(0, zoneFee - config.discountCents);
+  /* Les frais de la zone pour la durée d'une visite, à chaque visite : le
+     serveur fait le même calcul (`quoteCycle`) et le fige. */
+  const feePerVisit = Math.max(0, travel?.feeCents ?? 0);
   const cycleTravel = plan ? feePerVisit * plan.visits : 0;
   const cycleTotal = plan ? plan.cycleCents + cycleTravel : 0;
   const outOfZone = travel?.status === "out";
@@ -433,11 +432,9 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
                   <div className="space-y-2 text-[0.85rem] leading-relaxed text-gold-700">
                     <p className="flex items-start gap-2">
                       <span aria-hidden="true" className="mt-0.5">◆</span>
-                      {zoneFee <= 0
+                      {feePerVisit <= 0
                         ? t.booking.step2.travelFree
-                        : feePerVisit > 0
-                          ? s.address.travelReduced.replace("{fee}", money(feePerVisit)).replace("{full}", money(zoneFee))
-                          : s.address.travelZero}
+                        : s.address.travelFee.replace("{fee}", money(feePerVisit))}
                     </p>
                     {cycleTravel > 0 && (
                       <p className="pl-5 font-light text-ink-500">{s.address.cycleTotal.replace("{total}", money(cycleTotal))}</p>

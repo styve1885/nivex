@@ -405,8 +405,8 @@ async function insertSubscription(p: {
   const tz = settings.timezone;
 
   /* La zone et ses frais, décidés ici et jamais repris du navigateur, sur la
-     durée d'une visite. Les frais sont ceux de la zone, réduits pour un
-     abonné, et figés avec le montant du cycle : le tarif tient douze mois. */
+     durée d'une visite. Les frais sont ceux de la zone pour cette durée, et
+     figés avec le montant du cycle : le tarif tient douze mois. */
   const verdict = evaluateZone(input.postalCode, plan.minutesPerVisit, settings.zonePolicy);
   if (!bookable(verdict)) throw new SubscriptionError("out_of_area");
   const quote = quoteCycle(plan, settings, verdict.feeCents);

@@ -24,7 +24,8 @@ const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
 const { visitReminder, subscriptionConfirmation, subscriptionOwnerNotification, visitChanged, seriesNotice } = await import("../src/lib/email.ts");
-const { CANCEL_WINDOW_HOURS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, SERIES_CYCLES } = await import("../src/lib/brand.ts");
+const { CANCEL_WINDOW_HOURS, SERIES_CYCLES } = await import("../src/lib/brand.ts");
+const { evaluateZone, DEFAULT_ZONE_POLICY } = await import("../src/lib/travel.ts");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -111,13 +112,11 @@ test("un abonné d'avant le site reprend où il en est, jusqu'à la fin de sa s�
 
 /* ————— Les montants ————— */
 
-test("les frais d'un abonné : ceux de la zone moins la réduction, jamais sous zéro", () => {
-  assert.equal(SUBSCRIBER_TRAVEL_DISCOUNT_CENTS, 500);
-  assert.equal(subscriberFeeCents(1500), 1000);
-  assert.equal(subscriberFeeCents(2000), 1500);
-  assert.equal(subscriberFeeCents(500), 0);
-  assert.equal(subscriberFeeCents(300), 0);
+test("les frais d'un abonné : ceux de la zone pour la durée de la visite, sans réduction", () => {
+  assert.equal(subscriberFeeCents(1500), 1500);
+  assert.equal(subscriberFeeCents(1000), 1000);
   assert.equal(subscriberFeeCents(0), 0);
+  assert.equal(subscriberFeeCents(-300), 0, "jamais sous zéro");
 });
 
 test("à 55 $ l'heure, les formules coûtent 150, 200, 400 et 600 $, au lieu de 165, 220, 440 et 660 $", () => {
@@ -128,16 +127,20 @@ test("à 55 $ l'heure, les formules coûtent 150, 200, 400 et 600 $, au lieu de 
   });
 });
 
-test("Exécutif à Montréal, visites de 2 h : 400 $ + (15 $ − 5 $) × 4 = 440 $", () => {
+test("Exécutif en zone B, visites de 2 h : 400 $ + 15 $ × 4 = 460 $", () => {
   const q = quoteCycle(plan("executif"), settings, 1500);
-  assert.deepEqual(q, { planCents: 40000, travelCents: 4000, totalCents: 44000, feePerVisitCents: 1000 });
+  assert.deepEqual(q, { planCents: 40000, travelCents: 6000, totalCents: 46000, feePerVisitCents: 1500 });
 });
 
-test("Grande Famille à Saint-Jean, visites de 3 h : tarif réduit de la zone, moins 5 $", () => {
-  const q = quoteCycle(plan("grande-famille"), settings, 2000);
-  assert.equal(q.feePerVisitCents, 1500);
-  assert.equal(q.travelCents, 6000);
-  assert.equal(q.totalCents, q.planCents + 6000);
+test("les quatre formules lues sur la grille : en zone B, 15 $ par visite de 2 h et 10 $ par visite de 3 h ; à Montréal, rien", () => {
+  const devis = (k, code) => quoteCycle(plan(k), settings, evaluateZone(code, plan(k).minutesPerVisit, DEFAULT_ZONE_POLICY).feeCents);
+  const cles = ["essentiel", "confort", "executif", "grande-famille"];
+  assert.deepEqual(cles.map((k) => { const q = devis(k, "J2W 1A1"); return [q.feePerVisitCents, q.travelCents, q.totalCents]; }),
+    [[1000, 1000, 16000], [1500, 3000, 23000], [1500, 6000, 46000], [1000, 4000, 64000]]);
+  for (const k of cles) {
+    assert.equal(devis(k, "H3B 1A1").travelCents, 0, `${k} au centre-ville de Montréal, en zone A`);
+    assert.equal(devis(k, "J5R 1A1").travelCents, 0, `${k} à Candiac, en zone A`);
+  }
 });
 
 test("une adresse sans frais ne paie que la formule", () => {
@@ -403,6 +406,8 @@ test("la confirmation dit le rythme, la série, le montant du cycle et la règle
   assert.match(text, /vendredi, à 10 h 00, chaque semaine/);
   assert.match(text, /24 visites, jusqu'au/);
   assert.match(text, /Total d'un cycle: 400 \$/);
+  assert.match(text, /Frais de déplacement de votre zone : 10 \$ par visite, réglés avec le cycle\./);
+  assert.doesNotMatch(text, /réduit/, "plus de réduction des abonnés sur la route");
   assert.match(text, /23 h 59 la veille/);
   assert.match(text, /première visite du cycle/);
   assert.ok(m.html.includes(base.manageUrl));

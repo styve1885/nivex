@@ -133,15 +133,6 @@ export const SERIES_NOTICE_DAYS = 7;
 export const TERM_ALERT_DAYS = 30;
 
 /**
- * Réduction des frais de déplacement pour un abonné, par visite, en cents.
- *
- * Elle porte sur les frais de la zone et de la durée de la visite, sans
- * jamais les faire passer sous zéro : une adresse sans frais ne reçoit rien
- * en retour.
- */
-export const SUBSCRIBER_TRAVEL_DISCOUNT_CENTS = 500;
-
-/**
  * Un abonné paie l'heure ce montant de moins que la séance à la carte, en
  * cents : à 55 $ l'heure, 50 $. Le prix d'une formule en découle
  * (`planCents`), arrondi aux 5 $, puis se fige à la souscription.

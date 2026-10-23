@@ -4,8 +4,7 @@ import { planCents } from "./pricing";
 import { slotProblem, type Interval, type SlotProblem } from "./availability";
 import { addDaysToKey, dateKey, fromWall, parseDateKey, parseHM, toWall } from "./time";
 import {
-  CYCLE_MAX_WEEKS, SERIES_CYCLES, SERIES_NOTICE_DAYS, SUBSCRIBER_TRAVEL_DISCOUNT_CENTS,
-  TERM_ALERT_DAYS, TERM_SERIES,
+  CYCLE_MAX_WEEKS, SERIES_CYCLES, SERIES_NOTICE_DAYS, TERM_ALERT_DAYS, TERM_SERIES,
 } from "./brand";
 
 /**
@@ -120,9 +119,14 @@ export function visitsToEndOfSeries(perCycle: number, startCycle: number, startD
 
 /* ============================ Montants ============================ */
 
-/** Les frais d'une visite d'abonné : ceux de la zone, moins la réduction, jamais sous zéro. */
+/**
+ * Les frais d'une visite d'abonné : ceux de la zone pour la durée de la
+ * visite, comme pour une séance. Depuis le 23 octobre 2026, sans réduction :
+ * en zone B, 15 $ pour une visite de 2 h, 10 $ pour une visite de 3 h. Un
+ * abonné d'avant garde les frais figés à sa souscription.
+ */
 export function subscriberFeeCents(zoneFeeCents: number): number {
-  return Math.max(0, Math.round(zoneFeeCents) - SUBSCRIBER_TRAVEL_DISCOUNT_CENTS);
+  return Math.max(0, Math.round(zoneFeeCents));
 }
 
 export type CycleAmount = { planCents: number; travelCents: number; totalCents: number };

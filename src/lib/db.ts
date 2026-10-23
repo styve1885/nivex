@@ -1,5 +1,5 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { DEFAULT_ZONE_POLICY } from "./travel";
+import { DEFAULT_ZONE_POLICY, describeChanges, mergeZonesAB, type ZonePolicy } from "./travel";
 import { DATACENTER_CITIES, PERSONAL_PATH } from "./attribution";
 
 /**
@@ -486,7 +486,46 @@ async function bootstrap() {
     )
     UPDATE nivex_settings SET hourly_rate = 5500, updated_at = now()
     WHERE id = 1 AND hourly_rate = 5000 AND EXISTS (SELECT 1 FROM done)`;
+
+  /* Le 23 octobre 2026, deux zones au lieu de trois : la zone A absorbe la
+     zone B, sans frais ; la zone C devient la zone B, à 15 $ et 10 $
+     (`mergeZonesAB`). Les réservations et les abonnements gardent les frais
+     qu'ils portent. La grille ne change que si elle est encore celle qu'on
+     vient de lire : un enregistrement depuis /admin au même instant
+     l'emporte, et la migration repasse au démarrage suivant. Une grille
+     sans zone C n'a rien à transformer : la migration s'inscrit seule. */
+  const zonesDone = (await q`SELECT 1 FROM nivex_migrations WHERE name = 'zones-2026-ab'`).length > 0;
+  if (!zonesDone) {
+    const row = (await q`SELECT travel_policy FROM nivex_settings WHERE id = 1`)[0] as { travel_policy?: unknown } | undefined;
+    const before = row?.travel_policy;
+    const after = mergeZonesAB(before);
+    if (!after) {
+      await q`INSERT INTO nivex_migrations (name) VALUES ('zones-2026-ab') ON CONFLICT (name) DO NOTHING`;
+    } else {
+      const changes = [ZONES_NOTE, ...describeChanges(before as ZonePolicy, after)];
+      await q`
+        WITH upd AS (
+          UPDATE nivex_settings SET travel_policy = ${JSON.stringify(after)}::jsonb, updated_at = now()
+          WHERE id = 1 AND travel_policy = ${JSON.stringify(before)}::jsonb
+            AND NOT EXISTS (SELECT 1 FROM nivex_migrations WHERE name = 'zones-2026-ab')
+          RETURNING 1
+        ), done AS (
+          INSERT INTO nivex_migrations (name) SELECT 'zones-2026-ab' FROM upd
+          ON CONFLICT (name) DO NOTHING
+          RETURNING name
+        )
+        INSERT INTO nivex_zone_history (summary, author)
+        SELECT value, 'migration'
+        FROM jsonb_array_elements_text(${JSON.stringify(changes)}::jsonb) WITH ORDINALITY
+        WHERE EXISTS (SELECT 1 FROM done)
+        ORDER BY ordinality`;
+    }
+  }
 }
+
+/* La première ligne de l'historique de la migration des zones. */
+const ZONES_NOTE = "Deux zones au lieu de trois : la zone A réunit les anciennes zones A et B, sans frais ; "
+  + "l'ancienne zone C devient la zone B, à 15 $ sous 3 h et 10 $ à partir de 3 h.";
 
 /* La note de la bascule, écrite depuis la grille qu'elle pose. */
 const MIGRATION_NOTE = (() => {
