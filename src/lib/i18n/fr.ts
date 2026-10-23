@@ -932,12 +932,6 @@ export const fr = {
       { key: "pantalon", name: "Pantalon de complet",
         altBefore: "Pantalon de complet avant repassage",
         altAfter: "Pantalon de complet après repassage" },
-      { key: "t-shirt", name: "T-shirt en coton",
-        altBefore: "T-shirt en coton avant repassage",
-        altAfter: "T-shirt en coton après repassage" },
-      { key: "veste", name: "Veste doublée",
-        altBefore: "Veste doublée avant repassage",
-        altAfter: "Veste doublée après repassage" },
     ],
   },
   /* La galerie n'est plus une section de l'accueil depuis le 23 octobre

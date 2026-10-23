@@ -397,13 +397,18 @@ test("aucun texte retiré ne dort dans les dictionnaires, qui partent vers le na
   const en = getDict("en");
   for (const t of [fr, en]) {
     const tout = JSON.stringify(t);
-    for (const mot of ["velours", "Corduroy", "Séance semaine", "Week session", "Grand Foyer", "Douce Nuit",
+    for (const mot of ["velours", "Corduroy", "T-shirt en coton", "Cotton t-shirt", "Veste doublée", "Lined jacket",
+      "Séance semaine", "Week session", "Grand Foyer", "Douce Nuit",
       "Prolongation", "ne s'improvise pas", "isn't improvised", "Composer ma séance", "Put my session together",
       "Combien de temps prévoir", "How much time should I plan"]) {
       assert.ok(!tout.includes(mot), `« ${mot} » est encore dans le dictionnaire`);
     }
   }
   assert.deepEqual(Object.keys(retiredEn), Object.keys(retiredFr), "l'anglais des textes retirés suit le français");
+  /* L'avant/après ne montre plus que la chemise et le pantalon de complet. */
+  assert.deepEqual(fr.beforeAfter.items.map((x) => x.key), ["chemise", "pantalon"]);
+  assert.deepEqual(en.beforeAfter.items.map((x) => x.key), ["chemise", "pantalon"]);
+  assert.deepEqual(retiredFr.beforeAfter.map((x) => x.key), ["velours", "t-shirt", "veste"]);
 });
 
 /* ————— L'invitation d'agenda ————— */

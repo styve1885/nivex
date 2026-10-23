@@ -858,12 +858,6 @@ export const en: Dict = {
       { key: "pantalon", name: "Suit trousers",
         altBefore: "Suit trousers before pressing",
         altAfter: "Suit trousers after pressing" },
-      { key: "t-shirt", name: "Cotton t-shirt",
-        altBefore: "Cotton t-shirt before pressing",
-        altAfter: "Cotton t-shirt after pressing" },
-      { key: "veste", name: "Lined jacket",
-        altBefore: "Lined jacket before pressing",
-        altAfter: "Lined jacket after pressing" },
     ],
   },
   gallery: {
