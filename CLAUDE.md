@@ -563,11 +563,14 @@ langues, avec leur date. **Modifier une page dans le code, c'est avancer sa
 date** dans `PUBLIC_PAGES` (contenu, titre, description ou données
 structurées ; pas une virgule) : le plan du site l'écrit dans `<lastmod>` et
 IndexNow la compare à ce qu'il a envoyé. Ce que l'artisan change depuis
-`/admin` se date tout seul (`lib/freshness.ts`) : l'empreinte du contenu
-public tiré des réglages (`llms-full.txt`, la fiche dans les deux langues,
-les valeurs des conditions) est gardée dans `nivex_public_content`, avec le
-jour où elle a changé, et chaque page prend la plus récente des deux dates
-(`pageDate`). Un réglage sans effet visible ne la fait pas avancer. Les
+`/admin` se date tout seul (`lib/freshness.ts`) : l'empreinte des réglages
+qui paraissent sur les pages (`publicSettings` : prix, durée, pas, préavis,
+horizon, offre, horaire, secteurs actifs et frais de leurs zones) est gardée
+dans `nivex_public_content`, avec le jour où elle a changé, et chaque page
+prend la plus récente des deux dates (`pageDate`). Un réglage sans effet
+visible ne la fait pas avancer, et un texte du code non plus : c'est le rôle
+de `PUBLIC_PAGES`. Un réglage qui deviendrait visible (une section retirée
+qu'on rallume) s'ajoute à `publicSettings`. Les
 routes des réglages et des zones l'inscrivent avant et après
 l'enregistrement, revalident `/sitemap.xml` (qui se régénère comme les
 pages) et préviennent IndexNow après la réponse. Une date qui bouge sans raison fait perdre la confiance
@@ -581,15 +584,15 @@ les y ajouter. Toute page publique ajoutée va dans `PUBLIC_PAGES`.
 Seznam ; Google n'y participe pas. La clé est `INDEXNOW_KEY`, publiée dans
 `public/<clé>.txt`. Seules partent les pages dont la date a avancé depuis le
 dernier envoi réussi (`nivex_indexnow`), et seulement si le fichier de clé
-est servi tel quel sur le www. Deux déclencheurs, après la mise en ligne,
+est servi tel quel sur le www. Trois déclencheurs, après la mise en ligne,
 jamais pendant `next build` (qui s'exécute avant que le déploiement reçoive
 le domaine) : le workflow GitHub `.github/workflows/indexnow.yml`, sur
 l'événement de Vercel qui suit un déploiement de production, appelle `POST
 /api/indexnow` avec `CRON_SECRET` (secret du dépôt) et le commit déployé —
 la route répond 409 tant que le domaine sert la version précédente ;
 l'enregistrement des réglages ou des zones ; et, en filet, la tâche
-quotidienne. Chaque envoi relit d'abord l'empreinte du contenu, si bien
-qu'un texte changé par un déploiement compte dès l'envoi qui le suit.
+quotidienne. Chaque envoi relit d'abord l'empreinte des réglages visibles,
+si bien qu'un changement fait hors de l'admin (une migration) compte aussi.
 
 `/llms.txt` (`lib/llms.ts`) résume la maison pour les assistants, en
 français puis en anglais : le service, les zones et leurs frais, les quatre

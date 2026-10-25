@@ -43,19 +43,20 @@ jobs:
             echo "::notice::Secret CRON_SECRET absent : la tâche quotidienne fera l'envoi."
             exit 0
           fi
-          # On réessaie, au plus cinq minutes, tant que le domaine sert encore
-          # la version précédente : 409, ou 404 au tout premier déploiement,
-          # quand la route n'existe pas encore ; 000 pour une coupure réseau
-          # (curl l'écrit lui-même quand il échoue).
+          # On réessaie tant que le domaine sert encore la version
+          # précédente : 409, ou 404 au tout premier déploiement, quand la
+          # route n'existe pas encore ; 000 pour une coupure réseau (curl
+          # l'écrit lui-même quand il échoue). Au plus sept minutes environ,
+          # sous la limite de dix de la tâche.
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             rm -f response.json
-            code=$(curl -sS --max-time 40 -o response.json -w '%{http_code}' -X POST \
+            code=$(curl -sS --connect-timeout 10 --max-time 40 -o response.json -w '%{http_code}' -X POST \
               -H "Authorization: Bearer $CRON_SECRET" \
               "https://www.nivexrepassage.ca/api/indexnow?sha=$SHA") || true
             cat response.json 2>/dev/null || true; echo
             case "$code" in
               200) exit 0 ;;
-              409|404|000) sleep 30 ;;
+              409|404|000) [ "$SECONDS" -ge 360 ] && break; sleep 30 ;;
               *) echo "::warning::IndexNow : réponse $code ; la tâche quotidienne réessaiera."; exit 0 ;;
             esac
           done

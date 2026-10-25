@@ -92,8 +92,9 @@ async function keyIsServed(fetchImpl: typeof fetch): Promise<boolean> {
  */
 export async function submitChangedPages(fetchImpl: typeof fetch = fetch): Promise<IndexNowResult> {
   await ensureSchema();
-  /* Le contenu tiré des réglages est relu avec le code qui tourne : un texte
-     changé par ce déploiement compte dès cet envoi. */
+  /* Les réglages visibles sont relus d'abord : un changement que l'admin
+     n'aurait pas inscrit (une migration, une modification directe en base)
+     compte dès cet envoi. */
   const settingsChangedOn = await recordPublicContent(await getSettingsStrict());
   const rows = (await sql()`SELECT url, updated FROM nivex_indexnow`) as { url: string; updated: string }[];
   const changed = changedStamps(currentStamps(SITE_URL, settingsChangedOn), new Map(rows.map((r) => [r.url, r.updated])));

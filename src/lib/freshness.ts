@@ -1,42 +1,60 @@
 import { createHash } from "node:crypto";
 import { ensureSchema, isDbConfigured, logEvent, sql } from "./db";
-import { getDict } from "./i18n";
 import { getSettingsStrict, type Settings } from "./settings";
-import { llmsFullText } from "./llms";
-import { localBusinessJsonLd } from "./seo";
-import { legalValues } from "@/components/LegalDocument";
+import { sectorsByRegion } from "./travel";
 
 /**
- * La date à laquelle le contenu public tiré des réglages a changé pour la
- * dernière fois.
+ * La date à laquelle les réglages qui paraissent sur les pages publiques ont
+ * changé pour la dernière fois.
  *
  * Les pages publiques se réécrivent sans déploiement : un tarif, un horaire
  * ou une zone enregistrés depuis /admin changent les prix affichés, le texte
  * de la zone desservie, les conditions et la fiche des moteurs de toutes les
  * pages. La date de lib/pages.ts n'en sait rien. On garde donc l'empreinte de
- * ce contenu, et le jour où elle a changé ; le plan du site et IndexNow
+ * ces réglages, et le jour où elle a changé ; le plan du site et IndexNow
  * prennent, page par page, la plus récente des deux dates (`pageDate`).
  *
- * L'empreinte est celle du texte produit, pas des réglages eux-mêmes : un
- * réglage sans effet visible (le lien d'avis, la pause, l'agenda) ne fait
- * pas avancer la date, et un texte des dictionnaires changé par un
- * déploiement, s'il paraît dans ce contenu, la fait avancer.
+ * L'empreinte ne porte que sur les valeurs des réglages qui se voient, jamais
+ * sur les textes du code : une virgule corrigée dans un dictionnaire ne fait
+ * pas avancer la date de toutes les pages. Ce que change le code se date dans
+ * PUBLIC_PAGES, page par page. Un réglage sans effet visible (le lien d'avis,
+ * la pause, l'agenda, les prestations des sections retirées) n'y entre pas.
  *
  * La date est un jour, à l'heure de Montréal : deux enregistrements le même
  * jour ne font qu'un changement, et IndexNow ne renvoie pas une adresse plus
  * d'une fois par jour pour cette raison.
  */
 
-/** L'empreinte du contenu public qui dépend des réglages, dans les deux langues. */
+/**
+ * Ce que les pages publiques montrent des réglages, sous une forme fixe :
+ * prix et durée, pas des créneaux, préavis et horizon (conditions), offre de
+ * la première heure, jours et heures d'ouverture (pied de page, fiche), et
+ * les secteurs actifs dans l'ordre de l'affichage, avec les zones qui en ont
+ * et leurs frais. Les préfixes ne se lisent nulle part ; seul compte ce
+ * qu'ils décident, Rive-Sud ou Montréal.
+ */
+export function publicSettings(s: Settings) {
+  const { south, montreal } = sectorsByRegion(s.zonePolicy);
+  const sectors = [...south, ...montreal];
+  return {
+    hourlyRate: s.hourlyRate,
+    currency: s.currency,
+    minMinutes: s.minMinutes,
+    slotStep: s.slotStep,
+    leadHours: s.leadHours,
+    horizonDays: s.horizonDays,
+    firstHourFree: s.firstHourFree,
+    hours: s.hours.filter((h) => h.enabled).map((h) => [h.day, h.open, h.close]),
+    zones: s.zonePolicy.zones
+      .filter((z) => sectors.some((x) => x.zoneKey === z.key))
+      .map((z) => [z.key, z.nameFr, z.nameEn, z.shortFeeCents, z.longFeeCents, z.thresholdMinutes]),
+    sectors: sectors.map((x) => [x.nameFr, x.nameEn, x.zoneKey, montreal.includes(x)]),
+  };
+}
+
+/** L'empreinte de ce que les pages publiques montrent des réglages. */
 export function publicFingerprint(s: Settings): string {
-  const content = JSON.stringify([
-    llmsFullText(s),
-    localBusinessJsonLd(getDict("fr"), s, "fr"),
-    localBusinessJsonLd(getDict("en"), s, "en"),
-    legalValues("fr", s),
-    legalValues("en", s),
-  ]);
-  return createHash("sha256").update(content).digest("hex");
+  return createHash("sha256").update(JSON.stringify(publicSettings(s))).digest("hex");
 }
 
 /** Aujourd'hui, « AAAA-MM-JJ », à l'heure de Montréal : le serveur vit en UTC. */

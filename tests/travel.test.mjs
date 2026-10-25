@@ -28,6 +28,8 @@ const { seoFr, seoEn, seoAdmin, getSeo } = await import("../src/lib/i18n/seo.ts"
 const { llmsText, llmsFullText } = await import("../src/lib/llms.ts");
 const { PUBLIC_PAGES, publicUrls, pageDate } = await import("../src/lib/pages.ts");
 const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshness.ts");
+/* Un jour postérieur à toute date de PUBLIC_PAGES, présente ou future. */
+const PLUS_TARD = "2999-01-01";
 const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER } = await import("../src/lib/brand.ts");
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
@@ -744,17 +746,19 @@ test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", (
 
 /* Le plan du site lit la date du contenu en base : sans base, aucune, et
    chaque page garde la date du code. */
-const plan = await sitemap();
-const planProduction = await (async () => {
-  const avant = { VERCEL_ENV: process.env.VERCEL_ENV, NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL };
-  process.env.VERCEL_ENV = "production";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://nivexrepassage.ca";
+const BASES = ["DATABASE_URL", "POSTGRES_URL", "DATABASE_URL_UNPOOLED", "POSTGRES_URL_NON_POOLING"];
+async function avecEnv(vars, fn) {
+  const avant = Object.fromEntries([...BASES, ...Object.keys(vars)].map((k) => [k, process.env[k]]));
+  for (const k of BASES) delete process.env[k];
+  Object.assign(process.env, vars);
   try {
-    return await sitemap();
+    return await fn();
   } finally {
     for (const [k, v] of Object.entries(avant)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
   }
-})();
+}
+const plan = await avecEnv({}, () => sitemap());
+const planProduction = await avecEnv({ VERCEL_ENV: "production", NEXT_PUBLIC_SITE_URL: "https://nivexrepassage.ca" }, () => sitemap());
 
 test("le plan du site : les cinq pages publiques, deux langues, leur vraie date, sans les tunnels", () => {
   const o = siteOrigin();
@@ -777,7 +781,7 @@ test("la date d'une page suit aussi ce que l'artisan change depuis l'admin", () 
   const accueil = PUBLIC_PAGES[0];
   assert.equal(pageDate(accueil, ""), accueil.updated, "aucun changement relevé : la date du code");
   assert.equal(pageDate(accueil, "2026-01-01"), accueil.updated, "un changement plus ancien ne recule pas la date");
-  assert.equal(pageDate(accueil, "2026-11-03"), "2026-11-03");
+  assert.equal(pageDate(accueil, PLUS_TARD), PLUS_TARD);
   assert.equal(todayInMontreal(new Date("2026-11-03T03:30:00Z")), "2026-11-02", "à 22 h 30 à Montréal, c'est encore la veille");
   assert.equal(todayInMontreal(new Date("2026-11-03T05:30:00Z")), "2026-11-03");
 });
@@ -804,6 +808,27 @@ test("l'empreinte du contenu public change avec ce qui se voit, et seulement ave
     ["l'agenda", { ...FALLBACK_SETTINGS, calendarId: "autre@group.calendar.google.com" }],
     ["la connexion Google", { ...FALLBACK_SETTINGS, connected: true, ownerEmail: "x@example.com" }],
   ]) assert.equal(publicFingerprint(s), base, `${quoi} ne se voit sur aucune page publique`);
+  /* Un texte du code ne compte pas : c'est le rôle de PUBLIC_PAGES. */
+  const reponse = fr.faq.items[0].a;
+  fr.faq.items[0].a = `${reponse},`;
+  try {
+    assert.equal(publicFingerprint(FALLBACK_SETTINGS), base, "une virgule dans une réponse ne date pas toutes les pages");
+  } finally {
+    fr.faq.items[0].a = reponse;
+  }
+  const renomme = clone(FALLBACK_SETTINGS.zonePolicy);
+  renomme.sectors.find((x) => x.enabled).nameFr += " (Centre)";
+  assert.notEqual(publicFingerprint({ ...FALLBACK_SETTINGS, zonePolicy: renomme }), base, "un secteur renommé se lit partout");
+  const prefixe = clone(FALLBACK_SETTINGS.zonePolicy);
+  const sl = prefixe.sectors.find((x) => x.key === "saint-lambert") ?? prefixe.sectors.find((x) => x.enabled && !x.prefixes.some((p) => p.startsWith("H")));
+  sl.prefixes = [...sl.prefixes, "J4Z"];
+  assert.equal(publicFingerprint({ ...FALLBACK_SETTINGS, zonePolicy: prefixe }), base, "un préfixe de plus ne change aucun texte");
+  const inactif = clone(FALLBACK_SETTINGS.zonePolicy);
+  const off = inactif.sectors.find((x) => !x.enabled);
+  if (off) {
+    off.nameFr += " bis";
+    assert.equal(publicFingerprint({ ...FALLBACK_SETTINGS, zonePolicy: inactif }), base, "un secteur inactif ne paraît nulle part");
+  }
 });
 
 test("en production, toutes les adresses partent du www", () => {
@@ -845,8 +870,8 @@ test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce q
   sent.set(now[1].url, "2026-01-01");
   assert.deepEqual(changedStamps(now, sent).map((x) => x.url), [now[1].url]);
   sent.set(now[1].url, now[1].updated);
-  const apresAdmin = currentStamps(SITE_URL, "2026-11-03");
-  assert.ok(apresAdmin.every((x) => x.updated === "2026-11-03"), "un tarif changé depuis l'admin date toutes les pages");
+  const apresAdmin = currentStamps(SITE_URL, PLUS_TARD);
+  assert.ok(apresAdmin.every((x) => x.updated === PLUS_TARD), "un tarif changé depuis l'admin date toutes les pages");
   assert.equal(changedStamps(apresAdmin, sent).length, 10, "et les renvoie toutes, une fois");
   const wf = readFileSync(".github/workflows/indexnow.yml", "utf8");
   assert.match(wf, /deployment_status/);
