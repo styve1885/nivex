@@ -19,7 +19,10 @@ export const CONTACT_EMAIL = "contact@nivexrepassage.ca";
  * courriels et l'adresse de retour de Google (à déclarer dans la console
  * Google Cloud), et le webhook des réponses par texto chez Twilio : la
  * redirection de Vercel arrête les requêtes avant le code, si bien qu'un
- * réglage resté sur l'ancien domaine ne joint plus le site. En production, `siteOrigin`
+ * réglage resté sur l'ancien domaine ne joint plus le site. Ce que garde le
+ * navigateur est lié au domaine exact : après la bascule, l'artisan se
+ * reconnecte à /admin sur le www dans chaque navigateur, et rouvre son lien
+ * « ne pas compter » dans ceux de Facebook et d'Instagram. En production, `siteOrigin`
  * rend cette adresse quoi que dise la variable d'environnement : une
  * variable restée sur l'ancien domaine renverrait chaque lien canonique vers
  * une redirection, ce que Google lit comme une page à ne pas indexer.

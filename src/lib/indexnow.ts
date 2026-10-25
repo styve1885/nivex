@@ -1,6 +1,8 @@
 import { ensureSchema, logEvent, sql } from "./db";
 import { INDEXNOW_KEY, SITE_URL } from "./brand";
-import { publicUrls } from "./pages";
+import { pageDate, publicUrls } from "./pages";
+import { recordPublicContent } from "./freshness";
+import { getSettingsStrict } from "./settings";
 
 /**
  * IndexNow : prévenir Bing, et les autres moteurs du protocole, qu'une page
@@ -11,15 +13,18 @@ import { publicUrls } from "./pages";
  * Le moteur vérifie que le site nous appartient en lisant
  * public/<clé>.txt, qui ne contient que la clé (brand.ts). On n'envoie que
  * ce qui a bougé : chaque page porte sa date de modification (lib/pages.ts),
- * et la table `nivex_indexnow` garde, adresse par adresse, la date déjà
- * envoyée. Une page dont la date n'a pas avancé n'est pas renvoyée : les
- * moteurs demandent de ne signaler que les adresses changées.
+ * plus récente quand l'artisan a changé depuis /admin ce qu'elle affiche
+ * (lib/freshness.ts), et la table `nivex_indexnow` garde, adresse par
+ * adresse, la date déjà envoyée. Une page dont la date n'a pas avancé n'est
+ * pas renvoyée : les moteurs demandent de ne signaler que les adresses
+ * changées.
  *
- * Deux déclencheurs, en production seulement, et tous deux après la mise en
+ * Les déclencheurs, en production seulement, et tous après la mise en
  * ligne : la route /api/indexnow, que le workflow GitHub « IndexNow » appelle
- * dès qu'un déploiement de production a réussi, et, en filet, la tâche
- * quotidienne. Jamais pendant `next build` : la construction s'exécute avant
- * que le déploiement reçoive le domaine, si bien que le moteur aurait relu
+ * dès qu'un déploiement de production a réussi ; l'enregistrement des
+ * réglages ou des zones depuis /admin ; et, en filet, la tâche quotidienne.
+ * Jamais pendant `next build` : la construction s'exécute avant que le
+ * déploiement reçoive le domaine, si bien que le moteur aurait relu
  * l'ancienne page, ou pas encore trouvé le fichier de clé.
  *
  * Un envoi raté ne s'inscrit pas : le suivant reprend les mêmes adresses.
@@ -35,8 +40,8 @@ export const keyLocation = (origin = SITE_URL) => `${origin}/${INDEXNOW_KEY}.txt
 export type PageStamp = { url: string; updated: string };
 
 /** Les pages publiques à cette date, dans les deux langues. */
-export function currentStamps(origin = SITE_URL): PageStamp[] {
-  return publicUrls(origin).map(({ url, page }) => ({ url, updated: page.updated }));
+export function currentStamps(origin = SITE_URL, settingsChangedOn = ""): PageStamp[] {
+  return publicUrls(origin).map(({ url, page }) => ({ url, updated: pageDate(page, settingsChangedOn) }));
 }
 
 /** Ce qui est nouveau, ou dont la date a avancé depuis le dernier envoi. */
@@ -87,8 +92,11 @@ async function keyIsServed(fetchImpl: typeof fetch): Promise<boolean> {
  */
 export async function submitChangedPages(fetchImpl: typeof fetch = fetch): Promise<IndexNowResult> {
   await ensureSchema();
+  /* Le contenu tiré des réglages est relu avec le code qui tourne : un texte
+     changé par ce déploiement compte dès cet envoi. */
+  const settingsChangedOn = await recordPublicContent(await getSettingsStrict());
   const rows = (await sql()`SELECT url, updated FROM nivex_indexnow`) as { url: string; updated: string }[];
-  const changed = changedStamps(currentStamps(), new Map(rows.map((r) => [r.url, r.updated])));
+  const changed = changedStamps(currentStamps(SITE_URL, settingsChangedOn), new Map(rows.map((r) => [r.url, r.updated])));
   if (changed.length === 0) return { submitted: [], status: null, skipped: "unchanged" };
 
   if (!(await keyIsServed(fetchImpl))) {
@@ -116,7 +124,7 @@ export async function submitChangedPages(fetchImpl: typeof fetch = fetch): Promi
   return { submitted: urls, status: res.status };
 }
 
-/** L'envoi des deux déclencheurs : en production seulement, et jamais en erreur. */
+/** L'envoi des déclencheurs : en production seulement, et jamais en erreur. */
 export async function submitIfProduction(fetchImpl: typeof fetch = fetch): Promise<IndexNowResult> {
   if (process.env.VERCEL_ENV !== "production") return { submitted: [], status: null, skipped: "not_production" };
   try {

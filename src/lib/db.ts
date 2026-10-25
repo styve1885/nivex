@@ -496,6 +496,22 @@ async function bootstrap() {
       WHEN duplicate_table  THEN NULL;
     END $$`;
 
+  /* L'empreinte du contenu public tiré des réglages, et le jour où elle a
+     changé (lib/freshness.ts) : une seule ligne. Même garde que la table
+     d'IndexNow contre les constructions simultanées. */
+  await q`
+    DO $$ BEGIN
+      CREATE TABLE IF NOT EXISTS nivex_public_content (
+        id          int         PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        fingerprint text        NOT NULL,
+        changed_on  text        NOT NULL DEFAULT '',
+        checked_at  timestamptz NOT NULL DEFAULT now()
+      );
+    EXCEPTION
+      WHEN unique_violation THEN NULL;
+      WHEN duplicate_table  THEN NULL;
+    END $$`;
+
   /* Le taux horaire passe de 50 $ à 55 $ le 22 octobre 2026. Seulement s'il
      valait encore 50 $ : un autre taux est un choix de l'artisan. */
   await q`

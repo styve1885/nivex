@@ -26,7 +26,8 @@ const {
 } = await import("../src/lib/seo.ts");
 const { seoFr, seoEn, seoAdmin, getSeo } = await import("../src/lib/i18n/seo.ts");
 const { llmsText, llmsFullText } = await import("../src/lib/llms.ts");
-const { PUBLIC_PAGES, publicUrls } = await import("../src/lib/pages.ts");
+const { PUBLIC_PAGES, publicUrls, pageDate } = await import("../src/lib/pages.ts");
+const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshness.ts");
 const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER } = await import("../src/lib/brand.ts");
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
@@ -559,7 +560,7 @@ test("les descriptions disent les prix de la page, tirés des réglages", () => 
   assert.match(pageDescription("home", "en", FALLBACK_SETTINGS), /Subscriptions from \$150 per cycle\.$/);
   assert.match(flat(pageDescription("tarifs", "fr", FALLBACK_SETTINGS)),
     /abonnements de 150 \$ à 600 \$ par cycle, séance de 2 heures à 110 \$, prix des pièces à l'unité\.$/);
-  assert.match(pageDescription("tarifs", "en", FALLBACK_SETTINGS), /from \$150 to \$600 per cycle, a 2 hours? session for \$110/);
+  assert.match(pageDescription("tarifs", "en", FALLBACK_SETTINGS), /from \$150 to \$600 per cycle, a session of 2 hours for \$110, and single pieces\.$/);
   assert.match(flat(pageDescription("tarifs", "fr", { ...FALLBACK_SETTINGS, hourlyRate: 6000 })),
     /de 165 \$ à 660 \$ par cycle, séance de 2 heures à 120 \$/, "un autre taux change tout d'un coup");
 });
@@ -741,8 +742,21 @@ test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", (
   assert.equal(agents.length, 6);
 });
 
+/* Le plan du site lit la date du contenu en base : sans base, aucune, et
+   chaque page garde la date du code. */
+const plan = await sitemap();
+const planProduction = await (async () => {
+  const avant = { VERCEL_ENV: process.env.VERCEL_ENV, NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL };
+  process.env.VERCEL_ENV = "production";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://nivexrepassage.ca";
+  try {
+    return await sitemap();
+  } finally {
+    for (const [k, v] of Object.entries(avant)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+})();
+
 test("le plan du site : les cinq pages publiques, deux langues, leur vraie date, sans les tunnels", () => {
-  const plan = sitemap();
   const o = siteOrigin();
   assert.equal(plan.length, PUBLIC_PAGES.length * 2);
   assert.deepEqual(plan.map((x) => x.url), publicUrls(o).map((x) => x.url));
@@ -759,6 +773,39 @@ test("le plan du site : les cinq pages publiques, deux langues, leur vraie date,
   }
 });
 
+test("la date d'une page suit aussi ce que l'artisan change depuis l'admin", () => {
+  const accueil = PUBLIC_PAGES[0];
+  assert.equal(pageDate(accueil, ""), accueil.updated, "aucun changement relevé : la date du code");
+  assert.equal(pageDate(accueil, "2026-01-01"), accueil.updated, "un changement plus ancien ne recule pas la date");
+  assert.equal(pageDate(accueil, "2026-11-03"), "2026-11-03");
+  assert.equal(todayInMontreal(new Date("2026-11-03T03:30:00Z")), "2026-11-02", "à 22 h 30 à Montréal, c'est encore la veille");
+  assert.equal(todayInMontreal(new Date("2026-11-03T05:30:00Z")), "2026-11-03");
+});
+
+test("l'empreinte du contenu public change avec ce qui se voit, et seulement avec cela", () => {
+  const base = publicFingerprint(FALLBACK_SETTINGS);
+  assert.match(base, /^[a-f0-9]{64}$/);
+  assert.equal(publicFingerprint(clone(FALLBACK_SETTINGS)), base, "les mêmes réglages, la même empreinte");
+  const zones = clone(FALLBACK_SETTINGS.zonePolicy);
+  zones.zones.find((z) => z.key === "b").shortFeeCents += 500;
+  const heures = clone(FALLBACK_SETTINGS.hours);
+  heures[1].close = "21:00";
+  for (const [quoi, s] of [
+    ["le taux", { ...FALLBACK_SETTINGS, hourlyRate: 6000 }],
+    ["les frais d'une zone", { ...FALLBACK_SETTINGS, zonePolicy: zones }],
+    ["l'horaire", { ...FALLBACK_SETTINGS, hours: heures }],
+    ["le pas des créneaux", { ...FALLBACK_SETTINGS, slotStep: 60 }],
+    ["le préavis", { ...FALLBACK_SETTINGS, leadHours: FALLBACK_SETTINGS.leadHours + 24 }],
+    ["l'offre de la première heure", { ...FALLBACK_SETTINGS, firstHourFree: !FALLBACK_SETTINGS.firstHourFree }],
+  ]) assert.notEqual(publicFingerprint(s), base, `${quoi} se voit sur les pages`);
+  for (const [quoi, s] of [
+    ["le lien d'avis", { ...FALLBACK_SETTINGS, reviewUrl: "https://g.page/r/x/review" }],
+    ["la pause", { ...FALLBACK_SETTINGS, paused: !FALLBACK_SETTINGS.paused }],
+    ["l'agenda", { ...FALLBACK_SETTINGS, calendarId: "autre@group.calendar.google.com" }],
+    ["la connexion Google", { ...FALLBACK_SETTINGS, connected: true, ownerEmail: "x@example.com" }],
+  ]) assert.equal(publicFingerprint(s), base, `${quoi} ne se voit sur aucune page publique`);
+});
+
 test("en production, toutes les adresses partent du www", () => {
   const avant = { ...process.env };
   try {
@@ -766,7 +813,7 @@ test("en production, toutes les adresses partent du www", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://nivexrepassage.ca";
     assert.equal(siteOrigin(), "https://www.nivexrepassage.ca", "une variable restée sur l'ancien domaine ne compte plus");
     assert.equal(SITE_URL, "https://www.nivexrepassage.ca");
-    assert.ok(sitemap().every((x) => x.url.startsWith("https://www.nivexrepassage.ca/")));
+    assert.ok(planProduction.every((x) => x.url.startsWith("https://www.nivexrepassage.ca/")));
     process.env.VERCEL_ENV = "preview";
     process.env.NEXT_PUBLIC_SITE_URL = "https://essai.example";
     assert.equal(siteOrigin(), "https://essai.example", "une version d'essai garde sa propre adresse");
@@ -797,6 +844,10 @@ test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce q
   assert.deepEqual(changedStamps(now, sent), [], "un déploiement qui n'avance aucune date n'envoie rien");
   sent.set(now[1].url, "2026-01-01");
   assert.deepEqual(changedStamps(now, sent).map((x) => x.url), [now[1].url]);
+  sent.set(now[1].url, now[1].updated);
+  const apresAdmin = currentStamps(SITE_URL, "2026-11-03");
+  assert.ok(apresAdmin.every((x) => x.updated === "2026-11-03"), "un tarif changé depuis l'admin date toutes les pages");
+  assert.equal(changedStamps(apresAdmin, sent).length, 10, "et les renvoie toutes, une fois");
   const wf = readFileSync(".github/workflows/indexnow.yml", "utf8");
   assert.match(wf, /deployment_status/);
   assert.match(wf, /startsWith\(github\.event\.deployment\.environment, 'Production'\)/);

@@ -80,7 +80,7 @@ export const seoEn: Record<SeoPage, SeoText> = {
   },
   tarifs: {
     title: "NIVEX In-Home Ironing — Prices and subscriptions",
-    description: "Prices for in-home ironing in Montreal and on the South Shore: subscriptions from {from} to {to} per cycle, a {min} session for {price}, and single pieces.",
+    description: "Prices for in-home ironing in Montreal and on the South Shore: subscriptions from {from} to {to} per cycle, a session of {min} for {price}, and single pieces.",
   },
   montreal: {
     title: "NIVEX In-Home Ironing in Montreal",

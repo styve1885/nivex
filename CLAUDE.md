@@ -160,6 +160,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/i18n/seo.ts` | Le titre et la description de chaque page, dans les deux langues, hors des dictionnaires |
 | `lib/pages.ts` | Les pages publiques et la date de leur dernière modification : plan du site et IndexNow |
 | `lib/indexnow.ts` | Ce qui est signalé à IndexNow (Bing et les autres), et quand |
+| `lib/freshness.ts` | Le jour où le contenu public tiré des réglages a changé : plan du site et IndexNow |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
 | `lib/services.ts` | Les prestations par défaut et leurs types, sans dépendance : l'admin les importe sans tirer le pilote de base dans le navigateur |
 | `lib/retention.ts` | Les durées de conservation promises par la politique, tenues par la tâche quotidienne |
@@ -168,7 +169,8 @@ chacune : c'est ce 404 attendu, pas une panne.
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
-`nivex_zone_history`, `nivex_migrations`, `nivex_indexnow`. Le schéma se pose tout
+`nivex_zone_history`, `nivex_migrations`, `nivex_indexnow`,
+`nivex_public_content`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 **idempotent** : il s'exécute à chaque instance froide.
 
@@ -513,7 +515,10 @@ ne joint plus le site. L'URI de retour OAuth
 (`https://www.nivexrepassage.ca/api/auth/google/callback`, console Google
 Cloud) et le webhook « A message comes in » de Twilio
 (`https://www.nivexrepassage.ca/api/sms/incoming` ; Twilio ne suit pas un
-308) doivent porter le www.
+308) doivent porter le www. Le marqueur de retrait (`nivex.optout`) et la
+session de l'espace artisan sont liés au domaine exact : après la bascule,
+l'artisan rouvre `/admin` sur le www dans chaque navigateur, et son lien
+« ne pas compter » dans ceux de Facebook et d'Instagram.
 
 **L'en-tête de chaque page** se déclare dans la page, jamais dans la racine :
 la fusion des métadonnées de Next est superficielle, et un `alternates` posé
@@ -554,10 +559,18 @@ résultat enrichi de FAQ depuis 2026, mais le balisage reste valide et lu par
 les assistants.
 
 **Le plan du site** liste les pages de `lib/pages.ts`, dans les deux
-langues, avec leur date. **Modifier une page, c'est avancer sa date** dans
-`PUBLIC_PAGES` (contenu, titre, description ou données structurées ; pas une
-virgule) : le plan du site l'écrit dans `<lastmod>` et IndexNow la compare à
-ce qu'il a envoyé. Une date qui bouge sans raison fait perdre la confiance
+langues, avec leur date. **Modifier une page dans le code, c'est avancer sa
+date** dans `PUBLIC_PAGES` (contenu, titre, description ou données
+structurées ; pas une virgule) : le plan du site l'écrit dans `<lastmod>` et
+IndexNow la compare à ce qu'il a envoyé. Ce que l'artisan change depuis
+`/admin` se date tout seul (`lib/freshness.ts`) : l'empreinte du contenu
+public tiré des réglages (`llms-full.txt`, la fiche dans les deux langues,
+les valeurs des conditions) est gardée dans `nivex_public_content`, avec le
+jour où elle a changé, et chaque page prend la plus récente des deux dates
+(`pageDate`). Un réglage sans effet visible ne la fait pas avancer. Les
+routes des réglages et des zones l'inscrivent avant et après
+l'enregistrement, revalident `/sitemap.xml` (qui se régénère comme les
+pages) et préviennent IndexNow après la réponse. Une date qui bouge sans raison fait perdre la confiance
 de Google ; on ne la calcule jamais par `git log` (le clone de Vercel n'a
 que dix commits). Les tunnels `/reserver` et `/abonnement` n'y sont pas : ils
 ne servent qu'à réserver. robots.txt ne les bloque pas (seuls les liens à
@@ -573,8 +586,10 @@ jamais pendant `next build` (qui s'exécute avant que le déploiement reçoive
 le domaine) : le workflow GitHub `.github/workflows/indexnow.yml`, sur
 l'événement de Vercel qui suit un déploiement de production, appelle `POST
 /api/indexnow` avec `CRON_SECRET` (secret du dépôt) et le commit déployé —
-la route répond 409 tant que le domaine sert la version précédente ; et, en
-filet, la tâche quotidienne.
+la route répond 409 tant que le domaine sert la version précédente ;
+l'enregistrement des réglages ou des zones ; et, en filet, la tâche
+quotidienne. Chaque envoi relit d'abord l'empreinte du contenu, si bien
+qu'un texte changé par un déploiement compte dès l'envoi qui le suit.
 
 `/llms.txt` (`lib/llms.ts`) résume la maison pour les assistants, en
 français puis en anglais : le service, les zones et leurs frais, les quatre
@@ -736,6 +751,12 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 - **Le rendu.** Chromium est là, sous
   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, avec
   `playwright-core`. Lancez `next start` et regardez vraiment la page, au
-  téléphone comme à l'écran.
+  téléphone comme à l'écran. Un piège : après un enregistrement depuis
+  `/admin` (réglages ou zones), `next start` sert l'accueil en 404 et les
+  autres pages en 500 jusqu'au redémarrage. C'est son cache de fichiers :
+  la revalidation lui fait oublier les pages préparées, et `dynamicParams =
+  false` les refuse alors. Vercel n'est pas touché : il lance Next en mode
+  minimal, où cette branche ne s'exécute pas. Redémarrez le serveur local
+  après un tel enregistrement ; n'en concluez pas que la production tombe.
 
 La production se déploie depuis `main` : **demandez avant de fusionner.**
