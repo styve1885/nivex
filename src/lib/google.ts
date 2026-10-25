@@ -1,4 +1,5 @@
 import { getRefreshToken, getSettings } from "./settings";
+import { SITE_URL } from "./brand";
 
 /**
  * Client Google minimaliste (OAuth 2.0 + Calendar + Gmail) en fetch pur.
@@ -29,6 +30,9 @@ function creds() {
 
 /** Origine canonique du site — doit correspondre à l'URI de redirection déclarée chez Google. */
 export function siteOrigin(fallbackHost?: string | null): string {
+  /* En production, l'adresse canonique, avec www, quoi que dise la variable :
+     voir SITE_URL dans brand.ts. */
+  if (process.env.VERCEL_ENV === "production") return SITE_URL;
   const explicit = process.env.NEXT_PUBLIC_SITE_URL;
   if (explicit) return explicit.replace(/\/$/, "");
   const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;

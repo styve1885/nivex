@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
 import type { Settings } from "./settings";
-import { PHONE, contactEmail } from "./brand";
+import { FOUNDER, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
+import { catalogName, getSeo, type SeoPage } from "./i18n/seo";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
 import {
   PLANS, UNIT_PRICES, capacityPieces, cheapestPlanCents, planCents, planPieces, sessionLength, sessionPriceCents,
 } from "./pricing";
 import { setupSentence } from "./capacity";
-import { isMontrealSector, joinList, sectorsByRegion, thresholdText, type Sector, type ZonePolicy } from "./travel";
+import { isMontrealSector, sectorsByRegion, thresholdText, type Sector } from "./travel";
 
 /**
  * Ce que les moteurs et les assistants lisent du commerce.
@@ -58,33 +59,51 @@ export const siteViewport: Viewport = {
   initialScale: 1,
 };
 
-/** Le titre d'une page de la vitrine : son nom, puis la maison. */
-export const TITLE_TEMPLATE = "%s · NIVEX";
+/** Les réglages qui remplissent les montants des descriptions. */
+type PriceSettings = Pick<Settings, "hourlyRate" | "minMinutes" | "currency">;
 
 /**
- * Les métadonnées d'une page de la vitrine : son adresse canonique, ses deux
- * langues, et sa propre carte de partage.
+ * La description d'une page, montants remplis depuis les réglages : le plus
+ * bas montant par cycle ({plan}), l'éventail des abonnements ({from}, {to})
+ * et la séance d'essai ({min}, {price}). Une description sans montant se
+ * passe des réglages.
+ */
+export function pageDescription(page: SeoPage, lang: Lang, s?: PriceSettings): string {
+  const text = getSeo(lang)[page].description;
+  if (!s) return text;
+  const money = (c: number) => formatMoney(c, s.currency, lang);
+  const cycles = PLANS.map((p) => planCents(p, s));
+  return text
+    .replace("{plan}", money(cheapestPlanCents(s)))
+    .replace("{from}", money(Math.min(...cycles)))
+    .replace("{to}", money(Math.max(...cycles)))
+    .replace("{min}", minutesToText(sessionLength(s), lang))
+    .replace("{price}", money(sessionPriceCents(s)));
+}
+
+/**
+ * Les métadonnées d'une page publique : son titre et sa description
+ * (lib/i18n/seo.ts), son adresse canonique, ses deux langues et sa propre
+ * carte de partage.
+ *
+ * Le titre est complet — « NIVEX Repassage — … » — et la racine n'y ajoute
+ * rien. Les liens restent relatifs : `metadataBase` (l'adresse canonique,
+ * avec www, en production) les rend absolus dans `<head>`, hreflang compris.
  *
  * Un bloc `openGraph` déclaré plus bas remplace en entier celui du dessus, au
- * lieu de s'y fondre. Les sous-pages n'en déclaraient pas : elles se
- * partageaient avec la carte de l'accueil, son titre, sa description et un
- * `og:url` qui renvoyait à l'accueil — l'adresse que Facebook et LinkedIn
- * suivent, si bien que le lien profond se perdait. Chaque page reçoit donc un
- * bloc complet : type, nom du site, langues, et l'image, que le
- * fichier-convention ne fournit plus dès qu'un bloc est déclaré.
- *
- * Le gabarit « · NIVEX » ne s'applique qu'à `<title>` : la carte reçoit le
- * titre complet. Aucun bloc `twitter` ici — celui de la racine ne survit que
- * si personne ne le redéclare, et Next remplit le reste depuis `openGraph`.
+ * lieu de s'y fondre. Chaque page reçoit donc un bloc complet : type, nom du
+ * site, langues, et l'image, que le fichier-convention ne fournit plus dès
+ * qu'un bloc est déclaré. Aucun bloc `twitter` ici — celui de la racine ne
+ * survit que si personne ne le redéclare, et Next remplit le reste depuis
+ * `openGraph`.
  */
-export function pageMeta(
-  t: Dict, locale: string, path: string,
-  title: string | { absolute: string }, description: string,
-): Metadata {
+export function pageMeta(t: Dict, locale: string, path: string, page: SeoPage, s?: PriceSettings): Metadata {
   const lang: Lang = locale === "en" ? "en" : "fr";
+  const title = getSeo(lang)[page].title;
+  const description = pageDescription(page, lang, s);
   const url = `/${lang}${path}`;
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: {
       canonical: url,
@@ -93,7 +112,7 @@ export function pageMeta(
     openGraph: {
       type: "website",
       siteName: "NIVEX",
-      title: typeof title === "string" ? TITLE_TEMPLATE.replace("%s", title) : title.absolute,
+      title,
       description,
       url,
       locale: lang === "en" ? "en_CA" : "fr_CA",
@@ -104,61 +123,39 @@ export function pageMeta(
 }
 
 /**
- * L'en-tête d'une page introuvable : son titre, sans l'adresse canonique ni
- * les langues héritées de la racine, qui désignent l'accueil. Next ajoute de
- * lui-même `noindex` à toute réponse 404.
+ * L'en-tête d'une page personnelle — gérer sa réservation, ses visites — ou
+ * de retrait du décompte : son titre et sa description, jamais indexée, sans
+ * adresse canonique ni langues, qui n'ont de sens que pour une page publique.
  */
-export function notFoundMeta(t: Dict): Metadata {
-  return { title: t.notFound.metaTitle, alternates: {} };
+export function privateMeta(locale: string, page: SeoPage): Metadata {
+  const lang: Lang = locale === "en" ? "en" : "fr";
+  return {
+    title: { absolute: getSeo(lang)[page].title },
+    description: pageDescription(page, lang),
+    robots: { index: false, follow: false },
+    alternates: {},
+  };
+}
+
+/**
+ * L'en-tête d'une page introuvable : son titre et sa description, sans
+ * l'adresse canonique ni les langues. Next ajoute de lui-même `noindex` à
+ * toute réponse 404.
+ */
+export function notFoundMeta(locale: string): Metadata {
+  const lang: Lang = locale === "en" ? "en" : "fr";
+  return { title: { absolute: getSeo(lang).notFound.title }, description: pageDescription("notFound", lang), alternates: {} };
 }
 
 /* ========================= Les données structurées ========================= */
 
-/** « +1 450 943-1217 » : le numéro de la maison, écrit comme on le lit. */
-export function phoneDisplay(): string {
+/** Le nom de la maison dans les données structurées, dans les deux langues. */
+export const BUSINESS_NAME = "NIVEX Repassage à domicile";
+
+/** « +1-450-943-1217 » : le numéro, au format international des fiches. */
+export function phoneSchema(): string {
   const d = PHONE.replace(/\D/g, "").slice(-10);
-  return `+1 ${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}`;
-}
-
-/**
- * La description de l'accueil : les cinq premiers secteurs de la Rive-Sud,
- * dans l'ordre de l'onglet « Zones et frais », puis Montréal s'il est
- * desservi. Avec les réglages (`prices`), elle dit aussi les prix de la
- * page — le plus bas montant par cycle et la séance d'essai —, que les
- * assistants reprennent tels quels. La première heure offerte ne s'y ajoute
- * que tant que l'artisan la propose : un extrait de recherche ne promet pas
- * ce que le tunnel refuse.
- */
-export function metaDescription(
-  t: Dict, policy: ZonePolicy, lang: Lang, firstHourFree: boolean,
-  prices?: Pick<Settings, "hourlyRate" | "minMinutes" | "currency">,
-): string {
-  const { south, montreal } = sectorsByRegion(policy);
-  const places = [
-    ...south.slice(0, 5).map((s) => nameOf(s, lang)),
-    ...(montreal.length ? [lang === "en" ? "Montreal" : "Montréal"] : []),
-  ];
-  const parts = [t.meta.description.replace("{places}", joinList(places, lang))];
-  if (prices) {
-    const money = (c: number) => formatMoney(c, prices.currency, lang);
-    parts.push(t.meta.prices
-      .replace("{plan}", money(cheapestPlanCents(prices)))
-      .replace("{min}", minutesToText(sessionLength(prices), lang))
-      .replace("{price}", money(sessionPriceCents(prices))));
-  }
-  if (firstHourFree) parts.push(t.meta.offer);
-  return parts.join(" ");
-}
-
-/** La description de la page Tarifs : l'éventail des abonnements, la séance d'essai, le reste de la grille. */
-export function tarifsDescription(t: Dict, s: Pick<Settings, "hourlyRate" | "minMinutes" | "currency">, lang: Lang): string {
-  const money = (c: number) => formatMoney(c, s.currency, lang);
-  const cycles = PLANS.map((p) => planCents(p, s));
-  return t.tarifs.metaDescription
-    .replace("{from}", money(Math.min(...cycles)))
-    .replace("{to}", money(Math.max(...cycles)))
-    .replace("{min}", minutesToText(sessionLength(s), lang))
-    .replace("{price}", money(sessionPriceCents(s)));
+  return `+1-${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
 /**
@@ -184,7 +181,7 @@ function place(s: Sector, montreal: boolean, lang: Lang) {
  * Montréal y est —, sinon ses deux tarifs selon la durée, comme le tableau
  * de la page Tarifs. Tout vient de l'onglet « Zones et frais ».
  */
-function travelOffers(t: Dict, s: Settings, lang: Lang) {
+function travelOffers(t: Dict, s: Settings, lang: Lang, provider: { "@id": string }) {
   const { south, montreal } = sectorsByRegion(s.zonePolicy);
   const actifs = [...south, ...montreal];
   const money = (c: number) => formatMoney(c, s.currency, lang);
@@ -193,48 +190,76 @@ function travelOffers(t: Dict, s: Settings, lang: Lang) {
     .map((z) => ({ z, sectors: actifs.filter((x) => x.zoneKey === z.key) }))
     .filter(({ sectors }) => sectors.length > 0)
     .map(({ z, sectors }) => {
+      const name = `${terms.travel} · ${lang === "en" ? z.nameEn || z.nameFr : z.nameFr}`;
       const base = {
         "@type": "Offer",
-        name: `${terms.travel} · ${lang === "en" ? z.nameEn || z.nameFr : z.nameFr}`,
+        name,
+        itemOffered: { "@type": "Service", name, provider },
         areaServed: sectors.map((x) => place(x, isMontrealSector(x), lang)),
       };
       if (z.shortFeeCents === z.longFeeCents) {
         return { ...base, price: z.shortFeeCents / 100, priceCurrency: s.currency };
       }
+      /* Deux prix selon la durée de la séance, chacun avec sa condition : un
+         prix chiffré par tarif, que Google exige, plutôt qu'une fourchette. */
       const hours = thresholdText(z.thresholdMinutes, lang);
+      const short = terms.travelShort.replace("{fee}", money(z.shortFeeCents)).replace("{hours}", hours);
+      const long = terms.travelLong.replace("{fee}", money(z.longFeeCents)).replace("{hours}", hours);
       return {
         ...base,
-        description: `${terms.travelShort.replace("{fee}", money(z.shortFeeCents)).replace("{hours}", hours)}, `
-          + `${terms.travelLong.replace("{fee}", money(z.longFeeCents)).replace("{hours}", hours)}.`,
-        priceSpecification: {
-          "@type": "PriceSpecification",
-          minPrice: Math.min(z.shortFeeCents, z.longFeeCents) / 100,
-          maxPrice: Math.max(z.shortFeeCents, z.longFeeCents) / 100,
-          priceCurrency: s.currency,
-        },
+        description: `${short}, ${long}.`,
+        priceSpecification: [
+          { "@type": "PriceSpecification", price: z.shortFeeCents / 100, priceCurrency: s.currency, description: short },
+          { "@type": "PriceSpecification", price: z.longFeeCents / 100, priceCurrency: s.currency, description: long },
+        ],
       };
     });
 }
 
-/** La fiche LocalBusiness, la même sur l'accueil et sur la page Montréal. */
+/**
+ * La fiche de la maison, la même sur toutes les pages publiques : posée une
+ * fois par la racine app/[locale]/layout.tsx, dans la langue de la page.
+ *
+ * Un DryCleaningOrLaundry, le sous-type de LocalBusiness le plus proche du
+ * repassage. Google exige `name` et `address` : l'artisan se déplace et ne
+ * publie pas d'adresse, si bien que l'adresse s'arrête à la ville, sans rue
+ * ni code postal — comme sur son profil d'entreprise, qui masque l'adresse et
+ * nomme ses zones. Les secteurs desservis sont ceux de la page Tarifs
+ * (`areaServed`, la Rive-Sud d'abord), les prix ceux des pages, tirés des
+ * mêmes réglages.
+ *
+ * Toutes les adresses sont absolues, sur l'origine canonique (avec www en
+ * production) : une fiche qui pointe vers une redirection perd sa valeur.
+ */
 export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
   const origin = siteOrigin();
   const { south, montreal } = sectorsByRegion(s.zonePolicy);
   const session = sessionLength(s);
-  const rate = s.hourlyRate / 100;
+  const money = (c: number) => formatMoney(c, s.currency, lang);
+  const offerUrl = `${origin}/${lang}/tarifs`;
+  const cycles = PLANS.map((p) => planCents(p, s));
+  /* Chaque offre porte un Service, jamais un Product : un produit ferait
+     chercher à Google des avis, un stock et une livraison qu'un service n'a
+     pas. Le Service renvoie à la fiche par son identifiant. */
+  const provider = { "@id": `${origin}/#nivex` };
+  const service = (name: string) => ({ "@type": "Service", name, serviceType: t.meta.service, provider });
 
   return {
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${origin}/#nivex`,
-    name: "NIVEX",
-    description: metaDescription(t, s.zonePolicy, lang, s.firstHourFree, s),
+    "@type": "DryCleaningOrLaundry",
+    "@id": provider["@id"],
+    name: BUSINESS_NAME,
+    alternateName: "NIVEX",
+    description: pageDescription("home", lang, s),
     slogan: t.brand.tagline,
     url: `${origin}/${lang}`,
+    logo: `${origin}/logo-nivex.png`,
     image: `${origin}/opengraph-image.jpg`,
-    telephone: phoneDisplay(),
+    telephone: phoneSchema(),
     email: contactEmail(),
-    priceRange: `${formatMoney(s.hourlyRate, s.currency, lang)} / h`,
+    founder: { "@type": "Person", name: FOUNDER },
+    /* De la séance d'essai au plus haut montant par cycle, en chiffres. */
+    priceRange: `${money(sessionPriceCents(s))} – ${money(Math.max(...cycles))}`,
     currenciesAccepted: s.currency,
     address: { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" },
     /* La Rive-Sud d'abord, puis les quartiers de Montréal : l'ordre de la page. */
@@ -242,65 +267,109 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       ...south.map((x) => place(x, false, lang)),
       ...montreal.map((x) => place(x, true, lang)),
     ],
+    ...(SOCIAL_PROFILES.filter(Boolean).length ? { sameAs: SOCIAL_PROFILES.filter(Boolean) } : {}),
     openingHoursSpecification: s.hours.filter((h) => h.enabled).map((h) => ({
       "@type": "OpeningHoursSpecification",
-      dayOfWeek: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day],
+      dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
       opens: h.open, closes: h.close,
     })),
-    /* Ce que montrent l'accueil et la page Tarifs, aux mêmes prix : la
-       séance d'essai, l'heure de plus décidée sur place, les quatre
-       abonnements au prix d'un cycle, les prestations, puis les frais de
-       déplacement de chaque zone. Rien de ce que la vitrine a retiré
-       (séances de trois et quatre heures, forfaits, ajouts) n'y figure. */
+    /* Ce que la vitrine vend, aux prix des pages : les quatre abonnements au
+       prix d'un cycle et la séance d'essai, puis les pièces à l'unité. Rien
+       de ce que la vitrine a retiré (séances de trois et quatre heures,
+       forfaits, ajouts) n'y figure. */
+    hasOfferCatalog: [
+      {
+        "@type": "OfferCatalog",
+        name: catalogName(lang),
+        itemListElement: [
+          ...PLANS.map((p) => {
+            const text = lang === "en" ? p.en : p.fr;
+            const name = t.meta.plan.replace("{name}", text.name);
+            return {
+              "@type": "Offer",
+              name,
+              price: planCents(p, s) / 100,
+              priceCurrency: s.currency,
+              url: offerUrl,
+              description: `${text.detail} ${t.capacity.perCycle.replace("{n}", String(planPieces(p)))}. ${t.capacity.caveat}`,
+              itemOffered: service(name),
+            };
+          }),
+          {
+            "@type": "Offer",
+            name: `${t.meta.service} · ${minutesToText(session, lang)}`,
+            price: sessionPriceCents(s) / 100,
+            priceCurrency: s.currency,
+            url: offerUrl,
+            /* La capacité et le déroulement, les mêmes phrases que la page. */
+            description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(session)))}. ${t.capacity.caveat} ${setupSentence(t, s, lang)}`,
+            itemOffered: service(`${t.meta.service} · ${minutesToText(session, lang)}`),
+          },
+        ],
+      },
+      /* Les pièces à l'unité de la page Tarifs, une fourchette quand le prix varie. */
+      {
+        "@type": "OfferCatalog",
+        name: t.tarifs.units.title,
+        itemListElement: UNIT_PRICES.map((u) => ({
+          "@type": "Offer",
+          itemOffered: { "@type": "Service", name: lang === "en" ? u.en : u.fr, provider },
+          ...(u.toCents
+            /* « À partir de » : le prix plancher, que Google exige, et la fourchette. */
+            ? { priceSpecification: { "@type": "PriceSpecification", price: u.cents / 100, minPrice: u.cents / 100, maxPrice: u.toCents / 100, priceCurrency: s.currency } }
+            : { price: u.cents / 100, priceCurrency: s.currency }),
+        })),
+      },
+    ],
+    /* L'heure de plus décidée sur place, les cinq cartes des prestations,
+       telles que l'accueil les montre, et les frais de déplacement de chaque
+       zone. */
     makesOffer: [
       {
         "@type": "Offer",
-        name: `${t.meta.service} · ${minutesToText(session, lang)}`,
-        price: sessionPriceCents(s) / 100,
-        priceCurrency: s.currency,
-        /* La capacité et le déroulement, les mêmes phrases que la page. */
-        description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(session)))}. ${t.capacity.caveat} ${setupSentence(t, s, lang)}`,
-      },
-      {
-        "@type": "Offer",
         name: t.meta.extraHour,
+        itemOffered: service(t.meta.extraHour),
         priceSpecification: {
           "@type": "UnitPriceSpecification",
-          price: rate,
+          price: s.hourlyRate / 100,
           priceCurrency: s.currency,
           unitCode: "HUR",
           unitText: lang === "en" ? "hour" : "heure",
         },
       },
-      ...PLANS.map((p) => {
-        const text = lang === "en" ? p.en : p.fr;
-        return {
-          "@type": "Offer",
-          name: t.meta.plan.replace("{name}", text.name),
-          price: planCents(p, s) / 100,
-          priceCurrency: s.currency,
-          description: `${text.detail} ${t.capacity.perCycle.replace("{n}", String(planPieces(p)))}. ${t.capacity.caveat}`,
-        };
-      }),
-      /* Les cinq cartes des prestations, telles que l'accueil les montre. */
       ...t.services.items.map((x) => ({
-        "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body },
+        "@type": "Offer", itemOffered: { "@type": "Service", name: x.name, description: x.body, provider },
       })),
-      ...travelOffers(t, s, lang),
+      ...travelOffers(t, s, lang, provider),
     ],
-    /* Les pièces à l'unité de la page Tarifs, une fourchette quand le prix varie. */
-    hasOfferCatalog: {
-      "@type": "OfferCatalog",
-      name: t.tarifs.units.title,
-      itemListElement: UNIT_PRICES.map((u) => ({
-        "@type": "Offer",
-        itemOffered: { "@type": "Service", name: lang === "en" ? u.en : u.fr },
-        ...(u.toCents
-          ? { priceSpecification: { "@type": "PriceSpecification", minPrice: u.cents / 100, maxPrice: u.toCents / 100, priceCurrency: s.currency } }
-          : { price: u.cents / 100, priceCurrency: s.currency }),
-      })),
-    },
   };
+}
+
+/**
+ * Le site lui-même, sur l'accueil : le nom que Google peut afficher à la
+ * place du domaine, et le nom court.
+ */
+export function websiteJsonLd(lang: Lang) {
+  const origin = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${origin}/#site`,
+    name: BUSINESS_NAME,
+    alternateName: "NIVEX",
+    url: `${origin}/`,
+    inLanguage: lang === "en" ? "en-CA" : "fr-CA",
+    publisher: { "@id": `${origin}/#nivex` },
+  };
+}
+
+/**
+ * Le texte d'un bloc `<script type="application/ld+json">`. Les chevrons
+ * sont échappés : un nom de secteur saisi dans l'onglet Zones et frais qui
+ * contiendrait « </script> » ne doit pas pouvoir fermer la balise.
+ */
+export function jsonLdHtml(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, "\\u003c");
 }
 
 /** Une foire aux questions, telle que la page l'affiche. */

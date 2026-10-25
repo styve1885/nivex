@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { privateMeta } from "@/lib/seo";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { amountOf, findPlan, findSubscriptionByToken, scheduleInstant } from "@/lib/subscriptions";
@@ -14,8 +15,7 @@ import { VisitActions } from "@/components/booking/VisitActions";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
-  const { locale } = await params;
-  return { title: getDict(locale).subManage.title, robots: { index: false, follow: false } };
+  return privateMeta((await params).locale, "subscription");
 }
 
 /**

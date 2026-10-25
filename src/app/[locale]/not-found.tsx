@@ -19,7 +19,7 @@ async function currentLocale(): Promise<Locale> {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  return notFoundMeta(getDict(await currentLocale()));
+  return notFoundMeta(await currentLocale());
 }
 
 export default async function NotFound() {

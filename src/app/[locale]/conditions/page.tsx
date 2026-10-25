@@ -12,7 +12,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return pageMeta(t, locale, "/conditions", t.footer.terms, t.legal.terms.lede);
+  return pageMeta(t, locale, "/conditions", "conditions");
 }
 
 export default async function TermsPage({ params }: { params: Promise<{ locale: string }> }) {

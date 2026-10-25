@@ -21,8 +21,16 @@ const { cycleTravel, cycleTravelText } = await import("../src/lib/pricing.ts");
 const { legalValues, legalSections, fill } = await import("../src/components/LegalDocument.tsx");
 const { openingLine } = await import("../src/components/home/opening-line.ts");
 const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
-const { phoneDisplay, metaDescription, localBusinessJsonLd, faqJsonLd, tarifsDescription } = await import("../src/lib/seo.ts");
-const { llmsText } = await import("../src/lib/llms.ts");
+const {
+  phoneSchema, pageDescription, localBusinessJsonLd, websiteJsonLd, faqJsonLd, jsonLdHtml, BUSINESS_NAME,
+} = await import("../src/lib/seo.ts");
+const { seoFr, seoEn, seoAdmin, getSeo } = await import("../src/lib/i18n/seo.ts");
+const { llmsText, llmsFullText } = await import("../src/lib/llms.ts");
+const { PUBLIC_PAGES, publicUrls } = await import("../src/lib/pages.ts");
+const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER } = await import("../src/lib/brand.ts");
+const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
+const { siteOrigin } = await import("../src/lib/google.ts");
+const { readFileSync, readdirSync, statSync } = await import("node:fs");
 const { retiredFr } = await import("../src/lib/i18n/retired.ts");
 const { default: robots } = await import("../src/app/robots.ts");
 const { default: sitemap } = await import("../src/app/sitemap.ts");
@@ -510,63 +518,138 @@ test("la réponse sur les zones le dit à l'accueil, et se tait si un quartier p
 
 console.log("\nCe que lisent les moteurs et les assistants");
 
-test("le numéro s'écrit +1 450 943-1217", () => {
-  assert.equal(phoneDisplay(), "+1 450 943-1217");
+test("le numéro des fiches s'écrit +1-450-943-1217", () => {
+  assert.equal(phoneSchema(), "+1-450-943-1217");
 });
 
-test("la description de l'accueil nomme Saint-Lambert d'abord, puis Montréal", () => {
-  assert.equal(metaDescription(fr, P, "fr").split(".")[0],
-    "Repassage à domicile à Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert et Montréal");
-  assert.match(metaDescription(en, P, "en"), /^In-home ironing in Saint-Lambert, Vieux-Longueuil, Longueuil, Greenfield Park, Saint-Hubert and Montreal\./);
-  assert.doesNotMatch(metaDescription(fr, P, "fr"), /\{|!/);
+test("chaque page a son titre, qui commence par le nom de la maison, dans chaque langue", () => {
+  assert.equal(seoFr.home.title, "NIVEX Repassage à domicile — Montréal et Rive-Sud");
+  assert.equal(seoEn.home.title, "NIVEX In-Home Ironing — Montreal and South Shore");
+  assert.deepEqual(Object.keys(seoEn), Object.keys(seoFr), "le français a son anglais");
+  for (const v of Object.values(seoFr)) assert.ok(v.title.startsWith("NIVEX Repassage"), v.title);
+  for (const v of Object.values(seoEn)) assert.ok(v.title.startsWith("NIVEX In-Home Ironing"), v.title);
+  for (const t of [seoAdmin.title, seoAdmin.login]) assert.ok(t.startsWith("NIVEX Repassage"), t);
+  const titres = [...Object.values(seoFr), ...Object.values(seoEn)].map((v) => v.title).concat(seoAdmin.title, seoAdmin.login);
+  assert.equal(new Set(titres).size, titres.length, "aucun titre n'appartient à deux pages");
+  for (const t of titres) assert.doesNotMatch(t, /!/);
+  assert.equal(getSeo("de"), seoFr, "une langue inconnue retombe sur le français");
 });
 
-test("la fiche LocalBusiness : nom, téléphone, site, prix, et la Rive-Sud avant Montréal", () => {
+test("chaque description tient en 150 à 160 caractères et nomme le service, Montréal et la Rive-Sud", () => {
+  const reglages = [FALLBACK_SETTINGS, { ...FALLBACK_SETTINGS, hourlyRate: 6000 }, { ...FALLBACK_SETTINGS, hourlyRate: 5000 }];
+  for (const s of reglages) {
+    for (const page of Object.keys(seoFr)) {
+      const fr_ = pageDescription(page, "fr", s);
+      const en_ = pageDescription(page, "en", s);
+      for (const d of [fr_, en_]) {
+        assert.ok(d.length >= 150 && d.length <= 160, `${page} (${s.hourlyRate}) : ${d.length} caractères — ${d}`);
+        assert.doesNotMatch(d, /[{}!]/, d);
+      }
+      assert.match(fr_, /repassage à domicile/i, fr_);
+      assert.ok(fr_.includes("Montréal") && fr_.includes("Rive-Sud"), fr_);
+      assert.match(en_, /in-home ironing/i, en_);
+      assert.ok(en_.includes("Montreal") && en_.includes("South Shore"), en_);
+    }
+  }
+  assert.equal(pageDescription("home", "fr", FALLBACK_SETTINGS).length, flat(pageDescription("home", "fr", FALLBACK_SETTINGS)).length);
+});
+
+test("les descriptions disent les prix de la page, tirés des réglages", () => {
+  assert.match(flat(pageDescription("home", "fr", FALLBACK_SETTINGS)), /Abonnements dès 150 \$ par cycle\.$/);
+  assert.match(pageDescription("home", "en", FALLBACK_SETTINGS), /Subscriptions from \$150 per cycle\.$/);
+  assert.match(flat(pageDescription("tarifs", "fr", FALLBACK_SETTINGS)),
+    /abonnements de 150 \$ à 600 \$ par cycle, séance de 2 heures à 110 \$, prix des pièces à l'unité\.$/);
+  assert.match(pageDescription("tarifs", "en", FALLBACK_SETTINGS), /from \$150 to \$600 per cycle, a 2 hours? session for \$110/);
+  assert.match(flat(pageDescription("tarifs", "fr", { ...FALLBACK_SETTINGS, hourlyRate: 6000 })),
+    /de 165 \$ à 660 \$ par cycle, séance de 2 heures à 120 \$/, "un autre taux change tout d'un coup");
+});
+
+test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux, sans réseau tant qu'on n'en a pas", () => {
   const ld = localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr");
-  assert.equal(ld["@type"], "LocalBusiness");
-  assert.equal(ld.name, "NIVEX");
-  assert.equal(ld.telephone, "+1 450 943-1217");
-  assert.equal(ld.email, "contact@nivexrepassage.ca", "le courriel du domaine, pas le Gmail");
-  assert.match(ld.url, /\/fr$/);
-  assert.equal(flat(ld.priceRange), "55 $ / h");
-  /* Les offres de la vitrine, à leur prix : la séance d'essai, l'heure de
-     plus, puis les quatre abonnements. Plus de séance de trois heures. */
-  const [essai, heure, ...reste] = ld.makesOffer;
-  assert.equal(essai.price, 110);
-  assert.match(flat(essai.name), /2 heures$/);
-  assert.match(flat(essai.description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
-  assert.equal(heure.name, "Une heure de plus, décidée sur place");
-  assert.equal(heure.priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
-  assert.equal(heure.priceSpecification.unitCode, "HUR");
-  const abonnements = reste.filter((o) => o.name?.startsWith("Abonnement"));
-  assert.deepEqual(abonnements.map((o) => [o.name, o.price]),
-    [["Abonnement Essentiel", 150], ["Abonnement Confort", 200], ["Abonnement Exécutif", 400], ["Abonnement Grande Famille", 600]]);
-  assert.match(flat(abonnements[2].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
-  assert.ok(!ld.makesOffer.some((o) => o.price === 165), "la séance de trois heures n'est plus publiée");
-  /* Les cinq cartes des prestations, puis les quatorze pièces à l'unité. */
-  assert.deepEqual(reste.filter((o) => o.itemOffered).map((o) => o.itemOffered.name),
-    ["Chemises", "Complets et vestons", "Robes et pièces délicates", "Uniformes scolaires et de travail", "Draps et linge de maison"]);
-  /* Les frais de déplacement, une offre par zone, avec ses secteurs. */
-  const route = reste.filter((o) => o.name?.startsWith("Frais de déplacement"));
-  assert.deepEqual(route.map((o) => o.name), ["Frais de déplacement · Zone A", "Frais de déplacement · Zone B"]);
-  assert.equal(route[0].price, 0, "la zone A ne facture rien");
-  assert.equal(route[0].areaServed.length, 20);
-  assert.ok(route[0].areaServed.some((x) => x.name === "Verdun" && x.address.addressLocality === "Montréal"), "Montréal en zone A");
-  assert.deepEqual(route[1].areaServed.map((x) => x.name), ["Saint-Jean-sur-Richelieu"]);
-  assert.deepEqual([route[1].priceSpecification.minPrice, route[1].priceSpecification.maxPrice], [10, 15]);
-  assert.equal(flat(route[1].description), "15 $ pour une séance de moins de 3 h, 10 $ pour une séance de 3 h ou plus.");
-  assert.ok(!JSON.stringify(ld).includes("Zone C"));
-  const pieces = ld.hasOfferCatalog.itemListElement;
-  assert.equal(pieces.length, 14);
-  assert.deepEqual([pieces[0].itemOffered.name, pieces[0].price], ["Parure Queen ou King complète", 28]);
-  const nappe = pieces.find((x) => x.itemOffered.name === "Nappe de réception");
-  assert.deepEqual([nappe.priceSpecification.minPrice, nappe.priceSpecification.maxPrice], [12, 18]);
+  const o = siteOrigin();
+  assert.equal(ld["@type"], "DryCleaningOrLaundry");
+  assert.equal(ld["@id"], `${o}/#nivex`, "le même identifiant sur toutes les pages");
+  assert.equal(ld.name, "NIVEX Repassage à domicile");
+  assert.equal(ld.name, BUSINESS_NAME);
+  assert.equal(ld.alternateName, "NIVEX");
+  assert.equal(ld.url, `${o}/fr`);
+  assert.equal(ld.logo, `${o}/logo-nivex.png`);
+  assert.equal(ld.image, `${o}/opengraph-image.jpg`);
+  assert.equal(ld.telephone, "+1-450-943-1217");
+  assert.equal(ld.email, CONTACT_EMAIL, "le courriel affiché sur le site");
+  assert.deepEqual(ld.founder, { "@type": "Person", name: FOUNDER });
+  assert.equal(FOUNDER, "Styve Ketchandji Ngaleu");
+  assert.equal(flat(ld.priceRange), "110 $ – 600 $", "de la séance d'essai au plus haut cycle");
+  /* Pas de rue ni de code postal : l'artisan se déplace. La ville seule, que
+     Google exige pour une fiche locale. */
+  assert.deepEqual(ld.address, { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" });
+  assert.equal(ld.sameAs, undefined, "aucune adresse de réseau inventée");
+  assert.match(ld.description, /^NIVEX, repassage à domicile à Montréal et sur la Rive-Sud/);
   const lieux = ld.areaServed.map((x) => x.name);
   assert.equal(lieux[0], "Saint-Lambert");
   assert.equal(lieux.length, 21);
   const premierMontreal = ld.areaServed.findIndex((x) => x.address.addressLocality === "Montréal");
   assert.equal(lieux[premierMontreal], "L'Île-des-Sœurs");
   assert.ok(ld.areaServed.slice(premierMontreal).every((x) => x.address.addressLocality === "Montréal"), "Montréal en dernier, d'un bloc");
+  assert.equal(localBusinessJsonLd(en, FALLBACK_SETTINGS, "en").url, `${o}/en`);
+});
+
+test("la fiche : le catalogue des quatre abonnements et de la séance d'essai, chaque offre portant un Service", () => {
+  const ld = localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr");
+  const provider = { "@id": ld["@id"] };
+  const [catalogue, pieces] = ld.hasOfferCatalog;
+  assert.equal(catalogue["@type"], "OfferCatalog");
+  assert.equal(catalogue.name, "Abonnements et séance d'essai");
+  assert.deepEqual(catalogue.itemListElement.map((x) => [flat(x.name), x.price, x.priceCurrency]), [
+    ["Abonnement Essentiel", 150, "CAD"], ["Abonnement Confort", 200, "CAD"], ["Abonnement Exécutif", 400, "CAD"],
+    ["Abonnement Grande Famille", 600, "CAD"], ["Repassage à domicile · 2 heures", 110, "CAD"],
+  ]);
+  assert.match(flat(catalogue.itemListElement[2].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
+  assert.match(flat(catalogue.itemListElement[4].description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
+  assert.equal(pieces.itemListElement.length, 14);
+  assert.deepEqual([pieces.itemListElement[0].itemOffered.name, pieces.itemListElement[0].price], ["Parure Queen ou King complète", 28]);
+  const nappe = pieces.itemListElement.find((x) => x.itemOffered.name === "Nappe de réception");
+  assert.deepEqual([nappe.priceSpecification.price, nappe.priceSpecification.minPrice, nappe.priceSpecification.maxPrice], [12, 12, 18]);
+  assert.equal(ld.openingHoursSpecification[0].dayOfWeek, "https://schema.org/Monday");
+  const [heure, ...reste] = ld.makesOffer;
+  assert.equal(heure.name, "Une heure de plus, décidée sur place");
+  assert.equal(heure.priceSpecification.price, FALLBACK_SETTINGS.hourlyRate / 100, "le prix vient des réglages");
+  assert.equal(heure.priceSpecification.unitCode, "HUR");
+  /* Toutes les offres, partout : un Service fourni par la maison, jamais un Product. */
+  const offres = [...catalogue.itemListElement, ...pieces.itemListElement, ...ld.makesOffer];
+  for (const x of offres) {
+    assert.equal(x["@type"], "Offer");
+    assert.equal(x.itemOffered["@type"], "Service", JSON.stringify(x));
+    assert.deepEqual(x.itemOffered.provider, provider);
+  }
+  assert.doesNotMatch(JSON.stringify(ld), /Product|AggregateOffer|Zone C|165/);
+  assert.deepEqual(reste.slice(0, 5).map((x) => x.itemOffered.name),
+    ["Chemises", "Complets et vestons", "Robes et pièces délicates", "Uniformes scolaires et de travail", "Draps et linge de maison"]);
+  const route = reste.slice(5);
+  assert.deepEqual(route.map((x) => x.name), ["Frais de déplacement · Zone A", "Frais de déplacement · Zone B"]);
+  assert.equal(route[0].price, 0, "la zone A ne facture rien");
+  assert.equal(route[0].areaServed.length, 20);
+  assert.ok(route[0].areaServed.some((x) => x.name === "Verdun" && x.address.addressLocality === "Montréal"), "Montréal en zone A");
+  assert.deepEqual(route[1].areaServed.map((x) => x.name), ["Saint-Jean-sur-Richelieu"]);
+  assert.deepEqual(route[1].priceSpecification.map((x) => [x.price, flat(x.description)]),
+    [[15, "15 $ pour une séance de moins de 3 h"], [10, "10 $ pour une séance de 3 h ou plus"]], "un prix chiffré par durée");
+  assert.equal(flat(route[1].description), "15 $ pour une séance de moins de 3 h, 10 $ pour une séance de 3 h ou plus.");
+});
+
+test("un bloc de données structurées ne peut pas fermer sa balise", () => {
+  assert.equal(jsonLdHtml({ name: "</script><b>" }), '{"name":"\\u003c/script>\\u003cb>"}');
+  assert.deepEqual(JSON.parse(jsonLdHtml({ name: "</script>" })), { name: "</script>" }, "le JSON reste le même");
+});
+
+test("le site, sur l'accueil : le même nom que la fiche, et le nom court", () => {
+  const o = siteOrigin();
+  const ld = websiteJsonLd("en");
+  assert.equal(ld["@type"], "WebSite");
+  assert.equal(ld.name, BUSINESS_NAME);
+  assert.equal(ld.alternateName, "NIVEX");
+  assert.equal(ld.url, `${o}/`);
+  assert.equal(ld.inLanguage, "en-CA");
+  assert.deepEqual(ld.publisher, { "@id": `${o}/#nivex` });
 });
 
 test("la foire aux questions structurée reprend le texte affiché", () => {
@@ -575,32 +658,65 @@ test("la foire aux questions structurée reprend le texte affiché", () => {
   assert.equal(ld.mainEntity[0].acceptedAnswer.text, "R.");
 });
 
-const { pageMeta, notFoundMeta, siteMetadata, siteViewport } = await import("../src/lib/seo.ts");
+const { pageMeta, privateMeta, notFoundMeta, siteMetadata, siteViewport } = await import("../src/lib/seo.ts");
 
-test("chaque page a sa carte de partage : son adresse, ses deux langues, son titre complet", () => {
-  const m = pageMeta(en, "en", "/tarifs", en.tarifs.eyebrow, en.tarifs.lede);
-  assert.equal(m.title, en.tarifs.eyebrow, "le gabarit de la racine ajoute « · NIVEX » au <title>");
+test("chaque page publique : son titre complet, son adresse canonique, ses trois hreflang, sa carte de partage", () => {
+  const m = pageMeta(en, "en", "/tarifs", "tarifs", FALLBACK_SETTINGS);
+  assert.deepEqual(m.title, { absolute: seoEn.tarifs.title }, "la racine n'y ajoute rien");
+  assert.equal(m.description, pageDescription("tarifs", "en", FALLBACK_SETTINGS));
   assert.equal(m.alternates.canonical, "/en/tarifs");
   assert.deepEqual(m.alternates.languages, { "fr-CA": "/fr/tarifs", "en-CA": "/en/tarifs", "x-default": "/fr/tarifs" });
   assert.equal(m.openGraph.url, "/en/tarifs", "og:url est la page partagée, pas l'accueil");
   assert.equal(m.openGraph.type, "website");
   assert.equal(m.openGraph.siteName, "NIVEX");
-  assert.equal(m.openGraph.title, `${en.tarifs.eyebrow} · NIVEX`, "la carte reçoit le titre complet");
-  assert.equal(m.openGraph.description, en.tarifs.lede);
+  assert.equal(m.openGraph.title, seoEn.tarifs.title);
+  assert.equal(m.openGraph.description, m.description);
   assert.equal(m.openGraph.locale, "en_CA");
   assert.deepEqual(m.openGraph.alternateLocale, ["fr_CA"]);
   assert.equal(m.openGraph.images[0].url, "/opengraph-image.jpg", "l'image ne se perd pas avec le bloc");
   assert.equal(m.twitter, undefined, "la carte Twitter de la racine survit si personne ne la redéclare");
 
-  const mtl = pageMeta(fr, "fr", "/montreal", { absolute: fr.montreal.metaTitle }, fr.montreal.lede);
-  assert.equal(mtl.openGraph.title, fr.montreal.metaTitle, "un titre absolu reste tel quel");
-  assert.deepEqual(mtl.openGraph.alternateLocale, ["en_CA"]);
-  assert.equal(pageMeta(fr, "de", "", "x", "y").alternates.canonical, "/fr", "une langue inconnue retombe sur le français");
+  const accueil = pageMeta(fr, "fr", "", "home", FALLBACK_SETTINGS);
+  assert.equal(accueil.title.absolute, "NIVEX Repassage à domicile — Montréal et Rive-Sud");
+  assert.equal(accueil.alternates.canonical, "/fr");
+  assert.deepEqual(accueil.alternates.languages, { "fr-CA": "/fr", "en-CA": "/en", "x-default": "/fr" });
+  assert.equal(pageMeta(fr, "de", "", "home").alternates.canonical, "/fr", "une langue inconnue retombe sur le français");
+});
+
+test("les pages personnelles : leur titre, jamais indexées, sans adresse canonique ni langues", () => {
+  for (const page of ["reservation", "subscription", "optOut"]) {
+    const m = privateMeta("fr", page);
+    assert.deepEqual(m.title, { absolute: seoFr[page].title });
+    assert.deepEqual(m.robots, { index: false, follow: false });
+    assert.deepEqual(m.alternates, {}, "ni canonique ni hreflang hérités de la racine");
+  }
+  assert.equal(privateMeta("en", "reservation").title.absolute, "NIVEX In-Home Ironing — Manage my booking");
+});
+
+test("chaque page de la vitrine déclare son en-tête, et la racine ne pose ni canonique ni hreflang", () => {
+  const racine = readFileSync("src/app/[locale]/layout.tsx", "utf8");
+  assert.doesNotMatch(racine, /alternates|canonical/, "posés par la racine, ils passaient aux pages personnelles");
+  const pages = [];
+  const visit = (dir) => {
+    for (const f of readdirSync(dir)) {
+      const p = `${dir}/${f}`;
+      if (statSync(p).isDirectory()) visit(p);
+      else if (f === "page.tsx" || f === "not-found.tsx") pages.push(p);
+    }
+  };
+  visit("src/app/[locale]");
+  assert.ok(pages.length >= 12, pages.join(", "));
+  for (const p of pages) {
+    const src = readFileSync(p, "utf8");
+    assert.match(src, /export (async function generateMetadata|const metadata)/, `${p} n'a pas d'en-tête`);
+    assert.match(src, /pageMeta\(|privateMeta\(|notFoundMeta\(/, `${p} n'écrit pas son titre depuis lib/seo.ts`);
+  }
 });
 
 test("la page introuvable : un titre dans chaque langue, sans adresse canonique ni point d'exclamation", () => {
-  assert.deepEqual(notFoundMeta(fr), { title: "Page introuvable", alternates: {} });
-  assert.deepEqual(notFoundMeta(en), { title: "Page not found", alternates: {} });
+  assert.deepEqual(notFoundMeta("fr").title, { absolute: "NIVEX Repassage — Page introuvable" });
+  assert.deepEqual(notFoundMeta("en").title, { absolute: "NIVEX In-Home Ironing — Page not found" });
+  assert.deepEqual(notFoundMeta("fr").alternates, {});
   assert.deepEqual(Object.keys(en.notFound), Object.keys(fr.notFound));
   for (const t of [fr, en]) for (const v of Object.values(t.notFound)) assert.doesNotMatch(v, /!/, v);
 });
@@ -625,10 +741,67 @@ test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", (
   assert.equal(agents.length, 6);
 });
 
-test("le plan du site contient la page Montréal, en français et en anglais", () => {
-  const urls = sitemap().map((x) => x.url);
-  assert.ok(urls.some((u) => u.endsWith("/fr/montreal")));
-  assert.ok(urls.some((u) => u.endsWith("/en/montreal")));
+test("le plan du site : les cinq pages publiques, deux langues, leur vraie date, sans les tunnels", () => {
+  const plan = sitemap();
+  const o = siteOrigin();
+  assert.equal(plan.length, PUBLIC_PAGES.length * 2);
+  assert.deepEqual(plan.map((x) => x.url), publicUrls(o).map((x) => x.url));
+  for (const u of ["/fr/montreal", "/en/montreal", "/fr", "/en/tarifs", "/fr/confidentialite"]) {
+    assert.ok(plan.some((x) => x.url === `${o}${u}`), u);
+  }
+  assert.ok(!plan.some((x) => /reserver|abonnement|reservation|ne-pas-compter/.test(x.url)), "ni tunnels ni liens personnels");
+  for (const x of plan) {
+    assert.match(x.lastModified, /^\d{4}-\d{2}-\d{2}$/, "une date, pas l'heure de la construction");
+    const page = PUBLIC_PAGES.find((p) => x.url.endsWith(`/fr${p.path}`) || x.url.endsWith(`/en${p.path}`));
+    assert.equal(x.lastModified, page.updated);
+    assert.deepEqual(Object.keys(x.alternates.languages), ["fr-CA", "en-CA", "x-default"]);
+    assert.ok(Object.values(x.alternates.languages).every((u) => u.startsWith(`${o}/`)), "des adresses absolues");
+  }
+});
+
+test("en production, toutes les adresses partent du www", () => {
+  const avant = { ...process.env };
+  try {
+    process.env.VERCEL_ENV = "production";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://nivexrepassage.ca";
+    assert.equal(siteOrigin(), "https://www.nivexrepassage.ca", "une variable restée sur l'ancien domaine ne compte plus");
+    assert.equal(SITE_URL, "https://www.nivexrepassage.ca");
+    assert.ok(sitemap().every((x) => x.url.startsWith("https://www.nivexrepassage.ca/")));
+    process.env.VERCEL_ENV = "preview";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://essai.example";
+    assert.equal(siteOrigin(), "https://essai.example", "une version d'essai garde sa propre adresse");
+  } finally {
+    for (const k of ["VERCEL_ENV", "NEXT_PUBLIC_SITE_URL"]) {
+      if (avant[k] === undefined) delete process.env[k]; else process.env[k] = avant[k];
+    }
+  }
+});
+
+test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce qui a changé", () => {
+  assert.match(INDEXNOW_KEY, /^[a-f0-9]{32}$/);
+  assert.equal(readFileSync(`public/${INDEXNOW_KEY}.txt`, "utf8"), INDEXNOW_KEY, "le fichier ne contient que la clé");
+  const urls = currentStamps().map((x) => x.url);
+  assert.equal(urls.length, 10);
+  assert.ok(urls.every((u) => u.startsWith("https://www.nivexrepassage.ca/")), "jamais d'adresse sans www");
+  assert.ok(!urls.some((u) => /reserver|abonnement/.test(u)));
+  assert.deepEqual(indexNowBody(urls.slice(0, 2)), {
+    host: "www.nivexrepassage.ca",
+    key: INDEXNOW_KEY,
+    keyLocation: `https://www.nivexrepassage.ca/${INDEXNOW_KEY}.txt`,
+    urlList: urls.slice(0, 2),
+  });
+  assert.equal(keyLocation(), `https://www.nivexrepassage.ca/${INDEXNOW_KEY}.txt`);
+  const now = currentStamps();
+  assert.equal(changedStamps(now, new Map()).length, 10, "tout part au premier envoi");
+  const sent = new Map(now.map((x) => [x.url, x.updated]));
+  assert.deepEqual(changedStamps(now, sent), [], "un déploiement qui n'avance aucune date n'envoie rien");
+  sent.set(now[1].url, "2026-01-01");
+  assert.deepEqual(changedStamps(now, sent).map((x) => x.url), [now[1].url]);
+  const wf = readFileSync(".github/workflows/indexnow.yml", "utf8");
+  assert.match(wf, /deployment_status/);
+  assert.match(wf, /startsWith\(github\.event\.deployment\.environment, 'Production'\)/);
+  assert.match(wf, /vercel\.deployment\.success/);
+  assert.match(wf, /https:\/\/www\.nivexrepassage\.ca\/api\/indexnow\?sha=/);
 });
 
 test("le lien court /avis traverse le middleware, les autres adresses gardent leur langue", () => {
@@ -647,8 +820,7 @@ test("les nouveaux textes : aucun point d'exclamation, et le français a son ang
     ...Object.values(en.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v]))];
   for (const t of textes) assert.doesNotMatch(t, /!/, t);
   assert.equal(flat(fr.faq.items[0].q), "Est-ce que vous ramassez les vêtements ?");
-  assert.equal(fr.montreal.metaTitle, "Repassage à domicile à Montréal — NIVEX");
-  assert.equal(fr.meta.title, "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX");
+  assert.equal(seoFr.montreal.title, "NIVEX Repassage à domicile à Montréal");
 });
 
 test("le français garde ses espaces insécables : avant : ; ? et dans les guillemets", () => {
@@ -664,21 +836,26 @@ test("le français garde ses espaces insécables : avant : ; ? et dans les guill
 
 console.log("\nCe que la vitrine écrit depuis les réglages");
 
-test("les descriptions disent les prix de la page, tirés des réglages", () => {
-  assert.match(flat(metaDescription(fr, P, "fr", true, FALLBACK_SETTINGS)),
-    /pas de livraison\. Abonnements dès 150 \$ par cycle, séance de 2 heures à 110 \$\. Première heure offerte\.$/);
-  assert.match(flat(metaDescription(en, P, "en", false, FALLBACK_SETTINGS)),
-    /no delivery\. Subscriptions from \$150 per cycle, a session of 2 hours for \$110\.$/);
-  assert.match(flat(metaDescription(fr, P, "fr", false, { ...FALLBACK_SETTINGS, hourlyRate: 6000 })),
-    /dès 165 \$ par cycle, séance de 2 heures à 120 \$\.$/, "un autre taux change tout d'un coup");
-  assert.equal(flat(tarifsDescription(fr, FALLBACK_SETTINGS, "fr")),
-    "Repassage à domicile : abonnements de 150 $ à 600 $ par cycle, séance de 2 heures à 110 $, prix à la pièce et frais de déplacement par zone.");
-  assert.equal(tarifsDescription(en, FALLBACK_SETTINGS, "en"),
-    "In-home ironing: subscriptions from $150 to $600 per cycle, a session of 2 hours for $110, single-piece prices and travel fees by area.");
+test("llms.txt, version courte : le service, les zones, les prix, le contact et les pages, dans les deux langues", () => {
+  const txt = flat(llmsText({ ...FALLBACK_SETTINGS, zonePolicy: P }));
+  for (const bit of [
+    "# NIVEX Repassage à domicile", "> NIVEX, repassage à domicile à Montréal et sur la Rive-Sud",
+    "## Zones desservies", "Secteurs desservis : Saint-Lambert", "Aucuns frais de déplacement à Montréal.",
+    "- Zone B (Saint-Jean-sur-Richelieu) : 15 $ pour une séance de moins de 3 h",
+    "- Essentiel : 150 $ / cycle, 1 visite de 3 h", "- Confort : 200 $ / cycle", "- Exécutif : 400 $ / cycle", "- Grande Famille : 600 $ / cycle",
+    "## Séance d'essai", "Pour un premier essai : la séance de 2 heures, 110 $.",
+    "- Téléphone : +1 450 943 1217", "- Courriel : contact@nivexrepassage.ca",
+    "/fr/tarifs)", "/fr/montreal)", "/fr/reserver)", "/fr/abonnement)", "/llms-full.txt)",
+    "# NIVEX In-Home Ironing", "> NIVEX, in-home ironing in Montreal and on the South Shore",
+    "## Areas served", "No travel fees in Montreal.", "- Executive: $400 / cycle, four 2-hour visits", "## Trial session",
+    "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 943 1217", "/en/tarifs)",
+  ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
+  assert.ok(txt.length < 4000, `la version courte reste courte : ${txt.length}`);
+  assert.doesNotMatch(txt, /###|Zone C|\{|!|Découverte|velours|Corduroy/);
 });
 
-test("llms.txt : les mêmes prix, zones et questions que les pages, dans les deux langues", () => {
-  const txt = flat(llmsText({ ...FALLBACK_SETTINGS, zonePolicy: P }));
+test("llms-full.txt : les mêmes prix, zones et questions que les pages, dans les deux langues", () => {
+  const txt = flat(llmsFullText({ ...FALLBACK_SETTINGS, zonePolicy: P }));
   for (const bit of [
     "# NIVEX — Repassage à domicile", "Abonnement Exécutif : 400 $ / cycle (au lieu de 440 $)",
     "Pour un premier essai : la séance de 2 heures, 110 $.", "Une heure de plus, décidée sur place : 55 $.",
@@ -694,15 +871,6 @@ test("llms.txt : les mêmes prix, zones et questions que les pages, dans les deu
   assert.equal((txt.match(/^### /gm) ?? []).length, 16, "sept questions et une zone payante par langue");
   assert.doesNotMatch(txt, /Zone C|réduits de|reduced by/);
   assert.doesNotMatch(txt, /\{|!|Découverte|Grand Foyer|Douce Nuit|Prolongation|velours|Corduroy/);
-});
-
-test("la description n'annonce la première heure que si l'artisan l'offre", () => {
-  assert.match(metaDescription(fr, P, "fr", true), /pas de livraison\. Première heure offerte\.$/);
-  assert.match(metaDescription(en, P, "en", true), /no delivery\. First hour on the house\.$/);
-  assert.doesNotMatch(metaDescription(fr, P, "fr", false), /offerte/);
-  assert.doesNotMatch(metaDescription(en, P, "en", false), /on the house/);
-  assert.match(localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr").description, /Première heure offerte\.$/);
-  assert.doesNotMatch(localBusinessJsonLd(fr, { ...FALLBACK_SETTINGS, firstHourFree: false }, "fr").description, /offerte/);
 });
 
 test("les conditions ne nomment l'offre, pour l'écarter des abonnements, que si elle existe", () => {

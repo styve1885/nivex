@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { SiteMeasurement } from "@/components/SiteMeasurement";
 import { cormorant, jost } from "@/lib/fonts";
 import { siteMetadata, siteViewport } from "@/lib/seo";
+import { seoAdmin } from "@/lib/i18n/seo";
 import "../globals.css";
 
 /*
@@ -13,7 +14,8 @@ import "../globals.css";
 
 export const metadata: Metadata = {
   ...siteMetadata,
-  title: "Espace artisan",
+  title: { absolute: seoAdmin.title },
+  description: seoAdmin.description,
   robots: { index: false, follow: false, nocache: true },
 };
 

@@ -300,19 +300,10 @@ export const fr = {
   htmlLang: "fr-CA",
   meta: {
     service: "Repassage à domicile",
-    title: "Repassage à domicile à Saint-Lambert et Longueuil — NIVEX",
-    /* {places} : les premiers secteurs de la Rive-Sud, dans l'ordre de
-       l'onglet « Zones et frais », puis Montréal s'il est desservi. L'offre
-       ne s'y ajoute que tant que l'artisan la propose. */
-    description:
-      "Repassage à domicile à {places}. Nous repassons vos vêtements et votre literie sur place, chez vous\u00a0: pas de collecte, pas de livraison.",
-    /* {plan} : le plus bas montant par cycle ; {min} et {price} : la séance
-       d'essai. Les trois viennent des réglages, comme sur la page. */
-    prices: "Abonnements dès {plan} par cycle, séance de {min} à {price}.",
-    /* Les noms des offres dans les données structurées. */
+    /* Les noms des offres dans les données structurées. Les titres et les
+       descriptions des pages vivent dans i18n/seo.ts, hors du dictionnaire. */
     plan: "Abonnement {name}",
     extraHour: "Une heure de plus, décidée sur place",
-    offer: "Première heure offerte.",
     ogAlt: "NIVEX — Repassage à domicile de prestige",
   },
   nav: {
@@ -487,7 +478,6 @@ export const fr = {
   /* La page Montréal. Les montants, la durée minimale et les délais y sont
      remplis depuis les réglages, comme sur la page Tarifs. */
   montreal: {
-    metaTitle: "Repassage à domicile à Montréal — NIVEX",
     eyebrow: "Montréal",
     title: "Repassage à domicile à Montréal",
     lede:
@@ -708,7 +698,6 @@ export const fr = {
   /* La page d'une adresse qui ne mène nulle part : faute de frappe, vieux
      lien partagé, code QR mal recopié. */
   notFound: {
-    metaTitle: "Page introuvable",
     title: "Cette page a pris le pli.",
     body: "Elle n'existe pas, ou plus. Revenons à quelque chose de bien repassé.",
     home: "Retour à l'accueil",
@@ -870,11 +859,6 @@ export const fr = {
   tarifs: {
     eyebrow: "Tarification",
     title: "Tarifs du repassage à domicile.",
-    /* La description lue par les moteurs et les assistants : {from} et {to},
-       le plus bas et le plus haut montant par cycle ; {min} et {price}, la
-       séance d'essai. Tout vient des réglages, comme sur la page. */
-    metaDescription:
-      "Repassage à domicile\u00a0: abonnements de {from} à {to} par cycle, séance de {min} à {price}, prix à la pièce et frais de déplacement par zone.",
     /* La séance d'essai, en une ligne : {min} et {price} viennent des réglages. */
     trial: "Pour un premier essai\u00a0: la séance de {min}, {price}.",
     trialCta: "Réserver la séance",

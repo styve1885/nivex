@@ -1,0 +1,46 @@
+/**
+ * Les pages publiques que les moteurs doivent trouver, chacune avec la date
+ * de sa dernière modification significative : son contenu, ses données
+ * structurées ou son en-tête (titre, description). Une retouche de
+ * ponctuation ne compte pas.
+ *
+ * Le plan du site écrit ces dates, et IndexNow les compare à celles qu'il a
+ * déjà envoyées (lib/indexnow.ts) : modifier une page sans avancer sa date,
+ * c'est la laisser invisible aux deux. La date vaut pour les deux langues.
+ *
+ * Les tunnels, /reserver et /abonnement, n'y sont pas : ils ne servent qu'à
+ * réserver, depuis les autres pages. Les liens personnels de réservation et
+ * d'abonnement, que robots.txt écarte, encore moins.
+ *
+ * Sans dépendance : le plan du site, IndexNow et les tests la lisent tels
+ * quels.
+ */
+
+export type PublicPage = {
+  /** Le chemin après la langue : "" pour l'accueil, "/tarifs"… */
+  path: string;
+  /** « AAAA-MM-JJ », à l'heure de Montréal. */
+  updated: string;
+  changeFrequency: "weekly" | "monthly" | "yearly";
+  priority: number;
+};
+
+/* Le 25 octobre 2026, chaque page a reçu son titre, sa description et la
+   fiche LocalBusiness : toutes datent de ce jour-là. */
+export const PUBLIC_PAGES: PublicPage[] = [
+  { path: "", updated: "2026-10-25", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-10-25", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-10-25", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/conditions", updated: "2026-10-25", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-10-25", changeFrequency: "yearly", priority: 0.3 },
+];
+
+export const PAGE_LOCALES = ["fr", "en"] as const;
+
+export type PublicUrl = { url: string; locale: (typeof PAGE_LOCALES)[number]; page: PublicPage };
+
+/** Chaque page publique, dans chaque langue, en adresse absolue. */
+export function publicUrls(origin: string): PublicUrl[] {
+  return PAGE_LOCALES.flatMap((locale) =>
+    PUBLIC_PAGES.map((page) => ({ url: `${origin}/${locale}${page.path}`, locale, page })));
+}

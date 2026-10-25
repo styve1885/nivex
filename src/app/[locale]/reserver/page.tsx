@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return pageMeta(t, locale, "/reserver", t.booking.title, t.booking.lede);
+  return pageMeta(t, locale, "/reserver", "reserver");
 }
 
 export default async function BookPage({ params }: { params: Promise<{ locale: string }> }) {

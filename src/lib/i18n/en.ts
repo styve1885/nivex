@@ -282,13 +282,8 @@ export const en: Dict = {
   htmlLang: "en-CA",
   meta: {
     service: "In-home ironing",
-    title: "In-home ironing in Saint-Lambert and Longueuil — NIVEX",
-    description:
-      "In-home ironing in {places}. We iron your clothes and bed linen on site, in your home: no pickup, no delivery.",
-    prices: "Subscriptions from {plan} per cycle, a session of {min} for {price}.",
     plan: "{name} subscription",
     extraHour: "One more hour, decided on site",
-    offer: "First hour on the house.",
     ogAlt: "NIVEX — Prestige in-home ironing",
   },
   nav: {
@@ -439,7 +434,6 @@ export const en: Dict = {
     none: "Online booking is closed for every area at the moment. Call us.",
   },
   montreal: {
-    metaTitle: "In-home ironing in Montreal — NIVEX",
     eyebrow: "Montreal",
     title: "In-home ironing in Montreal",
     lede:
@@ -641,7 +635,6 @@ export const en: Dict = {
     back: "Back to the home page",
   },
   notFound: {
-    metaTitle: "Page not found",
     title: "This page has been folded away.",
     body: "It does not exist, or no longer does. Let us return to something neatly pressed.",
     home: "Back to the home page",
@@ -799,8 +792,6 @@ export const en: Dict = {
   tarifs: {
     eyebrow: "Pricing",
     title: "In-home ironing prices.",
-    metaDescription:
-      "In-home ironing: subscriptions from {from} to {to} per cycle, a session of {min} for {price}, single-piece prices and travel fees by area.",
     trial: "For a first try: a session of {min}, {price}.",
     trialCta: "Book the session",
     conditions: {
