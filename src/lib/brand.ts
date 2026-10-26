@@ -39,10 +39,11 @@ export const INDEXNOW_KEY = "5d6a47021d6a4c68a7b8503b397f7ee3";
 
 /**
  * Le jeton de la balise de validation de Google Search Console, propriété
- * https://www.nivexrepassage.ca/. Vide tant que l'artisan ne l'a pas fourni :
- * la balise ne s'écrit alors pas.
+ * https://www.nivexrepassage.ca/, fourni par l'artisan le 26 octobre 2026 :
+ * la valeur de `content=` seule, jamais la balise entière. Le retirer fait
+ * perdre la validation de la propriété. Vide, la balise ne s'écrit pas.
  */
-export const GOOGLE_SITE_VERIFICATION = "";
+export const GOOGLE_SITE_VERIFICATION = "qr9tWTjQLrKWeKSnXhvDQWGpP0_zqSdxksUIWVSg3w8";
 
 /** Le fondateur, nommé dans la fiche LocalBusiness. */
 export const FOUNDER = "Styve Ketchandji Ngaleu";
