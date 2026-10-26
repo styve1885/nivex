@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Mark, Wordmark } from "@/components/Logo";
 import { GoogleIcon } from "@/components/Icons";
@@ -5,8 +6,11 @@ import { getSettings } from "@/lib/settings";
 import { getSession } from "@/lib/session";
 import { googleConfigured } from "@/lib/google";
 import { isDbConfigured } from "@/lib/db";
+import { seoAdmin } from "@/lib/i18n/seo";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: { absolute: seoAdmin.login } };
 
 const MESSAGES: Record<string, string> = {
   google_not_configured: "Google n'est pas encore configuré sur ce site. Les variables GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET sont manquantes.",

@@ -3,7 +3,8 @@
 # La maison NIVEX
 
 Repassage à domicile de prestige, à Longueuil et sur la Rive-Sud. Site en
-production sur `nivexrepassage.ca`, déployé depuis la branche `main` par
+production sur `www.nivexrepassage.ca` (le domaine sans www y redirige en
+308, réglage de domaine chez Vercel), déployé depuis la branche `main` par
 Vercel. Base Neon, compte Google de l'artisan branché pour l'agenda et les
 courriels.
 
@@ -155,16 +156,21 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
-| `lib/seo.ts` | Ce que lisent les moteurs et les assistants : description de l'accueil, fiche LocalBusiness, FAQ structurée |
+| `lib/seo.ts` | Ce que lisent les moteurs et les assistants : en-tête de chaque page (titre, description, canonique, hreflang), fiche LocalBusiness, site, FAQ structurée |
+| `lib/i18n/seo.ts` | Le titre et la description de chaque page, dans les deux langues, hors des dictionnaires |
+| `lib/pages.ts` | Les pages publiques et la date de leur dernière modification : plan du site et IndexNow |
+| `lib/indexnow.ts` | Ce qui est signalé à IndexNow (Bing et les autres), et quand |
+| `lib/freshness.ts` | Le jour où le contenu public tiré des réglages a changé : plan du site et IndexNow |
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
 | `lib/services.ts` | Les prestations par défaut et leurs types, sans dépendance : l'admin les importe sans tirer le pilote de base dans le navigateur |
 | `lib/retention.ts` | Les durées de conservation promises par la politique, tenues par la tâche quotidienne |
 | `lib/items.ts` | Les lignes d'une réservation (séance, pièces à l'unité, ancien panier) et l'estimation en fourchette, sans dépendance |
-| `lib/llms.ts` | Le fichier `/llms.txt`, écrit depuis les réglages et les dictionnaires |
+| `lib/llms.ts` | Les fichiers `/llms.txt` (court) et `/llms-full.txt` (détaillé), écrits depuis les réglages et les dictionnaires |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
 `nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
-`nivex_zone_history`, `nivex_migrations`. Le schéma se pose tout
+`nivex_zone_history`, `nivex_migrations`, `nivex_indexnow`,
+`nivex_public_content`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
 **idempotent** : il s'exécute à chaque instance froide.
 
@@ -466,7 +472,7 @@ zone qu'ils portent.
 - **La Rive-Sud d'abord, Montréal ensuite.** Un secteur dont tous les
   préfixes commencent par H (sauf H7, Laval) est un quartier de Montréal
   (`isMontrealSector`), quelle que soit sa zone. Partout où les secteurs
-  sont nommés — texte de zone, description de l'accueil, `areaServed`,
+  sont nommés — texte de zone, `areaServed`,
   liste pour Google —, les autres viennent en premier, dans l'ordre de
   l'onglet, puis ceux de l'île. Saint-Lambert ouvre la liste : c'est le
   secteur que la maison met en avant, et l'ordre se tient depuis l'onglet.
@@ -499,28 +505,112 @@ rond paient déjà le tarif réduit.
 
 ## Moteurs de recherche et assistants
 
-La fiche `LocalBusiness` (`lib/seo.ts`) est la même sur l'accueil et sur la
-page Montréal : nom, téléphone, site, secteurs dans `areaServed` (Rive-Sud,
-puis Montréal, un quartier de l'île portant Montréal comme localité), et
-exactement les offres des pages, aux mêmes prix : la séance d'essai, l'heure
-de plus, les quatre abonnements, les cinq prestations, les frais de
-déplacement de chaque zone avec ses secteurs (zéro en zone A), et les pièces
-à l'unité dans `hasOfferCatalog`. La description de l'accueil nomme les cinq
-premiers secteurs de la Rive-Sud, puis Montréal, et dit les prix (dès
-150 $ par cycle, séance de 2 heures à 110 $) ; celle de Tarifs
-(`tarifsDescription`) l'éventail des abonnements.
+**Le domaine canonique est `https://www.nivexrepassage.ca`** (`SITE_URL`,
+`lib/brand.ts`), depuis le 25 octobre 2026. En production, `siteOrigin()` le
+rend quoi que dise `NEXT_PUBLIC_SITE_URL` : liens canoniques, hreflang, plan
+du site, robots.txt, données structurées, IndexNow, liens des courriels et
+adresse de retour de Google en dépendent. Le domaine sans www redirige en
+308 chez Vercel, avant le code : un réglage tiers resté sur l'ancien domaine
+ne joint plus le site. L'URI de retour OAuth
+(`https://www.nivexrepassage.ca/api/auth/google/callback`, console Google
+Cloud) et le webhook « A message comes in » de Twilio
+(`https://www.nivexrepassage.ca/api/sms/incoming` ; Twilio ne suit pas un
+308) doivent porter le www. Le marqueur de retrait (`nivex.optout`) et la
+session de l'espace artisan sont liés au domaine exact : après la bascule,
+l'artisan rouvre `/admin` sur le www dans chaque navigateur, et son lien
+« ne pas compter » dans ceux de Facebook et d'Instagram.
 
-`/llms.txt` (`app/llms.txt/route.ts`, `lib/llms.ts`) résume la maison pour
-les assistants, en français puis en anglais : prix, pièces à l'unité, zones
-et frais (avec le coût d'un cycle en zone payante, et Montréal sans frais),
-conditions, les sept questions et leurs réponses. Rien n'y est
-écrit à la main, et il se régénère comme les pages.
+**L'en-tête de chaque page** se déclare dans la page, jamais dans la racine :
+la fusion des métadonnées de Next est superficielle, et un `alternates` posé
+dans la racine passait aux pages qui n'en déclaraient pas. Une page publique
+appelle `pageMeta` (titre complet, description, canonique, hreflang `fr-CA`,
+`en-CA` et `x-default` vers le français, carte de partage) ; une page
+personnelle ou de retrait, `privateMeta` (`noindex`, ni canonique ni
+hreflang) ; une page introuvable, `notFoundMeta`. Les titres et les
+descriptions vivent dans `lib/i18n/seo.ts`, hors des dictionnaires : chaque
+titre commence par « NIVEX Repassage » (« NIVEX In-Home Ironing ») et
+n'appartient qu'à sa page ; chaque description tient en 150 à 160
+caractères et nomme le repassage à domicile, Montréal et la Rive-Sud. Les
+montants s'y remplissent depuis les réglages (`pageDescription`). Un test
+tient ces trois règles, à 50, 55 et 60 $ de l'heure.
+
+**La fiche de la maison** (`localBusinessJsonLd`) est posée par la racine
+`app/[locale]/layout.tsx`, la même sur toutes les pages, avec le même `@id`
+(`…/#nivex`). Un `DryCleaningOrLaundry`, le sous-type de LocalBusiness le
+plus proche : nom « NIVEX Repassage à domicile », nom court « NIVEX »,
+téléphone, `CONTACT_EMAIL`, fondateur (`FOUNDER`), logo, image, fourchette
+de prix (de la séance d'essai au plus haut cycle), horaire, secteurs dans
+`areaServed` (Rive-Sud, puis Montréal, un quartier de l'île portant Montréal
+comme localité), `sameAs` depuis `SOCIAL_PROFILES` (vide : rien n'est
+publié). Google exige une adresse : elle s'arrête à la ville (Longueuil),
+sans rue, puisque l'artisan se déplace. Le catalogue (`hasOfferCatalog`)
+porte les quatre abonnements et la séance d'essai, puis les pièces à
+l'unité ; `makesOffer`, l'heure de plus, les cinq prestations et les frais
+de chaque zone (zéro en zone A, un prix chiffré par durée en zone B).
+**Chaque offre porte un `Service`, jamais un `Product`** : un produit ferait
+chercher à Google des avis, un stock et une livraison. Une fourchette donne
+aussi son prix plancher (`price`), que Google exige. Les blocs passent par
+`jsonLdHtml`, qui échappe les chevrons.
+
+L'accueil ajoute le `WebSite` (le nom que Google peut afficher à la place du
+domaine), et l'accueil comme la page Montréal leur `FAQPage`, avec les
+questions qu'elles affichent, une par page. Google n'affiche plus de
+résultat enrichi de FAQ depuis 2026, mais le balisage reste valide et lu par
+les assistants.
+
+**Le plan du site** liste les pages de `lib/pages.ts`, dans les deux
+langues, avec leur date. **Modifier une page dans le code, c'est avancer sa
+date** dans `PUBLIC_PAGES` (contenu, titre, description ou données
+structurées ; pas une virgule) : le plan du site l'écrit dans `<lastmod>` et
+IndexNow la compare à ce qu'il a envoyé. Ce que l'artisan change depuis
+`/admin` se date tout seul (`lib/freshness.ts`) : l'empreinte des réglages
+qui paraissent sur les pages (`publicSettings` : prix, durée, pas, préavis,
+horizon, offre, horaire, secteurs actifs et frais de leurs zones) est gardée
+dans `nivex_public_content`, avec le jour où elle a changé, et chaque page
+prend la plus récente des deux dates (`pageDate`). Un réglage sans effet
+visible ne la fait pas avancer, et un texte du code non plus : c'est le rôle
+de `PUBLIC_PAGES`. Un réglage qui deviendrait visible (une section retirée
+qu'on rallume) s'ajoute à `publicSettings`. Les
+routes des réglages et des zones l'inscrivent avant et après
+l'enregistrement, revalident `/sitemap.xml` (qui se régénère comme les
+pages) et préviennent IndexNow après la réponse. Une date qui bouge sans raison fait perdre la confiance
+de Google ; on ne la calcule jamais par `git log` (le clone de Vercel n'a
+que dix commits). Les tunnels `/reserver` et `/abonnement` n'y sont pas : ils
+ne servent qu'à réserver. robots.txt ne les bloque pas (seuls les liens à
+jeton, `/fr/abonnement/` avec la barre finale, le sont), et il ne faut pas
+les y ajouter. Toute page publique ajoutée va dans `PUBLIC_PAGES`.
+
+**IndexNow** prévient Bing (donc ChatGPT et Copilot), Yandex, Naver et
+Seznam ; Google n'y participe pas. La clé est `INDEXNOW_KEY`, publiée dans
+`public/<clé>.txt`. Seules partent les pages dont la date a avancé depuis le
+dernier envoi réussi (`nivex_indexnow`), et seulement si le fichier de clé
+est servi tel quel sur le www. Trois déclencheurs, après la mise en ligne,
+jamais pendant `next build` (qui s'exécute avant que le déploiement reçoive
+le domaine) : le workflow GitHub `.github/workflows/indexnow.yml`, sur
+l'événement de Vercel qui suit un déploiement de production, appelle `POST
+/api/indexnow` avec `CRON_SECRET` (secret du dépôt) et le commit déployé —
+la route répond 409 tant que le domaine sert la version précédente ;
+l'enregistrement des réglages ou des zones ; et, en filet, la tâche
+quotidienne. Chaque envoi relit d'abord l'empreinte des réglages visibles,
+si bien qu'un changement fait hors de l'admin (une migration) compte aussi.
+
+`/llms.txt` (`lib/llms.ts`) résume la maison pour les assistants, en
+français puis en anglais : le service, les zones et leurs frais, les quatre
+abonnements et la séance d'essai avec leurs prix, le contact et les pages
+principales. `/llms-full.txt` en donne le détail : pièces à l'unité, coût
+d'un cycle en zone payante, conditions, les sept questions et leurs
+réponses. Rien n'y est écrit à la main, et ils se régénèrent comme les
+pages.
+
+La balise de validation de Google Search Console sort de
+`GOOGLE_SITE_VERIFICATION` (`lib/brand.ts`, la valeur `content=` seule), sur
+toutes les pages de la vitrine : la racine `/` redirige vers `/fr` ou `/en`,
+et Google lit la page d'arrivée.
 
 `robots.txt` nomme Googlebot, Bingbot, OAI-SearchBot, PerplexityBot et
 Claude-SearchBot. Un robot qui trouve son nom ignore le groupe `*` : chaque
 groupe répète donc les mêmes interdits (espace artisan, API, liens
-personnels de réservation et d'abonnement). Toute page publique ajoutée va
-dans `sitemap.ts`.
+personnels de réservation et d'abonnement).
 
 ## Mesure d'audience, et la Loi 25
 
@@ -622,8 +712,10 @@ date dans `LEGAL_UPDATED`.
 
 `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
 `ENCRYPTION_KEY` (32 octets, chiffre le jeton Google en AES-256-GCM),
-`SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET` (ouvre la tâche
-quotidienne des abonnements), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+`SESSION_SECRET`, `NEXT_PUBLIC_SITE_URL` (ignorée en production, qui prend
+toujours `SITE_URL`), `CRON_SECRET` (ouvre la tâche quotidienne et
+`/api/indexnow` ; la même valeur, en secret du dépôt GitHub, sert au
+workflow IndexNow), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_FROM` (les textos). Facultatives : `SMS_OWNER_TO`,
 `TWILIO_MESSAGING_SERVICE_SID` (le texto de deux heures avant),
 `ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
@@ -646,8 +738,9 @@ temps, séance d'essai, pièces à l'unité, foire aux questions),
 `sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan),
 `travel` (secteurs, zones, frais,
-conflits de préfixes, historique, Montréal, fiche LocalBusiness,
-descriptions, llms.txt, robots, plan du site), `subscription`
+conflits de préfixes, historique, Montréal, titres et descriptions de chaque
+page, hreflang, fiche LocalBusiness, llms.txt, robots, plan du site, origine
+www, IndexNow), `subscription`
 (grille des dates, rang des visites, montants, délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 
@@ -661,6 +754,12 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 - **Le rendu.** Chromium est là, sous
   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, avec
   `playwright-core`. Lancez `next start` et regardez vraiment la page, au
-  téléphone comme à l'écran.
+  téléphone comme à l'écran. Un piège : après un enregistrement depuis
+  `/admin` (réglages ou zones), `next start` sert l'accueil en 404 et les
+  autres pages en 500 jusqu'au redémarrage. C'est son cache de fichiers :
+  la revalidation lui fait oublier les pages préparées, et `dynamicParams =
+  false` les refuse alors. Vercel n'est pas touché : il lance Next en mode
+  minimal, où cette branche ne s'exécute pas. Redémarrez le serveur local
+  après un tel enregistrement ; n'en concluez pas que la production tombe.
 
 La production se déploie depuis `main` : **demandez avant de fusionner.**

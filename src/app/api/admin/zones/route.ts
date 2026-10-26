@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { getSettings, saveZonePolicy, zoneHistory } from "@/lib/settings";
+import { notePublicContent } from "@/lib/freshness";
+import { submitIfProduction } from "@/lib/indexnow";
 import { POLICY_LIMITS, POLICY_VERSION, policyProblems, type ZonePolicy } from "@/lib/travel";
 
 export const runtime = "nodejs";
@@ -94,10 +96,16 @@ export async function PUT(req: NextRequest) {
   const problems = policyProblems(policy);
   if (problems.length) return NextResponse.json({ ok: false, error: "invalid_policy", problems }, { status: 400 });
 
+  await notePublicContent();
   const changes = await saveZonePolicy(policy, owner.email);
   /* Texte de zone, frais, page Montréal : la vitrine se sert depuis le cache,
      elle se refait dès la prochaine visite. */
   revalidatePath("/[locale]", "layout");
   const [s, history] = await Promise.all([getSettings(), zoneHistory().catch(() => [])]);
+  /* Les pages prennent la date du jour, dans le plan du site et pour
+     IndexNow, prévenu après la réponse. */
+  await notePublicContent();
+  revalidatePath("/sitemap.xml");
+  after(() => submitIfProduction());
   return NextResponse.json({ ok: true, changes, policy: s.zonePolicy, history });
 }

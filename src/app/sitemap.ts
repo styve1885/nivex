@@ -1,31 +1,38 @@
 import type { MetadataRoute } from "next";
 import { siteOrigin } from "@/lib/google";
+import { pageDate, publicUrls } from "@/lib/pages";
+import { publicChangedOn } from "@/lib/freshness";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+/**
+ * Le plan du site : les pages publiques de lib/pages.ts, dans les deux
+ * langues, avec leur vraie date de modification et leurs équivalents dans
+ * l'autre langue. Les tunnels de réservation et les liens personnels n'y
+ * figurent pas.
+ *
+ * La date tient compte de ce que l'artisan change depuis /admin
+ * (lib/freshness.ts) : le plan se régénère comme les pages, et les routes
+ * qui enregistrent les réglages et les zones le revalident aussitôt. Une
+ * base injoignable fait échouer la régénération, qui laisse servir le
+ * dernier plan réussi.
+ */
+export const revalidate = 300;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteOrigin();
-  const now = new Date();
-  const pages = [
-    { path: "", changeFrequency: "weekly" as const, priority: 1 },
-    { path: "/reserver", changeFrequency: "monthly" as const, priority: 0.8 },
-    { path: "/tarifs", changeFrequency: "monthly" as const, priority: 0.7 },
-    { path: "/montreal", changeFrequency: "monthly" as const, priority: 0.7 },
-    { path: "/abonnement", changeFrequency: "monthly" as const, priority: 0.6 },
-    { path: "/confidentialite", changeFrequency: "yearly" as const, priority: 0.3 },
-    { path: "/conditions", changeFrequency: "yearly" as const, priority: 0.3 },
-  ];
-
-  return ["fr", "en"].flatMap((locale) =>
-    pages.map(({ path: p, changeFrequency, priority }) => ({
-      url: `${base}/${locale}${p}`,
-      lastModified: now,
-      changeFrequency,
-      priority,
-      alternates: {
-        languages: {
-          "fr-CA": `${base}/fr${p}`,
-          "en-CA": `${base}/en${p}`,
-        },
+  const changedOn = await publicChangedOn();
+  return publicUrls(base).map(({ url, page }) => ({
+    url,
+    /* La date seule, « AAAA-MM-JJ », écrite telle quelle dans <lastmod> :
+       aucun fuseau ne la déplace d'un jour. */
+    lastModified: pageDate(page, changedOn),
+    changeFrequency: page.changeFrequency,
+    priority: page.priority,
+    alternates: {
+      languages: {
+        "fr-CA": `${base}/fr${page.path}`,
+        "en-CA": `${base}/en${page.path}`,
+        "x-default": `${base}/fr${page.path}`,
       },
-    })),
-  );
+    },
+  }));
 }

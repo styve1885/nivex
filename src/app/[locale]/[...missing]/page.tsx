@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getDict } from "@/lib/i18n";
 import { notFoundMeta } from "@/lib/seo";
 
 /*
@@ -27,7 +26,7 @@ export const dynamic = "force-dynamic";
 /* not-found.tsx porte le même titre. Celui-ci reste affiché une fois la page
    reprise par le navigateur, qui relit l'en-tête de la route. */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
-  return notFoundMeta(getDict((await params).locale));
+  return notFoundMeta((await params).locale);
 }
 
 export default function MissingPage(): never {

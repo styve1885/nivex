@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return pageMeta(t, locale, "/abonnement", t.subscribe.title, t.subscribe.lede);
+  return pageMeta(t, locale, "/abonnement", "abonnement");
 }
 
 export default async function SubscribePage({

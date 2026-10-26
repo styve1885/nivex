@@ -1,0 +1,63 @@
+# Après chaque déploiement de production réussi, signale à IndexNow (Bing,
+# donc ChatGPT et Copilot, Yandex, Naver, Seznam) les pages publiques
+# nouvelles ou modifiées. Le travail se fait dans la route /api/indexnow
+# (src/lib/indexnow.ts) ; ce fichier ne fait que l'appeler.
+#
+# Vercel prévient GitHub de deux façons à la fin d'un déploiement : un
+# événement repository_dispatch (vercel.deployment.success) et un
+# deployment_status. Les deux sont écoutés ; le second appel trouve les pages
+# déjà signalées et n'envoie rien.
+#
+# Demande le secret CRON_SECRET dans les réglages du dépôt (Settings >
+# Secrets and variables > Actions), même valeur que chez Vercel. Sans lui,
+# rien n'échoue : la tâche quotidienne de 14 h UTC fait l'envoi.
+name: IndexNow
+
+on:
+  repository_dispatch:
+    types: [vercel.deployment.success]
+  deployment_status:
+
+permissions: {}
+
+concurrency:
+  group: indexnow
+
+jobs:
+  submit:
+    # Vercel nomme l'environnement « production » dans repository_dispatch,
+    # et « Production » (ou « Production – <projet> ») dans deployment_status.
+    if: >-
+      (github.event_name == 'repository_dispatch' && github.event.client_payload.environment == 'production') ||
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
+       startsWith(github.event.deployment.environment, 'Production'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Signaler les pages modifiées
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SHA: ${{ github.event.client_payload.git.sha || github.event.deployment.sha }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::notice::Secret CRON_SECRET absent : la tâche quotidienne fera l'envoi."
+            exit 0
+          fi
+          # On réessaie tant que le domaine sert encore la version
+          # précédente : 409, ou 404 au tout premier déploiement, quand la
+          # route n'existe pas encore ; 000 pour une coupure réseau (curl
+          # l'écrit lui-même quand il échoue). Au plus sept minutes environ,
+          # sous la limite de dix de la tâche.
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            rm -f response.json
+            code=$(curl -sS --connect-timeout 10 --max-time 40 -o response.json -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "https://www.nivexrepassage.ca/api/indexnow?sha=$SHA") || true
+            cat response.json 2>/dev/null || true; echo
+            case "$code" in
+              200) exit 0 ;;
+              409|404|000) [ "$SECONDS" -ge 360 ] && break; sleep 30 ;;
+              *) echo "::warning::IndexNow : réponse $code ; la tâche quotidienne réessaiera."; exit 0 ;;
+            esac
+          done
+          echo "::warning::La nouvelle version n'était pas encore servie ; la tâche quotidienne fera l'envoi."

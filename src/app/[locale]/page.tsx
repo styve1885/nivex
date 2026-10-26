@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
@@ -10,11 +11,19 @@ import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
 import { Faq } from "@/components/home/Faq";
 import { faqFill } from "@/components/home/faq-fill";
-import { faqJsonLd, localBusinessJsonLd } from "@/lib/seo";
+import { faqJsonLd, jsonLdHtml, pageMeta, websiteJsonLd } from "@/lib/seo";
 import { Contact } from "@/components/home/Contact";
 import { ClosingCta } from "@/components/home/ClosingCta";
 
 export const revalidate = 300;
+
+/* Son titre, sa description (avec le plus bas montant par cycle, tiré des
+   réglages), son adresse canonique et ses deux langues. */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocale(locale)) return {};
+  return pageMeta(getDict(locale), locale, "", "home", await getSettingsStrict());
+}
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -23,9 +32,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const t = getDict(locale);
   const settings = await getSettingsStrict();
 
-  /* Données structurées : la fiche du commerce, et la foire aux questions
-     telle qu'elle s'affiche. */
-  const jsonLd = localBusinessJsonLd(t, settings, locale);
+  /* Données structurées : le site, et la foire aux questions telle qu'elle
+     s'affiche. La fiche LocalBusiness vient de la racine, sur toutes les
+     pages. */
+  const siteLd = websiteJsonLd(locale);
   const faqLd = faqJsonLd(t.faq.items.map((f) => ({ q: f.q, a: faqFill(f.a, t, settings, locale) })));
 
   /* Faq et Contact sont des composants clients : leurs props sont sérialisées
@@ -38,8 +48,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(siteLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqLd) }} />
 
       {/* L'ordre du 23 octobre 2026, pour un accueil deux fois plus court.
           Le ruban (Marquee), la galerie (Gallery, dont les photos vivent

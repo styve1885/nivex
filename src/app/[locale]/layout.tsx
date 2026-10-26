@@ -6,7 +6,9 @@ import { SiteMeasurement } from "@/components/SiteMeasurement";
 import { cormorant, jost } from "@/lib/fonts";
 import { getDict, isLocale, locales } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
-import { TITLE_TEMPLATE, metaDescription, pageMeta, siteMetadata, siteViewport } from "@/lib/seo";
+import { jsonLdHtml, localBusinessJsonLd, siteMetadata, siteViewport } from "@/lib/seo";
+import { getSeo } from "@/lib/i18n/seo";
+import { GOOGLE_SITE_VERIFICATION } from "@/lib/brand";
 import "../globals.css";
 
 /*
@@ -40,20 +42,24 @@ export function generateStaticParams() {
    chaque adresse essayée par un robot laissait une page 404 dans le cache. */
 export const dynamicParams = false;
 
+/*
+ * Ce que toutes les pages de la vitrine partagent. Le titre, la description,
+ * l'adresse canonique et les langues appartiennent à chaque page, accueil
+ * compris (lib/seo.ts, `pageMeta`) : posés ici, ils passaient aux pages qui
+ * n'en déclaraient pas — une page personnelle se disait alors canonique de
+ * l'accueil. Le titre par défaut ne sert qu'à une page qui oublierait le
+ * sien ; les tests y veillent.
+ *
+ * La balise de validation de Google Search Console s'écrit sur toutes les
+ * pages, accueil compris, dès que son jeton est posé dans brand.ts.
+ */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocale(locale)) return siteMetadata;
-  const t = getDict(locale);
-  /* La description nomme les premiers secteurs de la Rive-Sud, puis
-     Montréal : une phrase écrite à la main finirait par nommer un secteur
-     fermé. L'offre n'y figure que si l'artisan la propose. */
-  const s = await getSettings();
-  const description = metaDescription(t, s.zonePolicy, locale === "en" ? "en" : "fr", s.firstHourFree, s);
-
   return {
     ...siteMetadata,
-    ...pageMeta(t, locale, "", { absolute: t.meta.title }, description),
-    title: { default: t.meta.title, template: TITLE_TEMPLATE },
+    title: getSeo(locale).home.title,
+    ...(GOOGLE_SITE_VERIFICATION ? { verification: { google: GOOGLE_SITE_VERIFICATION } } : {}),
   };
 }
 
@@ -86,6 +92,10 @@ export default async function LocaleLayout({
         </a>
         {/* Un composant client ne reçoit que ce qu'il lit : le dictionnaire
             entier, textes légaux compris, partait sinon dans chaque page. */}
+        {/* La fiche de la maison, la même sur toutes les pages publiques,
+            dans la langue de la page. */}
+        <script type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(localBusinessJsonLd(t, settings, locale)) }} />
         <SiteHeader t={{ nav: t.nav, brand: t.brand }} locale={locale} />
         <main id="contenu">{children}</main>
         <SiteFooter t={t} locale={locale} settings={settings} />

@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/session";
 import { getSettingsStrict, SettingsUnavailableError, updateSettings } from "@/lib/settings";
 import { parseHM } from "@/lib/time";
 import { MIN_SESSION_MINUTES } from "@/lib/brand";
+import { notePublicContent } from "@/lib/freshness";
+import { submitIfProduction } from "@/lib/indexnow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,10 +112,16 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    await notePublicContent();
     const settings = await updateSettings(parsed.data);
     /* La vitrine se sert depuis le cache : tarif, horaire et prestations y
        paraissent dès la prochaine visite, sans attendre `revalidate`. */
     revalidatePath("/[locale]", "layout");
+    /* Si le contenu public a changé, ses pages prennent la date du jour,
+       dans le plan du site et pour IndexNow, prévenu après la réponse. */
+    await notePublicContent();
+    revalidatePath("/sitemap.xml");
+    after(() => submitIfProduction());
     return NextResponse.json({ ok: true, settings });
   } catch (e) {
     if (e instanceof SettingsUnavailableError) return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });

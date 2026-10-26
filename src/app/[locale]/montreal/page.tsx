@@ -8,7 +8,7 @@ import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { setupSentence } from "@/lib/capacity";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { montrealFees, montrealNames, montrealTravelFree, type FeeRow } from "@/lib/travel";
-import { faqJsonLd, localBusinessJsonLd, pageMeta } from "@/lib/seo";
+import { faqJsonLd, jsonLdHtml, pageMeta } from "@/lib/seo";
 
 /*
  * Repassage à domicile à Montréal.
@@ -24,7 +24,7 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
   const t = getDict(locale);
-  return pageMeta(t, locale, "/montreal", { absolute: t.montreal.metaTitle }, t.montreal.lede);
+  return pageMeta(t, locale, "/montreal", "montreal");
 }
 
 /** Les frais d'une zone, en une phrase : ceux d'une courte séance, puis d'une longue. */
@@ -86,13 +86,13 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
   const entry = money(Math.round((shortest / 60) * s.hourlyRate));
 
   const faq = faqItems(t, s, locale, fees);
-  const jsonLd = localBusinessJsonLd(t, s, locale);
+  /* La fiche LocalBusiness vient de la racine, sur toutes les pages ; ici,
+     la foire aux questions de la page, telle qu'elle s'affiche. */
   const faqLd = faqJsonLd(faq);
 
   return (
     <div className="bg-linen-100">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqLd) }} />
 
       {/* — En-tête — */}
       <section className="px-7 pb-20 pt-36 sm:px-10 sm:pt-40">

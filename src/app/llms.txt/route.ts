@@ -2,8 +2,10 @@ import { getSettingsStrict } from "@/lib/settings";
 import { llmsText } from "@/lib/llms";
 
 /**
- * /llms.txt : ce que lisent les assistants qui le cherchent, écrit depuis
- * les réglages comme les pages (voir lib/llms.ts).
+ * /llms.txt : la maison résumée pour les assistants qui le cherchent — le
+ * service, les zones, les abonnements et la séance d'essai, le contact, les
+ * pages —, écrit depuis les réglages comme les pages (voir lib/llms.ts). Le
+ * détail est dans /llms-full.txt.
  *
  * Préparé à la construction et relu toutes les cinq minutes, comme l'accueil
  * et Tarifs, et par la lecture stricte : une relecture qui échoue laisse

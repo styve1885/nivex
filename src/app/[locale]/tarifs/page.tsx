@@ -6,7 +6,7 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, feeZones, servedText } from "@/lib/travel";
-import { pageMeta, tarifsDescription } from "@/lib/seo";
+import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import { RetiredSections } from "@/components/tarifs/RetiredSections";
 import { setupSentence } from "@/lib/capacity";
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   const t = getDict(locale);
   const s = await getSettingsStrict();
-  return pageMeta(t, locale, "/tarifs", t.tarifs.eyebrow, tarifsDescription(t, s, locale === "en" ? "en" : "fr"));
+  return pageMeta(t, locale, "/tarifs", "tarifs", s);
 }
 
 function UnitList({ items, s, locale }: { items: UnitPrice[]; s: Settings; locale: "fr" | "en" }) {

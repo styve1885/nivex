@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { privateMeta } from "@/lib/seo";
 import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { canSelfCancel, findByManageToken } from "@/lib/bookings";
@@ -14,8 +15,7 @@ export const dynamic = "force-dynamic";
 
 /* Un titre à elle, pour l'onglet et les lecteurs d'écran ; jamais indexée. */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
-  const { locale } = await params;
-  return { title: getDict(locale).manage.title, robots: { index: false, follow: false } };
+  return privateMeta((await params).locale, "reservation");
 }
 
 export default async function ManagePage({

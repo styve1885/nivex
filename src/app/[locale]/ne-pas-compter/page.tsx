@@ -5,6 +5,7 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { isOptOutKey } from "@/lib/session";
 import { Mark } from "@/components/Logo";
 import { OptOutNow } from "@/components/OptOutNow";
+import { privateMeta } from "@/lib/seo";
 
 /*
  * Le lien personnel de l'artisan, qui retire un navigateur du décompte.
@@ -17,7 +18,9 @@ import { OptOutNow } from "@/components/OptOutNow";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  return privateMeta((await params).locale, "optOut");
+}
 
 export default async function OptOutPage({
   params, searchParams,

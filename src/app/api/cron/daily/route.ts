@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeEqual } from "@/lib/crypto";
 import { runDaily } from "@/lib/subscriptions";
+import { submitIfProduction } from "@/lib/indexnow";
 import { requireOwner } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -8,7 +9,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * GET /api/cron/daily — rappels de la veille et courriels de fin de série.
+ * GET /api/cron/daily — rappels de la veille, courriels de fin de série, et
+ * pages modifiées signalées à IndexNow si l'envoi qui suit le déploiement
+ * n'a pas pu partir.
  *
  * Vercel l'appelle chaque matin (vercel.json) avec l'en-tête
  * `Authorization: Bearer <CRON_SECRET>`. Sans la variable, la route refuse
@@ -25,7 +28,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await runDaily(req.headers.get("host"));
-    return NextResponse.json({ ok: true, ...result });
+    /* Le filet d'IndexNow : ce que l'envoi d'après déploiement n'aurait pas
+       pu faire partir. Il ne lève jamais d'erreur. */
+    const indexNow = await submitIfProduction();
+    return NextResponse.json({ ok: true, ...result, indexNow });
   } catch (e) {
     console.error("[nivex] daily failed:", e);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });

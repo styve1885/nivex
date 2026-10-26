@@ -476,6 +476,42 @@ async function bootstrap() {
       applied_at timestamptz NOT NULL DEFAULT now()
     )`;
 
+  /* Les pages déjà signalées à IndexNow, avec la date envoyée : la suivante
+     ne renvoie que ce qui a changé (lib/indexnow.ts). Rien de personnel.
+
+     `IF NOT EXISTS` ne protège pas d'une création simultanée : la première
+     construction qui pose la table le fait depuis plusieurs ouvriers à la
+     fois, et le perdant reçoit une violation d'unicité sur le catalogue
+     (pg_type), ce qui faisait échouer la construction. Le bloc l'absorbe :
+     la table existe alors, posée par l'autre. */
+  await q`
+    DO $$ BEGIN
+      CREATE TABLE IF NOT EXISTS nivex_indexnow (
+        url          text PRIMARY KEY,
+        updated      text        NOT NULL,
+        submitted_at timestamptz NOT NULL DEFAULT now()
+      );
+    EXCEPTION
+      WHEN unique_violation THEN NULL;
+      WHEN duplicate_table  THEN NULL;
+    END $$`;
+
+  /* L'empreinte du contenu public tiré des réglages, et le jour où elle a
+     changé (lib/freshness.ts) : une seule ligne. Même garde que la table
+     d'IndexNow contre les constructions simultanées. */
+  await q`
+    DO $$ BEGIN
+      CREATE TABLE IF NOT EXISTS nivex_public_content (
+        id          int         PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        fingerprint text        NOT NULL,
+        changed_on  text        NOT NULL DEFAULT '',
+        checked_at  timestamptz NOT NULL DEFAULT now()
+      );
+    EXCEPTION
+      WHEN unique_violation THEN NULL;
+      WHEN duplicate_table  THEN NULL;
+    END $$`;
+
   /* Le taux horaire passe de 50 $ à 55 $ le 22 octobre 2026. Seulement s'il
      valait encore 50 $ : un autre taux est un choix de l'artisan. */
   await q`

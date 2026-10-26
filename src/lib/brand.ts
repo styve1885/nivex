@@ -10,6 +10,50 @@
 export const CONTACT_EMAIL = "contact@nivexrepassage.ca";
 
 /**
+ * L'adresse canonique du site, en production : avec www.
+ *
+ * Depuis le 25 octobre 2026, nivexrepassage.ca, sans www, redirige en 308
+ * vers elle : c'est un réglage de domaine chez Vercel, pas du code. Tout ce
+ * que lisent les moteurs en dépend — liens canoniques, hreflang, plan du
+ * site, robots.txt, données structurées, IndexNow —, et aussi les liens des
+ * courriels et l'adresse de retour de Google (à déclarer dans la console
+ * Google Cloud), et le webhook des réponses par texto chez Twilio : la
+ * redirection de Vercel arrête les requêtes avant le code, si bien qu'un
+ * réglage resté sur l'ancien domaine ne joint plus le site. Ce que garde le
+ * navigateur est lié au domaine exact : après la bascule, l'artisan se
+ * reconnecte à /admin sur le www dans chaque navigateur, et rouvre son lien
+ * « ne pas compter » dans ceux de Facebook et d'Instagram. En production, `siteOrigin`
+ * rend cette adresse quoi que dise la variable d'environnement : une
+ * variable restée sur l'ancien domaine renverrait chaque lien canonique vers
+ * une redirection, ce que Google lit comme une page à ne pas indexer.
+ */
+export const SITE_URL = "https://www.nivexrepassage.ca";
+
+/**
+ * La clé IndexNow : le moteur qui reçoit une liste d'adresses vérifie que le
+ * site lui appartient en lisant le fichier public/<clé>.txt, qui ne contient
+ * que la clé. Elle n'a rien de secret ; la changer demande de renommer le
+ * fichier. Voir lib/indexnow.ts.
+ */
+export const INDEXNOW_KEY = "5d6a47021d6a4c68a7b8503b397f7ee3";
+
+/**
+ * Le jeton de la balise de validation de Google Search Console, propriété
+ * https://www.nivexrepassage.ca/. Vide tant que l'artisan ne l'a pas fourni :
+ * la balise ne s'écrit alors pas.
+ */
+export const GOOGLE_SITE_VERIFICATION = "";
+
+/** Le fondateur, nommé dans la fiche LocalBusiness. */
+export const FOUNDER = "Styve Ketchandji Ngaleu";
+
+/**
+ * Les pages de la maison sur les réseaux sociaux (`sameAs` de la fiche
+ * LocalBusiness). Une adresse vide ou absente n'est pas publiée.
+ */
+export const SOCIAL_PROFILES: string[] = [];
+
+/**
  * Préavis d'annulation par le client, en heures.
  *
  * Au-delà, le lien « Gérer ma réservation » cesse d'annuler tout seul et
