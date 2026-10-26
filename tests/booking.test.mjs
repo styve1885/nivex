@@ -9,7 +9,9 @@
  */
 import assert from "node:assert/strict";
 
-const { clientConfirmation, clientCancellation, ownerNotification, contactAcknowledgement, reviewRequest } = await import("../src/lib/email.ts");
+const {
+  clientConfirmation, clientCancellation, ownerNotification, contactAcknowledgement, reviewRequest, sessionReminder,
+} = await import("../src/lib/email.ts");
 const { displayName, sendGmail } = await import("../src/lib/google.ts");
 const { getDict } = await import("../src/lib/i18n/index.ts");
 const { slotIsFree } = await import("../src/lib/availability.ts");
@@ -317,6 +319,53 @@ test("le courriel ne promet l'invitation que si elle est partie", () => {
   assert.match(clientConfirmation({ ...d, invited: true }).text, /invitation a été ajoutée/);
   assert.ok(!/invitation/i.test(clientConfirmation({ ...d, invited: false }).text));
   assert.ok(!/invitation/i.test(clientConfirmation({ ...d, locale: "en", invited: false }).text));
+});
+
+/* ————— Le rappel de la veille d'une séance ————— */
+
+test("le rappel de la veille d'une séance dit le jour, l'heure, l'adresse, le montant et la référence", () => {
+  const m = sessionReminder(d);
+  assert.equal(m.subject, "Rappel : votre séance NIVEX demain");
+  for (const bit of ["Un mot pour vous rappeler votre séance de demain.", "samedi 3 octobre 2026", "14 h 00",
+                     "88 rue Saint-Charles Ouest", "Longueuil", "Chemises", "2 heures", "50 $", "NVX-ABC123",
+                     "Première heure offerte"]) {
+    assert.ok(flat(m.text).includes(bit), `texte : « ${bit} » manquant`);
+  }
+  assert.ok(m.html.includes("NVX-ABC123") && m.html.includes("88 rue Saint-Charles Ouest"));
+  assert.ok(!flat(sessionReminder({ ...d, firstHourFree: false }).text).includes("Première heure offerte"));
+});
+
+test("le rappel dit ce qu'il faut prévoir, l'arrivée, et comment annuler", () => {
+  const m = sessionReminder(d);
+  const text = flat(m.text);
+  assert.ok(text.includes("Prévoyez votre planche à repasser, une prise électrique et environ deux mètres carrés"));
+  assert.ok(text.includes("Votre artisan arrive à l'heure du début."));
+  assert.ok(text.includes(d.manageUrl) && m.html.includes(d.manageUrl), "lien de gestion");
+  assert.match(text, /annuler en ligne jusqu'à 2 h avant le rendez-vous\. Pour le déplacer, appelez-nous/);
+  /* L'ancien déroulement garde son arrivée un quart d'heure avant. */
+  assert.match(flat(sessionReminder({ ...d, setupMinutes: 15 }).text), /15 minutes avant le début de votre séance/);
+});
+
+test("le rappel montre les frais de déplacement et le total quand il y en a", () => {
+  const avec = flat(sessionReminder({ ...d, travelFeeCents: 1500, travelZone: "Zone B" }).text);
+  assert.match(avec, /Frais de déplacement \(Zone B\): 15 \$/);
+  assert.match(avec, /Total estimé: 65 \$/);
+  assert.doesNotMatch(flat(sessionReminder(d).text), /Frais de déplacement|Total estimé/);
+});
+
+test("le rappel du jour même, et le rappel en anglais", () => {
+  const jour = sessionReminder(d, true);
+  assert.equal(jour.subject, "Rappel : votre séance NIVEX aujourd'hui");
+  assert.ok(jour.text.includes("Un mot pour vous rappeler votre séance d'aujourd'hui."));
+  const en = sessionReminder({ ...d, locale: "en" });
+  assert.equal(en.subject, "Reminder: your NIVEX session tomorrow");
+  assert.match(en.text, /A short note to remind you of tomorrow's session\./);
+  assert.match(en.text, /Saturday, October 3, 2026/);
+  assert.match(flat(en.text), /You may cancel online up to 2 h before the appointment/);
+  assert.equal(sessionReminder({ ...d, locale: "en" }, true).subject, "Reminder: your NIVEX session today");
+  for (const m of [sessionReminder(d), jour, en]) {
+    assert.doesNotMatch(m.subject + m.text, /!|\{|undefined|null/, "ni point d'exclamation ni trou");
+  }
 });
 
 /* ————— La séance d'essai et les pièces à l'unité ————— */

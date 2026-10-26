@@ -588,7 +588,8 @@ export function calendarEvent(b: Booking, origin: string, tz: string): {
   };
 }
 
-function emailData(b: Booking, s: Settings, origin: string): BookingEmailData {
+/** Ce que les courriels d'une séance ponctuelle disent d'elle : confirmation, rappel, annulation. */
+export function bookingEmailData(b: Booking, s: Settings, origin: string): BookingEmailData {
   return {
     ref: b.ref, locale: b.locale, clientName: b.clientName, clientEmail: b.clientEmail,
     clientPhone: b.clientPhone, address: b.address, city: b.city, postalCode: b.postalCode,
@@ -632,7 +633,7 @@ async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promi
     await logEvent("email_skipped", { ref: b.ref, reason: "no_refresh_token" });
     return false;
   }
-  const d = emailData(b, s, origin);
+  const d = bookingEmailData(b, s, origin);
   const fromName = s.businessName || "NIVEX";
 
   const client = clientConfirmation(d);
@@ -901,7 +902,7 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
   }
 
   if (at) {
-    const d = emailData(b, settings, origin);
+    const d = bookingEmailData(b, settings, origin);
     const fromName = settings.businessName || "NIVEX";
     const cc = clientCancellation(d);
     const on = ownerNotification(d, true);

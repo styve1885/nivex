@@ -371,7 +371,8 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   occurrence est retouchée pour porter son rang (« 3/4 »). Une visite annulée
   supprime son occurrence ; un remplacement est un événement simple.
 - **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
-  rappel de la veille, qui annonce le paiement à la première visite d'un
+  rappel de la veille, par courriel et par texto, aux abonnés comme aux
+  séances ponctuelles, qui annonce le paiement à la première visite d'un
   cycle et donne l'heure d'arrivée, programmation des textos de deux heures
   avant, et courriel de fin de série à l'artisan. Chaque envoi est réservé
   en base avant de partir : un second passage, ou le bouton de l'onglet
@@ -402,7 +403,10 @@ annule ou déplace lui-même, sur `SMS_OWNER_TO` ou, à défaut, `PHONE`.
 Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
 échouer une réservation, et un compte Google débranché ne l'empêche pas de
 partir. Le rappel par texto se note dans `sms_reminded_at`, à part du
-courriel (`reminder_sent_at`). Une séance ponctuelle n'a que le texto.
+courriel (`reminder_sent_at`). Une séance ponctuelle reçoit les deux depuis
+le 26 octobre 2026 : le courriel de rappel (`sessionReminder` : rendez-vous,
+adresse, montant, ce qu'il faut prévoir, lien de gestion) arrive même quand
+les textos ne passent pas.
 
 Les trois textos du client suivent les modèles de l'artisan, signés
 `SMS_SIGNATURE` : la confirmation (jour, date, début et fin, « Vous n'avez
@@ -733,8 +737,8 @@ dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
-chevauchements, temps hors séance), `booking` (courriels, durées, trois
-temps, séance d'essai, pièces à l'unité, foire aux questions),
+chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, durées,
+trois temps, séance d'essai, pièces à l'unité, foire aux questions),
 `sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan),
 `travel` (secteurs, zones, frais,
