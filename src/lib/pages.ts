@@ -29,14 +29,14 @@ export type PublicPage = {
   priority: number;
 };
 
-/* Le 25 octobre 2026, chaque page a reçu son titre, sa description et la
+/* Le 26 octobre 2026, chaque page a reçu son titre, sa description et la
    fiche LocalBusiness : toutes datent de ce jour-là. */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-10-25", changeFrequency: "weekly", priority: 1 },
-  { path: "/tarifs", updated: "2026-10-25", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/montreal", updated: "2026-10-25", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/conditions", updated: "2026-10-25", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-10-25", changeFrequency: "yearly", priority: 0.3 },
+  { path: "", updated: "2026-10-26", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-10-26", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-10-26", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/conditions", updated: "2026-10-26", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-10-26", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;
