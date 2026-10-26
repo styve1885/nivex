@@ -11,11 +11,13 @@ import {
   sendGmail, siteOrigin, GoogleError,
 } from "./google";
 import {
-  ownerVisitChanged, reviewRequest, seriesNotice, subscriptionConfirmation, subscriptionEnded,
+  ownerVisitChanged, reviewRequest, seriesNotice, sessionReminder, subscriptionConfirmation, subscriptionEnded,
   subscriptionOwnerNotification, visitChanged, visitReminder,
   type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
-import { cancelSoonText, cleanOrigin, dueSoonTexts, hydrate, occupiedBlock, scheduleSoonText, type Booking } from "./bookings";
+import {
+  bookingEmailData, cancelSoonText, cleanOrigin, dueSoonTexts, hydrate, occupiedBlock, scheduleSoonText, type Booking,
+} from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
 import {
@@ -720,7 +722,10 @@ function visitData(full: SubscriptionFull, v: Booking, s: Settings, origin: stri
   };
 }
 
-async function send(at: string, s: Settings, to: { email: string; name?: string }, m: { subject: string; html: string; text: string }, replyTo?: string): Promise<boolean> {
+async function send(
+  at: string, s: Settings, to: { email: string; name?: string }, m: { subject: string; html: string; text: string },
+  replyTo?: string, failure = "subscription_email_failed",
+): Promise<boolean> {
   try {
     await sendGmail(at, {
       to: to.email, toName: to.name, subject: m.subject, html: m.html, text: m.text,
@@ -728,7 +733,7 @@ async function send(at: string, s: Settings, to: { email: string; name?: string 
     });
     return true;
   } catch (e) {
-    await logEvent("subscription_email_failed", { to: to.email === REQUEST_INBOX ? "owner" : "client", error: describe(e) });
+    await logEvent(failure, { to: to.email === REQUEST_INBOX ? "owner" : "client", error: describe(e) });
     return false;
   }
 }
@@ -1445,11 +1450,12 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     return cache.get(id)!;
   };
 
-  /* — Rappels — */
+  /* — Rappels — par courriel et par texto, pour les visites d'abonné comme
+     pour les séances ponctuelles. */
   const due = ((await sql()`
     SELECT * FROM nivex_bookings
     WHERE status = 'confirmed'
-      AND ((subscription_id IS NOT NULL AND reminder_sent_at IS NULL) OR sms_reminded_at IS NULL)
+      AND (reminder_sent_at IS NULL OR sms_reminded_at IS NULL)
       AND starts_at > ${new Date(now.getTime() + 3600_000).toISOString()}
       AND starts_at < ${new Date(now.getTime() + 2 * DAY).toISOString()}
     ORDER BY starts_at`) as Row[]);
@@ -1474,6 +1480,15 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
           if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) reminders++;
           else await releaseReminder(v.id, "email", stamp);
         }
+      }
+    } else if (at && !v.reminderSentAt) {
+      /* Une séance ponctuelle reçoit aussi son rappel par courriel, depuis le
+         26 octobre 2026 : il arrive même quand les textos ne passent pas. */
+      const stamp = await claimReminder(v, "email");
+      if (stamp) {
+        const m = sessionReminder(bookingEmailData(v, settings, origin), isToday);
+        if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, m, undefined, "booking_email_failed")) reminders++;
+        else await releaseReminder(v.id, "email", stamp);
       }
     }
 

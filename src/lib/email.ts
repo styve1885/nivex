@@ -135,6 +135,10 @@ const T = {
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
     cancelNote: `Vous pouvez annuler en ligne jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous. Pour le déplacer, appelez-nous au ${PHONE}.`,
+    // Rappel
+    reminderSubject: (when: string) => `Rappel : votre séance NIVEX ${when}`,
+    reminderIntro: "Un mot pour vous rappeler votre séance de demain.",
+    reminderToday: "Un mot pour vous rappeler votre séance d'aujourd'hui.",
     // Annulation
     cancelSubject: (ref: string) => `Séance NIVEX annulée · ${ref}`,
     cancelIntro: "Votre séance a bien été annulée. Aucun montant ne vous sera facturé.",
@@ -171,6 +175,9 @@ const T = {
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
     cancelNote: `You may cancel online up to ${CANCEL_WINDOW_HOURS} h before the appointment. To move it, call us at ${PHONE}.`,
+    reminderSubject: (when: string) => `Reminder: your NIVEX session ${when}`,
+    reminderIntro: "A short note to remind you of tomorrow's session.",
+    reminderToday: "A short note to remind you of today's session.",
     cancelSubject: (ref: string) => `NIVEX session cancelled · ${ref}`,
     cancelIntro: "Your session has been cancelled. Nothing will be charged.",
     cancelCta: "Book a new appointment",
@@ -233,6 +240,19 @@ function travelRowsText(d: BookingEmailData, t: TravelLabels): string[] {
   ];
 }
 
+/** « Avant notre arrivée » : ce que le client prépare. La confirmation et le rappel le montrent. */
+function beforeBox(locale: "fr" | "en"): string {
+  const t = T[locale];
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${LINEN};border:1px solid #F0E6D2;">
+      <tr><td style="padding:22px 24px;font-family:Helvetica,Arial,sans-serif;">
+        <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:12px;">${esc(t.before)}</div>
+        <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.85;color:${MUTED};">
+          ${t.beforeList.map((x) => `<li>${esc(x)}</li>`).join("")}
+        </ul>
+      </td></tr>
+    </table>`;
+}
+
 export function clientConfirmation(d: BookingEmailData) {
   const t = T[d.locale];
   const when = formatDateTime(d.startsAt, d.timezone, d.locale);
@@ -265,14 +285,7 @@ export function clientConfirmation(d: BookingEmailData) {
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
   </td></tr>
   <tr><td style="padding:0 40px 30px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${LINEN};border:1px solid #F0E6D2;">
-      <tr><td style="padding:22px 24px;font-family:Helvetica,Arial,sans-serif;">
-        <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:12px;">${esc(t.before)}</div>
-        <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.85;color:${MUTED};">
-          ${t.beforeList.map((x) => `<li>${esc(x)}</li>`).join("")}
-        </ul>
-      </td></tr>
-    </table>
+    ${beforeBox(d.locale)}
     <p style="margin:18px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};text-align:center;">${esc(t.footNote)}</p>
   </td></tr>`;
 
@@ -293,6 +306,62 @@ export function clientConfirmation(d: BookingEmailData) {
   ].filter(Boolean).join("\n");
 
   return { subject: t.subject(d.ref), html: shell(inner, `${when} — ${d.ref}`, d.businessEmail, d.locale), text };
+}
+
+/**
+ * Le rappel de la veille d'une séance ponctuelle, ou du jour même pour une
+ * séance réservée après le passage de la tâche quotidienne : le rendez-vous,
+ * l'adresse, ce que la séance contient et ce qu'elle coûte, ce qu'il faut
+ * prévoir, et le lien pour l'annuler tant que le délai le permet. Il part
+ * par courriel même quand les textos ne passent pas.
+ */
+export function sessionReminder(d: BookingEmailData, today = false) {
+  const t = T[d.locale];
+  const when = formatDateTime(d.startsAt, d.timezone, d.locale);
+  const dur = minutesToText(d.durationMinutes, d.locale);
+  const money = estimateText(d);
+  const intro = today ? t.reminderToday : t.reminderIntro;
+  const shortWhen = today ? (d.locale === "en" ? "today" : "aujourd'hui") : (d.locale === "en" ? "tomorrow" : "demain");
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, intro, d.locale)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(t.when, `<strong style="font-size:16px;">${esc(when)}</strong>`)}
+      ${row(t.where, esc(`${d.address}, ${d.city} ${d.postalCode}`))}
+      ${row(t.what, itemsHtml(d))}
+      ${row(t.duration, esc(dur))}
+      ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
+      ${travelRowsHtml(d, t)}
+      ${row(t.ref, `<code style="font-family:monospace;letter-spacing:0.06em;">${esc(d.ref)}</code>`)}
+    </table>
+  </td></tr>
+  ${note(setupLine(d))}
+  <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
+    <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
+  </td></tr>
+  <tr><td style="padding:0 40px 30px;">
+    ${beforeBox(d.locale)}
+    <p style="margin:18px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.7;color:${MUTED};text-align:center;">${esc(t.footNote)}</p>
+  </td></tr>`;
+
+  const text = [
+    t.hi(d.clientName.split(" ")[0]), "", intro, "",
+    `${t.when}: ${when}`,
+    `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`,
+    `${t.what}:`, itemsText(d),
+    `${t.duration}: ${dur}`,
+    `${t.estimate}: ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
+    ...travelRowsText(d, t),
+    `${t.ref}: ${d.ref}`, "",
+    setupLine(d), "",
+    `${t.before}:`, ...t.beforeList.map((x) => `  · ${x}`), "",
+    `${t.manage}: ${d.manageUrl}`, "",
+    t.cancelNote, "", t.footNote, "",
+    `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
+  ].join("\n");
+
+  return { subject: t.reminderSubject(shortWhen), html: shell(inner, `${when} — ${d.ref}`, d.businessEmail, d.locale), text };
 }
 
 export function clientCancellation(d: BookingEmailData) {
