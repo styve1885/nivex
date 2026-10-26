@@ -30,7 +30,7 @@ const { PUBLIC_PAGES, publicUrls, pageDate } = await import("../src/lib/pages.ts
 const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshness.ts");
 /* Un jour postérieur à toute date de PUBLIC_PAGES, présente ou future. */
 const PLUS_TARD = "2999-01-01";
-const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER } = await import("../src/lib/brand.ts");
+const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, GOOGLE_SITE_VERIFICATION } = await import("../src/lib/brand.ts");
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
 const { readFileSync, readdirSync, statSync } = await import("node:fs");
@@ -847,6 +847,13 @@ test("en production, toutes les adresses partent du www", () => {
       if (avant[k] === undefined) delete process.env[k]; else process.env[k] = avant[k];
     }
   }
+});
+
+test("la balise de la Search Console : le jeton seul, posé par la racine sur toutes les pages", () => {
+  assert.equal(GOOGLE_SITE_VERIFICATION, "qr9tWTjQLrKWeKSnXhvDQWGpP0_zqSdxksUIWVSg3w8");
+  assert.match(GOOGLE_SITE_VERIFICATION, /^[A-Za-z0-9_-]{20,}$/, "la valeur de content= seule, jamais la balise entière");
+  const racine = readFileSync("src/app/[locale]/layout.tsx", "utf8");
+  assert.match(racine, /verification: \{ google: GOOGLE_SITE_VERIFICATION \}/);
 });
 
 test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce qui a changé", () => {
