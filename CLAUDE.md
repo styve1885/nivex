@@ -545,8 +545,10 @@ plus proche : nom « NIVEX Repassage à domicile », nom court « NIVEX »,
 téléphone, `CONTACT_EMAIL`, fondateur (`FOUNDER`), logo, image, fourchette
 de prix (de la séance d'essai au plus haut cycle), horaire, secteurs dans
 `areaServed` (Rive-Sud, puis Montréal, un quartier de l'île portant Montréal
-comme localité), `sameAs` depuis `SOCIAL_PROFILES` (vide : rien n'est
-publié). Google exige une adresse : elle s'arrête à la ville (Longueuil),
+comme localité), `sameAs` depuis `SOCIAL_PROFILES` (les pages de la
+maison, à leur adresse propre : ni lien de partage ni paramètre de suivi).
+Le LinkedIn de l'artisan est un profil de personne : il va sur le fondateur
+(`FOUNDER_PROFILES`), jamais sur la maison. Google exige une adresse : elle s'arrête à la ville (Longueuil),
 sans rue, puisque l'artisan se déplace. Le catalogue (`hasOfferCatalog`)
 porte les quatre abonnements et la séance d'essai, puis les pièces à
 l'unité ; `makesOffer`, l'heure de plus, les cinq prestations et les frais

@@ -30,7 +30,8 @@ export type PublicPage = {
 };
 
 /* Le 26 octobre 2026, chaque page a reçu son titre, sa description et la
-   fiche LocalBusiness : toutes datent de ce jour-là. */
+   fiche LocalBusiness, puis, le soir, les réseaux de la fiche (`sameAs`) :
+   toutes datent de ce jour-là, à l'heure de Montréal. */
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "", updated: "2026-10-26", changeFrequency: "weekly", priority: 1 },
   { path: "/tarifs", updated: "2026-10-26", changeFrequency: "monthly", priority: 0.8 },
