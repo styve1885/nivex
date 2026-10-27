@@ -69,6 +69,15 @@ export const FOUNDER_PROFILES: string[] = [
 ];
 
 /**
+ * La fiche Google de la maison (`hasMap` de la fiche LocalBusiness), par son
+ * identifiant permanent (`cid`), tiré de l'adresse Google Maps donnée par
+ * l'artisan le 27 octobre 2026. Jamais un lien de partage
+ * (maps.app.goo.gl), ni une adresse qui porte des coordonnées : elles
+ * situeraient le domicile, que le site ne publie pas. Vide, rien ne s'écrit.
+ */
+export const GOOGLE_MAPS_URL = "https://maps.google.com/?cid=5396462017230912861";
+
+/**
  * Préavis d'annulation par le client, en heures.
  *
  * Au-delà, le lien « Gérer ma réservation » cesse d'annuler tout seul et

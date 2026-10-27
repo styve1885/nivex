@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
 import type { Settings } from "./settings";
-import { FOUNDER, FOUNDER_PROFILES, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
+import { FOUNDER, FOUNDER_PROFILES, GOOGLE_MAPS_URL, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
 import { catalogName, getSeo, type SeoPage } from "./i18n/seo";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
@@ -274,6 +274,8 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       ...montreal.map((x) => place(x, true, lang)),
     ],
     ...sameAs(SOCIAL_PROFILES),
+    /* La fiche Google, par son identifiant : relie le site à la fiche. */
+    ...(GOOGLE_MAPS_URL ? { hasMap: GOOGLE_MAPS_URL } : {}),
     openingHoursSpecification: s.hours.filter((h) => h.enabled).map((h) => ({
       "@type": "OpeningHoursSpecification",
       dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
