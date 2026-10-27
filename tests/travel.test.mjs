@@ -34,6 +34,7 @@ const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, GOOGLE_SITE_VERIFICATION
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
 const { readFileSync, readdirSync, statSync } = await import("node:fs");
+const { createHash } = await import("node:crypto");
 const { retiredFr } = await import("../src/lib/i18n/retired.ts");
 const { default: robots } = await import("../src/app/robots.ts");
 const { default: sitemap } = await import("../src/app/sitemap.ts");
@@ -854,6 +855,18 @@ test("la balise de la Search Console : le jeton seul, posé par la racine sur to
   assert.match(GOOGLE_SITE_VERIFICATION, /^[A-Za-z0-9_-]{20,}$/, "la valeur de content= seule, jamais la balise entière");
   const racine = readFileSync("src/app/[locale]/layout.tsx", "utf8");
   assert.match(racine, /verification: \{ google: GOOGLE_SITE_VERIFICATION \}/);
+});
+
+test("le favicon est le fer de la maison, jamais le triangle du gabarit de Next.js", () => {
+  /* Google montre le favicon à côté du nom, dans ses résultats, et il retient
+     app/favicon.ico, que Next déclare le premier. Resté celui de Create Next
+     App jusqu'au 27 octobre 2026, il y affichait le triangle de Vercel. */
+  const ico = readFileSync("src/app/favicon.ico");
+  assert.notEqual(createHash("md5").update(ico).digest("hex"), "c30c7d42707a47a3f4591831641e50dc",
+    "le favicon du gabarit Create Next App");
+  assert.deepEqual([ico.readUInt16LE(0), ico.readUInt16LE(2)], [0, 1], "un fichier .ico");
+  const tailles = Array.from({ length: ico.readUInt16LE(4) }, (_, i) => ico[6 + 16 * i] || 256);
+  for (const t of [16, 32, 48, 256]) assert.ok(tailles.includes(t), `l'entrée de ${t} px`);
 });
 
 test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce qui a changé", () => {

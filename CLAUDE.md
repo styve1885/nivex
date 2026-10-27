@@ -611,6 +611,13 @@ La balise de validation de Google Search Console sort de
 toutes les pages de la vitrine : la racine `/` redirige vers `/fr` ou `/en`,
 et Google lit la page d'arrivée.
 
+**L'icône** est le fer doré de `app/icon.png`, que reprennent
+`app/apple-icon.png` et `app/favicon.ico` (16, 32, 48 et 256 px, réduits de
+la même image). Google l'affiche à côté du nom dans ses résultats, et il
+retient le `.ico`, que Next déclare le premier. Ce fichier est resté le
+triangle de Vercel du gabarit de départ jusqu'au 27 octobre 2026 ; un test
+l'empêche de revenir. Une icône changée se refait dans les trois fichiers.
+
 `robots.txt` nomme Googlebot, Bingbot, OAI-SearchBot, PerplexityBot et
 Claude-SearchBot. Un robot qui trouve son nom ignore le groupe `*` : chaque
 groupe répète donc les mêmes interdits (espace artisan, API, liens
