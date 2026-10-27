@@ -30,7 +30,9 @@ const { PUBLIC_PAGES, publicUrls, pageDate } = await import("../src/lib/pages.ts
 const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshness.ts");
 /* Un jour postérieur à toute date de PUBLIC_PAGES, présente ou future. */
 const PLUS_TARD = "2999-01-01";
-const { SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, GOOGLE_SITE_VERIFICATION } = await import("../src/lib/brand.ts");
+const {
+  SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, FOUNDER_PROFILES, SOCIAL_PROFILES, GOOGLE_SITE_VERIFICATION,
+} = await import("../src/lib/brand.ts");
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
 const { readFileSync, readdirSync, statSync } = await import("node:fs");
@@ -568,7 +570,7 @@ test("les descriptions disent les prix de la page, tirés des réglages", () => 
     /de 165 \$ à 660 \$ par cycle, séance de 2 heures à 120 \$/, "un autre taux change tout d'un coup");
 });
 
-test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux, sans réseau tant qu'on n'en a pas", () => {
+test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux et ses réseaux", () => {
   const ld = localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr");
   const o = siteOrigin();
   assert.equal(ld["@type"], "DryCleaningOrLaundry");
@@ -581,13 +583,28 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux,
   assert.equal(ld.image, `${o}/opengraph-image.jpg`);
   assert.equal(ld.telephone, "+1-450-943-1217");
   assert.equal(ld.email, CONTACT_EMAIL, "le courriel affiché sur le site");
-  assert.deepEqual(ld.founder, { "@type": "Person", name: FOUNDER });
+  assert.deepEqual(ld.founder, {
+    "@type": "Person", name: FOUNDER, sameAs: ["https://www.linkedin.com/in/styve-ketchandji-ngaleu-70a765362"],
+  });
   assert.equal(FOUNDER, "Styve Ketchandji Ngaleu");
   assert.equal(flat(ld.priceRange), "110 $ – 600 $", "de la séance d'essai au plus haut cycle");
   /* Pas de rue ni de code postal : l'artisan se déplace. La ville seule, que
      Google exige pour une fiche locale. */
   assert.deepEqual(ld.address, { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" });
-  assert.equal(ld.sameAs, undefined, "aucune adresse de réseau inventée");
+  /* Les pages de la maison sur la maison, le profil personnel sur le
+     fondateur ; l'adresse de chaque page, sans les paramètres de suivi des
+     liens de partage. */
+  assert.deepEqual(ld.sameAs, SOCIAL_PROFILES);
+  assert.deepEqual(ld.sameAs, [
+    "https://www.facebook.com/profile.php?id=61592622475613",
+    "https://www.instagram.com/nivexrepassage_a_domicile/",
+  ]);
+  assert.ok(!ld.sameAs.some((u) => u.includes("linkedin.com/in/")), "un profil personnel ne désigne pas la maison");
+  for (const u of [...SOCIAL_PROFILES, ...FOUNDER_PROFILES]) {
+    assert.match(u, /^https:\/\/www\.(instagram|facebook|linkedin)\.com\/./, u);
+    assert.doesNotMatch(u, /[?&](utm_[a-z]+|mibextid|mdxt|igsh|si|rdid|share_url)=|#/, `${u} : un paramètre de suivi`);
+    assert.doesNotMatch(u, /\/share\//, `${u} : un lien de partage n'est pas l'adresse de la page`);
+  }
   assert.match(ld.description, /^NIVEX, repassage à domicile à Montréal et sur la Rive-Sud/);
   const lieux = ld.areaServed.map((x) => x.name);
   assert.equal(lieux[0], "Saint-Lambert");

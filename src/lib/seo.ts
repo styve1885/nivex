@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
 import type { Settings } from "./settings";
-import { FOUNDER, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
+import { FOUNDER, FOUNDER_PROFILES, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
 import { catalogName, getSeo, type SeoPage } from "./i18n/seo";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
@@ -158,6 +158,12 @@ export function phoneSchema(): string {
   return `+1-${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
+/** Les profils publiés, sans les adresses vides ; aucun, pas de `sameAs`. */
+function sameAs(urls: string[]) {
+  const list = urls.filter(Boolean);
+  return list.length ? { sameAs: list } : {};
+}
+
 /**
  * Un lieu desservi. Un quartier de l'île porte Montréal comme localité : un
  * assistant qui lit « Verdun » doit comprendre qu'il s'agit de Montréal.
@@ -257,7 +263,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     image: `${origin}/opengraph-image.jpg`,
     telephone: phoneSchema(),
     email: contactEmail(),
-    founder: { "@type": "Person", name: FOUNDER },
+    founder: { "@type": "Person", name: FOUNDER, ...sameAs(FOUNDER_PROFILES) },
     /* De la séance d'essai au plus haut montant par cycle, en chiffres. */
     priceRange: `${money(sessionPriceCents(s))} – ${money(Math.max(...cycles))}`,
     currenciesAccepted: s.currency,
@@ -267,7 +273,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       ...south.map((x) => place(x, false, lang)),
       ...montreal.map((x) => place(x, true, lang)),
     ],
-    ...(SOCIAL_PROFILES.filter(Boolean).length ? { sameAs: SOCIAL_PROFILES.filter(Boolean) } : {}),
+    ...sameAs(SOCIAL_PROFILES),
     openingHoursSpecification: s.hours.filter((h) => h.enabled).map((h) => ({
       "@type": "OpeningHoursSpecification",
       dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,

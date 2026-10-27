@@ -50,9 +50,23 @@ export const FOUNDER = "Styve Ketchandji Ngaleu";
 
 /**
  * Les pages de la maison sur les réseaux sociaux (`sameAs` de la fiche
- * LocalBusiness). Une adresse vide ou absente n'est pas publiée.
+ * LocalBusiness), données par l'artisan le 26 octobre 2026. L'adresse de la
+ * page, jamais un lien de partage, et sans ses paramètres de suivi
+ * (`utm_source`, `mibextid`…). Une adresse vide n'est pas publiée.
  */
-export const SOCIAL_PROFILES: string[] = [];
+export const SOCIAL_PROFILES: string[] = [
+  "https://www.facebook.com/profile.php?id=61592622475613",
+  "https://www.instagram.com/nivexrepassage_a_domicile/",
+];
+
+/**
+ * Les profils personnels du fondateur (`sameAs` de `founder`, dans la même
+ * fiche). Son LinkedIn est un profil de personne, pas une page d'entreprise :
+ * il le désigne, lui, et non la maison.
+ */
+export const FOUNDER_PROFILES: string[] = [
+  "https://www.linkedin.com/in/styve-ketchandji-ngaleu-70a765362",
+];
 
 /**
  * Préavis d'annulation par le client, en heures.
