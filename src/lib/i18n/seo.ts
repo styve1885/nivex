@@ -3,8 +3,9 @@
  * description.
  *
  * Hors des dictionnaires, comme les textes retirés : un dictionnaire part en
- * entier vers les composants clients de la page, et ces textes ne servent
- * qu'au serveur, dans `<head>`.
+ * entier vers les composants clients qui le reçoivent tel quel (les
+ * tunnels, les pages personnelles), et ces textes ne servent qu'au serveur,
+ * dans `<head>`.
  *
  * Les règles, que les tests tiennent :
  *  — chaque titre commence par « NIVEX Repassage » (« NIVEX In-Home

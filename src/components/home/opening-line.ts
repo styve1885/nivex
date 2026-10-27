@@ -7,8 +7,8 @@ import type { DayHours, Settings } from "@/lib/settings";
  * Écrire cet horaire à la main, c'était le laisser mentir le jour où
  * l'artisan ouvre le dimanche. Chaque langue a ses usages : le français
  * met ses jours en minuscules et compte en heures, l'anglais capitalise
- * et coupe à midi. Le bloc Contact s'en sert ; la fonction vit hors du
- * composant client pour qu'un test puisse la lire.
+ * et coupe à midi. L'accueil l'écrit pour le bloc Contact, côté serveur :
+ * le composant client ne reçoit que la ligne, et un test peut la lire.
  */
 
 /* La semaine se lit du lundi au dimanche, comme dans l'espace artisan : un

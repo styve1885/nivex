@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDict, isLocale } from "@/lib/i18n";
-import { getSettingsStrict, type Settings } from "@/lib/settings";
+import { getSettingsStrict } from "@/lib/settings";
 import { contactEmail } from "@/lib/brand";
+import { servedText } from "@/lib/travel";
 import { Hero } from "@/components/home/Hero";
 import { Story } from "@/components/home/Story";
 import { Services } from "@/components/home/Services";
@@ -13,6 +14,7 @@ import { Faq } from "@/components/home/Faq";
 import { faqFill } from "@/components/home/faq-fill";
 import { faqJsonLd, jsonLdHtml, pageMeta, websiteJsonLd } from "@/lib/seo";
 import { Contact } from "@/components/home/Contact";
+import { openingLine } from "@/components/home/opening-line";
 import { ClosingCta } from "@/components/home/ClosingCta";
 
 export const revalidate = 300;
@@ -33,18 +35,17 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const settings = await getSettingsStrict();
 
   /* Données structurées : le site, et la foire aux questions telle qu'elle
-     s'affiche. La fiche LocalBusiness vient de la racine, sur toutes les
-     pages. */
+     s'affiche, remplie une seule fois pour les deux. La fiche LocalBusiness
+     vient de la racine, sur toutes les pages. */
   const siteLd = websiteJsonLd(locale);
-  const faqLd = faqJsonLd(t.faq.items.map((f) => ({ q: f.q, a: faqFill(f.a, t, settings, locale) })));
+  const faqItems = t.faq.items.map((f) => ({ q: f.q, a: faqFill(f.a, t, settings, locale) }));
+  const faqLd = faqJsonLd(faqItems);
 
-  /* Faq et Contact sont des composants clients : leurs props sont sérialisées
-     dans la page, lisibles par n'importe qui. Le compte Google de l'artisan
-     (adresse, nom, photo, agenda) n'a rien à y faire — le site ne montre que
-     l'adresse publique de la maison. */
-  const pub: Settings = {
-    ...settings, ownerEmail: null, ownerName: null, ownerPicture: null, calendarId: "", connectedAt: null,
-  };
+  /* Faq et Contact sont des composants clients : leurs props s'écrivent dans
+     la page, lisibles par n'importe qui, et chaque octet se télécharge avant
+     qu'elle réponde. Ils ne reçoivent donc que ce qu'ils affichent, écrit ici,
+     et des objets neufs : le dictionnaire entier pesait 47 Ko, le quart de la
+     page, et les réglages portent le compte Google de l'artisan. */
 
   return (
     <>
@@ -63,9 +64,11 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <BeforeAfterBanner t={t} />
       <Pricing t={t} locale={locale} settings={settings} />
       <Story t={t} />
-      <Faq t={t} settings={pub} locale={locale} />
-      <Contact t={t} locale={locale} businessEmail={contactEmail()}
-        settings={{ hours: settings.hours, zonePolicy: settings.zonePolicy }} />
+      <Faq eyebrow={t.faq.eyebrow} title={t.faq.title} items={faqItems} />
+      <Contact
+        t={{ contact: t.contact, brand: t.brand, photos: t.photos, zoneCheck: t.zoneCheck, montreal: { link: t.montreal.link } }}
+        locale={locale} businessEmail={contactEmail()}
+        hours={openingLine(t, settings, locale)} served={servedText(settings.zonePolicy, locale, t.zoneText)} />
       <ClosingCta t={t} locale={locale} settings={settings} />
     </>
   );

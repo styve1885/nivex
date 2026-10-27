@@ -2,24 +2,26 @@
 
 import { useState } from "react";
 import { Reveal } from "../Reveal";
-import type { Dict } from "@/lib/i18n";
-import type { Settings } from "@/lib/settings";
-import { faqFill } from "./faq-fill";
 
-export function Faq({ t, settings, locale }: { t: Dict; settings: Settings; locale: "fr" | "en" }) {
+/* Composant client : ses props s'écrivent dans la page. Il reçoit donc les
+   réponses déjà remplies par le serveur (`faqFill`), les mêmes que les
+   données structurées, et rien d'autre : ni le dictionnaire, ni les
+   réglages. */
+export function Faq({ eyebrow, title, items }: {
+  eyebrow: string; title: string; items: { q: string; a: string }[];
+}) {
   const [open, setOpen] = useState<number | null>(0);
-  const fill = (s: string) => faqFill(s, t, settings, locale);
 
   return (
     <section id="questions" className="scroll-mt-24 bg-linen-100 py-28 sm:py-36">
       <div className="mx-auto max-w-3xl px-7 sm:px-10">
         <Reveal className="text-center">
-          <p className="eyebrow">{t.faq.eyebrow}</p>
-          <h2 className="mt-5 font-display text-4xl font-light leading-tight text-ink-800 sm:text-5xl">{t.faq.title}</h2>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2 className="mt-5 font-display text-4xl font-light leading-tight text-ink-800 sm:text-5xl">{title}</h2>
         </Reveal>
 
         <dl className="mt-16">
-          {t.faq.items.map((item, i) => {
+          {items.map((item, i) => {
             const isOpen = open === i;
             return (
               <Reveal key={item.q} delay={i * 50} className="border-b border-gold-300/40 first:border-t">
@@ -45,7 +47,7 @@ export function Faq({ t, settings, locale }: { t: Dict; settings: Settings; loca
                   className="grid transition-[grid-template-rows] duration-600"
                   style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", transitionTimingFunction: "var(--ease-silk)" }}>
                   <div className="overflow-hidden">
-                    <p className="pb-7 pr-10 text-[0.93rem] font-light leading-[2] text-ink-500">{fill(item.a)}</p>
+                    <p className="pb-7 pr-10 text-[0.93rem] font-light leading-[2] text-ink-500">{item.a}</p>
                   </div>
                 </dd>
               </Reveal>

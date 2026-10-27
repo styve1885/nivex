@@ -5,11 +5,12 @@ import { INSTALL_MINUTES } from "../brand";
  * remettre.
  *
  * Ces textes vivent ici, et non dans les dictionnaires : un dictionnaire part
- * en entier vers les composants clients d'une page (questions, contact,
- * tunnels), et tout ce qui y dort se lirait dans la source de la page. Un
- * assistant qui lit le HTML brut y aurait trouvé des formules qui n'existent
- * plus. Seuls des composants serveur les lisent (RetiredSections, Marquee,
- * Protocol, Gallery), et seulement quand on les rallume.
+ * en entier vers les composants clients qui le reçoivent tel quel (les
+ * tunnels, les pages personnelles), et tout ce qui y dort se lirait dans la
+ * source de la page. Un assistant qui lit le HTML brut y aurait trouvé des
+ * formules qui n'existent plus. Seuls des composants serveur les lisent
+ * (RetiredSections, Marquee, Protocol, Gallery), et seulement quand on les
+ * rallume.
  *
  * Le français fait foi ; l'anglais en épouse la forme.
  */

@@ -7,18 +7,18 @@ import { Photo } from "../Photo";
 import { CheckIcon, ArrowIcon } from "../Icons";
 import { EMAIL_RE, formatPhone } from "../booking/Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
-import type { Settings } from "@/lib/settings";
 import { ZoneChecker } from "../ZoneChecker";
-import { servedText } from "@/lib/travel";
-import { openingLine } from "./opening-line";
 
 type Field = "name" | "email" | "message";
 
-/* Composant client : ses props s'écrivent dans la page, lisibles par tous.
-   Il ne reçoit donc que les deux réglages qu'il lit, jamais l'objet entier,
-   qui porte le compte Google de l'artisan. */
-export function Contact({ t, locale, businessEmail, settings }: {
-  t: Dict; locale: "fr" | "en"; businessEmail: string; settings: Pick<Settings, "hours" | "zonePolicy">;
+/* Composant client : ses props s'écrivent dans la page, lisibles par tous,
+   et pèsent sur son chargement. Il ne reçoit donc que ce qu'il affiche : les
+   parties du dictionnaire qu'il lit, l'horaire (`openingLine`) et le texte
+   de zone (`servedText`) déjà écrits par le serveur. Jamais les réglages,
+   qui portent le compte Google de l'artisan. */
+export function Contact({ t, locale, businessEmail, hours, served }: {
+  t: Pick<Dict, "contact" | "brand" | "photos" | "zoneCheck"> & { montreal: Pick<Dict["montreal"], "link"> };
+  locale: "fr" | "en"; businessEmail: string; hours: string; served: string;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -198,7 +198,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
                 </div>
                 <div>
                   <dt className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.contact.hoursLabel}</dt>
-                  <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue.replace("{hours}", openingLine(t, settings, locale))}</dd>
+                  <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue.replace("{hours}", hours)}</dd>
                 </div>
               </dl>
 
@@ -208,7 +208,7 @@ export function Contact({ t, locale, businessEmail, settings }: {
                   villes ne répond pas à la seule question qui se pose :
                   venez-vous chez moi, et combien. */}
               <p className="text-[0.85rem] font-light leading-[1.9] text-ink-500">
-                {servedText(settings.zonePolicy, locale, t.zoneText)}
+                {served}
               </p>
               <Link href={`/${locale}/montreal`}
                 className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
