@@ -8,9 +8,10 @@ import type { Settings } from "@/lib/settings";
  *
  * La capacité citée doit être celle de `capacityPieces`, et la liste des
  * secteurs celle de l'onglet « Zones et frais » : sinon la foire aux
- * questions contredit la grille deux écrans plus haut. Les données
- * structurées s'en servent aussi : la fonction vit donc hors du composant
- * client, appelable des deux côtés.
+ * questions contredit la grille deux écrans plus haut. L'accueil remplit
+ * les réponses une fois, côté serveur, pour la page et pour les données
+ * structurées ; /llms-full.txt les reprend. Le composant client ne reçoit
+ * que le résultat.
  *
  * « Aucuns frais de déplacement à Montréal » ouvre la dernière phrase de la
  * réponse sur les zones ({check}) tant que la grille le permet ; sinon cette

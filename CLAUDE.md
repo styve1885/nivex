@@ -133,6 +133,16 @@ construction, et la production reste telle quelle. La lecture se fait une
 fois par rendu (`cache` de React) : la racine et la page partagent la même
 ligne, ou la même panne.
 
+**Un composant client de la vitrine ne reçoit que ce qu'il affiche.** Tout
+ce qu'on lui passe s'écrit dans la page, puis dans son préchargement : sur
+l'accueil, le dictionnaire entier pesait 47 Ko, le quart du HTML, jusqu'au
+27 octobre 2026. La foire aux questions reçoit ses réponses déjà remplies,
+le bloc Contact l'horaire et le texte de zone déjà écrits, et chacun un
+objet neuf avec les seules parties du dictionnaire qu'il lit, comme l'en-tête
+(`Pick<Dict, …>` : le type seul n'empêche pas de passer `t` entier). Seuls
+les tunnels et les pages personnelles (gestion d'une réservation ou d'un
+abonnement, retrait de la mesure) reçoivent encore le dictionnaire entier.
+
 Une adresse inconnue sous `/fr` ou `/en` tombe sur `[locale]/[...missing]`,
 qui rend la page 404 de la maison, traduite (son HTML serveur est la coquille
 d'erreur de Next ; le texte paraît avec le JavaScript, le statut est bien
@@ -211,8 +221,9 @@ abonnement : « Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites ×
   du pantalon de velours, du t-shirt et de la veste doublée, les anciennes
   offres), vivent dans `lib/i18n/retired.ts`, **jamais dans
   les dictionnaires** : un dictionnaire part en entier vers les composants
-  clients de la page (questions, contact, tunnels), et ce qui y dort se lit
-  dans la source HTML — là où un assistant le trouverait. Un test y veille.
+  clients qui le reçoivent tel quel (les tunnels, les pages personnelles),
+  et ce qui y dort se lit dans la source HTML — là où un assistant le
+  trouverait. Un test y veille.
 - Le pantalon de velours paraissait aussi sur la photo du bandeau et sur
   l'image de partage : `bandeau-chemises-16x9.jpg` et
   `app/opengraph-image.jpg` sont recadrés sur les pièces blanches, la photo
