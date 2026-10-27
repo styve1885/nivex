@@ -30,14 +30,15 @@ export type PublicPage = {
 };
 
 /* Le 26 octobre 2026, chaque page a reçu son titre, sa description et la
-   fiche LocalBusiness, puis, le soir, les réseaux de la fiche (`sameAs`) :
-   toutes datent de ce jour-là, à l'heure de Montréal. */
+   fiche LocalBusiness, puis, le soir, les réseaux de la fiche (`sameAs`) ;
+   le 27, la fiche Google (`hasMap`). La fiche est posée sur toutes les
+   pages : toutes datent de ce jour-là, à l'heure de Montréal. */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-10-26", changeFrequency: "weekly", priority: 1 },
-  { path: "/tarifs", updated: "2026-10-26", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/montreal", updated: "2026-10-26", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/conditions", updated: "2026-10-26", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-10-26", changeFrequency: "yearly", priority: 0.3 },
+  { path: "", updated: "2026-10-27", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-10-27", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-10-27", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/conditions", updated: "2026-10-27", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-10-27", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

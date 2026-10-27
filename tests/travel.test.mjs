@@ -31,7 +31,7 @@ const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshnes
 /* Un jour postérieur à toute date de PUBLIC_PAGES, présente ou future. */
 const PLUS_TARD = "2999-01-01";
 const {
-  SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, FOUNDER_PROFILES, SOCIAL_PROFILES, GOOGLE_SITE_VERIFICATION,
+  SITE_URL, INDEXNOW_KEY, CONTACT_EMAIL, FOUNDER, FOUNDER_PROFILES, SOCIAL_PROFILES, GOOGLE_SITE_VERIFICATION, GOOGLE_MAPS_URL,
 } = await import("../src/lib/brand.ts");
 const { indexNowBody, changedStamps, currentStamps, keyLocation } = await import("../src/lib/indexnow.ts");
 const { siteOrigin } = await import("../src/lib/google.ts");
@@ -605,6 +605,12 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux 
     assert.doesNotMatch(u, /[?&](utm_[a-z]+|mibextid|mdxt|igsh|si|rdid|share_url)=|#/, `${u} : un paramètre de suivi`);
     assert.doesNotMatch(u, /\/share\//, `${u} : un lien de partage n'est pas l'adresse de la page`);
   }
+  /* La fiche Google par son identifiant seul : ni lien de partage, ni
+     coordonnées, qui situeraient le domicile. */
+  assert.equal(ld.hasMap, "https://maps.google.com/?cid=5396462017230912861");
+  assert.equal(ld.hasMap, GOOGLE_MAPS_URL);
+  assert.match(GOOGLE_MAPS_URL, /^https:\/\/maps\.google\.com\/\?cid=\d+$/);
+  assert.equal(ld.geo, undefined, "aucune coordonnée publiée");
   assert.match(ld.description, /^NIVEX, repassage à domicile à Montréal et sur la Rive-Sud/);
   const lieux = ld.areaServed.map((x) => x.name);
   assert.equal(lieux[0], "Saint-Lambert");

@@ -549,7 +549,10 @@ comme localité), `sameAs` depuis `SOCIAL_PROFILES` (les pages Facebook et
 Instagram de la maison, à leur adresse propre : ni lien de partage ni
 paramètre de suivi).
 Le LinkedIn de l'artisan est un profil de personne : il va sur le fondateur
-(`FOUNDER_PROFILES`), jamais sur la maison. Google exige une adresse : elle s'arrête à la ville (Longueuil),
+(`FOUNDER_PROFILES`), jamais sur la maison. `hasMap` donne la fiche Google
+par son identifiant permanent (`GOOGLE_MAPS_URL`, `?cid=…`) : jamais un
+lien de partage, ni les coordonnées d'une adresse Google Maps, qui
+situeraient le domicile. Google exige une adresse : elle s'arrête à la ville (Longueuil),
 sans rue, puisque l'artisan se déplace. Le catalogue (`hasOfferCatalog`)
 porte les quatre abonnements et la séance d'essai, puis les pièces à
 l'unité ; `makesOffer`, l'heure de plus, les cinq prestations et les frais
