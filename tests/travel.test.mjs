@@ -595,11 +595,14 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux 
      fondateur ; l'adresse de chaque page, sans les paramètres de suivi des
      liens de partage. */
   assert.deepEqual(ld.sameAs, SOCIAL_PROFILES);
-  assert.ok(ld.sameAs.includes("https://www.instagram.com/nivexrepassage_a_domicile/"));
+  assert.deepEqual(ld.sameAs, [
+    "https://www.facebook.com/profile.php?id=61592622475613",
+    "https://www.instagram.com/nivexrepassage_a_domicile/",
+  ]);
   assert.ok(!ld.sameAs.some((u) => u.includes("linkedin.com/in/")), "un profil personnel ne désigne pas la maison");
   for (const u of [...SOCIAL_PROFILES, ...FOUNDER_PROFILES]) {
     assert.match(u, /^https:\/\/www\.(instagram|facebook|linkedin)\.com\/./, u);
-    assert.doesNotMatch(u, /[?&](utm_[a-z]+|mibextid|mdxt|igsh|si)=/, `${u} : un paramètre de suivi`);
+    assert.doesNotMatch(u, /[?&](utm_[a-z]+|mibextid|mdxt|igsh|si|rdid|share_url)=|#/, `${u} : un paramètre de suivi`);
     assert.doesNotMatch(u, /\/share\//, `${u} : un lien de partage n'est pas l'adresse de la page`);
   }
   assert.match(ld.description, /^NIVEX, repassage à domicile à Montréal et sur la Rive-Sud/);

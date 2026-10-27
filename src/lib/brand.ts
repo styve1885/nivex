@@ -55,6 +55,7 @@ export const FOUNDER = "Styve Ketchandji Ngaleu";
  * (`utm_source`, `mibextid`…). Une adresse vide n'est pas publiée.
  */
 export const SOCIAL_PROFILES: string[] = [
+  "https://www.facebook.com/profile.php?id=61592622475613",
   "https://www.instagram.com/nivexrepassage_a_domicile/",
 ];
 
