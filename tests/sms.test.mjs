@@ -97,8 +97,8 @@ await test("les trois textos de la séance suivent les modèles de la maison, si
 await test("les confirmations disent comment ne plus recevoir de textos, les autres non", () => {
   assert.match(confirmed, /Répondez STOP pour ne plus recevoir de textos\. Styve$/);
   assert.match(confirmedEn, /Reply STOP to opt out\. Styve$/);
-  assert.match(SMS.subscriptionConfirmed("fr", "Exécutif", when, "chaque semaine", "https://x"), /Répondez STOP/);
-  assert.match(SMS.subscriptionConfirmed("en", "Executive", when, "every week", "https://x"), /Reply STOP/);
+  assert.match(SMS.subscriptionConfirmed("fr", "VIP", when, "chaque semaine", "https://x"), /Répondez STOP/);
+  assert.match(SMS.subscriptionConfirmed("en", "VIP", when, "every week", "https://x"), /Reply STOP/);
   assert.ok(!/STOP/.test(SMS.reminder("fr", day, "14 h", false, null)));
   assert.ok(!/STOP/.test(SMS.soon("fr", "14 h")));
   assert.ok(!/STOP/.test(SMS.visitMoved("fr", when, when)));
@@ -112,7 +112,8 @@ const gsm7 = (s) => [...s].every((c) => GSM7.has(c));
 await test("les textos de l'artisan tiennent dans l'alphabet des textos, en une tranche", () => {
   const all = [
     SMS.owner.newBooking("Marie Tremblay", when, "Saint-Lambert"),
-    SMS.owner.newSubscription("Marie Tremblay", "Exécutif", when),
+    /* Le plus long nom de formule. */
+    SMS.owner.newSubscription("Marie Tremblay", "Premium Plus", when),
     SMS.owner.cancelled("Marie Tremblay", when),
     SMS.owner.moved("Marie Tremblay", when, when),
     /* Un mois d'août et des noms accentués : û, ç, ô, î, ë sortent de l'alphabet. */
@@ -140,13 +141,13 @@ await test("le rappel donne l'heure d'arrivée, et le paiement seulement quand i
 await test("aucun point d'exclamation, et chaque texto signé NIVEX", () => {
   const all = [
     confirmed, confirmedEn, SMS.soon("fr", "14 h"), SMS.soon("en", "2 p.m."),
-    SMS.subscriptionConfirmed("fr", "Exécutif", when, "chaque semaine", "https://x"),
-    SMS.subscriptionConfirmed("en", "Executive", when, "every week", "https://x"),
+    SMS.subscriptionConfirmed("fr", "VIP", when, "chaque semaine", "https://x"),
+    SMS.subscriptionConfirmed("en", "VIP", when, "every week", "https://x"),
     SMS.reminder("fr", day, "14 h", false, "400 $"), SMS.reminder("en", "Tuesday, October 20", "2 p.m.", true, null),
     SMS.bookingCancelled("fr", when), SMS.bookingCancelled("en", when),
     SMS.visitCancelled("fr", when, when), SMS.visitCancelled("en", when, null),
     SMS.visitMoved("fr", when, when), SMS.visitMoved("en", when, when),
-    SMS.owner.newBooking("Claire", when, "Longueuil"), SMS.owner.newSubscription("Claire", "Exécutif", when),
+    SMS.owner.newBooking("Claire", when, "Longueuil"), SMS.owner.newSubscription("Claire", "VIP", when),
     SMS.owner.cancelled("Claire", when), SMS.owner.moved("Claire", when, when),
   ];
   for (const m of all) {

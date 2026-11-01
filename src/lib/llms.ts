@@ -15,7 +15,7 @@ import {
 /**
  * Ce que les assistants lisent de la maison, en Markdown, en français puis
  * en anglais, sur deux fichiers :
- *  — /llms.txt, court : le service, les zones, les quatre abonnements et la
+ *  — /llms.txt, court : le service, les zones, les cinq abonnements et la
  *    séance d'essai avec leurs prix, le contact et les pages principales ;
  *  — /llms-full.txt, le détail : pièces à l'unité, frais par zone et coût
  *    d'un cycle en zone payante, conditions, les sept questions et leurs

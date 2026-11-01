@@ -21,7 +21,7 @@ import type { Dict } from "@/lib/i18n";
 /** Une pièce à l'unité, telle que la grille la publie : prix, et haut de fourchette s'il varie. */
 type Unit = { key: string; label: string; cents: number; toCents?: number; group: "linen" | "garments" };
 /** Un abonnement, déjà chiffré par le serveur : il se poursuit dans son propre tunnel. */
-type PlanChoice = { key: string; name: string; line: string; cents: number; fullCents: number };
+type PlanChoice = { key: string; slug: string; name: string; line: string; cents: number; fullCents: number };
 
 export type WizardConfig = {
   locale: "fr" | "en";
@@ -457,7 +457,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s1" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{t.booking.step1.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light text-ink-500">{t.booking.step1.hint}</p>
 
-            {/* Cinq choix, et rien d'autre : la séance d'essai, puis les quatre
+            {/* Six choix, et rien d'autre : la séance d'essai, puis les cinq
                 abonnements. Un abonnement se poursuit dans son propre tunnel. */}
             <fieldset className="mt-8">
               <legend className="sr-only">{t.booking.step1.title}</legend>
@@ -741,7 +741,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                 }
                 setError(null);
                 if (step === 0 && choice !== "session") {
-                  router.push(`/${config.locale}/abonnement?formule=${encodeURIComponent(choice)}`);
+                  router.push(`/${config.locale}/abonnement?formule=${encodeURIComponent(config.plans.find((p) => p.key === choice)?.slug ?? choice)}`);
                   return;
                 }
                 if (step === 1) loadSchedule(rangeStart ?? undefined);

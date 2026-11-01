@@ -362,7 +362,7 @@ export const en: Dict = {
   },
   pricing: {
     eyebrow: "Pricing",
-    title: "Four subscriptions, a rate guaranteed for twelve months.",
+    title: "Five subscriptions, a rate guaranteed for twelve months.",
     planLine: "{detail}, up to {n} pieces",
     perCycle: "/ cycle",
     insteadOf: "instead of",

@@ -16,10 +16,12 @@ const {
 } = await import("../src/lib/cycles.ts");
 const {
   ownerFirstVisit, SubscriptionError, phoneKey, addressKey, onlineSubscriptionRefused, ONLINE_SUBSCRIPTIONS_PER_DAY,
+  planName,
 } = await import("../src/lib/subscriptions.ts");
 const { slotProblem } = await import("../src/lib/availability.ts");
 const { SMS, smsWhen } = await import("../src/lib/sms.ts");
-const { PLANS, planCents, planFullCents } = await import("../src/lib/pricing.ts");
+const { PLANS, planCents, planFullCents, planFromParam } = await import("../src/lib/pricing.ts");
+const { readFileSync } = await import("node:fs");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
@@ -46,7 +48,76 @@ test("les rythmes de la demande : chaque semaine, aux deux semaines, toutes les 
   assert.equal(plan("grande-famille").everyWeeks, 1);
   assert.equal(plan("confort").everyWeeks, 2);
   assert.equal(plan("essentiel").everyWeeks, 4);
-  assert.deepEqual(PLANS.map((p) => p.minutesPerVisit), [180, 120, 120, 180]);
+  assert.equal(plan("essentiel-2h").everyWeeks, 4);
+  assert.deepEqual(PLANS.map((p) => p.minutesPerVisit), [120, 180, 120, 120, 180]);
+});
+
+test("cinq formules, de la plus légère à la plus complète, sous leurs noms du 1er novembre 2026", () => {
+  assert.deepEqual(PLANS.map((p) => [p.key, p.fr.name, p.en.name]), [
+    ["essentiel-2h", "Essentiel", "Essential"],
+    ["essentiel", "Premium", "Premium"],
+    ["confort", "Premium Plus", "Premium Plus"],
+    ["executif", "VIP", "VIP"],
+    ["grande-famille", "Prestige", "Prestige"],
+  ]);
+  assert.equal(new Set(PLANS.map((p) => p.key)).size, PLANS.length, "une clé par formule");
+});
+
+test("une clé ne change jamais de formule : les anciennes gardent leur rythme et leur durée", () => {
+  /* Les abonnés et les liens déjà envoyés (?formule=…) portent ces clés :
+     elles désignent pour toujours la même formule, quel que soit son nom.
+     Le nouvel Essentiel a reçu une clé neuve ; « essentiel » est le Premium. */
+  const forme = (k) => { const p = plan(k); return p && [p.visits, p.minutesPerVisit, p.everyWeeks]; };
+  assert.deepEqual(forme("essentiel"), [1, 180, 4]);
+  assert.deepEqual(forme("confort"), [2, 120, 2]);
+  assert.deepEqual(forme("executif"), [4, 120, 1]);
+  assert.deepEqual(forme("grande-famille"), [4, 180, 1]);
+  assert.deepEqual(forme("essentiel-2h"), [1, 120, 4]);
+  for (const p of PLANS) {
+    for (const nom of [p.fr.name, p.en.name, p.fr.detail, p.en.detail, p.fr.short, p.en.short]) {
+      assert.doesNotMatch(nom, /Confort|Comfort|Exécutif|Executive|Grande Famille|Large Family/, `${p.key} : « ${nom} »`);
+    }
+  }
+  assert.deepEqual(PLANS.filter((p) => /Essenti/.test(p.fr.name + p.en.name)).map((p) => p.key), ["essentiel-2h"],
+    "« Essentiel » ne désigne plus que la formule de 2 h");
+});
+
+test("l'adresse dit le nom du jour, et un lien d'avant ouvre toujours la même formule", () => {
+  assert.deepEqual(PLANS.map((p) => p.slug), ["essentiel-2h", "premium", "premium-plus", "vip", "prestige"]);
+  const cle = (v) => planFromParam(v)?.key ?? null;
+  assert.equal(cle("premium"), "essentiel");
+  assert.equal(cle("premium-plus"), "confort");
+  assert.equal(cle("vip"), "executif");
+  assert.equal(cle("prestige"), "grande-famille");
+  assert.equal(cle("essentiel-2h"), "essentiel-2h");
+  /* Les liens envoyés ou imprimés avant le 1er novembre 2026. */
+  assert.equal(cle("essentiel"), "essentiel", "un ancien lien Essentiel ouvre le Premium, la formule de 3 h");
+  assert.equal(cle("confort"), "confort");
+  assert.equal(cle("executif"), "executif");
+  assert.equal(cle("grande-famille"), "grande-famille");
+  assert.equal(cle("inconnue"), null);
+  assert.equal(cle(undefined), null);
+  for (const p of PLANS) {
+    assert.ok(!PLANS.some((q) => q !== p && q.key === p.slug), `le mot « ${p.slug} » n'est la clé d'aucune autre formule`);
+  }
+  assert.equal(new Set(PLANS.map((p) => p.slug)).size, PLANS.length);
+});
+
+test("un abonné d'avant lit le nom de sa clé, jamais celui qu'il a gardé en base", () => {
+  assert.equal(planName({ planKey: "essentiel", planName: "Essentiel" }, "fr"), "Premium");
+  assert.equal(planName({ planKey: "confort", planName: "Confort" }, "en"), "Premium Plus");
+  assert.equal(planName({ planKey: "executif", planName: "Exécutif" }, "fr"), "VIP");
+  assert.equal(planName({ planKey: "grande-famille", planName: "Grande Famille" }, "fr"), "Prestige");
+  assert.equal(planName({ planKey: "essentiel-2h", planName: "Essentiel" }, "en"), "Essential");
+  assert.equal(planName({ planKey: "disparue", planName: "Ancienne" }, "fr"), "Ancienne", "une clé inconnue garde son nom");
+});
+
+test("la synchronisation des noms donne à chaque ancienne clé le nom de la grille, et ne touche pas au nouvel Essentiel", () => {
+  /* Une coquille dans le SQL ne se verrait qu'en production, une seule fois. */
+  const db = readFileSync(new URL("../src/lib/db.ts", import.meta.url), "utf8");
+  const bloc = db.slice(db.indexOf("names (plan_key, plan_name) AS"), db.indexOf("), subs AS"));
+  const paires = [...bloc.matchAll(/\('([^']+)', '([^']+)'\)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(paires, PLANS.filter((p) => p.key !== "essentiel-2h").map((p) => [p.key, p.fr.name]));
 });
 
 test("chaque formule tient un cycle en quatre semaines", () => {
@@ -64,7 +135,7 @@ test("10 h reste 10 h de l'autre côté du passage à l'heure normale (1er novem
   assert.equal(next.getTime() - at(2026, 10, 30).getTime(), 7 * DAY + 3600_000);
 });
 
-test("une série Confort avance de deux semaines en deux semaines", () => {
+test("une série Premium Plus avance de deux semaines en deux semaines", () => {
   const ds = gridDates(gridFrom(at(2026, 11, 3, 14), 2, TZ), 0, 3).map((d) => dateKey(d, TZ));
   assert.deepEqual(ds, ["2026-11-03", "2026-11-17", "2026-12-01"]);
 });
@@ -119,24 +190,25 @@ test("les frais d'un abonné : ceux de la zone pour la durée de la visite, sans
   assert.equal(subscriberFeeCents(-300), 0, "jamais sous zéro");
 });
 
-test("à 55 $ l'heure, les formules coûtent 150, 200, 400 et 600 $, au lieu de 165, 220, 440 et 660 $", () => {
+test("à 55 $ l'heure, les formules coûtent 100, 150, 200, 400 et 600 $, au lieu de 110, 165, 220, 440 et 660 $", () => {
   assert.equal(settings.hourlyRate, 5500);
   const prix = Object.fromEntries(PLANS.map((p) => [p.key, [planCents(p, settings), planFullCents(p, settings)]]));
   assert.deepEqual(prix, {
-    essentiel: [15000, 16500], confort: [20000, 22000], executif: [40000, 44000], "grande-famille": [60000, 66000],
+    "essentiel-2h": [10000, 11000], essentiel: [15000, 16500], confort: [20000, 22000], executif: [40000, 44000],
+    "grande-famille": [60000, 66000],
   });
 });
 
-test("Exécutif en zone B, visites de 2 h : 400 $ + 15 $ × 4 = 460 $", () => {
+test("VIP en zone B, visites de 2 h : 400 $ + 15 $ × 4 = 460 $", () => {
   const q = quoteCycle(plan("executif"), settings, 1500);
   assert.deepEqual(q, { planCents: 40000, travelCents: 6000, totalCents: 46000, feePerVisitCents: 1500 });
 });
 
-test("les quatre formules lues sur la grille : en zone B, 15 $ par visite de 2 h et 10 $ par visite de 3 h ; à Montréal, rien", () => {
+test("les cinq formules lues sur la grille : en zone B, 15 $ par visite de 2 h et 10 $ par visite de 3 h ; à Montréal, rien", () => {
   const devis = (k, code) => quoteCycle(plan(k), settings, evaluateZone(code, plan(k).minutesPerVisit, DEFAULT_ZONE_POLICY).feeCents);
-  const cles = ["essentiel", "confort", "executif", "grande-famille"];
+  const cles = ["essentiel-2h", "essentiel", "confort", "executif", "grande-famille"];
   assert.deepEqual(cles.map((k) => { const q = devis(k, "J2W 1A1"); return [q.feePerVisitCents, q.travelCents, q.totalCents]; }),
-    [[1000, 1000, 16000], [1500, 3000, 23000], [1500, 6000, 46000], [1000, 4000, 64000]]);
+    [[1500, 1500, 11500], [1000, 1000, 16000], [1500, 3000, 23000], [1500, 6000, 46000], [1000, 4000, 64000]]);
   for (const k of cles) {
     assert.equal(devis(k, "H3B 1A1").travelCents, 0, `${k} au centre-ville de Montréal, en zone A`);
     assert.equal(devis(k, "J5R 1A1").travelCents, 0, `${k} à Candiac, en zone A`);
@@ -393,7 +465,7 @@ test("fin d'abonnement, série renouvelée, visite replacée : un texto calme, s
 const base = {
   ref: "ABO-TEST01", locale: "fr", clientName: "Claire Beaulieu", clientEmail: "claire@example.com",
   clientPhone: "450 943-1217", address: "88 rue Saint-Charles Ouest", city: "Longueuil", postalCode: "J4H 1C6",
-  planName: "Exécutif", perCycle: 4, everyWeeks: 1, minutesPerVisit: 120,
+  planName: "VIP", perCycle: 4, everyWeeks: 1, minutesPerVisit: 120,
   visits: gridDates(gridFrom(at(2026, 11, 6), 1, TZ), 0, 24),
   planCents: 36000, travelCents: 4000, totalCents: 40000, feePerVisitCents: 1000, travelZone: "Quartiers de Montréal",
   currency: "CAD", timezone: TZ, manageUrl: "https://nivexrepassage.ca/fr/abonnement/abc",
@@ -415,7 +487,7 @@ test("la confirmation dit le rythme, la série, le montant du cycle et la règle
 });
 
 test("une série d'une seule visite se dit au singulier, au client comme à l'artisan", () => {
-  /* Un abonné Essentiel entré au cycle 6 : il ne reste qu'une visite à poser. */
+  /* Un abonné entré au cycle 6 : il ne reste qu'une visite à poser. */
   const one = { ...base, visits: base.visits.slice(0, 1) };
   assert.match(flat(subscriptionConfirmation(one).text), /Une visite, le vendredi 6 novembre/);
   assert.ok(!/1 visites/.test(subscriptionConfirmation(one).text));

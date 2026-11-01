@@ -178,6 +178,8 @@ export function unitByKey(key: string): UnitPrice | undefined {
 
 export type Plan = {
   key: string;
+  /** Le mot de l'adresse (`/abonnement?formule=…`), tiré du nom du jour. */
+  slug: string;
   /** Visites par cycle : c'est ce nombre, effectué, qui fait un « mois ». */
   visits: number;
   minutesPerVisit: number;
@@ -188,36 +190,70 @@ export type Plan = {
   en: { name: string; detail: string; short: string };
 };
 
+/*
+ * Les formules, de la plus légère à la plus complète. La clé est un
+ * identifiant interne, jamais un nom : elle vit dans les liens
+ * (`/abonnement?formule=…`) et dans chaque abonnement en base, et une clé ne
+ * désigne jamais deux formules. Le 1er novembre 2026, les quatre formules
+ * d'alors ont changé de nom sans changer de clé — « essentiel » est devenue
+ * Premium, « confort » Premium Plus, « executif » VIP, « grande-famille »
+ * Prestige — et le nouvel Essentiel a reçu une clé neuve, `essentiel-2h`.
+ * Un lien imprimé ou envoyé avant ouvre donc toujours la même formule, au
+ * même rythme, sous son nouveau nom. Les abonnés gardent leur prix et leur
+ * rythme, figés dans leur ligne ; seul le nom affiché suit, et la base
+ * avec lui (`formules-2026-11`, lib/db.ts).
+ *
+ * Les liens du site portent le `slug`, pour que l'adresse dise le nom du
+ * jour (`?formule=premium`) ; une ancienne clé y est encore comprise
+ * (`planFromParam`). Le nouvel Essentiel n'a jamais le mot « essentiel » :
+ * un ancien lien `?formule=essentiel` ouvre toujours le Premium.
+ */
 export const PLANS: Plan[] = [
   {
-    key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
-    fr: { name: "Essentiel", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison.",
+    key: "essentiel-2h", slug: "essentiel-2h", visits: 1, minutesPerVisit: 120, everyWeeks: 4,
+    fr: { name: "Essentiel", detail: "1 visite de 2 h toutes les quatre semaines — les chemises et les pantalons du mois.",
+          short: "1 visite de 2 h toutes les 4 semaines" },
+    en: { name: "Essential", detail: "One 2-hour visit every four weeks — the month's shirts and trousers.",
+          short: "One 2-hour visit every 4 weeks" },
+  },
+  {
+    key: "essentiel", slug: "premium", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
+    fr: { name: "Premium", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison.",
           short: "1 visite de 3 h toutes les 4 semaines" },
-    en: { name: "Essential", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets.",
+    en: { name: "Premium", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets.",
           short: "One 3-hour visit every 4 weeks" },
   },
   {
-    key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
-    fr: { name: "Confort", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour.",
+    key: "confort", slug: "premium-plus", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
+    fr: { name: "Premium Plus", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour.",
           short: "2 visites de 2 h, aux deux semaines" },
-    en: { name: "Comfort", detail: "Two 2-hour visits, every other week — everyday clothes kept current.",
+    en: { name: "Premium Plus", detail: "Two 2-hour visits, every other week — everyday clothes kept current.",
           short: "Two 2-hour visits, every other week" },
   },
   {
-    key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
-    fr: { name: "Exécutif", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour.",
+    key: "executif", slug: "vip", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
+    fr: { name: "VIP", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour.",
           short: "4 visites de 2 h, une par semaine" },
-    en: { name: "Executive", detail: "Four 2-hour visits, one a week — the work wardrobe kept current.",
+    en: { name: "VIP", detail: "Four 2-hour visits, one a week — the work wardrobe kept current.",
           short: "Four 2-hour visits, one a week" },
   },
   {
-    key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
-    fr: { name: "Grande Famille", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison.",
+    key: "grande-famille", slug: "prestige", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
+    fr: { name: "Prestige", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison.",
           short: "4 visites de 3 h, une par semaine" },
-    en: { name: "Large Family", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house.",
+    en: { name: "Prestige", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house.",
           short: "Four 3-hour visits, one a week" },
   },
 ];
+
+/**
+ * La formule que désigne un `?formule=` : son mot d'adresse, ou, pour un lien
+ * d'avant le 1er novembre 2026, sa clé. Rien si le mot n'est à personne.
+ */
+export function planFromParam(v: string | null | undefined): Plan | null {
+  if (!v) return null;
+  return PLANS.find((p) => p.slug === v) ?? PLANS.find((p) => p.key === v) ?? null;
+}
 
 /* ============================ Calculs ============================ */
 
@@ -248,7 +284,7 @@ export function firstTimeCents(o: Offer, s: Settings): number {
 /**
  * Montant d'un cycle d'abonnement : ses heures au tarif abonné, soit le taux
  * horaire moins `SUBSCRIBER_HOURLY_DISCOUNT_CENTS`, arrondi au multiple de
- * 5 $ le plus proche. À 55 $ l'heure : 150, 200, 400 et 600 $.
+ * 5 $ le plus proche. À 55 $ l'heure : 100, 150, 200, 400 et 600 $.
  */
 export function planCents(p: Plan, s: Pick<Settings, "hourlyRate">): number {
   const rate = Math.max(0, s.hourlyRate - SUBSCRIBER_HOURLY_DISCOUNT_CENTS);
@@ -285,7 +321,7 @@ export function cycleTravel(zone: Zone, s: Pick<Settings, "hourlyRate">): CycleT
   });
 }
 
-/** « Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $ ». */
+/** « VIP : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $ ». */
 export function cycleTravelText(
   c: CycleTravel, t: Dict, locale: "fr" | "en", money: (cents: number) => string,
 ): string {

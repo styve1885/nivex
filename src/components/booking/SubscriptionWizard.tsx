@@ -351,13 +351,14 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
           <section aria-labelledby="a1">
             <h2 id="a1" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{s.plan.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light leading-relaxed text-ink-500">{s.plan.hint}</p>
-            <div role="radiogroup" aria-labelledby="a1" className="mt-8 grid gap-3 sm:grid-cols-2">
+            {/* Deux colonnes ; une formule seule sur la dernière ligne s'y centre. */}
+            <div role="radiogroup" aria-labelledby="a1" className="mt-8 grid gap-3 sm:grid-cols-4">
               {config.plans.map((p) => {
                 const on = p.key === planKey;
                 return (
                   <button key={p.key} type="button" role="radio" aria-checked={on}
                     onClick={() => { setPlanKey(p.key); setSlot(null); setCheck(null); setSched(null); }}
-                    className={`flex flex-col gap-1.5 border p-5 text-left transition-colors duration-300 ${
+                    className={`flex flex-col gap-1.5 border p-5 text-left transition-colors duration-300 sm:col-span-2 sm:odd:last:col-start-2 ${
                       on ? "border-gold-500 bg-linen-100" : "border-gold-300/60 bg-linen-50 hover:border-gold-500"
                     }`}>
                     <span className="font-display text-[1.15rem] text-ink-800">{p.name}</span>

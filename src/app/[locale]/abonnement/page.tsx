@@ -4,7 +4,7 @@ import { getDict, isLocale } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
-import { PLANS, planCents, planFullCents, planPieces } from "@/lib/pricing";
+import { PLANS, planCents, planFromParam, planFullCents, planPieces } from "@/lib/pricing";
 import { rhythmPhrase } from "@/lib/email";
 import { SERIES_CYCLES } from "@/lib/brand";
 import { SubscriptionWizard, type SubscriptionConfig } from "@/components/booking/SubscriptionWizard";
@@ -62,7 +62,8 @@ export default async function SubscribePage({
     timezone: s.timezone,
     firstHourFree: s.firstHourFree,
     seriesCycles: SERIES_CYCLES,
-    initialPlan: sp.formule ?? null,
+    /* Le mot de l'adresse, ou la clé d'un lien d'avant le 1er novembre 2026. */
+    initialPlan: planFromParam(sp.formule)?.key ?? null,
     areaText: servedText(s.zonePolicy, locale, t.zoneText),
     legalUpdated: LEGAL_UPDATED,
   };

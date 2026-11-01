@@ -87,7 +87,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="eyebrow">{t.tarifs.plans.title}</p>
             <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.plans.lede}</h2>
           </div>
-          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {PLANS.map((p) => {
               const text = locale === "en" ? p.en : p.fr;
               const price = planCents(p, s);
@@ -112,7 +112,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       </span>
                     )}
                   </p>
-                  <Link href={`/${locale}/abonnement?formule=${p.key}`}
+                  <Link href={`/${locale}/abonnement?formule=${p.slug}`}
                     className="mt-auto self-start pt-4 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
                     {t.tarifs.plans.cta}
                   </Link>

@@ -204,7 +204,7 @@ export function Dashboard({
         )}
         {tab === "subscribers" && (
           <SubscribersPanel timezone={settings.timezone}
-            plans={PLANS.map((p) => ({ key: p.key, name: p.fr.name, visits: p.visits }))} />
+            plans={PLANS.map((p) => ({ key: p.key, name: `${p.fr.name} — ${p.fr.short}`, visits: p.visits }))} />
         )}
         {tab === "messages" && <MessagesPanel timezone={settings.timezone} />}
         {tab === "visits" && <VisitsPanel />}

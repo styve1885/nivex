@@ -7,7 +7,7 @@ import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
 
 /**
- * La vitrine tarifaire de l'accueil : les quatre abonnements, puis la séance
+ * La vitrine tarifaire de l'accueil : les cinq abonnements, puis la séance
  * d'essai en une ligne.
  *
  * Tout montant découle des réglages : le prix d'un cycle du taux horaire
@@ -32,13 +32,16 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
           </h2>
         </Reveal>
 
-        <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Cinq cartes : une colonne au téléphone, puis deux, trois et cinq.
+            Une rangée incomplète se centre, comme le titre au-dessus. */}
+        <div className="mt-16 flex flex-wrap justify-center gap-5">
           {PLANS.map((p, i) => {
             const text = locale === "en" ? p.en : p.fr;
             const price = planCents(p, settings);
             const full = planFullCents(p, settings);
             return (
-              <Reveal key={p.key} delay={i * 90} className="paper flex flex-col p-7">
+              <Reveal key={p.key} delay={i * 90}
+                className="paper flex w-full flex-col p-7 sm:w-[calc((100%-1.25rem)/2)] lg:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-5rem)/5)]">
                 <h3 className="text-[10px] uppercase tracking-[0.24em] text-gold-700">{text.name}</h3>
                 {/* « 400 $ au lieu de 440 $ » : le prix à la carte barré, et dit
                     en toutes lettres — un lecteur d'écran n'entend pas le trait. */}
@@ -54,7 +57,7 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
                 <p className="mt-4 text-[0.88rem] font-light leading-[1.75] text-ink-600">
                   {t.pricing.planLine.replace("{detail}", text.short).replace("{n}", String(planPieces(p)))}
                 </p>
-                <Link href={`/${locale}/abonnement?formule=${p.key}`}
+                <Link href={`/${locale}/abonnement?formule=${p.slug}`}
                   className="mt-auto self-start pt-5 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
                   {t.pricing.subscribe}
                 </Link>
