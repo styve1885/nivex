@@ -112,7 +112,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
                       </span>
                     )}
                   </p>
-                  <Link href={`/${locale}/abonnement?formule=${p.key}`}
+                  <Link href={`/${locale}/abonnement?formule=${p.slug}`}
                     className="mt-auto self-start pt-4 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
                     {t.tarifs.plans.cta}
                   </Link>

@@ -178,6 +178,8 @@ export function unitByKey(key: string): UnitPrice | undefined {
 
 export type Plan = {
   key: string;
+  /** Le mot de l'adresse (`/abonnement?formule=…`), tiré du nom du jour. */
+  slug: string;
   /** Visites par cycle : c'est ce nombre, effectué, qui fait un « mois ». */
   visits: number;
   minutesPerVisit: number;
@@ -200,44 +202,58 @@ export type Plan = {
  * même rythme, sous son nouveau nom. Les abonnés gardent leur prix et leur
  * rythme, figés dans leur ligne ; seul le nom affiché suit (migration
  * `formules-2026-11`, lib/db.ts).
+ *
+ * Les liens du site portent le `slug`, pour que l'adresse dise le nom du
+ * jour (`?formule=premium`) ; une ancienne clé y est encore comprise
+ * (`planFromParam`). Le nouvel Essentiel n'a jamais le mot « essentiel » :
+ * un ancien lien `?formule=essentiel` ouvre toujours le Premium.
  */
 export const PLANS: Plan[] = [
   {
-    key: "essentiel-2h", visits: 1, minutesPerVisit: 120, everyWeeks: 4,
+    key: "essentiel-2h", slug: "essentiel-2h", visits: 1, minutesPerVisit: 120, everyWeeks: 4,
     fr: { name: "Essentiel", detail: "1 visite de 2 h toutes les quatre semaines — les chemises et les pantalons du mois.",
           short: "1 visite de 2 h toutes les 4 semaines" },
     en: { name: "Essential", detail: "One 2-hour visit every four weeks — the month's shirts and trousers.",
           short: "One 2-hour visit every 4 weeks" },
   },
   {
-    key: "essentiel", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
+    key: "essentiel", slug: "premium", visits: 1, minutesPerVisit: 180, everyWeeks: 4,
     fr: { name: "Premium", detail: "1 visite de 3 h toutes les quatre semaines — les vêtements du mois et les draps de la maison.",
           short: "1 visite de 3 h toutes les 4 semaines" },
     en: { name: "Premium", detail: "One 3-hour visit every four weeks — the month's clothes and the household sheets.",
           short: "One 3-hour visit every 4 weeks" },
   },
   {
-    key: "confort", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
+    key: "confort", slug: "premium-plus", visits: 2, minutesPerVisit: 120, everyWeeks: 2,
     fr: { name: "Premium Plus", detail: "2 visites de 2 h, aux deux semaines — le linge de tous les jours tenu à jour.",
           short: "2 visites de 2 h, aux deux semaines" },
     en: { name: "Premium Plus", detail: "Two 2-hour visits, every other week — everyday clothes kept current.",
           short: "Two 2-hour visits, every other week" },
   },
   {
-    key: "executif", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
+    key: "executif", slug: "vip", visits: 4, minutesPerVisit: 120, everyWeeks: 1,
     fr: { name: "VIP", detail: "4 visites de 2 h, une par semaine — la garde-robe de travail tenue à jour.",
           short: "4 visites de 2 h, une par semaine" },
     en: { name: "VIP", detail: "Four 2-hour visits, one a week — the work wardrobe kept current.",
           short: "Four 2-hour visits, one a week" },
   },
   {
-    key: "grande-famille", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
+    key: "grande-famille", slug: "prestige", visits: 4, minutesPerVisit: 180, everyWeeks: 1,
     fr: { name: "Prestige", detail: "4 visites de 3 h, une par semaine — vêtements, uniformes et literie de toute la maison.",
           short: "4 visites de 3 h, une par semaine" },
     en: { name: "Prestige", detail: "Four 3-hour visits, one a week — clothes, uniforms and bedding for the whole house.",
           short: "Four 3-hour visits, one a week" },
   },
 ];
+
+/**
+ * La formule que désigne un `?formule=` : son mot d'adresse, ou, pour un lien
+ * d'avant le 1er novembre 2026, sa clé. Rien si le mot n'est à personne.
+ */
+export function planFromParam(v: string | null | undefined): Plan | null {
+  if (!v) return null;
+  return PLANS.find((p) => p.slug === v) ?? PLANS.find((p) => p.key === v) ?? null;
+}
 
 /* ============================ Calculs ============================ */
 

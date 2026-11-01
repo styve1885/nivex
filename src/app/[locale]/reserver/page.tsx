@@ -54,7 +54,7 @@ export default async function BookPage({ params }: { params: Promise<{ locale: s
     plans: PLANS.map((p) => {
       const text = locale === "en" ? p.en : p.fr;
       return {
-        key: p.key, name: text.name,
+        key: p.key, slug: p.slug, name: text.name,
         line: t.pricing.planLine.replace("{detail}", text.short).replace("{n}", String(planPieces(p))),
         cents: planCents(p, s), fullCents: planFullCents(p, s),
       };

@@ -112,7 +112,8 @@ const gsm7 = (s) => [...s].every((c) => GSM7.has(c));
 await test("les textos de l'artisan tiennent dans l'alphabet des textos, en une tranche", () => {
   const all = [
     SMS.owner.newBooking("Marie Tremblay", when, "Saint-Lambert"),
-    SMS.owner.newSubscription("Marie Tremblay", "VIP", when),
+    /* Le plus long nom de formule. */
+    SMS.owner.newSubscription("Marie Tremblay", "Premium Plus", when),
     SMS.owner.cancelled("Marie Tremblay", when),
     SMS.owner.moved("Marie Tremblay", when, when),
     /* Un mois d'août et des noms accentués : û, ç, ô, î, ë sortent de l'alphabet. */

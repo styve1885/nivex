@@ -16,10 +16,12 @@ const {
 } = await import("../src/lib/cycles.ts");
 const {
   ownerFirstVisit, SubscriptionError, phoneKey, addressKey, onlineSubscriptionRefused, ONLINE_SUBSCRIPTIONS_PER_DAY,
+  planName,
 } = await import("../src/lib/subscriptions.ts");
 const { slotProblem } = await import("../src/lib/availability.ts");
 const { SMS, smsWhen } = await import("../src/lib/sms.ts");
-const { PLANS, planCents, planFullCents } = await import("../src/lib/pricing.ts");
+const { PLANS, planCents, planFullCents, planFromParam } = await import("../src/lib/pricing.ts");
+const { readFileSync } = await import("node:fs");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
@@ -78,6 +80,44 @@ test("une clé ne change jamais de formule : les anciennes gardent leur rythme e
   }
   assert.deepEqual(PLANS.filter((p) => /Essenti/.test(p.fr.name + p.en.name)).map((p) => p.key), ["essentiel-2h"],
     "« Essentiel » ne désigne plus que la formule de 2 h");
+});
+
+test("l'adresse dit le nom du jour, et un lien d'avant ouvre toujours la même formule", () => {
+  assert.deepEqual(PLANS.map((p) => p.slug), ["essentiel-2h", "premium", "premium-plus", "vip", "prestige"]);
+  const cle = (v) => planFromParam(v)?.key ?? null;
+  assert.equal(cle("premium"), "essentiel");
+  assert.equal(cle("premium-plus"), "confort");
+  assert.equal(cle("vip"), "executif");
+  assert.equal(cle("prestige"), "grande-famille");
+  assert.equal(cle("essentiel-2h"), "essentiel-2h");
+  /* Les liens envoyés ou imprimés avant le 1er novembre 2026. */
+  assert.equal(cle("essentiel"), "essentiel", "un ancien lien Essentiel ouvre le Premium, la formule de 3 h");
+  assert.equal(cle("confort"), "confort");
+  assert.equal(cle("executif"), "executif");
+  assert.equal(cle("grande-famille"), "grande-famille");
+  assert.equal(cle("inconnue"), null);
+  assert.equal(cle(undefined), null);
+  for (const p of PLANS) {
+    assert.ok(!PLANS.some((q) => q !== p && q.key === p.slug), `le mot « ${p.slug} » n'est la clé d'aucune autre formule`);
+  }
+  assert.equal(new Set(PLANS.map((p) => p.slug)).size, PLANS.length);
+});
+
+test("un abonné d'avant lit le nom de sa clé, jamais celui qu'il a gardé en base", () => {
+  assert.equal(planName({ planKey: "essentiel", planName: "Essentiel" }, "fr"), "Premium");
+  assert.equal(planName({ planKey: "confort", planName: "Confort" }, "en"), "Premium Plus");
+  assert.equal(planName({ planKey: "executif", planName: "Exécutif" }, "fr"), "VIP");
+  assert.equal(planName({ planKey: "grande-famille", planName: "Grande Famille" }, "fr"), "Prestige");
+  assert.equal(planName({ planKey: "essentiel-2h", planName: "Essentiel" }, "en"), "Essential");
+  assert.equal(planName({ planKey: "disparue", planName: "Ancienne" }, "fr"), "Ancienne", "une clé inconnue garde son nom");
+});
+
+test("la migration des noms donne à chaque ancienne clé le nom de la grille, et ne touche pas au nouvel Essentiel", () => {
+  /* Une coquille dans le SQL ne se verrait qu'en production, une seule fois. */
+  const db = readFileSync(new URL("../src/lib/db.ts", import.meta.url), "utf8");
+  const bloc = db.slice(db.indexOf("'formules-2026-11'"), db.indexOf("), subs AS"));
+  const paires = [...bloc.matchAll(/\('([^']+)', '([^']+)'\)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(paires, PLANS.filter((p) => p.key !== "essentiel-2h").map((p) => [p.key, p.fr.name]));
 });
 
 test("chaque formule tient un cycle en quatre semaines", () => {

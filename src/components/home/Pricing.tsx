@@ -57,7 +57,7 @@ export function Pricing({ t, locale, settings }: { t: Dict; locale: "fr" | "en";
                 <p className="mt-4 text-[0.88rem] font-light leading-[1.75] text-ink-600">
                   {t.pricing.planLine.replace("{detail}", text.short).replace("{n}", String(planPieces(p)))}
                 </p>
-                <Link href={`/${locale}/abonnement?formule=${p.key}`}
+                <Link href={`/${locale}/abonnement?formule=${p.slug}`}
                   className="mt-auto self-start pt-5 text-[10px] uppercase tracking-[0.18em] text-gold-700 underline decoration-gold-400 underline-offset-4 transition-colors hover:text-gold-600">
                   {t.pricing.subscribe}
                 </Link>

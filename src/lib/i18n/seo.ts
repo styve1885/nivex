@@ -14,8 +14,8 @@
  *    et nomme le repassage à domicile, Montréal et la Rive-Sud ;
  *  — les montants ({plan}, {from}, {to}, {min}, {price}) se remplissent
  *    depuis les réglages, jamais à la main (`pageDescription`, lib/seo.ts).
- *    Un changement de taux ne change la longueur que si un montant gagne un
- *    chiffre : le test le dirait.
+ *    Un changement de taux ne change la longueur que si un montant gagne ou
+ *    perd un chiffre : le test le dirait.
  */
 
 export type SeoPage =

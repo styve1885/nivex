@@ -191,6 +191,9 @@ qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
 remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 50 $ à 55 $, seulement s'il valait encore 50 $. `zones-2026-ab` a ramené
 la grille à deux zones (plus bas, « Zones et frais de déplacement »).
+`formules-2026-11` a donné aux abonnés d'avant le nom nouveau de leur
+formule, sans toucher à leur prix ni à leur rythme (plus bas, « Les
+abonnements ») ; un test vérifie que ses noms sont ceux de la grille.
 
 ### La vitrine, et ce qui en a été retiré
 
@@ -338,8 +341,12 @@ sortent toujours de `planCents`. **La clé d'une formule est un identifiant,
 jamais un nom, et ne sert qu'à une formule.** Ce jour-là, les quatre
 formules d'avant ont changé de nom sans changer de clé : `essentiel` est
 Premium, `confort` Premium Plus, `executif` VIP, `grande-famille` Prestige ;
-le nouvel Essentiel a la clé neuve `essentiel-2h`. Un ancien lien
-`?formule=essentiel` ouvre donc toujours la formule de 3 h. Un test tient
+le nouvel Essentiel a la clé neuve `essentiel-2h`. Les liens du site
+portent un mot d'adresse tiré du nom (`slug` : `premium`, `premium-plus`,
+`vip`, `prestige`, `essentiel-2h`), et une ancienne clé y est encore
+comprise (`planFromParam`) : un ancien lien `?formule=essentiel` ouvre
+donc toujours la formule de 3 h, et le mot « essentiel » ne paraît plus
+que pour la nouvelle. Un test tient
 le rythme et la durée de chaque ancienne clé. Partout, le nom d'une formule se
 lit par sa clé (`planName`, lib/subscriptions.ts), côté client comme côté
 artisan ; le nom gardé en base (`plan_name`) n'est qu'un secours. La
@@ -637,7 +644,7 @@ quotidienne. Chaque envoi relit d'abord l'empreinte des réglages visibles,
 si bien qu'un changement fait hors de l'admin (une migration) compte aussi.
 
 `/llms.txt` (`lib/llms.ts`) résume la maison pour les assistants, en
-français puis en anglais : le service, les zones et leurs frais, les quatre
+français puis en anglais : le service, les zones et leurs frais, les cinq
 abonnements et la séance d'essai avec leurs prix, le contact et les pages
 principales. `/llms-full.txt` en donne le détail : pièces à l'unité, coût
 d'un cycle en zone payante, conditions, les sept questions et leurs
@@ -790,7 +797,9 @@ desservie, journal, provenance, familles de sources, robots, bilan),
 conflits de préfixes, historique, Montréal, titres et descriptions de chaque
 page, hreflang, fiche LocalBusiness, llms.txt, robots, plan du site, origine
 www, IndexNow), `subscription`
-(grille des dates, rang des visites, montants, délai de la veille). Plus un
+(les cinq formules, leurs clés et leurs mots d'adresse, le nom lu par la
+clé, les noms de la migration, grille des dates, rang des visites, montants,
+délai de la veille). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 
 Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
