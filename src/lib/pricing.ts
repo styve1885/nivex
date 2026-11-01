@@ -200,8 +200,8 @@ export type Plan = {
  * Prestige — et le nouvel Essentiel a reçu une clé neuve, `essentiel-2h`.
  * Un lien imprimé ou envoyé avant ouvre donc toujours la même formule, au
  * même rythme, sous son nouveau nom. Les abonnés gardent leur prix et leur
- * rythme, figés dans leur ligne ; seul le nom affiché suit (migration
- * `formules-2026-11`, lib/db.ts).
+ * rythme, figés dans leur ligne ; seul le nom affiché suit, et la base
+ * avec lui (`formules-2026-11`, lib/db.ts).
  *
  * Les liens du site portent le `slug`, pour que l'adresse dise le nom du
  * jour (`?formule=premium`) ; une ancienne clé y est encore comprise

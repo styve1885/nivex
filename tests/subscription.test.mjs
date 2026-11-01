@@ -112,10 +112,10 @@ test("un abonné d'avant lit le nom de sa clé, jamais celui qu'il a gardé en b
   assert.equal(planName({ planKey: "disparue", planName: "Ancienne" }, "fr"), "Ancienne", "une clé inconnue garde son nom");
 });
 
-test("la migration des noms donne à chaque ancienne clé le nom de la grille, et ne touche pas au nouvel Essentiel", () => {
+test("la synchronisation des noms donne à chaque ancienne clé le nom de la grille, et ne touche pas au nouvel Essentiel", () => {
   /* Une coquille dans le SQL ne se verrait qu'en production, une seule fois. */
   const db = readFileSync(new URL("../src/lib/db.ts", import.meta.url), "utf8");
-  const bloc = db.slice(db.indexOf("'formules-2026-11'"), db.indexOf("), subs AS"));
+  const bloc = db.slice(db.indexOf("names (plan_key, plan_name) AS"), db.indexOf("), subs AS"));
   const paires = [...bloc.matchAll(/\('([^']+)', '([^']+)'\)/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(paires, PLANS.filter((p) => p.key !== "essentiel-2h").map((p) => [p.key, p.fr.name]));
 });

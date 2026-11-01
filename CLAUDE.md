@@ -191,9 +191,9 @@ qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
 remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 50 $ à 55 $, seulement s'il valait encore 50 $. `zones-2026-ab` a ramené
 la grille à deux zones (plus bas, « Zones et frais de déplacement »).
-`formules-2026-11` a donné aux abonnés d'avant le nom nouveau de leur
-formule, sans toucher à leur prix ni à leur rythme (plus bas, « Les
-abonnements ») ; un test vérifie que ses noms sont ceux de la grille.
+Les noms des formules, eux, ne passent pas par cette table : ils
+convergent à chaque démarrage (`formules-2026-11`, plus bas, « Les
+abonnements »).
 
 ### La vitrine, et ce qui en a été retiré
 
@@ -350,12 +350,18 @@ que pour la nouvelle. Un test tient
 le rythme et la durée de chaque ancienne clé. Partout, le nom d'une formule se
 lit par sa clé (`planName`, lib/subscriptions.ts), côté client comme côté
 artisan ; le nom gardé en base (`plan_name`) n'est qu'un secours. La
-migration unique `formules-2026-11` lui a tout de même donné le nom nouveau,
-ainsi qu'à l'étiquette « Abonnement … » des visites, sans toucher au prix ni
-au rythme des abonnés, figés dans leur ligne. Au premier passage suivant, la
-tâche quotidienne a renommé les visites à venir dans l'agenda
-(`formules-2026-11-agenda`, inscrite seulement avec Google), sans message à
-personne ; les visites passées gardent l'ancien nom.
+base suit tout de même : à chaque démarrage, `bootstrap()` ramène le nom
+gardé et l'étiquette « Abonnement … » des visites au nom de la clé
+(`formules-2026-11`), sans toucher au prix ni au rythme des abonnés, figés
+dans leur ligne. Ce n'est pas une migration unique, et c'est voulu : ce nom
+ne s'édite jamais à la main, si bien qu'une ligne écrite par l'ancienne
+version pendant un déploiement se rattrape au démarrage suivant. Ses
+conditions ne peuvent lever aucune erreur, quelle que soit la forme
+d'`items`, et un test compare ses noms à la grille. La tâche quotidienne a
+renommé une fois les visites à venir dans l'agenda
+(`formules-2026-11-agenda`, inscrite seulement quand aucune retouche n'a
+échoué), sans message à personne ; les visites passées gardent l'ancien
+nom.
 
 - **Une série = six cycles, douze mois = deux séries.** La première est posée
   d'un coup, toutes ses dates vérifiées avant la confirmation. La seconde est

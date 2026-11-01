@@ -558,36 +558,42 @@ async function bootstrap() {
     }
   }
 
-  /* Le 1er novembre 2026, les formules changent de nom sans changer de clé
-     (lib/pricing.ts) : un abonné garde sa formule, son prix et son rythme,
-     figés dans sa ligne, et prend le nom nouveau. Son nom gardé en base
-     (agenda, avis à l'artisan, onglet Abonnés) et l'étiquette de ses visites
-     (« Abonnement Exécutif », onglet Rendez-vous) suivent, une seule fois.
-     La clé neuve du nouvel Essentiel, `essentiel-2h`, n'y figure pas : un
-     abonnement pris à cette formule n'est jamais touché. */
+  /* Le 1er novembre 2026 (`formules-2026-11`), les formules changent de nom
+     sans changer de clé (lib/pricing.ts) : un abonné garde sa formule, son
+     prix et son rythme, figés dans sa ligne, et prend le nom nouveau. Son
+     nom gardé en base et l'étiquette de ses visites (« Abonnement Exécutif »,
+     onglet Rendez-vous) suivent.
+
+     Ce n'est pas une migration unique : le nom gardé ne s'édite jamais à la
+     main et une clé ne sert jamais deux formules, si bien qu'il peut
+     converger à chaque démarrage. Une ligne écrite par l'ancienne version
+     pendant le déploiement — la construction pose ce schéma avant que la
+     nouvelle soit servie — prend donc son nom au démarrage suivant. Rien
+     n'est touché quand tout est déjà juste. La clé neuve du nouvel
+     Essentiel, `essentiel-2h`, n'y figure pas. Les conditions ne peuvent
+     pas lever d'erreur, quelle que soit la forme d'une colonne `items` :
+     une erreur ici fermerait le site à chaque démarrage. Un test compare
+     ces noms à la grille. */
   await q`
-    WITH done AS (
-      INSERT INTO nivex_migrations (name) VALUES ('formules-2026-11')
-      ON CONFLICT (name) DO NOTHING
-      RETURNING name
-    ), names (plan_key, plan_name) AS (
+    WITH names (plan_key, plan_name) AS (
       VALUES ('essentiel', 'Premium'), ('confort', 'Premium Plus'), ('executif', 'VIP'), ('grande-famille', 'Prestige')
     ), subs AS (
       UPDATE nivex_subscriptions s SET plan_name = n.plan_name
       FROM names n
-      WHERE s.plan_key = n.plan_key AND EXISTS (SELECT 1 FROM done)
-      RETURNING s.id, n.plan_key, n.plan_name
+      WHERE s.plan_key = n.plan_key AND s.plan_name IS DISTINCT FROM n.plan_name
+      RETURNING s.id
     )
     UPDATE nivex_bookings b
     SET items = (
-      SELECT jsonb_agg(CASE WHEN x.e->>'key' = subs.plan_key
-                            THEN jsonb_set(x.e, '{label}', to_jsonb('Abonnement ' || subs.plan_name))
+      SELECT jsonb_agg(CASE WHEN jsonb_typeof(x.e) = 'object' AND x.e->>'key' = n.plan_key
+                            THEN jsonb_set(x.e, '{label}', to_jsonb('Abonnement ' || n.plan_name))
                             ELSE x.e END ORDER BY x.ord)
       FROM jsonb_array_elements(b.items) WITH ORDINALITY AS x(e, ord)
     )
-    FROM subs
-    WHERE b.subscription_id = subs.id
-      AND jsonb_typeof(b.items) = 'array' AND jsonb_array_length(b.items) > 0`;
+    FROM nivex_subscriptions s, names n
+    WHERE b.subscription_id = s.id AND s.plan_key = n.plan_key
+      AND b.items @> jsonb_build_array(jsonb_build_object('key', n.plan_key))
+      AND NOT b.items @> jsonb_build_array(jsonb_build_object('key', n.plan_key, 'label', 'Abonnement ' || n.plan_name))`;
 }
 
 /* La première ligne de l'historique de la migration des zones. */

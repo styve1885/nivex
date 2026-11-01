@@ -679,9 +679,11 @@ async function calendarSingle(full: SubscriptionFull, v: Booking, at: string, s:
  * Une annulation fait reculer toutes les visites suivantes d'un rang : la
  * troisième devient la deuxième, et le « 3/4 » affiché doit suivre.
  */
-async function renumberCalendar(full: SubscriptionFull, at: string, s: Settings, origin: string, opts: { times?: boolean } = {}): Promise<void> {
+async function renumberCalendar(full: SubscriptionFull, at: string, s: Settings, origin: string, opts: { times?: boolean } = {}): Promise<number> {
   const now = Date.now();
   const future = full.visits.filter((v) => v.status !== "cancelled" && v.googleEventId && v.endsAt.getTime() > now);
+  /* Les retouches manquées ; un événement effacé à la main n'en est pas une. */
+  let failed = 0;
   await eachLimit(future, 4, async (v) => {
     const n = full.view.numbers.get(v.id);
     const block = occupiedBlock(v);
@@ -689,8 +691,12 @@ async function renumberCalendar(full: SubscriptionFull, at: string, s: Settings,
       summary: summaryOf(full.sub, n),
       description: descriptionOf(full.sub, v, n, origin, s.timezone),
       ...(opts.times ? { start: block.start.toISOString(), end: block.end.toISOString(), timeZone: s.timezone } : {}),
-    }).catch((e) => logEvent("subscription_patch_failed", { ref: v.ref, error: describe(e) }));
+    }).catch((e) => {
+      if (!(e instanceof GoogleError && (e.status === 404 || e.status === 410))) failed++;
+      return logEvent("subscription_patch_failed", { ref: v.ref, error: describe(e) });
+    });
   });
+  return failed;
 }
 
 /* ============================ Courriels ============================ */
@@ -1574,24 +1580,6 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
-  /* — Agenda — une seule fois, au premier passage après le 1er novembre
-     2026 : les visites à venir prennent dans leur titre et leur description
-     le nom nouveau de leur formule (`formules-2026-11`, lib/db.ts). La même
-     retouche que pour un changement de rang, sans message à personne. Sans
-     Google, rien ne s'inscrit, et le passage suivant reprend. */
-  if (at) {
-    const renamed = (await sql()`SELECT 1 FROM nivex_migrations WHERE name = 'formules-2026-11-agenda'`) as Row[];
-    if (renamed.length === 0) {
-      const subs = (await sql()`SELECT id FROM nivex_subscriptions WHERE status = 'active'`) as Row[];
-      for (const r of subs) {
-        const full = await subOf(r.id as string);
-        if (full) await renumberCalendar(full, at, settings, origin);
-      }
-      await sql()`INSERT INTO nivex_migrations (name) VALUES ('formules-2026-11-agenda') ON CONFLICT (name) DO NOTHING`;
-      await logEvent("plan_names_calendar", { subscriptions: subs.length });
-    }
-  }
-
   /* — Conservation — les durées promises par la politique de confidentialité.
      Une purge qui échoue n'empêche ni les rappels ni les avis : elle
      reprendra au passage suivant. */
@@ -1604,6 +1592,29 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     await logEvent("retention_calendar_failed", { error: describe(e) });
     return null;
   });
+
+  /* — Agenda — une fois, après le 1er novembre 2026 : les visites à venir
+     prennent dans leur titre et leur description le nom nouveau de leur
+     formule (lib/pricing.ts). La même retouche que pour un changement de
+     rang, sans message à personne (`sendUpdates=none`). Le passage ne
+     s'inscrit que s'il n'a rien manqué ; sinon le suivant reprend. En
+     dernier : une retouche lente ne retarde ni les rappels ni la
+     conservation. */
+  if (at) {
+    const renamed = (await sql()`SELECT 1 FROM nivex_migrations WHERE name = 'formules-2026-11-agenda'`) as Row[];
+    if (renamed.length === 0) {
+      const subs = (await sql()`SELECT id FROM nivex_subscriptions WHERE status = 'active'`) as Row[];
+      let failed = 0;
+      for (const r of subs) {
+        const full = await subOf(r.id as string);
+        if (full) failed += await renumberCalendar(full, at, settings, origin);
+      }
+      if (failed === 0) {
+        await sql()`INSERT INTO nivex_migrations (name) VALUES ('formules-2026-11-agenda') ON CONFLICT (name) DO NOTHING`;
+      }
+      await logEvent("plan_names_calendar", { subscriptions: subs.length, failed });
+    }
+  }
 
   await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, day: today, purged, calendarCopies });
   return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at) };
