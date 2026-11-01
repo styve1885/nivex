@@ -264,8 +264,9 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     telephone: phoneSchema(),
     email: contactEmail(),
     founder: { "@type": "Person", name: FOUNDER, ...sameAs(FOUNDER_PROFILES) },
-    /* De la séance d'essai au plus haut montant par cycle, en chiffres. */
-    priceRange: `${money(sessionPriceCents(s))} – ${money(Math.max(...cycles))}`,
+    /* Du plus bas montant affiché — l'Essentiel, sous la séance d'essai
+       depuis le 1er novembre 2026 — au plus haut montant par cycle. */
+    priceRange: `${money(Math.min(sessionPriceCents(s), ...cycles))} – ${money(Math.max(...cycles))}`,
     currenciesAccepted: s.currency,
     address: { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" },
     /* La Rive-Sud d'abord, puis les quartiers de Montréal : l'ordre de la page. */
@@ -281,7 +282,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
       dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
       opens: h.open, closes: h.close,
     })),
-    /* Ce que la vitrine vend, aux prix des pages : les quatre abonnements au
+    /* Ce que la vitrine vend, aux prix des pages : les cinq abonnements au
        prix d'un cycle et la séance d'essai, puis les pièces à l'unité. Rien
        de ce que la vitrine a retiré (séances de trois et quatre heures,
        forfaits, ajouts) n'y figure. */

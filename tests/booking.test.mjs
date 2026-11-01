@@ -242,7 +242,7 @@ test("jusqu'à 18 pièces en 2 h, 27 en 3 h ; 1 h 50 et 2 h 50 de repassage", ()
 
 test("le volume d'un cycle d'abonnement découle de la même capacité", () => {
   const vol = Object.fromEntries(PLANS.map((p) => [p.key, planPieces(p)]));
-  assert.deepEqual(vol, { essentiel: 27, confort: 36, executif: 72, "grande-famille": 108 });
+  assert.deepEqual(vol, { "essentiel-2h": 18, essentiel: 27, confort: 36, executif: 72, "grande-famille": 108 });
 });
 
 test("aucune offre n'écrit de quantité : le volume ne vient que de la capacité", () => {

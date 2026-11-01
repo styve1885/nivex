@@ -557,6 +557,37 @@ async function bootstrap() {
         ORDER BY ordinality`;
     }
   }
+
+  /* Le 1er novembre 2026, les formules changent de nom sans changer de clé
+     (lib/pricing.ts) : un abonné garde sa formule, son prix et son rythme,
+     figés dans sa ligne, et prend le nom nouveau. Son nom gardé en base
+     (agenda, avis à l'artisan, onglet Abonnés) et l'étiquette de ses visites
+     (« Abonnement Exécutif », onglet Rendez-vous) suivent, une seule fois.
+     La clé neuve du nouvel Essentiel, `essentiel-2h`, n'y figure pas : un
+     abonnement pris à cette formule n'est jamais touché. */
+  await q`
+    WITH done AS (
+      INSERT INTO nivex_migrations (name) VALUES ('formules-2026-11')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name
+    ), names (plan_key, plan_name) AS (
+      VALUES ('essentiel', 'Premium'), ('confort', 'Premium Plus'), ('executif', 'VIP'), ('grande-famille', 'Prestige')
+    ), subs AS (
+      UPDATE nivex_subscriptions s SET plan_name = n.plan_name
+      FROM names n
+      WHERE s.plan_key = n.plan_key AND EXISTS (SELECT 1 FROM done)
+      RETURNING s.id, n.plan_key, n.plan_name
+    )
+    UPDATE nivex_bookings b
+    SET items = (
+      SELECT jsonb_agg(CASE WHEN x.e->>'key' = subs.plan_key
+                            THEN jsonb_set(x.e, '{label}', to_jsonb('Abonnement ' || subs.plan_name))
+                            ELSE x.e END ORDER BY x.ord)
+      FROM jsonb_array_elements(b.items) WITH ORDINALITY AS x(e, ord)
+    )
+    FROM subs
+    WHERE b.subscription_id = subs.id
+      AND jsonb_typeof(b.items) = 'array' AND jsonb_array_length(b.items) > 0`;
 }
 
 /* La première ligne de l'historique de la migration des zones. */

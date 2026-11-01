@@ -457,7 +457,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <h2 id="s1" tabIndex={-1} className="font-display text-2xl font-normal text-ink-800">{t.booking.step1.title}</h2>
             <p className="mt-2 text-[0.88rem] font-light text-ink-500">{t.booking.step1.hint}</p>
 
-            {/* Cinq choix, et rien d'autre : la séance d'essai, puis les quatre
+            {/* Six choix, et rien d'autre : la séance d'essai, puis les cinq
                 abonnements. Un abonnement se poursuit dans son propre tunnel. */}
             <fieldset className="mt-8">
               <legend className="sr-only">{t.booking.step1.title}</legend>

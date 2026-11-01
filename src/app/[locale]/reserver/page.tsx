@@ -39,7 +39,7 @@ export default async function BookPage({ params }: { params: Promise<{ locale: s
   }
 
   /* Le tunnel ne propose que la séance d'essai — avec les pièces à l'unité
-     en option — et les quatre abonnements. Tout est chiffré ici, depuis les
+     en option — et les cinq abonnements. Tout est chiffré ici, depuis les
      réglages et la grille ; createBooking refait le calcul de son côté. */
   const config: WizardConfig = {
     locale,

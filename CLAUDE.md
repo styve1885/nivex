@@ -97,8 +97,8 @@ ramènerait au prochain chargement ; elles se désactivent.
 - La première heure est offerte à partir de deux heures réservées, une
   fois par client, jamais sur les abonnements.
 - **Le site ne vend que trois choses** (depuis le 23 octobre 2026) : les
-  quatre abonnements, la séance d'essai de deux heures et les pièces à
-  l'unité. Une heure de plus se décide sur place, au taux horaire. Les
+  abonnements (cinq depuis le 1er novembre 2026), la séance d'essai de deux
+  heures et les pièces à l'unité. Une heure de plus se décide sur place, au taux horaire. Les
   anciennes séances de trois et quatre heures, les forfaits et les ajouts
   ne paraissent plus nulle part.
 
@@ -197,8 +197,8 @@ la grille à deux zones (plus bas, « Zones et frais de déplacement »).
 L'accueil suit l'ordre du 23 octobre 2026, deux fois plus court qu'avant :
 héros, déroulement, prestations (cinq cartes d'une phrase, puis les photos
 de la galerie sans légende), avant/après (la chemise blanche et le pantalon
-de complet), tarifs (les quatre abonnements et
-la séance d'essai en une ligne), l'histoire en version courte, sept
+de complet), tarifs (les cinq abonnements, en cinq cartes qui se rangent
+sur une, deux, trois ou cinq colonnes, et la séance d'essai en une ligne), l'histoire en version courte, sept
 questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
 les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
 reste à un clic, et au pied de chaque page.
@@ -206,7 +206,7 @@ reste à un clic, et au pied de chaque page.
 La page Tarifs tient dans cet ordre : abonnements, séance d'essai, pièces à
 l'unité, frais de déplacement par zone (avec la vérification du code
 postal, puis, pour chaque zone payante, le coût d'un cycle de chaque
-abonnement : « Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites ×
+abonnement : « VIP : 400 $ + 60 $ de déplacement, soit 4 visites ×
 15 $ », `cycleTravel`), première heure offerte, cinq conditions au plus.
 
 **Rien de retiré n'est effacé : c'est masqué, pour pouvoir le remettre.**
@@ -256,7 +256,7 @@ l'onglet Messages, sur demande de son auteur.
 ## Le tunnel de réservation
 
 Quatre étapes : formule, adresse, créneau, confirmation. La première ne
-propose que la séance d'essai et les quatre abonnements ; un abonnement
+propose que la séance d'essai et les cinq abonnements ; un abonnement
 passe la main à `/abonnement?formule=…`. La séance dure la durée minimale
 réglée (`sessionLength`), sans panier : le client ne choisit jamais une
 durée. Les pièces à l'unité s'y ajoutent en option, à leur prix de grille,
@@ -325,10 +325,30 @@ Les gardes posées là, et pourquoi :
 ## Les abonnements
 
 Un « mois » d'abonnement n'est pas un mois civil : c'est un **cycle de
-visites effectuées** — 4 (Exécutif, Grande Famille), 2 (Confort) ou 1
-(Essentiel). Le client choisit une seule fois la formule, puis la date et
+visites effectuées** — 4 (VIP, Prestige), 2 (Premium Plus) ou 1
+(Essentiel, Premium). Le client choisit une seule fois la formule, puis la date et
 l'heure de la première visite ; les suivantes tombent le même jour, à la même
 heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
+
+**Cinq formules depuis le 1er novembre 2026**, à 55 $ l'heure : Essentiel
+(1 × 2 h toutes les quatre semaines, 100 $), Premium (1 × 3 h, 150 $),
+Premium Plus (2 × 2 h aux deux semaines, 200 $), VIP (4 × 2 h chaque
+semaine, 400 $), Prestige (4 × 3 h chaque semaine, 600 $) — les montants
+sortent toujours de `planCents`. **La clé d'une formule est un identifiant,
+jamais un nom, et ne sert qu'à une formule.** Ce jour-là, les quatre
+formules d'avant ont changé de nom sans changer de clé : `essentiel` est
+Premium, `confort` Premium Plus, `executif` VIP, `grande-famille` Prestige ;
+le nouvel Essentiel a la clé neuve `essentiel-2h`. Un ancien lien
+`?formule=essentiel` ouvre donc toujours la formule de 3 h. Un test tient
+le rythme et la durée de chaque ancienne clé. Partout, le nom d'une formule se
+lit par sa clé (`planName`, lib/subscriptions.ts), côté client comme côté
+artisan ; le nom gardé en base (`plan_name`) n'est qu'un secours. La
+migration unique `formules-2026-11` lui a tout de même donné le nom nouveau,
+ainsi qu'à l'étiquette « Abonnement … » des visites, sans toucher au prix ni
+au rythme des abonnés, figés dans leur ligne. Au premier passage suivant, la
+tâche quotidienne a renommé les visites à venir dans l'agenda
+(`formules-2026-11-agenda`, inscrite seulement avec Google), sans message à
+personne ; les visites passées gardent l'ancien nom.
 
 - **Une série = six cycles, douze mois = deux séries.** La première est posée
   d'un coup, toutes ses dates vérifiées avant la confirmation. La seconde est
@@ -353,8 +373,8 @@ heure, au rythme de la formule (`everyWeeks` dans `PLANS`).
   déroulement, agenda et texto de deux heures avant décalés, ou rien ne
   change si une séance déjà posée y touche (`slot_taken`). Les frais : ceux
   de la zone pour la durée d'une visite, comme pour une séance, multipliés
-  par les visites du cycle — en zone B, 15 $ par visite de 2 h (Confort,
-  Exécutif), 10 $ par visite de 3 h (Essentiel, Grande Famille). Jusqu'au
+  par les visites du cycle — en zone B, 15 $ par visite de 2 h (Essentiel,
+  Premium Plus, VIP), 10 $ par visite de 3 h (Premium, Prestige). Jusqu'au
   23 octobre 2026, un abonné payait 5 $ de moins par visite ; ceux d'avant
   gardent leurs frais figés. Le tout se paie à la première visite du cycle.
   Une visite d'abonné vaut `estimate_cents = 0` ; jamais de première heure
@@ -554,7 +574,8 @@ tient ces trois règles, à 50, 55 et 60 $ de l'heure.
 (`…/#nivex`). Un `DryCleaningOrLaundry`, le sous-type de LocalBusiness le
 plus proche : nom « NIVEX Repassage à domicile », nom court « NIVEX »,
 téléphone, `CONTACT_EMAIL`, fondateur (`FOUNDER`), logo, image, fourchette
-de prix (de la séance d'essai au plus haut cycle), horaire, secteurs dans
+de prix (du plus bas montant affiché, l'Essentiel à 100 $, au plus haut
+cycle), horaire, secteurs dans
 `areaServed` (Rive-Sud, puis Montréal, un quartier de l'île portant Montréal
 comme localité), `sameAs` depuis `SOCIAL_PROFILES` (les pages Facebook et
 Instagram de la maison, à leur adresse propre : ni lien de partage ni
@@ -565,7 +586,7 @@ par son identifiant permanent (`GOOGLE_MAPS_URL`, `?cid=…`) : jamais un
 lien de partage, ni les coordonnées d'une adresse Google Maps, qui
 situeraient le domicile. Google exige une adresse : elle s'arrête à la ville (Longueuil),
 sans rue, puisque l'artisan se déplace. Le catalogue (`hasOfferCatalog`)
-porte les quatre abonnements et la séance d'essai, puis les pièces à
+porte les cinq abonnements et la séance d'essai, puis les pièces à
 l'unité ; `makesOffer`, l'heure de plus, les cinq prestations et les frais
 de chaque zone (zéro en zone A, un prix chiffré par durée en zone B).
 **Chaque offre porte un `Service`, jamais un `Product`** : un produit ferait

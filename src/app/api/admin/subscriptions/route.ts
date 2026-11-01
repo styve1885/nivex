@@ -9,7 +9,7 @@ import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
-  placeMakeup, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
+  placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
   setPaid, setTravelFee,
   SubscriptionError, type SubscriptionFull,
 } from "@/lib/subscriptions";
@@ -25,7 +25,7 @@ function serialise(f: SubscriptionFull, tz: string) {
   const currentFirst = current?.visitIds[0] ? visits.find((v) => v.id === current.visitIds[0]) : null;
   return {
     id: sub.id, ref: sub.ref, status: sub.status, manageToken: sub.manageToken, locale: sub.locale,
-    planKey: sub.planKey, planName: sub.planName, perCycle: sub.perCycle,
+    planKey: sub.planKey, planName: planName(sub, "fr"), perCycle: sub.perCycle,
     minutesPerVisit: sub.minutesPerVisit,
     slot: slotPhrase(scheduleInstant(sub, tz), tz, "fr"),
     rhythm: rhythmPhrase(sub.everyWeeks, "fr"),

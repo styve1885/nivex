@@ -160,7 +160,14 @@ export function findPlan(key: string): Plan | null {
   return PLANS.find((p) => p.key === key) ?? null;
 }
 
-function planName(sub: Pick<Subscription, "planKey" | "planName">, locale: "fr" | "en"): string {
+/**
+ * Le nom d'une formule, tiré de sa clé : celui du jour, partout où il se lit
+ * (client, artisan, agenda, étiquette des visites). Le nom gardé en base ne
+ * sert que si la clé n'existe plus — ce qui n'arrive pas : une clé ne quitte
+ * jamais `PLANS`. Il fait foi même dans les minutes où la base est déjà
+ * migrée et l'ancienne version encore servie.
+ */
+export function planName(sub: Pick<Subscription, "planKey" | "planName">, locale: "fr" | "en"): string {
   const p = findPlan(sub.planKey);
   return p ? (locale === "en" ? p.en.name : p.fr.name) : sub.planName;
 }
@@ -509,7 +516,7 @@ async function insertSubscription(p: {
         smsWhen(first.startsAt, settings.timezone, l), rhythmPhrase(full.sub.everyWeeks, l),
         `${origin}/${l}/abonnement/${full.sub.manageToken}`), full.sub.ref),
       p.createdBy === "client"
-        ? sendSms(ownerSmsNumber(), SMS.owner.newSubscription(full.sub.clientName, full.sub.planName,
+        ? sendSms(ownerSmsNumber(), SMS.owner.newSubscription(full.sub.clientName, planName(full.sub, "fr"),
             smsWhen(first.startsAt, settings.timezone, "fr")), full.sub.ref)
         : Promise.resolve(false),
     ]);
@@ -542,7 +549,7 @@ async function isDone(id: string): Promise<boolean> {
 
 function summaryOf(sub: Subscription, n: VisitNumber | undefined): string {
   const rank = n ? ` ${n.index}/${sub.perCycle}` : "";
-  return `NIVEX — ${sub.clientName} · ${sub.planName}${rank}`;
+  return `NIVEX — ${sub.clientName} · ${planName(sub, "fr")}${rank}`;
 }
 
 /**
@@ -562,7 +569,7 @@ function descriptionOf(sub: Subscription, v: Booking, n: VisitNumber | undefined
       ? `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}`
       : `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}, installation et rangement compris`,
     "",
-    `Formule : ${sub.planName}`,
+    `Formule : ${planName(sub, "fr")}`,
     n ? `Visite ${n.index}/${sub.perCycle} du cycle ${n.cycle}` : "Visite",
   ];
   if (n?.index === 1) {
@@ -796,7 +803,7 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
           ) VALUES (
             ${bookingRef()}, ${token(24)}, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
             ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
-            ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb,
+            ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${planName(sub, "fr")}`, qty: 1 }])}::jsonb,
             ${when.toISOString()}, ${new Date(when.getTime() + sub.minutesPerVisit * 60_000).toISOString()},
             ${sub.minutesPerVisit}, ${sub.setupMinutes}, 0, ${sub.currency}, false,
             0, ${sub.travelZone}, ${sub.id}, ${series}, true, true
@@ -875,7 +882,7 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
     const d = visitData(before, b, settings, origin);
     await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change));
     if (by === "client") {
-      await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: before.sub.planName }, change), b.clientEmail);
+      await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: planName(before.sub, "fr") }, change), b.clientEmail);
     }
   }
 
@@ -982,7 +989,7 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
     const d = visitData(full, moved, settings, origin);
     await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change));
     if (by === "client") {
-      await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: full.sub.planName }, change), b.clientEmail);
+      await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: planName(full.sub, "fr") }, change), b.clientEmail);
     }
   }
 
@@ -1179,7 +1186,7 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
       ) VALUES (
         ${bookingRef()}, ${token(24)}, ${full.sub.locale}, 'confirmed', ${full.sub.clientName}, ${full.sub.clientEmail}, ${full.sub.clientPhone},
         ${full.sub.address}, ${full.sub.city}, ${full.sub.postalCode}, ${full.sub.notes},
-        ${JSON.stringify([{ key: full.sub.planKey, label: `Abonnement ${full.sub.planName}`, qty: 1 }])}::jsonb,
+        ${JSON.stringify([{ key: full.sub.planKey, label: `Abonnement ${planName(full.sub, "fr")}`, qty: 1 }])}::jsonb,
         ${when.toISOString()}, ${new Date(when.getTime() + full.sub.minutesPerVisit * 60_000).toISOString()},
         ${full.sub.minutesPerVisit}, ${full.sub.setupMinutes}, 0, ${full.sub.currency}, false,
         0, ${full.sub.travelZone}, ${full.sub.id}, ${series}, true, true
@@ -1262,7 +1269,7 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
       SELECT
         r.ref, r.manage_token, ${sub.locale}, 'confirmed', ${sub.clientName}, ${sub.clientEmail}, ${sub.clientPhone},
         ${sub.address}, ${sub.city}, ${sub.postalCode}, ${sub.notes},
-        ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${sub.planName}`, qty: 1 }])}::jsonb, r.starts_at, r.ends_at,
+        ${JSON.stringify([{ key: sub.planKey, label: `Abonnement ${planName(sub, "fr")}`, qty: 1 }])}::jsonb, r.starts_at, r.ends_at,
         ${sub.minutesPerVisit}, ${sub.setupMinutes}, 0, ${sub.currency}, false,
         0, ${sub.travelZone}, ${sub.id}::uuid, ${series}
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS r(
@@ -1556,7 +1563,7 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       WHERE id = ${sub.id} AND notice_series < ${alert.series} RETURNING id`) as Row[];
     if (claimed.length === 0) continue;
     const ok = await send(at!, settings, { email: REQUEST_INBOX },
-      seriesNotice({ ...emailBase(full, settings, origin), planName: sub.planName }, {
+      seriesNotice({ ...emailBase(full, settings, origin), planName: planName(sub, "fr") }, {
         series: alert.series, lastAt: alert.lastAt, termEnds: alert.series >= TERM_SERIES,
       }), sub.clientEmail);
     if (ok) notices++;
@@ -1564,6 +1571,24 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       await sql()`
         UPDATE nivex_subscriptions SET notice_series = ${sub.noticeSeries}
         WHERE id = ${sub.id} AND notice_series = ${alert.series}`.catch(() => {});
+    }
+  }
+
+  /* — Agenda — une seule fois, au premier passage après le 1er novembre
+     2026 : les visites à venir prennent dans leur titre et leur description
+     le nom nouveau de leur formule (`formules-2026-11`, lib/db.ts). La même
+     retouche que pour un changement de rang, sans message à personne. Sans
+     Google, rien ne s'inscrit, et le passage suivant reprend. */
+  if (at) {
+    const renamed = (await sql()`SELECT 1 FROM nivex_migrations WHERE name = 'formules-2026-11-agenda'`) as Row[];
+    if (renamed.length === 0) {
+      const subs = (await sql()`SELECT id FROM nivex_subscriptions WHERE status = 'active'`) as Row[];
+      for (const r of subs) {
+        const full = await subOf(r.id as string);
+        if (full) await renumberCalendar(full, at, settings, origin);
+      }
+      await sql()`INSERT INTO nivex_migrations (name) VALUES ('formules-2026-11-agenda') ON CONFLICT (name) DO NOTHING`;
+      await logEvent("plan_names_calendar", { subscriptions: subs.length });
     }
   }
 

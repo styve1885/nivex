@@ -561,13 +561,13 @@ test("chaque description tient en 150 à 160 caractères et nomme le service, Mo
 });
 
 test("les descriptions disent les prix de la page, tirés des réglages", () => {
-  assert.match(flat(pageDescription("home", "fr", FALLBACK_SETTINGS)), /Abonnements dès 150 \$ par cycle\.$/);
-  assert.match(pageDescription("home", "en", FALLBACK_SETTINGS), /Subscriptions from \$150 per cycle\.$/);
+  assert.match(flat(pageDescription("home", "fr", FALLBACK_SETTINGS)), /Abonnements dès 100 \$ par cycle\.$/);
+  assert.match(pageDescription("home", "en", FALLBACK_SETTINGS), /Subscriptions from \$100 per cycle\.$/);
   assert.match(flat(pageDescription("tarifs", "fr", FALLBACK_SETTINGS)),
-    /abonnements de 150 \$ à 600 \$ par cycle, séance de 2 heures à 110 \$, prix des pièces à l'unité\.$/);
-  assert.match(pageDescription("tarifs", "en", FALLBACK_SETTINGS), /from \$150 to \$600 per cycle, a session of 2 hours for \$110, and single pieces\.$/);
+    /abonnements de 100 \$ à 600 \$ par cycle, séance de 2 heures à 110 \$, prix des pièces à l'unité\.$/);
+  assert.match(pageDescription("tarifs", "en", FALLBACK_SETTINGS), /from \$100 to \$600 per cycle, a session of 2 hours for \$110, and single pieces\.$/);
   assert.match(flat(pageDescription("tarifs", "fr", { ...FALLBACK_SETTINGS, hourlyRate: 6000 })),
-    /de 165 \$ à 660 \$ par cycle, séance de 2 heures à 120 \$/, "un autre taux change tout d'un coup");
+    /de 110 \$ à 660 \$ par cycle, séance de 2 heures à 120 \$/, "un autre taux change tout d'un coup");
 });
 
 test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux et ses réseaux", () => {
@@ -587,7 +587,7 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux 
     "@type": "Person", name: FOUNDER, sameAs: ["https://www.linkedin.com/in/styve-ketchandji-ngaleu-70a765362"],
   });
   assert.equal(FOUNDER, "Styve Ketchandji Ngaleu");
-  assert.equal(flat(ld.priceRange), "110 $ – 600 $", "de la séance d'essai au plus haut cycle");
+  assert.equal(flat(ld.priceRange), "100 $ – 600 $", "du plus bas montant affiché, l'Essentiel, au plus haut cycle");
   /* Pas de rue ni de code postal : l'artisan se déplace. La ville seule, que
      Google exige pour une fiche locale. */
   assert.deepEqual(ld.address, { "@type": "PostalAddress", addressLocality: "Longueuil", addressRegion: "QC", addressCountry: "CA" });
@@ -621,18 +621,19 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux 
   assert.equal(localBusinessJsonLd(en, FALLBACK_SETTINGS, "en").url, `${o}/en`);
 });
 
-test("la fiche : le catalogue des quatre abonnements et de la séance d'essai, chaque offre portant un Service", () => {
+test("la fiche : le catalogue des cinq abonnements et de la séance d'essai, chaque offre portant un Service", () => {
   const ld = localBusinessJsonLd(fr, FALLBACK_SETTINGS, "fr");
   const provider = { "@id": ld["@id"] };
   const [catalogue, pieces] = ld.hasOfferCatalog;
   assert.equal(catalogue["@type"], "OfferCatalog");
   assert.equal(catalogue.name, "Abonnements et séance d'essai");
   assert.deepEqual(catalogue.itemListElement.map((x) => [flat(x.name), x.price, x.priceCurrency]), [
-    ["Abonnement Essentiel", 150, "CAD"], ["Abonnement Confort", 200, "CAD"], ["Abonnement Exécutif", 400, "CAD"],
-    ["Abonnement Grande Famille", 600, "CAD"], ["Repassage à domicile · 2 heures", 110, "CAD"],
+    ["Abonnement Essentiel", 100, "CAD"], ["Abonnement Premium", 150, "CAD"], ["Abonnement Premium Plus", 200, "CAD"],
+    ["Abonnement VIP", 400, "CAD"], ["Abonnement Prestige", 600, "CAD"], ["Repassage à domicile · 2 heures", 110, "CAD"],
   ]);
-  assert.match(flat(catalogue.itemListElement[2].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
-  assert.match(flat(catalogue.itemListElement[4].description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
+  assert.match(flat(catalogue.itemListElement[0].description), /^1 visite de 2 h toutes les quatre semaines — les chemises et les pantalons du mois\. Jusqu'à 18 pièces par cycle\./);
+  assert.match(flat(catalogue.itemListElement[3].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
+  assert.match(flat(catalogue.itemListElement[5].description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
   assert.equal(pieces.itemListElement.length, 14);
   assert.deepEqual([pieces.itemListElement[0].itemOffered.name, pieces.itemListElement[0].price], ["Parure Queen ou King complète", 28]);
   const nappe = pieces.itemListElement.find((x) => x.itemOffered.name === "Nappe de réception");
@@ -961,35 +962,40 @@ test("llms.txt, version courte : le service, les zones, les prix, le contact et 
     "# NIVEX Repassage à domicile", "> NIVEX, repassage à domicile à Montréal et sur la Rive-Sud",
     "## Zones desservies", "Secteurs desservis : Saint-Lambert", "Aucuns frais de déplacement à Montréal.",
     "- Zone B (Saint-Jean-sur-Richelieu) : 15 $ pour une séance de moins de 3 h",
-    "- Essentiel : 150 $ / cycle, 1 visite de 3 h", "- Confort : 200 $ / cycle", "- Exécutif : 400 $ / cycle", "- Grande Famille : 600 $ / cycle",
+    "- Essentiel : 100 $ / cycle, 1 visite de 2 h", "- Premium : 150 $ / cycle, 1 visite de 3 h", "- Premium Plus : 200 $ / cycle",
+    "- VIP : 400 $ / cycle", "- Prestige : 600 $ / cycle", "- Essential: $100 / cycle, one 2-hour visit",
     "## Séance d'essai", "Pour un premier essai : la séance de 2 heures, 110 $.",
     "- Téléphone : +1 450 943 1217", "- Courriel : contact@nivexrepassage.ca",
     "/fr/tarifs)", "/fr/montreal)", "/fr/reserver)", "/fr/abonnement)", "/llms-full.txt)",
     "# NIVEX In-Home Ironing", "> NIVEX, in-home ironing in Montreal and on the South Shore",
-    "## Areas served", "No travel fees in Montreal.", "- Executive: $400 / cycle, four 2-hour visits", "## Trial session",
+    "## Areas served", "No travel fees in Montreal.", "- VIP: $400 / cycle, four 2-hour visits", "## Trial session",
     "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 943 1217", "/en/tarifs)",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
   assert.ok(txt.length < 4000, `la version courte reste courte : ${txt.length}`);
   assert.doesNotMatch(txt, /###|Zone C|\{|!|Découverte|velours|Corduroy/);
+  assert.doesNotMatch(txt, /Confort|Comfort|Exécutif|Executive|Grande Famille|Large Family/, "plus aucun ancien nom");
 });
 
 test("llms-full.txt : les mêmes prix, zones et questions que les pages, dans les deux langues", () => {
   const txt = flat(llmsFullText({ ...FALLBACK_SETTINGS, zonePolicy: P }));
   for (const bit of [
-    "# NIVEX — Repassage à domicile", "Abonnement Exécutif : 400 $ / cycle (au lieu de 440 $)",
+    "# NIVEX — Repassage à domicile", "Abonnement VIP : 400 $ / cycle (au lieu de 440 $)",
+    "Abonnement Essentiel : 100 $ / cycle (au lieu de 110 $)",
     "Pour un premier essai : la séance de 2 heures, 110 $.", "Une heure de plus, décidée sur place : 55 $.",
     "Nappe de réception : 12 $ – 18 $", "Secteurs desservis : Saint-Lambert",
     "### Faut-il fournir la planche et le fer ?", "### Puis-je annuler ou déplacer mon rendez-vous ?",
     "Aucuns frais de déplacement à Montréal.", "- Zone B (Saint-Jean-sur-Richelieu) : 15 $ pour une séance de moins de 3 h",
-    "### Abonnements en Zone B, par cycle", "- Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
-    "- Essentiel : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
-    "# NIVEX — In-home ironing", "Executive subscription: $400 / cycle (instead of $440)",
+    "### Abonnements en Zone B, par cycle", "- VIP : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
+    "- Essentiel : 100 $ + 15 $ de déplacement, soit 1 visite × 15 $",
+    "- Premium : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
+    "# NIVEX — In-home ironing", "VIP subscription: $400 / cycle (instead of $440)",
     "For a first try: a session of 2 hours, $110.", "### Can I cancel or reschedule?",
-    "No travel fees in Montreal.", "### Subscriptions in Zone B, per cycle", "- Executive: $400 + $60 travel, i.e. 4 visits × $15",
+    "No travel fees in Montreal.", "### Subscriptions in Zone B, per cycle", "- VIP: $400 + $60 travel, i.e. 4 visits × $15",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
   assert.equal((txt.match(/^### /gm) ?? []).length, 16, "sept questions et une zone payante par langue");
   assert.doesNotMatch(txt, /Zone C|réduits de|reduced by/);
   assert.doesNotMatch(txt, /\{|!|Découverte|Grand Foyer|Douce Nuit|Prolongation|velours|Corduroy/);
+  assert.doesNotMatch(txt, /Confort|Comfort|Exécutif|Executive|Grande Famille|Large Family/, "plus aucun ancien nom");
 });
 
 test("les conditions ne nomment l'offre, pour l'écarter des abonnements, que si elle existe", () => {
@@ -1153,16 +1159,17 @@ test("le coût d'un cycle en zone B : chaque visite paie les frais de sa durée"
   const money = (c) => `${Math.round(c / 100)} $`;
   const lignes = cycleTravel(zoneB, FALLBACK_SETTINGS).map((c) => flat(cycleTravelText(c, fr, "fr", money)));
   assert.deepEqual(lignes, [
-    "Essentiel : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
-    "Confort : 200 $ + 30 $ de déplacement, soit 2 visites × 15 $",
-    "Exécutif : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
-    "Grande Famille : 600 $ + 40 $ de déplacement, soit 4 visites × 10 $",
+    "Essentiel : 100 $ + 15 $ de déplacement, soit 1 visite × 15 $",
+    "Premium : 150 $ + 10 $ de déplacement, soit 1 visite × 10 $",
+    "Premium Plus : 200 $ + 30 $ de déplacement, soit 2 visites × 15 $",
+    "VIP : 400 $ + 60 $ de déplacement, soit 4 visites × 15 $",
+    "Prestige : 600 $ + 40 $ de déplacement, soit 4 visites × 10 $",
   ]);
   const usd = (c) => `$${Math.round(c / 100)}`;
-  assert.equal(flat(cycleTravelText(cycleTravel(zoneB, FALLBACK_SETTINGS)[2], en, "en", usd)),
-    "Executive: $400 + $60 travel, i.e. 4 visits × $15");
+  assert.equal(flat(cycleTravelText(cycleTravel(zoneB, FALLBACK_SETTINGS)[3], en, "en", usd)),
+    "VIP: $400 + $60 travel, i.e. 4 visits × $15");
   const gratuite = cycleTravel(P.zones.find((z) => z.key === "a"), FALLBACK_SETTINGS)[0];
-  assert.equal(flat(cycleTravelText(gratuite, fr, "fr", money)), "Essentiel : 150 $, sans frais de déplacement");
+  assert.equal(flat(cycleTravelText(gratuite, fr, "fr", money)), "Essentiel : 100 $, sans frais de déplacement");
 });
 
 console.log("\nDans les courriels");

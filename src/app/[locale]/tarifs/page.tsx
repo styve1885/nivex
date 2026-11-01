@@ -87,7 +87,7 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
             <p className="eyebrow">{t.tarifs.plans.title}</p>
             <h2 className="mt-4 font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.plans.lede}</h2>
           </div>
-          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {PLANS.map((p) => {
               const text = locale === "en" ? p.en : p.fr;
               const price = planCents(p, s);

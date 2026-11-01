@@ -389,7 +389,7 @@ export const fr = {
   },
   pricing: {
     eyebrow: "Tarification",
-    title: "Quatre abonnements, un tarif garanti douze mois.",
+    title: "Cinq abonnements, un tarif garanti douze mois.",
     /* Sous chaque carte : {detail}, la formule en une ligne, et {n}, son
        volume par cycle, tiré de `capacityPieces`. */
     planLine: "{detail}, jusqu'à {n} pièces",
