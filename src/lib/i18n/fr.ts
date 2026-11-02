@@ -834,9 +834,13 @@ export const fr = {
     phoneLabel: "Téléphone",
     emailLabel: "Courriel",
     hoursLabel: "Disponible",
-    hoursValue: "{hours}",
+    hoursValue: "{hours}.",
+    /* La ligne d'horaire (`openingLine`) : « du lundi au jeudi et le
+       samedi ». `onDay` précède un jour seul à côté d'une suite de jours. */
     from: "du",
     to: "au",
+    and: "et",
+    onDay: "le",
     errors: {
       required: "Ce champ est requis",
       email: "Courriel invalide",

@@ -60,7 +60,15 @@ page qui récite de mémoire finit par contredire le moteur.
   par prestation. Il s'accompagne toujours de « selon la taille, le type et
   la matière des vêtements » (`capacity.caveat`).
 - **Horaire d'ouverture** : déduit de `settings.hours`, jours ouverts
-  compris.
+  compris. Une seule phrase, `openingLine`, pour le bloc « Nous écrire » et
+  `/llms.txt`, dont voici la forme : « 18 h – 22 h, du lundi au jeudi et le
+  samedi ; 7 h – 22 h, vendredi et dimanche », « 6 pm – 10 pm, Monday to
+  Thursday and Saturday… ». Le pied de page et `openingHoursSpecification`
+  listent les mêmes jours, du lundi au dimanche (`openDays`). Une page
+  rendue à la visite dont la base n'a pas répondu tait l'horaire
+  (`adminHours`) plutôt que de citer celui du code. Le moteur de créneaux
+  lit le même horaire : une séance tient entière entre l'ouverture et la
+  fermeture du jour.
 - **Délais** : `CANCEL_WINDOW_HOURS`, `FIRST_FREE_MIN_MINUTES`,
   `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES`,
   `SOON_TEXT_MINUTES` dans `src/lib/brand.ts`.

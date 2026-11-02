@@ -172,7 +172,8 @@ Quelques décisions à connaître avant de toucher au code :
 ## 6. Ce que Styve pourra régler seul, sans code
 
 Depuis `/admin`, onglet **Réglages** : heures d'ouverture jour par jour
-(actuellement 7 h – 22 h, dimanche fermé), taux horaire, durée minimale,
+(le pied de page, le bloc « Nous écrire », la fiche de la maison et les
+créneaux les suivent d'eux-mêmes), taux horaire, durée minimale,
 durée par prestation, tampon de déplacement, délai de prévenance, horizon de
 réservation, zone desservie, première heure offerte, et une pause pour les
 vacances.

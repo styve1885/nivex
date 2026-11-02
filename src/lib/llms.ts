@@ -7,6 +7,7 @@ import { feeTable, feeZones, montrealTravelFree, servedText, type FeeRow } from 
 import { setupSentence } from "./capacity";
 import { pageDescription } from "./seo";
 import { faqFill } from "@/components/home/faq-fill";
+import { openingLine } from "@/components/home/opening-line";
 import {
   PLANS, UNIT_GARMENTS, UNIT_LINEN, cycleTravel, cycleTravelText, planCents, planFullCents, planPieces,
   sessionLength, sessionPriceCents, type UnitPrice,
@@ -16,15 +17,16 @@ import {
  * Ce que les assistants lisent de la maison, en Markdown, en français puis
  * en anglais, sur deux fichiers :
  *  — /llms.txt, court : le service, les zones, les cinq abonnements et la
- *    séance d'essai avec leurs prix, le contact et les pages principales ;
+ *    séance d'essai avec leurs prix, le contact et l'horaire, les pages
+ *    principales ;
  *  — /llms-full.txt, le détail : pièces à l'unité, frais par zone et coût
  *    d'un cycle en zone payante, conditions, les sept questions et leurs
  *    réponses.
  *
  * Rien n'y est écrit à la main : les prix, la séance d'essai, les zones et
- * leurs frais, les questions et leurs réponses sortent des mêmes réglages et
- * des mêmes dictionnaires que les pages. Un assistant qui les lit cite donc
- * exactement ce que la page affiche.
+ * leurs frais, l'horaire, les questions et leurs réponses sortent des mêmes
+ * réglages et des mêmes dictionnaires que les pages. Un assistant qui les
+ * lit cite donc exactement ce que la page affiche.
  */
 export function llmsText(s: Settings): string {
   return [shortSection(s, "fr"), shortSection(s, "en")].join("\n\n---\n\n");
@@ -46,6 +48,18 @@ function feeLine(f: FeeRow, t: ReturnType<typeof getDict>): string {
 /* Le français met une espace avant les deux-points ; l'anglais, non. */
 const punctuate = (text: string, lang: "fr" | "en") =>
   lang === "en" ? text.replace(/ : /g, ": ").replace(/ ; /g, "; ") : text;
+
+/* Le contact : téléphone, courriel, puis l'horaire de l'onglet Réglages, la
+   même ligne que le bloc « Nous écrire » (`openingLine`). */
+function contactLines(s: Settings, lang: "fr" | "en", t: ReturnType<typeof getDict>): string[] {
+  const L = LABELS[lang];
+  const hours = openingLine(t, s, lang);
+  return [
+    `- ${L.phone} : ${PHONE}`,
+    `- ${L.email} : ${CONTACT_EMAIL}`,
+    ...(hours ? [`- ${t.footer.hours} : ${hours}`] : []),
+  ];
+}
 
 function shortSection(s: Settings, lang: "fr" | "en"): string {
   const t = getDict(lang);
@@ -80,8 +94,7 @@ function shortSection(s: Settings, lang: "fr" | "en"): string {
     "",
     `## ${t.nav.contact}`,
     "",
-    `- ${L.phone} : ${PHONE}`,
-    `- ${L.email} : ${CONTACT_EMAIL}`,
+    ...contactLines(s, lang, t),
     "",
     `## ${L.pages}`,
     "",
@@ -171,8 +184,7 @@ function section(s: Settings, lang: "fr" | "en"): string {
     "",
     `## ${t.nav.contact}`,
     "",
-    `- ${L.phone} : ${PHONE}`,
-    `- ${L.email} : ${CONTACT_EMAIL}`,
+    ...contactLines(s, lang, t),
   ];
   return punctuate(lines.join("\n"), lang);
 }

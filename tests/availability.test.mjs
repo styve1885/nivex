@@ -279,6 +279,74 @@ t("l'artisan et les dates suivantes d'une série ne sont pas tenus à l'horizon"
   assert.equal(slotProblem(at(2027, 2, 1, 9).getTime(), 120, [], settings, NOW, { checkLead: false }), null);
 });
 
+console.log("\nL'horaire du 2 novembre 2026 : les soirs en semaine et le samedi");
+/* Lundi au jeudi 18 h – 22 h, vendredi 7 h – 22 h, samedi 18 h – 22 h,
+   dimanche 7 h – 22 h. Une séance finit au plus tard à la fermeture. */
+const SOIRS = {
+  ...settings,
+  hours: [
+    { day: 0, enabled: true, open: "07:00", close: "22:00" },
+    { day: 1, enabled: true, open: "18:00", close: "22:00" },
+    { day: 2, enabled: true, open: "18:00", close: "22:00" },
+    { day: 3, enabled: true, open: "18:00", close: "22:00" },
+    { day: 4, enabled: true, open: "18:00", close: "22:00" },
+    { day: 5, enabled: true, open: "07:00", close: "22:00" },
+    { day: 6, enabled: true, open: "18:00", close: "22:00" },
+  ],
+};
+/* NOW est le mercredi 26 août : vendredi 28, samedi 29, dimanche 30, lundi 31. */
+const heures = (key, minutes, setupMinutes = 0) => computeSlots({
+  fromKey: key, days: 1, durationMinutes: minutes, settings: SOIRS, busy: [], now: NOW, setupMinutes,
+})[0].slots.map((x) => x.time);
+const range = (from, to) => {
+  const out = [];
+  for (let m = parseHM(from); m <= parseHM(to); m += 30) out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  return out;
+};
+
+t("le samedi propose 18 h à 20 h pour 2 h, 18 h à 19 h pour 3 h", () => {
+  assert.equal(weekdayOfKey("2026-08-29"), 6);
+  assert.deepEqual(heures("2026-08-29", 120), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
+  assert.deepEqual(heures("2026-08-29", 180), ["18:00", "18:30", "19:00"]);
+});
+t("le vendredi propose 7 h à 20 h pour 2 h, 7 h à 19 h pour 3 h", () => {
+  assert.equal(weekdayOfKey("2026-08-28"), 5);
+  assert.deepEqual(heures("2026-08-28", 120), range("07:00", "20:00"));
+  assert.deepEqual(heures("2026-08-28", 180), range("07:00", "19:00"));
+});
+t("le dimanche suit le vendredi, le lundi le samedi", () => {
+  assert.deepEqual(heures("2026-08-30", 120), range("07:00", "20:00"));
+  assert.deepEqual(heures("2026-08-31", 120), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
+  assert.deepEqual(heures("2026-08-31", 180), ["18:00", "18:30", "19:00"]);
+});
+t("aucune séance ne finit après 22 h, sur deux semaines, à 2 h comme à 3 h", () => {
+  for (const minutes of [120, 180]) {
+    const days = computeSlots({ fromKey: "2026-08-28", days: 14, durationMinutes: minutes, settings: SOIRS, busy: [], now: NOW });
+    assert.equal(days.filter((d) => d.slots.length > 0).length, 14, "les sept jours ouvrent");
+    for (const d of days) for (const x of d.slots) {
+      const end = parseHM(x.time) + minutes;
+      assert.ok(end <= 22 * 60, `${d.date} ${x.time} + ${minutes} min finit après 22 h`);
+    }
+  }
+});
+t("la vérification finale refuse 20 h 30 pour 2 h et 19 h 30 pour 3 h, le samedi", () => {
+  const sam = (h, mi) => fromWall({ year: 2026, month: 8, day: 29, hour: h, minute: mi }, TZ);
+  assert.equal(slotIsFree(sam(20, 0).toISOString(), 120, [], SOIRS, NOW), true);
+  assert.equal(slotIsFree(sam(20, 30).toISOString(), 120, [], SOIRS, NOW), false);
+  assert.equal(slotIsFree(sam(17, 30).toISOString(), 120, [], SOIRS, NOW), false);
+  assert.equal(slotProblem(sam(19, 0).getTime(), 180, [], SOIRS, NOW), null);
+  assert.equal(slotProblem(sam(19, 30).getTime(), 180, [], SOIRS, NOW), "closed");
+  assert.equal(slotProblem(sam(20, 30).getTime(), 120, [], SOIRS, NOW), "closed");
+  /* L'artisan qui place lui-même une visite n'y échappe pas non plus. */
+  assert.equal(slotProblem(sam(20, 30).getTime(), 120, [], SOIRS, NOW, { checkLead: false }), "closed");
+});
+t("l'horaire porte sur la séance : un abonné « arrivée 15 min avant » garde les mêmes heures", () => {
+  assert.deepEqual(heures("2026-08-29", 120, 15), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
+  assert.deepEqual(heures("2026-08-29", 180, 15), ["18:00", "18:30", "19:00"]);
+  const sam = (h, mi) => fromWall({ year: 2026, month: 8, day: 29, hour: h, minute: mi }, TZ).getTime();
+  assert.equal(slotProblem(sam(20, 30), 120, [], SOIRS, NOW, { checkLead: false, setupMinutes: 15 }), "closed");
+});
+
 console.log("\nBascule d'heure avancée");
 t("créneaux corrects la veille du passage à l'heure d'hiver", () => {
   // 2026-11-01 : retour à l'heure normale au Québec

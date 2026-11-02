@@ -33,9 +33,11 @@ export type PublicPage = {
    s'ajoute : l'accueil et Tarifs les affichent, les descriptions portent le
    nouveau « dès », et le catalogue de la fiche LocalBusiness, posée sur
    toutes les pages, les nomme. Toutes datent de ce jour-là, à l'heure de
-   Montréal. */
+   Montréal. Le 2 novembre, la ligne d'horaire du bloc « Nous écrire » se
+   dit autrement (« du lundi au jeudi et le samedi ») : l'accueil seul
+   avance. */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-11-01", changeFrequency: "weekly", priority: 1 },
+  { path: "", updated: "2026-11-02", changeFrequency: "weekly", priority: 1 },
   { path: "/tarifs", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.8 },
   { path: "/montreal", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.7 },
   { path: "/conditions", updated: "2026-11-01", changeFrequency: "yearly", priority: 0.3 },

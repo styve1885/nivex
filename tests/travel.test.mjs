@@ -19,8 +19,8 @@ const {
 const { faqFill } = await import("../src/components/home/faq-fill.ts");
 const { cycleTravel, cycleTravelText } = await import("../src/lib/pricing.ts");
 const { legalValues, legalSections, fill } = await import("../src/components/LegalDocument.tsx");
-const { openingLine } = await import("../src/components/home/opening-line.ts");
-const { readZonePolicy, FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+const { openingLine, openDays } = await import("../src/components/home/opening-line.ts");
+const { readZonePolicy, FALLBACK_SETTINGS, UNREAD_SETTINGS, adminHours } = await import("../src/lib/settings.ts");
 const {
   phoneSchema, pageDescription, localBusinessJsonLd, websiteJsonLd, faqJsonLd, jsonLdHtml, BUSINESS_NAME,
 } = await import("../src/lib/seo.ts");
@@ -50,6 +50,18 @@ const { en } = await import("../src/lib/i18n/en.ts");
 let n = 0;
 const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
 const flat = (x) => x.replace(/[\u00a0\u202f\u2009]/g, " ");
+
+/* L'horaire réglé par l'artisan le 2 novembre 2026 : les soirs en semaine et
+   le samedi, la journée entière le vendredi et le dimanche. */
+const SOIRS = [
+  { day: 0, enabled: true, open: "07:00", close: "22:00" },
+  { day: 1, enabled: true, open: "18:00", close: "22:00" },
+  { day: 2, enabled: true, open: "18:00", close: "22:00" },
+  { day: 3, enabled: true, open: "18:00", close: "22:00" },
+  { day: 4, enabled: true, open: "18:00", close: "22:00" },
+  { day: 5, enabled: true, open: "07:00", close: "22:00" },
+  { day: 6, enabled: true, open: "18:00", close: "22:00" },
+];
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 const P = DEFAULT_ZONE_POLICY;
@@ -970,10 +982,23 @@ test("llms.txt, version courte : le service, les zones, les prix, le contact et 
     "# NIVEX In-Home Ironing", "> NIVEX, in-home ironing in Montreal and on the South Shore",
     "## Areas served", "No travel fees in Montreal.", "- VIP: $400 / cycle, four 2-hour visits", "## Trial session",
     "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 943 1217", "/en/tarifs)",
+    "- Horaire : 7 h – 22 h, du lundi au samedi", "- Hours: 7 am – 10 pm, Monday to Saturday",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
   assert.ok(txt.length < 4000, `la version courte reste courte : ${txt.length}`);
   assert.doesNotMatch(txt, /###|Zone C|\{|!|Découverte|velours|Corduroy/);
   assert.doesNotMatch(txt, /Confort|Comfort|Exécutif|Executive|Grande Famille|Large Family/, "plus aucun ancien nom");
+});
+
+test("llms.txt et llms-full.txt donnent l'horaire de l'onglet Réglages, la ligne du bloc « Nous écrire »", () => {
+  for (const make of [llmsText, llmsFullText]) {
+    const txt = flat(make({ ...FALLBACK_SETTINGS, zonePolicy: P, hours: SOIRS }));
+    assert.ok(txt.includes("- Horaire : 18 h – 22 h, du lundi au jeudi et le samedi ; 7 h – 22 h, vendredi et dimanche\n"), make.name);
+    assert.ok(txt.endsWith("- Hours: 6 pm – 10 pm, Monday to Thursday and Saturday; 7 am – 10 pm, Friday and Sunday")
+      || txt.includes("- Hours: 6 pm – 10 pm, Monday to Thursday and Saturday; 7 am – 10 pm, Friday and Sunday\n"), make.name);
+    /* Aucun jour ouvert : aucune ligne, plutôt qu'un horaire vide. */
+    const ferme = flat(make({ ...FALLBACK_SETTINGS, zonePolicy: P, hours: SOIRS.map((h) => ({ ...h, enabled: false })) }));
+    assert.doesNotMatch(ferme, /Horaire :|Hours:/, make.name);
+  }
 });
 
 test("llms-full.txt : les mêmes prix, zones et questions que les pages, dans les deux langues", () => {
@@ -1053,14 +1078,61 @@ test("l'horaire du bloc Contact garde ses heures, et la semaine commence le lund
   const ligne = (hours, locale = "fr", d = fr) => flat(openingLine(d, { ...FALLBACK_SETTINGS, hours }, locale));
   const H = FALLBACK_SETTINGS.hours;
   assert.equal(ligne(H), "7 h – 22 h, du lundi au samedi");
-  assert.equal(ligne(H, "en", en), "7 a.m. – 10 p.m., Monday to Saturday");
+  assert.equal(ligne(H, "en", en), "7 am – 10 pm, Monday to Saturday");
   const samediCourt = H.map((h) => (h.day === 6 ? { ...h, open: "09:00", close: "17:00" } : h));
   assert.equal(ligne(samediCourt), "7 h – 22 h, du lundi au vendredi ; 9 h – 17 h, samedi");
-  assert.equal(ligne(samediCourt, "en", en), "7 a.m. – 10 p.m., Monday to Friday; 9 a.m. – 5 p.m., Saturday");
+  assert.equal(ligne(samediCourt, "en", en), "7 am – 10 pm, Monday to Friday; 9 am – 5 pm, Saturday");
   assert.equal(ligne(H.map((h) => ({ ...h, enabled: h.day !== 1 }))), "7 h – 22 h, du mardi au dimanche");
   assert.equal(ligne(H.map((h) => ({ ...h, enabled: [5, 6, 0].includes(h.day) }))), "7 h – 22 h, du vendredi au dimanche");
-  assert.equal(ligne(H.map((h) => ({ ...h, enabled: [1, 3, 5].includes(h.day) }))), "7 h – 22 h, lundi, mercredi, vendredi");
+  assert.equal(ligne(H.map((h) => ({ ...h, enabled: [1, 3, 5].includes(h.day) }))), "7 h – 22 h, lundi, mercredi et vendredi");
   assert.equal(ligne(H.map((h) => ({ ...h, enabled: false }))), "");
+});
+
+test("l'horaire du 2 novembre 2026, mot pour mot : « et le samedi », « vendredi et dimanche »", () => {
+  const ligne = (hours, locale = "fr", d = fr) => openingLine(d, { ...FALLBACK_SETTINGS, hours }, locale);
+  assert.equal(flat(ligne(SOIRS)), "18 h – 22 h, du lundi au jeudi et le samedi ; 7 h – 22 h, vendredi et dimanche");
+  assert.equal(flat(ligne(SOIRS, "en", en)), "6 pm – 10 pm, Monday to Thursday and Saturday; 7 am – 10 pm, Friday and Sunday");
+  /* Le bloc « Nous écrire » y met le point final. */
+  assert.equal(flat(fr.contact.hoursValue.replace("{hours}", ligne(SOIRS))),
+    "18 h – 22 h, du lundi au jeudi et le samedi ; 7 h – 22 h, vendredi et dimanche.");
+  assert.equal(flat(en.contact.hoursValue.replace("{hours}", ligne(SOIRS, "en", en))),
+    "6 pm – 10 pm, Monday to Thursday and Saturday; 7 am – 10 pm, Friday and Sunday.");
+  /* L'heure ne se sépare jamais de son unité au bout d'une ligne. */
+  assert.ok(ligne(SOIRS).startsWith("18\u00a0h – 22\u00a0h"));
+  assert.ok(ligne(SOIRS, "en", en).startsWith("6\u00a0pm – 10\u00a0pm"));
+  /* Deux suites, un jour seul, deux jours qui se suivent. */
+  const ouverts = (days) => SOIRS.map((h) => ({ ...h, open: "18:00", close: "22:00", enabled: days.includes(h.day) }));
+  assert.equal(flat(ligne(ouverts([1, 2, 3, 5, 0]))), "18 h – 22 h, du lundi au mercredi, le vendredi et le dimanche");
+  assert.equal(flat(ligne(ouverts([1, 2, 3, 5, 0]), "en", en)), "6 pm – 10 pm, Monday to Wednesday, Friday and Sunday");
+  assert.equal(flat(ligne(ouverts([6, 0]))), "18 h – 22 h, samedi et dimanche");
+  assert.equal(flat(ligne(ouverts([6]))), "18 h – 22 h, samedi");
+  assert.equal(flat(ligne([{ day: 2, enabled: true, open: "09:30", close: "12:00" }], "en", en)), "9:30 am – 12 pm, Tuesday");
+  assert.equal(flat(ligne([{ day: 2, enabled: true, open: "09:30", close: "12:00" }])), "9 h 30 – 12 h, mardi");
+});
+
+test("le pied de page et la fiche de la maison lisent l'horaire de l'onglet Réglages, ou rien", () => {
+  /* Le pied de page : du lundi au dimanche, le samedi entre le vendredi et le dimanche. */
+  assert.deepEqual(openDays(SOIRS).map((h) => `${fr.daysShort[h.day]} ${h.open} – ${h.close}`), [
+    "Lun 18:00 – 22:00", "Mar 18:00 – 22:00", "Mer 18:00 – 22:00", "Jeu 18:00 – 22:00",
+    "Ven 07:00 – 22:00", "Sam 18:00 – 22:00", "Dim 07:00 – 22:00",
+  ]);
+  assert.deepEqual(openDays(SOIRS).map((h) => en.daysShort[h.day]), ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  /* La fiche de la maison, dans le même ordre. */
+  const reglages = { ...FALLBACK_SETTINGS, hours: SOIRS };
+  assert.equal(adminHours(reglages), SOIRS);
+  assert.deepEqual(localBusinessJsonLd(fr, reglages, "fr").openingHoursSpecification
+    .map((h) => [h["@type"], h.dayOfWeek.replace("https://schema.org/", ""), h.opens, h.closes]), [
+    ["OpeningHoursSpecification", "Monday", "18:00", "22:00"], ["OpeningHoursSpecification", "Tuesday", "18:00", "22:00"],
+    ["OpeningHoursSpecification", "Wednesday", "18:00", "22:00"], ["OpeningHoursSpecification", "Thursday", "18:00", "22:00"],
+    ["OpeningHoursSpecification", "Friday", "07:00", "22:00"], ["OpeningHoursSpecification", "Saturday", "18:00", "22:00"],
+    ["OpeningHoursSpecification", "Sunday", "07:00", "22:00"],
+  ]);
+  /* Une base muette : ni l'horaire du code dans le pied de page, ni dans la fiche. */
+  assert.equal(adminHours(UNREAD_SETTINGS), null);
+  assert.equal("openingHoursSpecification" in localBusinessJsonLd(fr, UNREAD_SETTINGS, "fr"), false);
+  assert.equal("openingHoursSpecification" in localBusinessJsonLd(en, UNREAD_SETTINGS, "en"), false);
+  /* Le reste de la fiche ne change pas pour autant. */
+  assert.equal(localBusinessJsonLd(fr, UNREAD_SETTINGS, "fr").name, BUSINESS_NAME);
 });
 
 console.log("\nL'historique");
