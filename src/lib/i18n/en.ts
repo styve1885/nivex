@@ -768,9 +768,11 @@ export const en: Dict = {
     phoneLabel: "Phone",
     emailLabel: "Email",
     hoursLabel: "Available",
-    hoursValue: "{hours}",
+    hoursValue: "{hours}.",
     from: "",
     to: "to",
+    and: "and",
+    onDay: "",
     errors: {
       required: "This field is required",
       email: "Invalid email",

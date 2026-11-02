@@ -23,7 +23,7 @@ const { SMS, smsWhen } = await import("../src/lib/sms.ts");
 const { PLANS, planCents, planFullCents, planFromParam } = await import("../src/lib/pricing.ts");
 const { readFileSync } = await import("node:fs");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
-const { fromWall, toWall, dateKey } = await import("../src/lib/time.ts");
+const { fromWall, toWall, dateKey, weekdayOfKey } = await import("../src/lib/time.ts");
 const { canSelfCancel } = await import("../src/lib/bookings.ts");
 const { visitReminder, subscriptionConfirmation, subscriptionOwnerNotification, visitChanged, seriesNotice } = await import("../src/lib/email.ts");
 const { CANCEL_WINDOW_HOURS, SERIES_CYCLES } = await import("../src/lib/brand.ts");
@@ -351,6 +351,27 @@ test("une date déjà prise ou un jour fermé se signale, avec la raison", () =>
   const closed = seriesConflicts(starts, 120, [], noSaturday, { now: at(2026, 10, 1) });
   assert.equal(closed.length, 4);
   assert.ok(closed.every((x) => x.reason === "closed"));
+});
+
+test("une série du samedi soir tient dans 18 h – 22 h : 2 h jusqu'à 20 h, 3 h jusqu'à 19 h", () => {
+  /* L'horaire du 2 novembre 2026 : le samedi ouvre de 18 h à 22 h. */
+  const soirs = { ...settings, hours: settings.hours.map((h) => (
+    h.day === 6 || (h.day >= 1 && h.day <= 4) ? { ...h, enabled: true, open: "18:00", close: "22:00" }
+      : { ...h, enabled: true, open: "07:00", close: "22:00" })) };
+  const serie = (h, min, everyWeeks) => gridDates(gridFrom(at(2026, 11, 7, h, min), everyWeeks, TZ), 0, 6);
+  const now = at(2026, 11, 2);
+  for (const [plan, h, min] of [["vip", 20, 0], ["essentiel-2h", 20, 0], ["premium-plus", 20, 0], ["prestige", 19, 0], ["premium", 19, 0]]) {
+    const p = planFromParam(plan);
+    const starts = serie(h, min, p.everyWeeks);
+    assert.ok(starts.every((d) => weekdayOfKey(dateKey(d, TZ)) === 6), `${plan} : tous des samedis`);
+    assert.deepEqual(seriesConflicts(starts, p.minutesPerVisit, [], soirs, { now }), [], `${plan} à ${h} h ${min}`);
+  }
+  for (const [plan, h, min] of [["vip", 20, 30], ["prestige", 19, 30], ["premium", 20, 0], ["essentiel-2h", 17, 30]]) {
+    const p = planFromParam(plan);
+    const c = seriesConflicts(serie(h, min, p.everyWeeks), p.minutesPerVisit, [], soirs, { now });
+    assert.equal(c.length, 6, `${plan} à ${h} h ${min} : toutes les dates refusées`);
+    assert.ok(c.every((x) => x.reason === "closed"), plan);
+  }
 });
 
 test("le délai de prévenance ne vaut que pour la première date, et pas pour l'artisan", () => {

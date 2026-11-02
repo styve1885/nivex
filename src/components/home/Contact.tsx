@@ -196,10 +196,14 @@ export function Contact({ t, locale, businessEmail, hours, served }: {
                     </a>
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.contact.hoursLabel}</dt>
-                  <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue.replace("{hours}", hours)}</dd>
-                </div>
+                {/* L'horaire de l'onglet Réglages, déjà écrit par le serveur ;
+                    aucun jour ouvert, aucune ligne. */}
+                {hours && (
+                  <div>
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.contact.hoursLabel}</dt>
+                    <dd className="mt-1.5 text-[0.95rem] text-ink-700">{t.contact.hoursValue.replace("{hours}", hours)}</dd>
+                  </div>
+                )}
               </dl>
 
               <div className="rule-diamond my-8" aria-hidden="true"><span className="text-[10px]">◆</span></div>

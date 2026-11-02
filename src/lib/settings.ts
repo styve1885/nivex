@@ -266,8 +266,27 @@ export async function getSettings(): Promise<Settings> {
     return await getSettingsStrict();
   } catch {
     console.error("[nivex] réglages illisibles, retour aux valeurs par défaut :", lastReadError);
-    return FALLBACK_SETTINGS;
+    return UNREAD_SETTINGS;
   }
+}
+
+/**
+ * Ce que rend `getSettings` quand la base n'a pas répondu : les valeurs du
+ * code, dans un objet à part, reconnaissable à son identité.
+ *
+ * L'horaire du code n'est pas celui de l'artisan. Ce qui l'affiche — le pied
+ * de page et la fiche de la maison, que la racine de la vitrine écrit aussi
+ * sur les pages rendues à chaque visite — le lit donc par `adminHours`, qui
+ * se tait plutôt que d'en réciter un autre : l'horaire affiché est celui de
+ * l'onglet Réglages, ou rien. Les pages préparées n'en ont pas besoin : leur
+ * lecture stricte fait échouer la régénération, et la dernière page réussie
+ * reste servie.
+ */
+export const UNREAD_SETTINGS: Settings = { ...FALLBACK_SETTINGS };
+
+/** L'horaire enregistré dans l'onglet Réglages, ou `null` si la base n'a pas pu le dire. */
+export function adminHours(s: Settings): DayHours[] | null {
+  return s === UNREAD_SETTINGS ? null : s.hours;
 }
 
 let lastReadError: string | null = null;

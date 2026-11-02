@@ -12,6 +12,7 @@ import { Field, LegalAccept, Row, SlotPicker } from "./BookingWizard";
 import { EMAIL_RE, POSTAL_RE, formatPhone, isPhoneValid, normalisePostal, rejectedContactFields } from "./Stepper.helpers";
 import type { Dict } from "@/lib/i18n";
 import { slotPhrase } from "@/lib/email";
+import { INSTALL_MINUTES, PACKUP_MINUTES } from "@/lib/brand";
 
 /* ============================ Types ============================ */
 
@@ -534,8 +535,13 @@ export function SubscriptionWizard({ t, config }: { t: Dict; config: Subscriptio
               </div>
             )}
 
+            {/* La durée d'une visite et son temps de repassage, comme dans le
+                tunnel de la séance d'essai : sans eux, la phrase montrait ses
+                marqueurs bruts. */}
             <p className="mx-auto mt-8 max-w-lg border-l-2 border-gold-400 pl-4 text-[0.84rem] font-light leading-[1.8] text-ink-600">
-              {t.booking.step3.setup}
+              {t.booking.step3.setup
+                .replace("{duration}", durationText(plan.minutesPerVisit))
+                .replace("{ironing}", durationText(Math.max(0, plan.minutesPerVisit - INSTALL_MINUTES - PACKUP_MINUTES)))}
             </p>
           </section>
         )}

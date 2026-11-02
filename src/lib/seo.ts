@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
-import type { Settings } from "./settings";
+import { adminHours, type Settings } from "./settings";
 import { FOUNDER, FOUNDER_PROFILES, GOOGLE_MAPS_URL, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
 import { catalogName, getSeo, type SeoPage } from "./i18n/seo";
 import { siteOrigin } from "./google";
@@ -10,6 +10,7 @@ import {
 } from "./pricing";
 import { setupSentence } from "./capacity";
 import { isMontrealSector, sectorsByRegion, thresholdText, type Sector } from "./travel";
+import { openDays } from "@/components/home/opening-line";
 
 /**
  * Ce que les moteurs et les assistants lisent du commerce.
@@ -244,6 +245,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
   const money = (c: number) => formatMoney(c, s.currency, lang);
   const offerUrl = `${origin}/${lang}/tarifs`;
   const cycles = PLANS.map((p) => planCents(p, s));
+  const hours = adminHours(s);
   /* Chaque offre porte un Service, jamais un Product : un produit ferait
      chercher à Google des avis, un stock et une livraison qu'un service n'a
      pas. Le Service renvoie à la fiche par son identifiant. */
@@ -277,11 +279,15 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     ...sameAs(SOCIAL_PROFILES),
     /* La fiche Google, par son identifiant : relie le site à la fiche. */
     ...(GOOGLE_MAPS_URL ? { hasMap: GOOGLE_MAPS_URL } : {}),
-    openingHoursSpecification: s.hours.filter((h) => h.enabled).map((h) => ({
-      "@type": "OpeningHoursSpecification",
-      dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
-      opens: h.open, closes: h.close,
-    })),
+    /* L'horaire de l'onglet Réglages, du lundi au dimanche ; rien quand la
+       base n'a pas répondu, plutôt que celui du code (`adminHours`). */
+    ...(hours ? {
+      openingHoursSpecification: openDays(hours).map((h) => ({
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
+        opens: h.open, closes: h.close,
+      })),
+    } : {}),
     /* Ce que la vitrine vend, aux prix des pages : les cinq abonnements au
        prix d'un cycle et la séance d'essai, puis les pièces à l'unité. Rien
        de ce que la vitrine a retiré (séances de trois et quatre heures,

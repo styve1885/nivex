@@ -1,18 +1,21 @@
 import Link from "next/link";
 import { Wordmark } from "./Logo";
 import type { Dict } from "@/lib/i18n";
-import type { Settings } from "@/lib/settings";
+import { adminHours, type Settings } from "@/lib/settings";
 import { contactEmail, contactEmailHref } from "@/lib/brand";
 import { servedText } from "@/lib/travel";
-import { WEEK } from "./home/opening-line";
+import { openDays } from "./home/opening-line";
 
 export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   const year = new Date().getFullYear();
   const home = `/${locale}`;
 
-  /* Du lundi au dimanche, comme la ligne du bloc Contact. */
-  const openDays = WEEK.flatMap((day) => settings.hours.filter((h) => h.day === day && h.enabled));
-  const grouped = openDays.map((h) => ({
+  /* L'horaire de l'onglet Réglages, du lundi au dimanche, comme la ligne du
+     bloc Contact. Quand la base n'a pas répondu (une page rendue à la
+     visite), la colonne se tait : l'horaire du code n'est pas celui de
+     l'artisan. */
+  const hours = adminHours(settings);
+  const grouped = hours && openDays(hours).map((h) => ({
     label: t.daysShort[h.day],
     range: `${h.open} – ${h.close}`,
   }));
@@ -44,17 +47,19 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
             </ul>
           </div>
 
-          <div>
-            <h3 className="mb-5 text-[10px] uppercase tracking-[0.26em] text-gold-400">{t.footer.hours}</h3>
-            <ul className="space-y-2 text-sm text-linen-300/85">
-              {grouped.length === 0 && <li className="text-linen-300/60">{t.closed}</li>}
-              {grouped.map((g) => (
-                <li key={g.label} className="flex justify-between gap-4 tabular-nums">
-                  <span className="text-linen-300/60">{g.label}</span><span>{g.range}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {grouped && (
+            <div>
+              <h3 className="mb-5 text-[10px] uppercase tracking-[0.26em] text-gold-400">{t.footer.hours}</h3>
+              <ul className="space-y-2 text-sm text-linen-300/85">
+                {grouped.length === 0 && <li className="text-linen-300/60">{t.closed}</li>}
+                {grouped.map((g) => (
+                  <li key={g.label} className="flex justify-between gap-4 tabular-nums">
+                    <span className="text-linen-300/60">{g.label}</span><span>{g.range}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div>
             <h3 className="mb-5 text-[10px] uppercase tracking-[0.26em] text-gold-400">{t.footer.zone}</h3>
