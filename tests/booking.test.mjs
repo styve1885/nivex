@@ -28,6 +28,7 @@ const { setupSentence } = await import("../src/lib/capacity.ts");
 const { faqFill } = await import("../src/components/home/faq-fill.ts");
 const { fr } = await import("../src/lib/i18n/fr.ts");
 const { retiredFr, retiredEn } = await import("../src/lib/i18n/retired.ts");
+const { readFileSync } = await import("node:fs");
 
 const TZ = "America/Toronto";
 const settings = { ...FALLBACK_SETTINGS, timezone: TZ };
@@ -606,6 +607,20 @@ test("le remerciement invite à un avis, quel qu'il soit, dans la langue du clie
   assert.match(fr.html, /lang="fr-CA"/);
   assert.match(en.html, /lang="en-CA"/);
   assert.match(fr.text, /qu'une fois/);
+});
+
+test("la note de déroulement des deux tunnels remplit sa durée et son temps de repassage", () => {
+  /* Le tunnel d'abonnement montrait « {duration} » et « {ironing} » tels
+     quels, du 22 octobre au 2 novembre 2026. */
+  for (const f of ["BookingWizard", "SubscriptionWizard"]) {
+    const src = readFileSync(new URL(`../src/components/booking/${f}.tsx`, import.meta.url), "utf8");
+    const uses = src.split("t.booking.step3.setup").slice(1);
+    assert.ok(uses.length > 0, `${f} affiche la note`);
+    for (const u of uses) {
+      assert.match(u.slice(0, 260), /^\s*\.replace\("\{duration\}"[\s\S]*\.replace\("\{ironing\}"/, `${f} : la note remplit ses deux marqueurs`);
+    }
+  }
+  for (const d of [fr, getDict("en")]) assert.match(d.booking.step3.setup, /\{duration\}[\s\S]*\{ironing\}/, "les deux marqueurs existent");
 });
 
 console.log(`\n${n} vérifications passées.\n`);
