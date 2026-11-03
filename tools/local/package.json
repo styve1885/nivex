@@ -1,0 +1,8 @@
+{
+  "name": "nivex-banc-local",
+  "private": true,
+  "description": "Banc d'essai local de NIVEX : le relais qui fait parler le pilote Neon à un PostgreSQL du conteneur.",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

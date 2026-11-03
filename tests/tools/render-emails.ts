@@ -25,7 +25,7 @@ const d: BookingEmailData = {
   manageUrl: "https://nivex-repassage.vercel.app/fr/reservation/exemple",
   siteUrl: "https://nivex-repassage.vercel.app",
   businessPhone: "+1 450 943 1217",
-  businessEmail: "styve1885@gmail.com",
+  businessEmail: "contact@nivexrepassage.ca",
 };
 
 const out = process.argv[2];

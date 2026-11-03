@@ -490,7 +490,7 @@ const base = {
   visits: gridDates(gridFrom(at(2026, 11, 6), 1, TZ), 0, 24),
   planCents: 36000, travelCents: 4000, totalCents: 40000, feePerVisitCents: 1000, travelZone: "Quartiers de Montréal",
   currency: "CAD", timezone: TZ, manageUrl: "https://nivexrepassage.ca/fr/abonnement/abc",
-  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217", businessEmail: "styve1884@gmail.com",
+  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217", businessEmail: "contact@nivexrepassage.ca",
 };
 
 test("la confirmation dit le rythme, la série, le montant du cycle et la règle de la veille", () => {
