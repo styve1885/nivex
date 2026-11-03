@@ -340,6 +340,37 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS referral text`;
   await q`ALTER TABLE nivex_visits ADD COLUMN IF NOT EXISTS robot    text`;
 
+  /* Les lectures de la vidéo de présentation : une ligne par premier appui sur
+     lecture dans une page affichée. La page, le type d'appareil, et le motif
+     d'un robot, rien d'autre — ni provenance, ni ville, ni identifiant. Elles
+     suivent le journal des visites : mêmes exclusions, même oubli à douze
+     mois (`purgeOldVisits`).
+
+     Une table neuve, donc la garde de la table d'IndexNow : les processus de
+     la construction posent le schéma ensemble, et le second à créer la table
+     ou son index bute sur le catalogue (unique_violation) ou sur la relation
+     déjà là (duplicate_table). Sans bloc, la construction s'arrêtait. */
+  await q`
+    DO $$ BEGIN
+      CREATE TABLE IF NOT EXISTS nivex_video_plays (
+        id         bigserial PRIMARY KEY,
+        path       text        NOT NULL,
+        device     text        NOT NULL DEFAULT 'ordinateur',
+        robot      text,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+    EXCEPTION
+      WHEN unique_violation THEN NULL;
+      WHEN duplicate_table  THEN NULL;
+    END $$`;
+  await q`
+    DO $$ BEGIN
+      CREATE INDEX IF NOT EXISTS nivex_video_plays_created_idx ON nivex_video_plays (created_at DESC);
+    EXCEPTION
+      WHEN unique_violation THEN NULL;
+      WHEN duplicate_table  THEN NULL;
+    END $$`;
+
   /* Les visites venues d'un centre de données avant que le journal ne sache
      les reconnaître. La règle est celle de `isDatacenterVisit`, que les
      nouvelles visites suivent dès leur écriture ; une ligne déjà marquée

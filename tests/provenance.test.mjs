@@ -19,7 +19,7 @@ const {
   groupOfSource, visitGroup, bookingGroup, heardFromHint, heardFromText, refName, robotReason,
   isDatacenterVisit, isPrivatePath, PERSONAL_PATH, SOURCE_GROUPS,
 } = await import("../src/lib/attribution.ts");
-const { isCounted, digestSummary, visitBilan, sourcesOf } = await import("../src/lib/visits.ts");
+const { isCounted, digestSummary, visitBilan, sourcesOf, playSpot, tallyPlays } = await import("../src/lib/visits.ts");
 const { ownerNotification } = await import("../src/lib/email.ts");
 const { BookingInput, cleanOrigin } = await import("../src/lib/bookings.ts");
 
@@ -344,6 +344,30 @@ test("le bilan range chaque famille sur les quatre périodes, sans les robots", 
   assert.deepEqual(b.facebook, { 7: 1, 30: 4, 90: 5, 0: 5 });
   assert.deepEqual(b.recommandation, { 7: 1, 30: 2, 90: 6, 0: 9 });
   assert.deepEqual(b.direct, { 7: 0, 30: 1, 90: 1, 0: 1 }, "le robot de San Jose n'y est pas");
+});
+
+console.log("\nLectures de la vidéo de présentation");
+
+test("une lecture se range selon l'endroit d'où on l'a lancée", () => {
+  for (const p of ["/fr", "/en", "/fr/", "/en/"]) assert.equal(playSpot(p), "accueil", p);
+  for (const p of ["/fr/presentation", "/en/presentation", "/en/presentation/"]) assert.equal(playSpot(p), "page", p);
+  for (const p of ["/fr/tarifs", "/fr/presentations", "/presentation", "/fr/montreal"]) assert.equal(playSpot(p), "autre", p);
+  assert.ok(isCounted("/fr/presentation") && isCounted("/en/presentation"), "la page de présentation se compte");
+  assert.ok(!isCounted("/admin") && !isCounted("/api/visit"), "jamais l'espace artisan ni l'API");
+});
+
+test("le décompte additionne les lectures par endroit, sur les quatre périodes", () => {
+  const c = (a, b, d, e) => ({ 7: a, 30: b, 90: d, 0: e });
+  const t = tallyPlays([
+    { path: "/fr", counts: c(1, 3, 4, 4) },
+    { path: "/en", counts: c(0, 1, 1, 2) },
+    { path: "/fr/presentation", counts: c(2, 2, 2, 2) },
+    { path: "/en/presentation", counts: c(0, 0, 1, 1) },
+  ]);
+  assert.deepEqual(t.accueil, c(1, 4, 5, 6));
+  assert.deepEqual(t.page, c(2, 2, 3, 3));
+  assert.deepEqual(t.autre, c(0, 0, 0, 0));
+  assert.deepEqual(tallyPlays([]).accueil, c(0, 0, 0, 0), "rien de lu, des zéros");
 });
 
 console.log("\nUne provenance abîmée ne coûte jamais une réservation");

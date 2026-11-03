@@ -4,7 +4,7 @@ import { siteOrigin } from "@/lib/google";
 import { bookingSources } from "@/lib/bookings";
 import { isSourceGroup, SOURCE_GROUPS, type SourceGroup } from "@/lib/attribution";
 import {
-  digestSummary, isPeriod, listVisits, sourcesOf, visitBilan, visitDigest,
+  digestSummary, isPeriod, listVisits, playCounts, sourcesOf, visitBilan, visitDigest,
   PERIODS, type Period, type RobotFilter,
 } from "@/lib/visits";
 
@@ -15,8 +15,9 @@ const DAY = 86_400_000;
 
 /**
  * Le journal des visites, pour l'onglet Visites de l'espace artisan : la
- * liste filtrée, ce qui la coiffe, le bilan par source et le lien personnel
- * qui retire un navigateur du décompte.
+ * liste filtrée, ce qui la coiffe, le bilan par source, les lectures de la
+ * vidéo de présentation et le lien personnel qui retire un navigateur du
+ * décompte.
  */
 export async function GET(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
@@ -45,6 +46,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
   const summary = digestSummary(digest, period, robots, group);
+  /* Les lectures de la vidéo, sans les robots. Une table illisible ne doit
+     pas priver l'onglet du reste du journal : elle se tait. */
+  const plays = await playCounts().catch(() => null);
 
   /* Le bilan : pages vues sans les robots, réservations, par famille et par
      période. Les réservations se comptent à la date où elles ont été prises. */
@@ -65,6 +69,7 @@ export async function GET(req: NextRequest) {
     groups: summary.groups,
     summary: { views: summary.views, cities: summary.cities, robots: summary.robots },
     bilan,
+    plays: plays && PERIODS.map((p) => ({ days: p, home: plays.accueil[p], page: plays.page[p], other: plays.autre[p] })),
     optOutUrl: key ? `${siteOrigin()}/fr/ne-pas-compter?cle=${key}` : null,
     visits: visits.map((v) => ({
       id: v.id, path: v.path, group: v.group, source: v.source,

@@ -18,7 +18,7 @@ import {
  * en anglais, sur deux fichiers :
  *  — /llms.txt, court : le service, les zones, les cinq abonnements et la
  *    séance d'essai avec leurs prix, le contact et l'horaire, les pages
- *    principales ;
+ *    principales, dont la présentation en vidéo ;
  *  — /llms-full.txt, le détail : pièces à l'unité, frais par zone et coût
  *    d'un cycle en zone payante, conditions, les sept questions et leurs
  *    réponses.
@@ -103,6 +103,7 @@ function shortSection(s: Settings, lang: "fr" | "en"): string {
     `- [${t.montreal.eyebrow}](${origin}/${lang}/montreal)`,
     `- [${t.booking.title}](${origin}/${lang}/reserver)`,
     `- [${t.tarifs.plans.title}](${origin}/${lang}/abonnement)`,
+    `- [${t.video.pageName}](${origin}/${lang}/presentation)`,
     `- [${L.full}](${origin}/llms-full.txt)`,
   ];
   return punctuate(lines.join("\n"), lang);
@@ -181,6 +182,7 @@ function section(s: Settings, lang: "fr" | "en"): string {
     `- [${t.booking.title}](${origin}/${lang}/reserver)`,
     `- [${t.tarifs.plans.title}](${origin}/${lang}/abonnement)`,
     `- [${t.montreal.eyebrow}](${origin}/${lang}/montreal)`,
+    `- [${t.video.pageName}](${origin}/${lang}/presentation)`,
     "",
     `## ${t.nav.contact}`,
     "",

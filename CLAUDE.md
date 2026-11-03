@@ -186,11 +186,15 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/llms.ts` | Les fichiers `/llms.txt` (court) et `/llms-full.txt` (détaillé), écrits depuis les réglages et les dictionnaires |
 
 Les tables : `nivex_settings` (une seule ligne), `nivex_bookings`,
-`nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_events`,
-`nivex_zone_history`, `nivex_migrations`, `nivex_indexnow`,
+`nivex_subscriptions`, `nivex_messages`, `nivex_visits`, `nivex_video_plays`,
+`nivex_events`, `nivex_zone_history`, `nivex_migrations`, `nivex_indexnow`,
 `nivex_public_content`. Le schéma se pose tout
 seul au démarrage, dans `bootstrap()` de `lib/db.ts`, et doit rester
-**idempotent** : il s'exécute à chaque instance froide.
+**idempotent** : il s'exécute à chaque instance froide. **Une table neuve se
+crée dans un bloc `DO … EXCEPTION WHEN unique_violation / duplicate_table`**,
+son index aussi : les trois processus de `next build` posent le schéma
+ensemble, et le second à créer la table butait sur le catalogue — la
+construction s'arrêtait (vu le 2 novembre 2026 avec `nivex_video_plays`).
 
 Une migration de données qui ne doit passer qu'**une fois** s'inscrit dans
 `nivex_migrations` : le nom s'insère et la mise à jour se fait dans la même
@@ -206,13 +210,38 @@ abonnements »).
 ### La vitrine, et ce qui en a été retiré
 
 L'accueil suit l'ordre du 23 octobre 2026, deux fois plus court qu'avant :
-héros, déroulement, prestations (cinq cartes d'une phrase, puis les photos
+héros, la vidéo de présentation (depuis le 2 novembre 2026, plus bas),
+déroulement, prestations (cinq cartes d'une phrase, puis les photos
 de la galerie sans légende), avant/après (la chemise blanche et le pantalon
 de complet), tarifs (les cinq abonnements, en cinq cartes qui se rangent
 sur une, deux, trois ou cinq colonnes, et la séance d'essai en une ligne), l'histoire en version courte, sept
 questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
 les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
 reste à un clic, et au pied de chaque page.
+
+**La vidéo de présentation** (2 novembre 2026). Styve présente la maison en
+une minute, en français, sous-titres incrustés. Le fichier,
+`public/videos/nivex-presentation.mp4` (H.264 et AAC, 1920 × 1080, l'index en
+tête pour la lecture en continu), n'est **jamais recompressé** ; son aperçu
+est `public/images/nivex-presentation-apercu.jpg`. La durée, la date de mise
+en ligne et les chemins vivent dans `lib/video.ts` ; la transcription, mot
+pour mot, et sa traduction anglaise, dans `lib/i18n/video.ts`, hors des
+dictionnaires. Le lecteur est celui du navigateur (`controls`,
+`playsInline`, `preload="none"`, jamais de lecture automatique) : rien de la
+vidéo ne part avant l'appui sur lecture. Sur l'accueil, l'aperçu ne se
+demande qu'à l'approche de la section, à la largeur qu'il faut (WebP de
+19 à 79 Ko par l'optimiseur de Next, `getImageProps`) ; sur la page
+`/presentation`, dont il est le premier écran, il est écrit dans la page. La
+section suit le héros (`#presentation`, avec sa transcription repliable en
+`<details>`), et un lien discret du héros y descend. La page
+`/fr/presentation` (`/en/presentation`) a la vidéo pour sujet, ce que Google
+exige pour la montrer dans ses résultats : au plan du site avec sa vidéo
+(`video: true` dans `PUBLIC_PAGES`), dans `/llms.txt`, pas dans le menu. Le
+middleware laisse passer `.mp4` : sans cela, la vidéo partait vers
+`/fr/videos/…`, une page introuvable. Le Chromium du conteneur n'a pas les
+codecs H.264 et AAC : on éprouve le lecteur en servant une copie WebM à la
+même adresse, et le fichier réel avec `ffmpeg` (décodage complet, niveau
+sonore).
 
 La page Tarifs tient dans cet ordre : abonnements, séance d'essai, pièces à
 l'unité, frais de déplacement par zone (avec la vérification du code
@@ -617,7 +646,13 @@ aussi son prix plancher (`price`), que Google exige. Les blocs passent par
 
 L'accueil ajoute le `WebSite` (le nom que Google peut afficher à la place du
 domaine), et l'accueil comme la page Montréal leur `FAQPage`, avec les
-questions qu'elles affichent, une par page. Google n'affiche plus de
+questions qu'elles affichent, une par page. L'accueil et la page
+`/presentation` portent le `VideoObject` de la présentation
+(`presentationVideoJsonLd`, même `@id`) : nom, description d'une phrase
+(capacité et précision comprises), aperçu et fichier en adresses absolues
+sur le www, date avec le fuseau de Montréal, durée ISO, langue entendue
+`fr-CA`, transcription de la page (la traduction sur les pages anglaises).
+Le plan du site déclare la même vidéo pour la page `/presentation`. Google n'affiche plus de
 résultat enrichi de FAQ depuis 2026, mais le balisage reste valide et lu par
 les assistants.
 
@@ -659,8 +694,8 @@ si bien qu'un changement fait hors de l'admin (une migration) compte aussi.
 
 `/llms.txt` (`lib/llms.ts`) résume la maison pour les assistants, en
 français puis en anglais : le service, les zones et leurs frais, les cinq
-abonnements et la séance d'essai avec leurs prix, le contact et les pages
-principales. `/llms-full.txt` en donne le détail : pièces à l'unité, coût
+abonnements et la séance d'essai avec leurs prix, le contact, l'horaire et
+les pages principales, dont la présentation en vidéo. `/llms-full.txt` en donne le détail : pièces à l'unité, coût
 d'un cycle en zone payante, conditions, les sept questions et leurs
 réponses. Rien n'y est écrit à la main, et ils se régénèrent comme les
 pages.
@@ -690,7 +725,11 @@ La frontière à tenir, et elle court dans tout le code :
   d'appareil, ville approximative. Aucune adresse IP n'entre en base —
   l'en-tête de l'hébergeur est lu puis jeté. Aucun identifiant ne relie
   deux lignes : deux visites du même navigateur y sont deux inconnus.
-  Oubli automatique à douze mois.
+  Oubli automatique à douze mois. Les **lectures de la vidéo** de
+  présentation y entrent aussi (`nivex_video_plays`, `recordPlay`) : le
+  premier appui sur lecture d'une page affichée, avec la page, le type
+  d'appareil et le motif d'un robot, rien d'autre ; mêmes exclusions, même
+  oubli, et l'onglet Visites les compte, sans les robots.
 - La **provenance** finit attachée à une réservation, donc à une
   personne. Elle reste donc dans le `localStorage` du visiteur et n'en
   sort qu'au moment où il réserve.
@@ -806,11 +845,13 @@ Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, durées,
 trois temps, séance d'essai, pièces à l'unité, foire aux questions),
 `sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
-desservie, journal, provenance, familles de sources, robots, bilan),
+desservie, journal, provenance, familles de sources, robots, bilan,
+lectures de la vidéo),
 `travel` (secteurs, zones, frais,
 conflits de préfixes, historique, Montréal, titres et descriptions de chaque
 page, hreflang, fiche LocalBusiness, llms.txt, robots, plan du site, origine
-www, IndexNow), `subscription`
+www, IndexNow, la vidéo : fichier en lecture continue, VideoObject, page de
+présentation, middleware), `subscription`
 (les cinq formules, leurs clés et leurs mots d'adresse, le nom lu par la
 clé, les noms de la migration, grille des dates, rang des visites, montants,
 délai de la veille). Plus un

@@ -8,9 +8,11 @@ import { formatMoney, minutesToText } from "./time";
 import {
   PLANS, UNIT_PRICES, capacityPieces, cheapestPlanCents, planCents, planPieces, sessionLength, sessionPriceCents,
 } from "./pricing";
-import { setupSentence } from "./capacity";
+import { setupSentence, shortDuration } from "./capacity";
 import { isMontrealSector, sectorsByRegion, thresholdText, type Sector } from "./travel";
 import { openDays } from "@/components/home/opening-line";
+import { PRESENTATION, isoDuration, uploadDateTime } from "./video";
+import { presentationTranscript, presentationVideoText } from "./i18n/video";
 
 /**
  * Ce que les moteurs et les assistants lisent du commerce.
@@ -364,6 +366,38 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
  * Le site lui-même, sur l'accueil : le nom que Google peut afficher à la
  * place du domaine, et le nom court.
  */
+/**
+ * La vidéo de présentation (VideoObject), sur l'accueil et sur sa page.
+ *
+ * Google n'affiche une vidéo dans ses résultats que pour la page dont elle
+ * est le sujet : c'est /presentation. L'accueil la déclare aussi, sous le même
+ * identifiant. Les adresses sont absolues, sur le www ; la durée et la date
+ * viennent de lib/video.ts, la description du seul chiffre de capacité du
+ * site, avec sa précision. La transcription est celle que la page affiche :
+ * la bande son en français, sa traduction sur les pages anglaises. La langue
+ * déclarée reste celle qu'on entend.
+ */
+export function presentationVideoJsonLd(lang: Lang) {
+  const origin = siteOrigin();
+  const text = presentationVideoText[lang];
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "@id": `${origin}/#presentation-video`,
+    name: text.name,
+    description: text.description
+      .replace("{n}", String(capacityPieces(120)))
+      .replace("{duration}", shortDuration(120, lang)),
+    thumbnailUrl: `${origin}${PRESENTATION.poster}`,
+    contentUrl: `${origin}${PRESENTATION.src}`,
+    uploadDate: uploadDateTime(PRESENTATION.uploaded),
+    duration: isoDuration(PRESENTATION.seconds),
+    inLanguage: PRESENTATION.language,
+    transcript: presentationTranscript[lang].join(" "),
+    publisher: { "@id": `${origin}/#nivex` },
+  };
+}
+
 export function websiteJsonLd(lang: Lang) {
   const origin = siteOrigin();
   return {

@@ -12,10 +12,11 @@ import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
 import { Faq } from "@/components/home/Faq";
 import { faqFill } from "@/components/home/faq-fill";
-import { faqJsonLd, jsonLdHtml, pageMeta, websiteJsonLd } from "@/lib/seo";
+import { faqJsonLd, jsonLdHtml, pageMeta, presentationVideoJsonLd, websiteJsonLd } from "@/lib/seo";
 import { Contact } from "@/components/home/Contact";
 import { openingLine } from "@/components/home/opening-line";
 import { ClosingCta } from "@/components/home/ClosingCta";
+import { VideoIntro } from "@/components/home/VideoIntro";
 
 export const revalidate = 300;
 
@@ -40,6 +41,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const siteLd = websiteJsonLd(locale);
   const faqItems = t.faq.items.map((f) => ({ q: f.q, a: faqFill(f.a, t, settings, locale) }));
   const faqLd = faqJsonLd(faqItems);
+  /* La vidéo de présentation, que montre la section qui suit le héros. Sa
+     page à elle (/presentation) porte la même, comme contenu principal. */
+  const videoLd = presentationVideoJsonLd(locale);
 
   /* Faq et Contact sont des composants clients : leurs props s'écrivent dans
      la page, lisibles par n'importe qui, et chaque octet se télécharge avant
@@ -51,13 +55,16 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(siteLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(videoLd) }} />
 
       {/* L'ordre du 23 octobre 2026, pour un accueil deux fois plus court.
           Le ruban (Marquee), la galerie (Gallery, dont les photos vivent
           maintenant sous les prestations) et le protocole (Protocol) ont
           quitté la page ; leurs composants et leurs textes restent, pour
-          pouvoir les remettre. */}
+          pouvoir les remettre. La vidéo de présentation s'est glissée entre
+          le héros et le déroulement le 2 novembre 2026. */}
       <Hero t={t} locale={locale} settings={settings} />
+      <VideoIntro t={{ video: t.video }} locale={locale} />
       <HowItWorks t={t} />
       <Services t={t} />
       <BeforeAfter t={t} />

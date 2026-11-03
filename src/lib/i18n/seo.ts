@@ -19,7 +19,7 @@
  */
 
 export type SeoPage =
-  | "home" | "tarifs" | "montreal" | "reserver" | "abonnement" | "conditions" | "confidentialite"
+  | "home" | "tarifs" | "montreal" | "presentation" | "reserver" | "abonnement" | "conditions" | "confidentialite"
   | "reservation" | "subscription" | "notFound" | "optOut";
 
 type SeoText = { title: string; description: string };
@@ -39,6 +39,10 @@ export const seoFr: Record<SeoPage, SeoText> = {
   montreal: {
     title: "NIVEX Repassage à domicile à Montréal",
     description: "Repassage à domicile à Montréal comme sur la Rive-Sud\u00a0: NIVEX repasse vos vêtements et votre literie chez vous, dans les quartiers de l'île, sans collecte.",
+  },
+  presentation: {
+    title: "NIVEX Repassage — La présentation en vidéo",
+    description: "La présentation de NIVEX en vidéo\u00a0: le repassage à domicile à Montréal et sur la Rive-Sud, avec l'équipement professionnel apporté chez vous, en une minute.",
   },
   reserver: {
     title: "NIVEX Repassage — Réserver une séance",
@@ -86,6 +90,10 @@ export const seoEn: Record<SeoPage, SeoText> = {
   montreal: {
     title: "NIVEX In-Home Ironing in Montreal",
     description: "In-home ironing in Montreal, just as on the South Shore: NIVEX presses your clothes and bed linen in your home, across the island's neighbourhoods. No pickup.",
+  },
+  presentation: {
+    title: "NIVEX In-Home Ironing — Video introduction",
+    description: "NIVEX's video introduction: in-home ironing in Montreal and on the South Shore, with professional equipment brought to your home, in one minute (in French).",
   },
   reserver: {
     title: "NIVEX In-Home Ironing — Book a session",
