@@ -47,3 +47,7 @@ next-env.d.ts
 .env*.local
 .vercel
 public/_preview/
+
+# banc d'essai local (tools/local) : son pilote et son certificat
+/tools/local/node_modules/
+/tools/local/certs/

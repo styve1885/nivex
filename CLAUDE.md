@@ -12,6 +12,11 @@ Ce qui suit est la charte réelle, relevée dans le code. Elle ne ressemble
 pas forcément à ce qu'on imagine pour une marque de prestige — n'inventez
 ni couleur ni police, même de bonne foi.
 
+Une session qui reprend le site lit aussi `HANDOFF.md` : comment on
+travaille avec Styve, les comptes et les services, la façon de livrer et de
+confirmer une mise en ligne, le banc d'essai local (`tools/local/`), ce qui
+reste en suspens.
+
 ## Couleurs et polices
 
 Tout vient de `@theme` dans `src/app/globals.css`. Les classes Tailwind
@@ -832,7 +837,9 @@ workflow IndexNow), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 
 ## Avant de pousser
 
-`npm test` puis `npm run build`. `npx eslint src` sort **deux erreurs
+`npm test` puis `npm run build` — dans le conteneur, contre une base
+locale : `bash tools/local/build.sh` (mode d'emploi dans
+`tools/local/README.md`). `npx eslint src` sort **deux erreurs
 anciennes** (deux règles React sur des composants d'avant : `SiteHeader` et
 la page de gestion d'une réservation) : comptez-les avant et après votre
 travail, et n'en ajoutez pas une troisième. Un `<a>` vers `/api/auth/google`
@@ -859,15 +866,17 @@ contrôle de contraste en Python, qui doit rester à 27/27.
 
 Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 
-- **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Extrayez
-  ses instructions et passez-les sur un vrai PostgreSQL, **deux fois**
-  pour l'idempotence. Une contrainte mal écrite a déjà fait tomber le
+- **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Passez-le
+  sur un vrai PostgreSQL, **deux fois** pour l'idempotence : le banc le
+  fait par le vrai code (`npx tsx tools/local/schema.mjs`, relais lancé),
+  sur une base vide puis sur la même. Une contrainte mal écrite a déjà fait tomber le
   site : elle levait une erreur hors de la liste `EXCEPTION`, et les
   réglages se lisaient comme un compte Google absent.
 - **Le rendu.** Chromium est là, sous
   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, avec
-  `playwright-core`. Lancez `next start` et regardez vraiment la page, au
-  téléphone comme à l'écran. Un piège : après un enregistrement depuis
+  `playwright-core`. Lancez `next start` (`tools/local/start.sh`) et
+  regardez vraiment la page, au téléphone comme à l'écran
+  (`tools/local/shots.cjs`). Un piège : après un enregistrement depuis
   `/admin` (réglages ou zones), `next start` sert l'accueil en 404 et les
   autres pages en 500 jusqu'au redémarrage. C'est son cache de fichiers :
   la revalidation lui fait oublier les pages préparées, et `dynamicParams =

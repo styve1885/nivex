@@ -63,7 +63,7 @@ const d = {
   manageUrl: "https://nivexrepassage.ca/fr/reservation/abc",
   siteUrl: "https://nivexrepassage.ca",
   businessPhone: PHONE,
-  businessEmail: "styve1884@gmail.com",
+  businessEmail: "contact@nivexrepassage.ca",
 };
 
 /* ————— La destination ————— */

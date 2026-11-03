@@ -1,182 +1,285 @@
-# NIVEX — reprise du projet
+# NIVEX — passation
 
-Ce document est autonome : il ne suppose aucune conversation préalable.
-Il décrit ce qui tourne, ce qui manque, et comment finir.
+Pour une session qui reprend le site sans avoir suivi les précédentes.
+`CLAUDE.md` fait foi pour la charte, les règles et l'architecture ; ce
+document dit le reste : avec qui on travaille et comment, les comptes, la
+façon de livrer, le banc d'essai, ce qui reste en suspens. À jour au
+3 novembre 2026.
+
+**Le dépôt est public.** Rien de secret ni de personnel ne s'écrit dans un
+fichier suivi : ni clé, ni adresse de domicile, ni courriel personnel.
 
 ---
 
-## 1. Ce qui existe
+## 1. En bref
 
 | | |
 |---|---|
-| Site en production | https://nivex-repassage.vercel.app |
-| Dépôt | https://github.com/ReneMarcellin007/nivex (public) |
-| Hébergement | Vercel, projet `nivex` — déploiement automatique à chaque `push` sur `main` |
-| Diagnostic | https://nivex-repassage.vercel.app/api/health |
+| Site | https://www.nivexrepassage.ca (`/fr`, `/en`) ; le domaine sans www redirige en 308 |
+| Espace artisan | https://www.nivexrepassage.ca/admin, derrière la session Google de l'artisan |
+| Diagnostic | `/api/health` : base, Google, textos ; le détail du schéma n'apparaît qu'une fois connecté |
+| Dépôt | https://github.com/styve1885/nivex, branche `main` |
+| Production | Vercel, projet `nivex`, déployée à chaque fusion dans `main`, en une à deux minutes |
+| Base | Postgres chez Neon ; chaque version d'essai a sa copie (CLAUDE.md, piège 4) |
+| Tâche quotidienne | `/api/cron/daily`, 14 h UTC (`vercel.json`) : 9 h à Montréal l'hiver, 10 h l'été |
 
-Le site est **complet et en ligne** : page d'accueil bilingue FR/EN, tunnel de
-réservation en quatre étapes, formulaire de contact, espace artisan sur
-`/admin`. `npm test` passe (26 cas du moteur de créneaux, 27 paires de
-contraste WCAG AA).
-
-**L'entreprise** : NIVEX, repassage à domicile de prestige, Longueuil et la
-Rive-Sud. Propriétaire : Styve. Téléphone `+1 450 943 1217`. Il possède deux
-adresses Gmail, `styve1885@gmail.com` et `Styve1884@gmail.com` — le site
-s'aligne automatiquement sur celle du compte Google qu'il branche, il n'y a
-donc rien à choisir.
+L'artisan, c'est **Styve**, fondateur de la maison (`FOUNDER`) et celui
+qui signe les textos (`SMS_SIGNATURE`, `lib/brand.ts`). Il fait lui-même
+ses réglages depuis `/admin`, tient lui-même les consoles (Vercel, Twilio,
+Google, OVH) et passe par une session Claude Code pour tout ce qui touche
+au code.
 
 ---
 
-## 2. Ce qui manque — deux branchements
+## 2. Travailler avec Styve
 
-`GET /api/health` répond aujourd'hui `database: false, google: false`.
-Tant que c'est le cas, le site reste présentable mais dégradé : le formulaire
-de réservation affiche le numéro de téléphone au lieu du calendrier, et le
-formulaire de contact invite à appeler. **Rien ne casse.**
-
-### A. Base de données (≈ 2 min, clics humains)
-
-Dans le tableau de bord Vercel du projet `nivex` :
-
-1. Onglet **Storage** → **Create Database** → choisir **Neon** (Serverless Postgres)
-2. Accepter les conditions du fournisseur → **Continue**
-3. Région : **Washington, D.C. (iad1)** — la plus proche de Montréal
-4. **Create**
-
-Vercel injecte `DATABASE_URL` tout seul. Le schéma (tables `nivex_settings`,
-`nivex_bookings`, `nivex_messages`, `nivex_events`) se crée au premier appel,
-via `ensureSchema()` dans `src/lib/db.ts`. Rien à migrer à la main.
-
-> L'acceptation des conditions doit venir d'un humain — un agent ne signe pas
-> à la place de quelqu'un.
-
-### B. Identifiants Google (≈ 6 min, clics humains)
-
-Le but : permettre à Styve de brancher **son propre** compte Google depuis
-`/admin`, sans que personne touche au code.
-
-1. **Créer le projet** — https://console.cloud.google.com/projectcreate
-   Nom : `NIVEX`.
-2. **Activer les deux API** (bien vérifier que le projet NIVEX est sélectionné) :
-   - https://console.cloud.google.com/apis/library/calendar-json.googleapis.com
-   - https://console.cloud.google.com/apis/library/gmail.googleapis.com
-3. **Écran de consentement OAuth** — https://console.cloud.google.com/auth/branding
-   - Type : **Externe**
-   - Nom de l'application : `NIVEX`
-   - Courriel d'assistance et de contact : l'adresse de Styve
-   - Laisser l'application en mode **Test**, et ajouter les adresses de Styve
-     comme **utilisateurs de test**.
-4. **Créer le client OAuth** — https://console.cloud.google.com/auth/clients
-   - Type : **Application Web**
-   - Nom : `NIVEX — site`
-   - **URI de redirection autorisés** (les deux, exactement) :
-     ```
-     https://nivex-repassage.vercel.app/api/auth/google/callback
-     http://localhost:3000/api/auth/google/callback
-     ```
-5. Copier le **Client ID** et le **Client secret**, puis :
-   ```bash
-   vercel env add GOOGLE_CLIENT_ID production
-   vercel env add GOOGLE_CLIENT_SECRET production
-   vercel deploy --prod
-   ```
-
-> **Le mode Test suffit indéfiniment.** Seul Styve s'authentifie avec Google ;
-> les clients remplissent un simple formulaire. Publier l'application
-> déclencherait une vérification Google de plusieurs semaines, inutile ici.
+- **En français, en le tutoyant.** Réponses courtes et concrètes ; pas de
+  jargon quand une phrase simple suffit.
+- **Ses demandes arrivent en brief numéroté** : ce qu'il veut, où, ce qu'il
+  ne faut pas toucher, puis un dernier point « AVANT DE DÉPLOYER : … puis
+  déploie ». Chaque point se traite, et la réponse finale rend compte de
+  chacun, dans l'ordre.
+- **Déployer.** La règle de `CLAUDE.md` tient : on demande avant de
+  fusionner. Quand sa demande dit « puis déploie », c'est l'accord pour
+  cette demande-là, une fois faites et montrées les vérifications de son
+  point « AVANT DE DÉPLOYER ». Un accord ne vaut pas pour la demande
+  suivante.
+- **Il veut voir** : captures au téléphone (390 px) et à l'écran (1280 px),
+  la liste des endroits modifiés avec le texte exact, en français et en
+  anglais, et les chiffres avant/après quand il y en a (poids de page,
+  temps, nombre de créneaux).
+- **Jamais de secret.** Ne jamais lui demander, ni accepter qu'il colle,
+  `GOOGLE_CLIENT_SECRET`, `CRON_SECRET`, `TWILIO_AUTH_TOKEN`,
+  `DATABASE_URL`, `SESSION_SECRET`, `ENCRYPTION_KEY`. Il pose lui-même les
+  variables chez Vercel : on lui donne le nom, la valeur quand elle n'est
+  pas secrète (un identifiant `MG…`), l'environnement, et on lui rappelle
+  de redéployer (une variable n'est lue que par un nouveau déploiement). Une
+  capture qu'il envoie ne doit montrer ni clé ni jeton.
+- **Sa vie privée.** Son adresse de domicile ne s'écrit nulle part : ni
+  code, ni document, ni réponse. La fiche de la maison s'arrête à la ville.
+  Ses courriels personnels servent à l'identifier, jamais à les envoyer à
+  un service.
+- **Dire ce qu'on n'a pas pu vérifier**, et pourquoi, avec le lien pour
+  qu'il le fasse lui-même (section 3, étape 8 ; section 9).
+- **Les étapes qu'on lui donne** sont numérotées, avec le nom exact des
+  menus, l'ordre quand il compte, et ce qu'il doit voir à la fin pour savoir
+  que c'est réussi.
+- **Les fichiers qu'il joint** (vidéo, photos) arrivent dans le conteneur,
+  au chemin cité dans son message. Une vidéo ne se recompresse pas ; une
+  photo passe par l'optimiseur de Next. Pour monter une vidéo filmée à
+  l'iPhone, la compétence `nivex-montage` de son compte existe, si elle
+  figure dans la liste des compétences de la session.
 
 ---
 
-## 3. Vérifier que tout marche
+## 3. Livrer un changement
+
+1. **Branche** : celle que la session désigne. Après chaque fusion, repartir
+   de `main` :
+   `git fetch origin main && git checkout -B <branche> origin/main`, puis
+   `git push -u origin <branche>` (avec `--force-with-lease` si la branche
+   ne porte que de l'historique déjà fusionné).
+2. **Écrire le code** selon `CLAUDE.md` : chiffres tirés des réglages,
+   textes dans les deux langues, retraits masqués et non effacés, date
+   avancée dans `PUBLIC_PAGES` pour toute page publique modifiée (jour de
+   Montréal), politique de confidentialité et `LEGAL_UPDATED` si la collecte
+   change, `CLAUDE.md` tenu à jour.
+3. **Vérifier**, sans exception :
+   - `npm test` : six fichiers, puis le contraste à 27/27 ;
+   - `npx eslint src` : exactement **deux** erreurs anciennes (`SiteHeader`,
+     `reservation/[token]`) ; lire la sortie entière ;
+   - la construction : `bash tools/local/build.sh` (section 4), qui
+     construit contre la base locale et pose le schéma comme en
+     production ;
+   - sur le banc : regarder la page au téléphone et à l'écran, éprouver le
+     tunnel jusqu'à l'étape de confirmation sans créer de rendez-vous (dans
+     Playwright, intercepter les `POST` vers `/api/bookings` et
+     `/api/subscriptions`), captures.
+4. **Commit** en français : un titre qui dit le changement (« Horaire :
+   samedi soir, une seule source, « et le samedi » »), un corps qui dit
+   pourquoi et comment c'est vérifié, puis les lignes de fin que la session
+   impose. Aucun identifiant de modèle dans un commit, une PR ou le code.
+5. **PR vers `main`** par les outils GitHub de la session (MCP) ; il n'y a
+   pas de `gh`. Le corps : ce qui change, où, ce qui a été vérifié, ce qui
+   reste à faire de son côté.
+6. **Version d'essai** : Vercel en construit une par PR, sur une copie de la
+   base, mais avec la vraie connexion Google et les vraies clés Twilio. On
+   n'y fait **jamais** de vraie réservation : elle écrirait dans l'agenda et
+   partirait par courriel et par texto.
+7. **Fusion** par commit de fusion (merge), seulement avec l'accord de la
+   section 2.
+8. **Confirmer la mise en ligne.** La production n'est pas joignable depuis
+   le conteneur. Après chaque déploiement de production, le workflow
+   IndexNow (`.github/workflows/indexnow.yml`) appelle
+   `/api/indexnow?sha=<commit>`, qui répond 409 tant que le domaine sert une
+   autre version. Un 200 prouve donc que le commit fusionné est en ligne.
+   Lire le journal : `actions_list` (`list_workflow_runs`, `indexnow.yml`),
+   puis `list_workflow_jobs`, puis `get_job_logs` avec `return_content`.
+   Vercel prévient de deux façons, et certaines exécutions sortent
+   « skipped » par la condition du workflow : c'est attendu. Parmi celles
+   qui tournent, l'une envoie
+   (`{"ok":true,"submitted":[…],"status":200}`), l'autre trouve tout déjà
+   envoyé (`"skipped":"unchanged"`). Les deux réponses `ok:true` viennent
+   d'une route qui a reconnu le commit.
+9. **Repartir de `main`** (étape 1), puis rendre compte à Styve : ce qui est
+   en ligne, les endroits modifiés, les vérifications faites, ce qu'il doit
+   faire lui-même.
+
+---
+
+## 4. Le banc d'essai local
+
+Tout est dans `tools/local/` (mode d'emploi : `tools/local/README.md`). Le
+site construit tourne contre un PostgreSQL du conteneur ; un petit relais
+imite le protocole HTTP de Neon. Secrets factices, aucune connexion à la
+production.
 
 ```bash
-curl -s https://nivex-repassage.vercel.app/api/health | python3 -m json.tool
+bash tools/local/setup.sh            # une fois par conteneur
+node tools/local/neon-relay.mjs &    # le relais, sur https://localhost
+bash tools/local/build.sh            # schéma, ligne de réglages, next build
+bash tools/local/start.sh &          # http://localhost:3000
+node tools/local/session.mjs         # jeton du cookie nivex_session (espace artisan)
+node tools/local/shots.cjs http://localhost:3000/fr /dossier "#presentation"
 ```
 
-Attendu : `database: true`, `google: true`.
-
-Puis, dans un navigateur :
-
-1. `/admin` → **Continuer avec Google** → se connecter avec le compte de Styve.
-   Un **code d'installation** est demandé à la toute première connexion : il est
-   dans la variable Vercel `ADMIN_SETUP_CODE` (production). Il garantit qu'un
-   inconnu ne revendique pas l'espace artisan avant lui. Une fois le compte
-   revendiqué, le code ne sert plus.
-2. Accorder les deux autorisations : **Google Agenda** et **envoi Gmail**.
-   Si l'une est refusée, `/admin` l'affiche en rouge avec un lien pour
-   réautoriser.
-3. `/fr/reserver` → réserver un créneau de test.
-   Vérifier : l'événement apparaît dans l'agenda de Styve, le client reçoit la
-   confirmation, Styve reçoit la fiche de mission.
-4. Ouvrir le lien « Gérer ma réservation » du courriel → annuler.
-   Vérifier : l'événement disparaît de l'agenda, les deux sont prévenus.
+Éprouvé le 3 novembre 2026 sur une base vide : construction, pages
+publiques, espace artisan, captures. Les surprises connues (redémarrage
+après un enregistrement depuis `/admin`, régénération à cinq minutes,
+Chromium sans H.264) sont listées dans le README.
 
 ---
 
-## 4. Développer en local
+## 5. Les comptes et les services
 
-```bash
-git clone https://github.com/ReneMarcellin007/nivex.git
-cd nivex
-npm install
-cp .env.example .env.local
-npm run dev
-```
+La session n'a accès qu'au dépôt GitHub. Tout le reste se fait par Styve,
+avec des étapes qu'on lui donne.
 
-`.env.local` contient déjà `NIVEX_DEMO=1` : le tunnel de réservation et le
-formulaire de contact tournent alors sur un **agenda fictif**, sans base de
-données ni compte Google. Le garde-fou refuse d'activer ce mode si
-`VERCEL_ENV` vaut `production` — aucun risque de le laisser traîner.
-
-```bash
-npm test        # 26 cas du moteur de créneaux + 27 paires de contraste
-npm run typecheck
-npm run build
-```
+| Service | À quoi il sert | Ce qu'il faut savoir |
+|---|---|---|
+| GitHub `styve1885/nivex` | Code, PR, workflow IndexNow | Public. Secret de dépôt `CRON_SECRET` pour le workflow (même valeur que chez Vercel) |
+| Vercel, projet `nivex` | Construction, hébergement, tâche quotidienne | Les variables : `CLAUDE.md` et `.env.example`. Domaine www ; l'apex redirige en 308 |
+| Neon | La base | Par l'intégration Vercel : une branche de base par version d'essai (Preview coché, Production décoché) |
+| Google Cloud (OAuth) | La connexion de l'espace artisan | URI de retour : `https://www.nivexrepassage.ca/api/auth/google/callback` |
+| Compte Google de l'artisan | Agenda des rendez-vous, envoi des courriels | Branché depuis `/admin`, onglet Connexion ; les avis internes vont à `REQUEST_INBOX` |
+| ImprovMX et OVH | `contact@nivexrepassage.ca` (`CONTACT_EMAIL`), renvoyé vers le Gmail de l'artisan | Domaine acheté chez OVH ; MX et SPF dans sa zone DNS. L'adresse ne reçoit rien elle-même |
+| Twilio | Les textos, depuis le +1 450 367 6231 | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308) ; permissions géographiques limitées au Canada |
+| Search Console, Bing Webmaster Tools | Indexation | Propriété www validée (`GOOGLE_SITE_VERIFICATION`) ; plans du site lus |
+| Fiche Google (Business Profile) | La fiche de la maison, les avis | `GOOGLE_MAPS_URL` (identifiant `cid`). Le lien d'avis se colle dans `/admin`, Réglages. L'horaire de la fiche se recopie à la main |
+| Facebook, Instagram, LinkedIn | Profils | `SOCIAL_PROFILES` (la maison), `FOUNDER_PROFILES` (le fondateur) |
+| IndexNow | Bing, donc ChatGPT et Copilot | Clé `INDEXNOW_KEY`, publiée dans `public/<clé>.txt` |
 
 ---
 
-## 5. Repères dans le code
+## 6. Ce que Styve règle seul, depuis `/admin`
 
-```
-src/lib/
-├── availability.ts   moteur de créneaux (heures d'ouverture, tampon, préavis)
-├── time.ts           fuseaux horaires via Intl, bascules d'heure comprises
-├── bookings.ts       création, annulation, statistiques
-├── messages.ts       formulaire de contact
-├── google.ts         OAuth + Calendar + Gmail, en fetch pur
-├── email.ts          gabarits de courriel
-├── db.ts             schéma Postgres, créé au premier appel
-└── settings.ts       réglages modifiables depuis /admin
-```
+- **Réglages** : taux horaire, durée minimale, pas des créneaux, préavis,
+  horizon, première heure offerte, horaire jour par jour, pause des
+  réservations, prestations, lien d'avis Google.
+- **Zones et frais** : secteurs, zones, frais.
+- **Abonnés** : visite effectuée, seconde série, prix garanti, « arrivée
+  15 min avant », frais par visite, déplacer ou annuler une visite.
+- **Rendez-vous, Messages** (suppression sur demande de l'auteur),
+  **Visites** (son lien « ne pas compter »), **Connexion** (Google, état du
+  système).
 
-Quelques décisions à connaître avant de toucher au code :
-
-- **Les durées et les prix sont recalculés côté serveur.** Le navigateur ne
-  fait que proposer ; `createBooking` refait le calcul à partir du catalogue
-  de prestations.
-- **Le chevauchement est impossible au niveau de la base.** Une contrainte
-  d'exclusion GiST sur `tstzrange(starts_at, ends_at)` ferme la course entre
-  deux réservations simultanées. Un index unique seul ne suffisait pas :
-  10 h–13 h et 11 h–12 h commencent à des heures différentes mais se
-  chevauchent.
-- **Le jeton Google est chiffré en AES-256-GCM** avant d'entrer en base.
-- **Les messages de contact sont enregistrés avant toute tentative d'envoi.**
-  Un courriel qui échoue ne doit jamais faire disparaître ce que quelqu'un a
-  pris la peine d'écrire.
-- **Les classes CSS maison vivent dans `@layer components`**, sinon elles
-  écrasent les utilitaires Tailwind.
+D'où la règle : un prix, un horaire ou une zone faux sur le site est
+presque toujours un réglage, et la base l'emporte sur les valeurs par
+défaut du code. Changer une constante ne change rien en production
+(`CLAUDE.md`, piège 1).
 
 ---
 
-## 6. Ce que Styve pourra régler seul, sans code
+## 7. En suspens
 
-Depuis `/admin`, onglet **Réglages** : heures d'ouverture jour par jour
-(le pied de page, le bloc « Nous écrire », la fiche de la maison et les
-créneaux les suivent d'eux-mêmes), taux horaire, durée minimale,
-durée par prestation, tampon de déplacement, délai de prévenance, horizon de
-réservation, zone desservie, première heure offerte, et une pause pour les
-vacances.
+### Côté Styve
 
-Pour bloquer du temps personnel, il lui suffit de le mettre dans son Google
-Agenda : le créneau disparaît du site tout seul.
+À lui rappeler s'il en parle, sans insister.
+
+- **Twilio** (étapes données le 2 novembre, pas encore confirmées) :
+  1. numéro +1 450 367 6231, « A message comes in » : Webhook,
+     `https://www.nivexrepassage.ca/api/sms/incoming`, HTTP POST ;
+  2. « A call comes in » : un TwiML Bin qui transfère les appels vers son
+     cellulaire, `<Dial answerOnBridge="true" timeout="30">` ; ajouter
+     `callerId="+14503676231"` si son opérateur bloque l'appel transféré ;
+  3. un Messaging Service « NIVEX » avec ce numéro, « Incoming Messages »
+     laissé sur « Defer to sender's webhook », A2P 10DLC passé (États-Unis
+     seulement) ; noter l'identifiant `MG…` ;
+  4. chez Vercel, `TWILIO_MESSAGING_SERVICE_SID` = ce `MG…`, en Production
+     seulement, puis Redeploy ;
+  5. vérifier dans `/admin`, Connexion, État du système : « Texto de deux
+     heures avant » au vert ; un texto envoyé au numéro depuis un autre
+     téléphone doit arriver sur son cellulaire.
+  Une fois le transfert d'appels confirmé, l'inscrire dans `CLAUDE.md`
+  (section « Les textos »).
+- **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
+  https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation ;
+  demande d'indexation de `/fr/presentation` dans la Search Console.
+- **Fiche Google** : y recopier l'horaire de l'admin, samedi 18 h – 22 h
+  compris.
+- **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
+  sont plus lues par le code. S'il les a encore chez Vercel, il peut les
+  supprimer.
+
+### Questions ouvertes
+
+Décisions de Styve : ne rien changer sans lui.
+
+- **L'heure en anglais** s'écrit « 6 pm » dans l'horaire et « 11:59 p.m. »
+  dans le délai des abonnés. Harmoniser, et dans quel sens ?
+- **Abonnés « arrivée 15 min avant »** : le temps hors séance n'entre pas
+  dans l'horaire, si bien qu'une visite qui finit à 22 h se range jusqu'à
+  22 h 15. À garder, ou à refuser ?
+
+---
+
+## 8. Historique récent
+
+Toutes fusionnées dans `main` depuis la branche de travail. Dates de
+fusion, au jour de Montréal.
+
+| PR | Date | Objet |
+|---|---|---|
+| #26 | 2 nov. 2026 | Vidéo de présentation : accueil, page `/presentation`, VideoObject, lectures comptées |
+| #25 | 1er nov. 2026 | Horaire : samedi soir, une seule source, « et le samedi » ; note du tunnel d'abonnement réparée |
+| #24 | 1er nov. 2026 | Cinq formules, l'Essentiel à 2 h, noms du 1er novembre |
+| #23 | 27 oct. 2026 | Accueil plus léger : la FAQ et le bloc Contact ne reçoivent que ce qu'ils affichent |
+| #20 à #22 | 26-27 oct. 2026 | Favicon ; Facebook, Instagram et LinkedIn ; fiche Google par son identifiant |
+| #17 à #19 | 26 oct. 2026 | Domaine www et référencement ; rappel par courriel la veille ; balise Search Console |
+| #14 à #16 | 23 oct. 2026 | Site plus court (trois offres) ; avant/après ; deux zones, Montréal sans frais |
+| #12, #13 | 21-22 oct. 2026 | Lien court `/avis` ; prix 2026, installation dans la séance, capacité unique |
+| #1 à #11 | 17-21 oct. 2026 | Abonnements, textos, zones et frais, page Montréal, mesure d'audience, analyse complète, remerciement et avis |
+
+`git log --merges origin/main` donne le reste ; chaque PR décrit ce qu'elle
+a changé et vérifié.
+
+---
+
+## 9. Ce que l'expérience a appris
+
+- **Hôtes injoignables** depuis le conteneur (réglages réseau de
+  l'environnement) : `www.nivexrepassage.ca`, `search.google.com`,
+  `validator.schema.org`. La mise en ligne se confirme par le workflow
+  IndexNow (section 3, étape 8) ; pour les validateurs, on éprouve en local
+  selon les règles publiées, puis on donne le lien à Styve.
+- **Espaces insécables** : le site en met avant les unités et la
+  ponctuation double. Dans le source, les écrire en échappements
+  (`\u00a0`, `\u202f`) : un outil d'écriture les change en caractères
+  invisibles, impossibles à relire. Dans les tests, comparer à travers
+  `flat()` (`tests/booking.test.mjs`), qui les ramène à des espaces.
+- **Dates de `PUBLIC_PAGES`** au jour de Montréal : un changement fait à
+  22 h l'est déjà le lendemain en UTC.
+- **Une table neuve** se crée dans un bloc `DO … EXCEPTION` (`CLAUDE.md`) ;
+  sur une base entièrement vide, même les anciennes tables se disputent
+  entre les trois processus de `next build`. La production n'est pas
+  concernée ; le banc pose donc le schéma en un seul processus avant de
+  construire (`tools/local/schema.mjs`).
+- **Un fichier statique d'une extension nouvelle** doit entrer dans
+  `PUBLIC_FILE` du middleware, sinon il part vers `/fr/…` et rend une page
+  introuvable (vu avec `.mp4`).
+- **Les versions d'essai gardent Google et Twilio** : jamais de vraie
+  réservation dessus.
+- **Un texte à trous montre ses accolades** si un remplacement est oublié :
+  `{duration}` est resté visible dans le tunnel d'abonnement du 22 octobre
+  au 2 novembre 2026. Un test garde maintenant cette note dans les deux
+  tunnels ; tout nouveau texte à trous mérite le sien.
