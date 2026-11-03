@@ -27,11 +27,15 @@ type Visit = {
 
 type BilanRow = { group: SourceGroup; periods: { days: number; visits: number; bookings: number }[] };
 
+/** Les lectures de la vidéo de présentation, par période : depuis l'accueil, sa page, ailleurs. */
+type PlayRow = { days: number; home: number; page: number; other: number };
+
 type Payload = {
   visits: Visit[];
   groups: { group: SourceGroup; count: number }[];
   summary: { views: number; cities: number; robots: number };
   bilan: BilanRow[];
+  plays: PlayRow[] | null;
   optOutUrl: string | null;
 };
 
@@ -94,7 +98,7 @@ export function VisitsPanel() {
   /* Le bilan et le lien personnel ne dépendent d'aucun filtre : on garde la
      dernière version reçue, pour qu'ils ne clignent pas quand le filtre
      change. */
-  const [steady, setSteady] = useState<Pick<Payload, "bilan" | "optOutUrl"> | null>(null);
+  const [steady, setSteady] = useState<Pick<Payload, "bilan" | "plays" | "optOutUrl"> | null>(null);
 
   const key = `${days}|${group}|${robots}`;
   const loading = held?.key !== key;
@@ -115,7 +119,7 @@ export function VisitsPanel() {
         if (!json?.ok) { setHeld({ key, data: null, error: loadErrorOf(status) }); return; }
         const d: Payload = json;
         setHeld({ key, data: d, error: null });
-        setSteady({ bilan: d.bilan, optOutUrl: d.optOutUrl });
+        setSteady({ bilan: d.bilan, plays: d.plays ?? null, optOutUrl: d.optOutUrl });
       })
       .catch(() => { if (!abandoned) setHeld({ key, data: null, error: "server" }); });
 
@@ -127,6 +131,8 @@ export function VisitsPanel() {
       <OwnVisits url={steady?.optOutUrl ?? null} ready={steady !== null} />
 
       {steady && steady.bilan.length > 0 && <Bilan rows={steady.bilan} />}
+
+      {steady?.plays && <Plays rows={steady.plays} />}
 
       <div className="mt-12 flex flex-wrap items-end justify-between gap-6 border-b border-gold-300/40 pb-6">
         <div className="flex flex-wrap gap-6">
@@ -311,6 +317,57 @@ function Bilan({ rows }: { rows: BilanRow[] }) {
         d&apos;abord au lien de recommandation suivi, puis à la réponse « Comment avez-vous connu NIVEX ? », puis
         à ce que le navigateur a relevé. « Depuis le début » remonte, pour les visites, aux {VISIT_RETENTION_MONTHS} derniers mois.
       </p>
+    </section>
+  );
+}
+
+/**
+ * Les lectures de la vidéo de présentation : combien de fois quelqu'un a
+ * appuyé sur lecture, depuis l'accueil et depuis sa page, sur chaque période.
+ */
+function Plays({ rows }: { rows: PlayRow[] }) {
+  const heads = ["7 jours", "30 jours", "90 jours", "Depuis le début"];
+  const lines: { label: string; pick: (r: PlayRow) => number }[] = [
+    { label: "Depuis l'accueil", pick: (r) => r.home },
+    { label: "Depuis sa page", pick: (r) => r.page },
+    ...(rows.some((r) => r.other > 0) ? [{ label: "Ailleurs", pick: (r: PlayRow) => r.other }] : []),
+  ];
+  return (
+    <section className="mt-12" aria-labelledby="lectures">
+      <h2 id="lectures" className="font-display text-2xl font-light text-ink-800">Vidéo de présentation</h2>
+      <p className="mt-1.5 text-[0.8rem] font-light leading-relaxed text-ink-500">
+        Les lectures : un appui sur lecture, au plus une fois par page affichée, sans les robots ni vos propres lectures.
+      </p>
+      <table className="mt-5 w-full border-collapse text-left">
+        <thead>
+          <tr className="border-b border-gold-300/50">
+            <th scope="col" className="py-2 pr-2 text-[10px] font-normal uppercase tracking-[0.14em] text-ink-400">Lectures</th>
+            {heads.map((h) => (
+              <th key={h} scope="col" className="px-1 py-2 text-right align-bottom text-[10px] font-normal uppercase leading-snug tracking-[0.14em] text-ink-400">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gold-300/30">
+          {lines.map((l) => (
+            <tr key={l.label}>
+              <th scope="row" className="py-2.5 pr-2 text-[0.84rem] font-normal text-ink-700">{l.label}</th>
+              {rows.map((r) => (
+                <td key={r.days} className="px-1 py-2.5 text-right text-[0.95rem] tabular-nums text-ink-800">{l.pick(r)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-gold-400/70">
+            <th scope="row" className="py-2.5 pr-2 text-[0.84rem] font-normal text-ink-800">Total</th>
+            {rows.map((r) => (
+              <td key={r.days} className="px-1 py-2.5 text-right text-[0.95rem] tabular-nums text-ink-800">{r.home + r.page + r.other}</td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
     </section>
   );
 }

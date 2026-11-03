@@ -80,6 +80,15 @@ export function ArrowIcon({ className = "h-4 w-4" }: P) {
   );
 }
 
+/** Un triangle de lecture, au trait, comme la flèche. */
+export function PlayIcon({ className = "h-3.5 w-3.5" }: P) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${base} ${className}`} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 5.5v13l10.5-6.5L8 5.5z" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ className = "h-4 w-4" }: P) {
   return (
     <svg viewBox="0 0 24 24" className={`${base} ${className}`} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

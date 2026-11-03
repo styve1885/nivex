@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { defaultLocale, locales } from "@/lib/i18n";
 
-const PUBLIC_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|json|html|pdf|webmanifest|woff2?)$/;
+/* Les fichiers de public/ passent tels quels. Sans `mp4`, la vidéo de
+   présentation était renvoyée vers /fr/videos/…, une page introuvable. */
+const PUBLIC_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|json|html|pdf|webmanifest|woff2?|mp4)$/;
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

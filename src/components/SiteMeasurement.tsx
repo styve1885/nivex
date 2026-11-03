@@ -208,6 +208,29 @@ export function arrivalHint(): { heardFrom: HeardFrom | ""; referredBy: string }
   return { heardFrom: heardFromHint(from) ?? "", referredBy: from.ref ?? "" };
 }
 
+/* ====================== La vidéo de présentation ====================== */
+
+/**
+ * Compte une lecture de la vidéo de présentation, au premier appui sur
+ * lecture (c'est le lecteur qui n'appelle qu'une fois par page affichée).
+ * Les mêmes exclusions que pour une page vue : ni page privée, ni appareil
+ * retiré du décompte, et le serveur écarte la session de l'artisan. Rien de
+ * la provenance ne part avec.
+ */
+export function countVideoPlay(): void {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (isPrivatePath(path) || isOptedOut()) return;
+  let tz: string | null = null;
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? null; } catch { /* sans fuseau */ }
+  fetch("/api/visit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({ kind: "play", path, webdriver: navigator.webdriver === true, tz }),
+  }).catch(() => {});
+}
+
 /* ====================== Le composant ====================== */
 
 export function SiteMeasurement() {

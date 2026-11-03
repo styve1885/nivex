@@ -136,6 +136,38 @@ export async function recordVisit(input: VisitInput, ctx: VisitContext): Promise
 }
 
 /**
+ * Une lecture de la vidéo de présentation : le premier appui sur lecture
+ * dans une page affichée. Mêmes garde-fous que pour une page vue — l'artisan
+ * est écarté par la route, une page privée ne compte pas, un robot se marque
+ * —, mais moins de choses gardées : la page, le type d'appareil et le motif
+ * d'un robot. La ville et l'agent du navigateur servent à reconnaître un
+ * robot, puis sont oubliés.
+ */
+export type PlayInput = Pick<VisitInput, "path" | "webdriver" | "timeZone">;
+
+export async function recordPlay(input: PlayInput, ctx: VisitContext): Promise<boolean> {
+  if (!isDbConfigured()) return false;
+
+  const path = clip(input.path, 300) ?? "/";
+  if (!isCounted(path)) return false;
+
+  const device = deviceType(ctx.userAgent);
+  const robot = robotReason({
+    userAgent: ctx.userAgent, webdriver: input.webdriver, timeZone: input.timeZone,
+    country: clip(ctx.country, 8), city: clip(ctx.city, 120), source: "direct", device, referral: null,
+  });
+
+  try {
+    await ensureSchema();
+    await sql()`INSERT INTO nivex_video_plays (path, device, robot) VALUES (${path}, ${device}, ${robot})`;
+    return true;
+  } catch (e) {
+    console.warn("[nivex] lecture non consignée :", (e as Error).message);
+    return false;
+  }
+}
+
+/**
  * Oubli automatique au-delà de douze mois.
  *
  * Le ménage ne se fait pas à chaque visite : ce serait une suppression par
@@ -154,7 +186,12 @@ export async function purgeOldVisits(): Promise<number> {
     DELETE FROM nivex_visits
     WHERE created_at < now() - make_interval(months => ${VISIT_RETENTION_MONTHS})
     RETURNING 1`) as Row[];
-  return rows.length;
+  /* Les lectures de la vidéo font partie du journal : même fenêtre. */
+  const plays = (await sql()`
+    DELETE FROM nivex_video_plays
+    WHERE created_at < now() - make_interval(months => ${VISIT_RETENTION_MONTHS})
+    RETURNING 1`) as Row[];
+  return rows.length + plays.length;
 }
 
 /* ============================ Lecture ============================ */
@@ -289,4 +326,46 @@ export async function listVisits(opts: VisitQuery = {}): Promise<Visit[]> {
     LIMIT ${limit}`) as Row[];
 
   return rows.map(hydrate);
+}
+
+/* ============================ Lectures de la vidéo ============================ */
+
+/** L'endroit d'où la vidéo a été lancée : l'accueil, sa page, ou ailleurs. */
+export type PlaySpot = "accueil" | "page" | "autre";
+
+export function playSpot(path: string): PlaySpot {
+  if (/^\/(fr|en)\/?$/.test(path)) return "accueil";
+  if (/^\/(fr|en)\/presentation\/?$/.test(path)) return "page";
+  return "autre";
+}
+
+/** Les lectures des humains, par endroit et par période de l'onglet. */
+export type PlayCounts = Record<PlaySpot, Record<Period, number>>;
+
+export async function playCounts(): Promise<PlayCounts> {
+  await ensureSchema();
+  const rows = (await sql()`
+    SELECT path,
+           count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int  AS d7,
+           count(*) FILTER (WHERE created_at >= now() - interval '30 days')::int AS d30,
+           count(*) FILTER (WHERE created_at >= now() - interval '90 days')::int AS d90,
+           count(*)::int AS total
+    FROM nivex_video_plays
+    WHERE robot IS NULL
+    GROUP BY 1`) as Row[];
+  return tallyPlays(rows.map((r) => ({
+    path: r.path as string,
+    counts: { 7: Number(r.d7), 30: Number(r.d30), 90: Number(r.d90), 0: Number(r.total) },
+  })));
+}
+
+/** Le décompte, rangé par endroit. Pur : les tests le lisent sans base. */
+export function tallyPlays(rows: { path: string; counts: Record<Period, number> }[]): PlayCounts {
+  const zero = () => ({ 7: 0, 30: 0, 90: 0, 0: 0 });
+  const out: PlayCounts = { accueil: zero(), page: zero(), autre: zero() };
+  for (const r of rows) {
+    const spot = playSpot(r.path);
+    for (const p of PERIODS) out[spot][p] += r.counts[p] ?? 0;
+  }
+  return out;
 }

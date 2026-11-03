@@ -27,6 +27,8 @@ export type PublicPage = {
   updated: string;
   changeFrequency: "weekly" | "monthly" | "yearly";
   priority: number;
+  /** La page dont la vidéo de présentation est le sujet : le plan du site la déclare. */
+  video?: true;
 };
 
 /* Le 1er novembre 2026, les formules changent de nom et l'Essentiel à 2 h
@@ -35,13 +37,17 @@ export type PublicPage = {
    toutes les pages, les nomme. Toutes datent de ce jour-là, à l'heure de
    Montréal. Le 2 novembre, la ligne d'horaire du bloc « Nous écrire » se
    dit autrement (« du lundi au jeudi et le samedi ») : l'accueil seul
-   avance. */
+   avance. Le même jour, la vidéo de présentation entre sur l'accueil et sur
+   sa page, et les lectures entrent au journal des visites, ce que la
+   politique de confidentialité dit désormais (sa date, que les conditions
+   affichent aussi, avance avec elle). */
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "", updated: "2026-11-02", changeFrequency: "weekly", priority: 1 },
   { path: "/tarifs", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.8 },
   { path: "/montreal", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/conditions", updated: "2026-11-01", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-01", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/presentation", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.6, video: true },
+  { path: "/conditions", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

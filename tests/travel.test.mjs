@@ -23,9 +23,13 @@ const { openingLine, openDays } = await import("../src/components/home/opening-l
 const { readZonePolicy, FALLBACK_SETTINGS, UNREAD_SETTINGS, adminHours } = await import("../src/lib/settings.ts");
 const {
   phoneSchema, pageDescription, localBusinessJsonLd, websiteJsonLd, faqJsonLd, jsonLdHtml, BUSINESS_NAME,
+  presentationVideoJsonLd,
 } = await import("../src/lib/seo.ts");
 const { seoFr, seoEn, seoAdmin, getSeo } = await import("../src/lib/i18n/seo.ts");
 const { llmsText, llmsFullText } = await import("../src/lib/llms.ts");
+const { PRESENTATION, isoDuration, minutesLabel, uploadDateTime } = await import("../src/lib/video.ts");
+const { presentationTranscript, presentationVideoText } = await import("../src/lib/i18n/video.ts");
+const { pickPoster } = await import("../src/components/video/PresentationPlayer.tsx");
 const { PUBLIC_PAGES, publicUrls, pageDate } = await import("../src/lib/pages.ts");
 const { publicFingerprint, todayInMontreal } = await import("../src/lib/freshness.ts");
 /* Un jour postérieur à toute date de PUBLIC_PAGES, présente ou future. */
@@ -784,6 +788,16 @@ test("robots.txt : les cinq robots nommés, chacun avec les mêmes interdits", (
 /* Le plan du site lit la date du contenu en base : sans base, aucune, et
    chaque page garde la date du code. */
 const BASES = ["DATABASE_URL", "POSTGRES_URL", "DATABASE_URL_UNPOOLED", "POSTGRES_URL_NON_POOLING"];
+/* La même chose pour un calcul sans attente : les fiches et llms.txt. */
+function avecEnvSync(vars, fn) {
+  const avant = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(avant)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+}
 async function avecEnv(vars, fn) {
   const avant = Object.fromEntries([...BASES, ...Object.keys(vars)].map((k) => [k, process.env[k]]));
   for (const k of BASES) delete process.env[k];
@@ -797,11 +811,11 @@ async function avecEnv(vars, fn) {
 const plan = await avecEnv({}, () => sitemap());
 const planProduction = await avecEnv({ VERCEL_ENV: "production", NEXT_PUBLIC_SITE_URL: "https://nivexrepassage.ca" }, () => sitemap());
 
-test("le plan du site : les cinq pages publiques, deux langues, leur vraie date, sans les tunnels", () => {
+test("le plan du site : les six pages publiques, deux langues, leur vraie date, sans les tunnels", () => {
   const o = siteOrigin();
   assert.equal(plan.length, PUBLIC_PAGES.length * 2);
   assert.deepEqual(plan.map((x) => x.url), publicUrls(o).map((x) => x.url));
-  for (const u of ["/fr/montreal", "/en/montreal", "/fr", "/en/tarifs", "/fr/confidentialite"]) {
+  for (const u of ["/fr/montreal", "/en/montreal", "/fr", "/en/tarifs", "/fr/confidentialite", "/fr/presentation", "/en/presentation"]) {
     assert.ok(plan.some((x) => x.url === `${o}${u}`), u);
   }
   assert.ok(!plan.some((x) => /reserver|abonnement|reservation|ne-pas-compter/.test(x.url)), "ni tunnels ni liens personnels");
@@ -909,7 +923,8 @@ test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce q
   assert.match(INDEXNOW_KEY, /^[a-f0-9]{32}$/);
   assert.equal(readFileSync(`public/${INDEXNOW_KEY}.txt`, "utf8"), INDEXNOW_KEY, "le fichier ne contient que la clé");
   const urls = currentStamps().map((x) => x.url);
-  assert.equal(urls.length, 10);
+  assert.equal(urls.length, PUBLIC_PAGES.length * 2);
+  assert.equal(urls.length, 12, "six pages, deux langues");
   assert.ok(urls.every((u) => u.startsWith("https://www.nivexrepassage.ca/")), "jamais d'adresse sans www");
   assert.ok(!urls.some((u) => /reserver|abonnement/.test(u)));
   assert.deepEqual(indexNowBody(urls.slice(0, 2)), {
@@ -920,7 +935,7 @@ test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce q
   });
   assert.equal(keyLocation(), `https://www.nivexrepassage.ca/${INDEXNOW_KEY}.txt`);
   const now = currentStamps();
-  assert.equal(changedStamps(now, new Map()).length, 10, "tout part au premier envoi");
+  assert.equal(changedStamps(now, new Map()).length, 12, "tout part au premier envoi");
   const sent = new Map(now.map((x) => [x.url, x.updated]));
   assert.deepEqual(changedStamps(now, sent), [], "un déploiement qui n'avance aucune date n'envoie rien");
   sent.set(now[1].url, "2026-01-01");
@@ -928,12 +943,137 @@ test("IndexNow : la clé publiée à la racine, un seul hôte, et seulement ce q
   sent.set(now[1].url, now[1].updated);
   const apresAdmin = currentStamps(SITE_URL, PLUS_TARD);
   assert.ok(apresAdmin.every((x) => x.updated === PLUS_TARD), "un tarif changé depuis l'admin date toutes les pages");
-  assert.equal(changedStamps(apresAdmin, sent).length, 10, "et les renvoie toutes, une fois");
+  assert.equal(changedStamps(apresAdmin, sent).length, 12, "et les renvoie toutes, une fois");
   const wf = readFileSync(".github/workflows/indexnow.yml", "utf8");
   assert.match(wf, /deployment_status/);
   assert.match(wf, /startsWith\(github\.event\.deployment\.environment, 'Production'\)/);
   assert.match(wf, /vercel\.deployment\.success/);
   assert.match(wf, /https:\/\/www\.nivexrepassage\.ca\/api\/indexnow\?sha=/);
+});
+
+console.log("\nLa présentation en vidéo");
+
+test("la durée, la date et l'aperçu de la vidéo ne s'écrivent qu'une fois", () => {
+  assert.equal(isoDuration(PRESENTATION.seconds), "PT1M11S");
+  assert.equal(isoDuration(60), "PT1M");
+  assert.equal(isoDuration(45), "PT45S");
+  assert.equal(flat(minutesLabel(PRESENTATION.seconds)), "1 min");
+  assert.equal(minutesLabel(PRESENTATION.seconds), "1 min", "1 et min ne se séparent pas");
+  assert.equal(uploadDateTime(PRESENTATION.uploaded), "2026-11-02T00:00:00-05:00", "minuit à Montréal, heure normale");
+  assert.equal(uploadDateTime("2026-07-15"), "2026-07-15T00:00:00-04:00", "heure avancée l'été");
+  assert.equal(pickPoster("a 640w, b 1080w, c 1920w", 1074), "b", "un téléphone prend l'aperçu à sa mesure");
+  assert.equal(pickPoster("c 1920w, a 640w", 500), "a", "l'ordre de la liste n'y fait rien");
+  assert.equal(pickPoster("a 640w, b 1080w", 3000), "b", "à défaut, la plus grande");
+  assert.equal(pickPoster("", 800), "");
+});
+
+test("le fichier vidéo se lit pendant qu'il se télécharge, et dure ce que disent les moteurs", () => {
+  const buf = readFileSync(`public${PRESENTATION.src}`);
+  /* Les boîtes de premier niveau du MP4 : l'index (moov) doit précéder les données (mdat). */
+  const boxes = [];
+  for (let off = 0; off + 8 <= buf.length && boxes.length < 12;) {
+    let size = buf.readUInt32BE(off);
+    const type = buf.toString("latin1", off + 4, off + 8);
+    if (size === 1) size = Number(buf.readBigUInt64BE(off + 8));
+    boxes.push({ type, off });
+    if (size < 8) break;
+    off += size;
+  }
+  const types = boxes.map((b) => b.type);
+  assert.ok(types.indexOf("moov") >= 0 && types.indexOf("moov") < types.indexOf("mdat"), `moov avant mdat : ${types.join(", ")}`);
+  /* La durée de l'en-tête de film (mvhd), en secondes. */
+  const mvhd = buf.indexOf(Buffer.from("mvhd"), boxes.find((b) => b.type === "moov").off);
+  const version = buf[mvhd + 4];
+  const scale = buf.readUInt32BE(mvhd + (version === 1 ? 24 : 16));
+  const units = version === 1 ? Number(buf.readBigUInt64BE(mvhd + 28)) : buf.readUInt32BE(mvhd + 20);
+  assert.equal(Math.round(units / scale), PRESENTATION.seconds);
+  assert.ok(buf.length < 40 * 1024 * 1024, "un fichier raisonnable");
+  /* L'aperçu : un JPEG de 1920 × 1080, lu dans son en-tête SOF. */
+  const jpg = readFileSync(`public${PRESENTATION.poster}`);
+  assert.deepEqual([jpg[0], jpg[1]], [0xff, 0xd8], "un JPEG");
+  let at = 2, dims = null;
+  while (at < jpg.length && !dims) {
+    const marker = jpg[at + 1], len = jpg.readUInt16BE(at + 2);
+    if (marker >= 0xc0 && marker <= 0xc3) dims = [jpg.readUInt16BE(at + 7), jpg.readUInt16BE(at + 5)];
+    at += 2 + len;
+  }
+  assert.deepEqual(dims, [PRESENTATION.width, PRESENTATION.height]);
+});
+
+test("la vidéo traverse le middleware, au lieu d'être renvoyée vers /fr/videos", () => {
+  const r = middleware(new NextRequest(`https://www.nivexrepassage.ca${PRESENTATION.src}`));
+  assert.equal(r.headers.get("x-middleware-next"), "1");
+  assert.equal(r.headers.get("location"), null);
+  const img = middleware(new NextRequest(`https://www.nivexrepassage.ca${PRESENTATION.poster}`));
+  assert.equal(img.headers.get("x-middleware-next"), "1");
+});
+
+test("la transcription : la bande son mot pour mot, sa traduction en anglais, sans point d'exclamation", () => {
+  const frT = presentationTranscript.fr.join(" "), enT = presentationTranscript.en.join(" ");
+  assert.equal(presentationTranscript.en.length, presentationTranscript.fr.length, "un paragraphe anglais par paragraphe français");
+  assert.ok(frT.startsWith("Bonjour, je m'appelle Styve, je suis le fondateur de NIVEX, repassage de vêtements à domicile."));
+  assert.ok(frT.endsWith("ou alors nous appeler au 450 943-1217. Merci."));
+  assert.ok(frT.includes("en deux heures, on peut repasser jusqu'à 18 pièces de vêtements"));
+  assert.ok(enT.startsWith("Hello, my name is Styve, and I'm the founder of NIVEX, in-home clothes ironing."));
+  assert.ok(enT.endsWith("or call us at 450 943-1217. Thank you."));
+  for (const t of [frT, enT]) assert.doesNotMatch(t, /!/);
+  for (const d of [fr, en]) {
+    assert.doesNotMatch(JSON.stringify(d), /Bonjour, je m'appelle Styve|Hello, my name is Styve/, "la transcription vit hors des dictionnaires");
+  }
+});
+
+test("la fiche VideoObject : ce que Google demande, sur le www, en heure de Montréal", () => {
+  const prod = avecEnvSync({ VERCEL_ENV: "production", NEXT_PUBLIC_SITE_URL: "https://nivexrepassage.ca" }, () => ({
+    fr: presentationVideoJsonLd("fr"), en: presentationVideoJsonLd("en"),
+  }));
+  const v = prod.fr;
+  assert.equal(v["@context"], "https://schema.org");
+  assert.equal(v["@type"], "VideoObject");
+  assert.equal(v["@id"], "https://www.nivexrepassage.ca/#presentation-video");
+  assert.equal(v.name, "NIVEX Repassage à domicile — présentation");
+  assert.equal(v.thumbnailUrl, "https://www.nivexrepassage.ca/images/nivex-presentation-apercu.jpg");
+  assert.equal(v.contentUrl, "https://www.nivexrepassage.ca/videos/nivex-presentation.mp4");
+  assert.equal(v.uploadDate, "2026-11-02T00:00:00-05:00");
+  assert.equal(v.duration, "PT1M11S");
+  assert.equal(v.inLanguage, "fr-CA");
+  assert.deepEqual(v.publisher, { "@id": "https://www.nivexrepassage.ca/#nivex" }, "la maison, par son identifiant");
+  assert.equal(flat(v.description),
+    "Repassage à domicile à Montréal et sur la Rive-Sud : NIVEX apporte son équipement professionnel chez vous et repasse jusqu'à 18 pièces en 2 h, selon la taille, le type et la matière des vêtements, à la séance ou par abonnement.");
+  assert.equal(v.transcript, presentationTranscript.fr.join(" "), "la transcription française, d'un bloc");
+  /* Une seule phrase, et rien de non rempli. */
+  assert.equal((flat(v.description).match(/\. |\.$/g) ?? []).length, 1);
+  for (const x of [prod.fr, prod.en]) assert.doesNotMatch(JSON.stringify(x), /[{}]\w|\{n\}|\{duration\}|!/);
+  /* L'anglais : son nom, sa description, la traduction affichée ; la langue entendue reste le français. */
+  assert.equal(prod.en.name, presentationVideoText.en.name);
+  assert.match(prod.en.description, /^In-home ironing in Montreal and on the South Shore: .* up to 18 pieces in 2 hours, depending on the size, type and fabric of the clothes/);
+  assert.equal(prod.en.transcript, presentationTranscript.en.join(" "));
+  assert.equal(prod.en.inLanguage, "fr-CA");
+  assert.equal(prod.en["@id"], v["@id"], "la même vidéo, le même identifiant");
+  assert.doesNotMatch(jsonLdHtml(v), /</, "aucun chevron brut dans le bloc");
+});
+
+test("la page de présentation : son titre, au plan du site avec sa vidéo, dans llms.txt", () => {
+  assert.equal(seoFr.presentation.title, "NIVEX Repassage — La présentation en vidéo");
+  assert.equal(seoEn.presentation.title, "NIVEX In-Home Ironing — Video introduction");
+  const page = PUBLIC_PAGES.find((p) => p.path === "/presentation");
+  assert.ok(page && page.video === true, "au plan du site, avec sa vidéo");
+  assert.equal(PUBLIC_PAGES.filter((p) => p.video).length, 1, "la vidéo n'est déclarée que pour sa page");
+  const avecVideo = planProduction.filter((x) => x.videos);
+  assert.deepEqual(avecVideo.map((x) => x.url), ["https://www.nivexrepassage.ca/fr/presentation", "https://www.nivexrepassage.ca/en/presentation"]);
+  const [vf, ve] = avecVideo.map((x) => x.videos[0]);
+  assert.equal(vf.title, "NIVEX Repassage à domicile — présentation");
+  assert.equal(ve.title, "NIVEX In-Home Ironing — introduction");
+  assert.equal(vf.thumbnail_loc, "https://www.nivexrepassage.ca/images/nivex-presentation-apercu.jpg");
+  assert.equal(vf.content_loc, "https://www.nivexrepassage.ca/videos/nivex-presentation.mp4");
+  assert.equal(vf.duration, 71);
+  assert.equal(vf.publication_date, "2026-11-02T00:00:00-05:00");
+  assert.doesNotMatch(vf.description + ve.description, /[<>&]/, "rien que Next écrirait sans l'échapper");
+  for (const make of [llmsText, llmsFullText]) {
+    const txt = flat(avecEnvSync({ VERCEL_ENV: "production", NEXT_PUBLIC_SITE_URL: "https://nivexrepassage.ca" },
+      () => make({ ...FALLBACK_SETTINGS, zonePolicy: P })));
+    assert.ok(txt.includes("- [La présentation en vidéo](https://www.nivexrepassage.ca/fr/presentation)"), make.name);
+    assert.ok(txt.includes("- [Video introduction](https://www.nivexrepassage.ca/en/presentation)"), make.name);
+  }
 });
 
 test("le lien court /avis traverse le middleware, les autres adresses gardent leur langue", () => {
@@ -984,7 +1124,8 @@ test("llms.txt, version courte : le service, les zones, les prix, le contact et 
     "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 943 1217", "/en/tarifs)",
     "- Horaire : 7 h – 22 h, du lundi au samedi", "- Hours: 7 am – 10 pm, Monday to Saturday",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
-  assert.ok(txt.length < 4000, `la version courte reste courte : ${txt.length}`);
+  /* Deux langues, l'horaire et la présentation en vidéo compris : environ 4 Ko. */
+  assert.ok(txt.length < 4500, `la version courte reste courte : ${txt.length}`);
   assert.doesNotMatch(txt, /###|Zone C|\{|!|Découverte|velours|Corduroy/);
   assert.doesNotMatch(txt, /Confort|Comfort|Exécutif|Executive|Grande Famille|Large Family/, "plus aucun ancien nom");
 });

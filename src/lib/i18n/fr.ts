@@ -52,7 +52,7 @@ const privacy: LegalDoc = {
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site\u00a0: une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
         "Mesure de fréquentation — le nombre de pages vues, la page regardée, le site d'où vous arrivez, votre pays et le type d'appareil. Ces données sont agrégées\u00a0: elles disent combien de personnes sont passées, jamais lesquelles. Aucun témoin n'est déposé et aucun identifiant ne vous suit d'une visite à l'autre.",
-        "Journal des visites — pour chaque page affichée\u00a0: la date et l'heure, la page et sa langue, le site ou la campagne d'où vous êtes arrivé au début de votre visite, avec l'adresse de provenance telle que votre navigateur la transmet, le prénom inscrit dans le lien de recommandation si vous en avez suivi un, le type d'appareil, et la ville approximative, avec sa région et son pays, que notre hébergeur déduit du réseau. Votre adresse IP n'y est jamais inscrite\u00a0: elle sert à deviner la ville, puis elle est oubliée avec la requête. Pour écarter les robots, le serveur regarde aussi le nom que se donne votre navigateur, s'il est piloté par un programme et le fuseau de son horloge\u202f; il n'en garde rien, sinon la mention «\u00a0robot\u00a0» quand c'en est un. Aucun identifiant ne relie deux lignes entre elles — deux de vos visites y figurent comme deux inconnus. Les pages de l'espace réservé à l'artisan ne sont jamais comptées, ni les liens personnels «\u00a0Gérer ma réservation\u00a0» et «\u00a0Gérer mes visites\u00a0», ni les visites de l'artisan lui-même.",
+        "Journal des visites — pour chaque page affichée\u00a0: la date et l'heure, la page et sa langue, le site ou la campagne d'où vous êtes arrivé au début de votre visite, avec l'adresse de provenance telle que votre navigateur la transmet, le prénom inscrit dans le lien de recommandation si vous en avez suivi un, le type d'appareil, et la ville approximative, avec sa région et son pays, que notre hébergeur déduit du réseau. Votre adresse IP n'y est jamais inscrite\u00a0: elle sert à deviner la ville, puis elle est oubliée avec la requête. Pour écarter les robots, le serveur regarde aussi le nom que se donne votre navigateur, s'il est piloté par un programme et le fuseau de son horloge\u202f; il n'en garde rien, sinon la mention «\u00a0robot\u00a0» quand c'en est un. Aucun identifiant ne relie deux lignes entre elles — deux de vos visites y figurent comme deux inconnus. Les pages de l'espace réservé à l'artisan ne sont jamais comptées, ni les liens personnels «\u00a0Gérer ma réservation\u00a0» et «\u00a0Gérer mes visites\u00a0», ni les visites de l'artisan lui-même. Quand vous lancez la vidéo de présentation, le journal le note aussi\u00a0: la date et l'heure, la page et le type d'appareil, sans rien d'autre, avec les mêmes exclusions.",
         "Provenance d'une réservation — à votre première visite, votre navigateur retient pour lui seul l'étiquette de campagne du lien suivi, le prénom inscrit dans un lien de recommandation, le site d'où vous veniez, la page d'arrivée, la date de cette première visite et le nombre de fois que vous êtes revenu. Ces informations restent dans votre navigateur et n'en sortent que si vous réservez\u00a0: elles accompagnent alors votre réservation, pour que nous sachions quel moyen vous a fait connaître la maison. Si vous ne réservez pas, nous n'en savons rien, et vider les données de votre navigateur les efface.",
         "Comment vous nous avez connus — la réponse que vous donnez, si vous le souhaitez, à la question facultative du formulaire de réservation, et le nom de la personne qui vous a recommandé si vous choisissez de l'écrire. Une visite à votre porte ou une carte remise en main propre ne laissent aucune trace technique\u00a0: cette réponse est le seul moyen de le savoir. Elle est proposée d'avance quand vous arrivez par un lien de recommandation ou par le code d'une carte, et vous restez libre de la changer ou de l'effacer.",
       ],
@@ -335,6 +335,23 @@ export const fr = {
     ctaSecondary: "Découvrir l'histoire",
     offer: "Votre première heure est offerte, une seule fois, sur votre première réservation.",
     scroll: "Faites défiler",
+  },
+  /* La vidéo de présentation : sa section de l'accueil, sa page et le lien du
+     héros. La transcription vit hors du dictionnaire (lib/i18n/video.ts). */
+  video: {
+    eyebrow: "En vidéo",
+    title: "Une minute pour faire connaissance.",
+    lede: "Styve, fondateur de NIVEX, présente le service.",
+    /* {min} : la durée de la vidéo, à la minute (lib/video.ts). */
+    heroLink: "Voir la présentation ({min})",
+    transcriptToggle: "Lire la transcription",
+    transcriptTitle: "Transcription",
+    /* Rien en français : la transcription est celle de la bande son. */
+    transcriptNote: "",
+    label: "Présentation de NIVEX en vidéo, par Styve, son fondateur",
+    fallback: "Votre navigateur ne lit pas cette vidéo.",
+    download: "Télécharger la vidéo",
+    pageName: "La présentation en vidéo",
   },
   /* Le ruban défile sans fin : un bouton doit pouvoir l'arrêter. */
   marqueeControl: { pause: "Arrêter le défilement", play: "Reprendre le défilement" },

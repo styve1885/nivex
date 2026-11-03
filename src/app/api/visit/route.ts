@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recordVisit } from "@/lib/visits";
+import { recordPlay, recordVisit } from "@/lib/visits";
 import { clip } from "@/lib/attribution";
 import { getSession } from "@/lib/session";
 
@@ -17,6 +17,10 @@ export const dynamic = "force-dynamic";
  * La réponse est toujours la même, et toujours légère. Le navigateur n'a
  * rien à en faire, et un journal qui refuse une ligne ne doit pas se
  * traduire par une erreur visible sur le site.
+ *
+ * `kind: "play"` consigne une lecture de la vidéo de présentation au lieu
+ * d'une page vue (lib/visits.ts, `recordPlay`) : les mêmes exclusions, moins
+ * de choses gardées.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
@@ -31,6 +35,19 @@ export async function POST(req: NextRequest) {
   if (!path || !path.startsWith("/")) return NextResponse.json({ ok: true }, { status: 202 });
 
   const h = req.headers;
+  if (body.kind === "play") {
+    await recordPlay(
+      { path, webdriver: body.webdriver, timeZone: clip(body.tz, 60) },
+      {
+        userAgent: h.get("user-agent"),
+        city: decodeHeader(h.get("x-vercel-ip-city")),
+        region: null,
+        country: decodeHeader(h.get("x-vercel-ip-country")),
+      },
+    );
+    return NextResponse.json({ ok: true }, { status: 202 });
+  }
+
   await recordVisit(
     {
       path,

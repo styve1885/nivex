@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Lockup } from "../Logo";
-import { ArrowIcon } from "../Icons";
+import { ArrowIcon, PlayIcon } from "../Icons";
 import type { Dict } from "@/lib/i18n";
 import type { Settings } from "@/lib/settings";
+import { PRESENTATION, minutesLabel } from "@/lib/video";
 
 export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   return (
@@ -72,6 +73,16 @@ export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; se
           </Link>
           <Link href="#histoire" className="btn btn-ghost w-full sm:w-auto">{t.hero.ctaSecondary}</Link>
         </div>
+
+        {/* La présentation en vidéo, juste dessous : un lien discret, la
+            section suit le héros. Sa durée vient du fichier (lib/video.ts). */}
+        <p className="mt-7 animate-fade" style={{ animationDelay: "800ms" }}>
+          <a href="#presentation"
+            className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
+            <PlayIcon />
+            {t.video.heroLink.replace("{min}", minutesLabel(PRESENTATION.seconds))}
+          </a>
+        </p>
 
         {/* La ligne de l'offre — reprise du cintre de porte. Elle suit le
             réglage de l'artisan, comme la grille : une offre retirée ne
