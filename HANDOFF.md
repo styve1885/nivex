@@ -4,7 +4,7 @@ Pour une session qui reprend le site sans avoir suivi les précédentes.
 `CLAUDE.md` fait foi pour la charte, les règles et l'architecture ; ce
 document dit le reste : avec qui on travaille et comment, les comptes, la
 façon de livrer, le banc d'essai, ce qui reste en suspens. À jour au
-3 novembre 2026.
+4 novembre 2026.
 
 **Le dépôt est public.** Rien de secret ni de personnel ne s'écrit dans un
 fichier suivi : ni clé, ni adresse de domicile, ni courriel personnel.
@@ -166,6 +166,7 @@ avec des étapes qu'on lui donne.
 | Twilio | Les textos, depuis le +1 450 367 6231 | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308) ; permissions géographiques limitées au Canada |
 | Search Console, Bing Webmaster Tools | Indexation | Propriété www validée (`GOOGLE_SITE_VERIFICATION`) ; plans du site lus |
 | Fiche Google (Business Profile) | La fiche de la maison, les avis | `GOOGLE_MAPS_URL` (identifiant `cid`). Le lien d'avis se colle dans `/admin`, Réglages. L'horaire de la fiche se recopie à la main |
+| Bing Places | La fiche de la maison chez Bing (Bing Maps) | Importée de la fiche Google. On corrige la fiche Google, puis on touche « Synchronisation » dans Bing Places. Adresse masquée |
 | Facebook, Instagram, LinkedIn | Profils | `SOCIAL_PROFILES` (la maison), `FOUNDER_PROFILES` (le fondateur) |
 | IndexNow | Bing, donc ChatGPT et Copilot | Clé `INDEXNOW_KEY`, publiée dans `public/<clé>.txt` |
 
@@ -213,13 +214,45 @@ défaut du code. Changer une constante ne change rien en production
   Une fois le transfert d'appels confirmé, l'inscrire dans `CLAUDE.md`
   (section « Les textos »).
 - **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
-  https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation ;
-  demande d'indexation de `/fr/presentation` dans la Search Console.
-- **Fiche Google** : y recopier l'horaire de l'admin, samedi 18 h – 22 h
-  compris.
+  https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
+
+### Indexation, au 4 novembre 2026
+
+Vérifiée par Styve sur son téléphone, en captures : recherches
+`site:nivexrepassage.ca`, inspection d'URL dans les deux consoles. Le
+conteneur n'atteint ni Google ni Bing (section 9).
+
+- **Google** : le 3 novembre, 9 des 12 adresses du plan du site étaient
+  indexées (les deux accueils, Montréal en français et en anglais, Tarifs
+  en français, les quatre documents légaux), plus la page d'abonnement, ce
+  qui est voulu. Manquaient la présentation, dans les deux langues, et
+  Tarifs en anglais. Google montrait encore l'ancien titre des documents
+  légaux (« · NIVEX ») et, pour Tarifs, l'ancien prix (« de 150 $ à
+  600 $ ») : des lectures d'avant le 26 octobre et le 1er novembre.
+  Indexation demandée le 3 novembre pour `/fr/tarifs`, `/fr/presentation`,
+  `/en/tarifs` et `/en/presentation` ; plan du site renvoyé.
+- **Le nom du site chez Google** est encore « nivexrepassage.ca », au lieu
+  du nom de la maison. À revoir vers le 24 novembre. Piste, si rien ne
+  bouge : aligner `og:site_name` (« NIVEX ») sur le nom du `WebSite`
+  (« NIVEX Repassage à domicile »), dans `lib/seo.ts`.
+- **Bing** : aucune page indexée le 3 novembre. L'inspection de `/fr`
+  disait « Découverte mais pas analysée » depuis le 26 octobre, jour du
+  premier envoi IndexNow ; le test en direct la disait indexable, sans
+  problème SEO. Rien ne bloque : Bing tarde avec un domaine neuf.
+  Indexation demandée le 3 novembre pour `/fr`, `/en`, `/fr/tarifs`,
+  `/fr/montreal` et `/fr/presentation`.
+- **Bing Places** : la fiche, importée de Google fin octobre, est vérifiée
+  et attend sa publication (7 à 12 jours). Resynchronisée le 4 novembre,
+  horaire du samedi compris ; adresse masquée ; `contact@nivexrepassage.ca`
+  ajouté.
+- **Fiche Google** : l'horaire du samedi y est depuis le 4 novembre.
+- **À refaire vers le 10 novembre** : `site:nivexrepassage.ca` sur Google
+  et sur Bing, en captures. Si Bing n'a toujours rien : ses « Plans de
+  site » dans Bing Webmaster Tools, puis des liens vers le site depuis la
+  fiche Google, Facebook, Instagram et des annuaires.
 
 ### Questions ouvertes
 
@@ -240,6 +273,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #27 | 2 nov. 2026 | Passation : banc d'essai local et ce document |
 | #26 | 2 nov. 2026 | Vidéo de présentation : accueil, page `/presentation`, VideoObject, lectures comptées |
 | #25 | 1er nov. 2026 | Horaire : samedi soir, une seule source, « et le samedi » ; note du tunnel d'abonnement réparée |
 | #24 | 1er nov. 2026 | Cinq formules, l'Essentiel à 2 h, noms du 1er novembre |
@@ -259,9 +293,13 @@ a changé et vérifié.
 
 - **Hôtes injoignables** depuis le conteneur (réglages réseau de
   l'environnement) : `www.nivexrepassage.ca`, `search.google.com`,
-  `validator.schema.org`. La mise en ligne se confirme par le workflow
-  IndexNow (section 3, étape 8) ; pour les validateurs, on éprouve en local
-  selon les règles publiées, puis on donne le lien à Styve.
+  `validator.schema.org`, `www.google.com`, `www.bing.com`. La mise en
+  ligne se confirme par le workflow IndexNow (section 3, étape 8) ; pour
+  les validateurs, on éprouve en local selon les règles publiées, puis on
+  donne le lien à Styve. L'indexation, c'est Styve qui la regarde, en
+  captures : la recherche `site:nivexrepassage.ca`, puis l'inspection d'URL
+  de la Search Console et de Bing Webmaster Tools, qui dit pourquoi une
+  page manque.
 - **Espaces insécables** : le site en met avant les unités et la
   ponctuation double. Dans le source, les écrire en échappements
   (`\u00a0`, `\u202f`) : un outil d'écriture les change en caractères
