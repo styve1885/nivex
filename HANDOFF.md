@@ -4,7 +4,7 @@ Pour une session qui reprend le site sans avoir suivi les précédentes.
 `CLAUDE.md` fait foi pour la charte, les règles et l'architecture ; ce
 document dit le reste : avec qui on travaille et comment, les comptes, la
 façon de livrer, le banc d'essai, ce qui reste en suspens. À jour au
-4 novembre 2026.
+6 novembre 2026.
 
 **Le dépôt est public.** Rien de secret ni de personnel ne s'écrit dans un
 fichier suivi : ni clé, ni adresse de domicile, ni courriel personnel.
@@ -163,7 +163,7 @@ avec des étapes qu'on lui donne.
 | Google Cloud (OAuth) | La connexion de l'espace artisan | URI de retour : `https://www.nivexrepassage.ca/api/auth/google/callback` |
 | Compte Google de l'artisan | Agenda des rendez-vous, envoi des courriels | Branché depuis `/admin`, onglet Connexion ; les avis internes vont à `REQUEST_INBOX` |
 | ImprovMX et OVH | `contact@nivexrepassage.ca` (`CONTACT_EMAIL`), renvoyé vers le Gmail de l'artisan | Domaine acheté chez OVH ; MX et SPF dans sa zone DNS. L'adresse ne reçoit rien elle-même |
-| Twilio | Les textos, depuis le +1 450 367 6231 | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308) ; permissions géographiques limitées au Canada |
+| Twilio | Les textos et les appels du +1 450 367 6231 | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308). Appels renvoyés au cellulaire par le TwiML Bin « NIVEX - transfert ». Service de messagerie « NIVEX » pour le texto de deux heures avant. Permissions géographiques : textos au Canada seulement, appels « United States and Canada » (`CLAUDE.md`, « Les textos ») |
 | Search Console, Bing Webmaster Tools | Indexation | Propriété www validée (`GOOGLE_SITE_VERIFICATION`) ; plans du site lus |
 | Fiche Google (Business Profile) | La fiche de la maison, les avis | `GOOGLE_MAPS_URL` (identifiant `cid`). Le lien d'avis se colle dans `/admin`, Réglages. L'horaire de la fiche se recopie à la main |
 | Bing Places | La fiche de la maison chez Bing (Bing Maps) | Importée de la fiche Google. On corrige la fiche Google, puis on touche « Synchronisation » dans Bing Places. Adresse masquée |
@@ -197,22 +197,6 @@ défaut du code. Changer une constante ne change rien en production
 
 À lui rappeler s'il en parle, sans insister.
 
-- **Twilio** (étapes données le 2 novembre, pas encore confirmées) :
-  1. numéro +1 450 367 6231, « A message comes in » : Webhook,
-     `https://www.nivexrepassage.ca/api/sms/incoming`, HTTP POST ;
-  2. « A call comes in » : un TwiML Bin qui transfère les appels vers son
-     cellulaire, `<Dial answerOnBridge="true" timeout="30">` ; ajouter
-     `callerId="+14503676231"` si son opérateur bloque l'appel transféré ;
-  3. un Messaging Service « NIVEX » avec ce numéro, « Incoming Messages »
-     laissé sur « Defer to sender's webhook », A2P 10DLC passé (États-Unis
-     seulement) ; noter l'identifiant `MG…` ;
-  4. chez Vercel, `TWILIO_MESSAGING_SERVICE_SID` = ce `MG…`, en Production
-     seulement, puis Redeploy ;
-  5. vérifier dans `/admin`, Connexion, État du système : « Texto de deux
-     heures avant » au vert ; un texto envoyé au numéro depuis un autre
-     téléphone doit arriver sur son cellulaire.
-  Une fois le transfert d'appels confirmé, l'inscrire dans `CLAUDE.md`
-  (section « Les textos »).
 - **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
   https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
@@ -317,6 +301,13 @@ a changé et vérifié.
   introuvable (vu avec `.mp4`).
 - **Les versions d'essai gardent Google et Twilio** : jamais de vraie
   réservation dessus.
+- **Un appel renvoyé qui échoue en 0 seconde** (ligne « Outgoing Dial »,
+  « Failed », dans les journaux d'appels de Twilio), le client entendant
+  « la communication n'a pas pu être établie » : les permissions
+  géographiques Voice n'autorisaient pas « United States and Canada »
+  (réglé le 6 novembre 2026). Les journaux d'appels et d'erreurs de la
+  console Twilio disent où un appel s'arrête ; Styve les envoie en
+  captures.
 - **Un texte à trous montre ses accolades** si un remplacement est oublié :
   `{duration}` est resté visible dans le tunnel d'abonnement du 22 octobre
   au 2 novembre 2026. Un test garde maintenant cette note dans les deux
