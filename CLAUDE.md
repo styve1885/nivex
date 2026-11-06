@@ -502,7 +502,11 @@ L'heure dite est toujours l'**arrivée** : le début de la séance, ou un quart
 d'heure plus tôt à l'ancien régime. Le texto de deux heures avant est
 **programmé chez Twilio** (`ScheduleType=fixed`), ce qui demande un service
 de messagerie (`TWILIO_MESSAGING_SERVICE_SID`) ; sans lui, il ne part pas,
-et rien d'autre ne change. Twilio accepte une échéance de quinze minutes à
+et rien d'autre ne change. Ce service, « NIVEX », existe depuis le
+6 novembre 2026 : le numéro pour seul expéditeur, et « Defer to sender's
+webhook » pour les messages entrants, si bien que les réponses des clients
+suivent le réglage du numéro. La variable n'est posée qu'en Production :
+les versions d'essai gardent les vraies clés Twilio. Twilio accepte une échéance de quinze minutes à
 trente-cinq jours ; on s'en tient à 36 heures : le texto se programme à la
 réservation si son heure d'envoi tombe dans ce délai, sinon par la tâche
 quotidienne, qui repasse avant. L'envoi est réservé en
@@ -525,6 +529,19 @@ message comes in » du numéro chez Twilio). La signature `X-Twilio-Signature`
 est vérifiée, le nom du client retrouvé par son numéro, et une instruction
 TwiML fait suivre le message au cellulaire de l'artisan. Rien n'est
 conservé : ni le texte, ni le numéro.
+
+Les **appels** au numéro NIVEX (+1 450 367 6231) ne passent pas par le
+code : un TwiML Bin de la console Twilio, « NIVEX - transfert », les
+renvoie au cellulaire de l'artisan (`PHONE`) avec
+`<Dial answerOnBridge="true" timeout="30" callerId="+14503676231">`. Le
+client entend sonner jusqu'à ce que l'artisan décroche, et le cellulaire
+affiche le numéro NIVEX. Le renvoi demande, dans les permissions
+géographiques Voice, « United States and Canada » : sans elles, jusqu'au
+6 novembre 2026, l'appel vers le cellulaire échouait en 0 seconde et le
+client entendait « la communication n'a pas pu être établie ». Le bin
+n'appelle qu'un numéro fixe : cette permission n'ouvre rien aux appels
+surtaxés. Pas d'adresse d'urgence sur le numéro : il n'appelle jamais le
+911.
 
 ## Zones et frais de déplacement
 
