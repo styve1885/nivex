@@ -6,7 +6,7 @@ import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
-import { smsConfigured, smsScheduleConfigured } from "@/lib/sms";
+import { ownerSmsNumber, smsConfigured, smsScheduleConfigured } from "@/lib/sms";
 import { getDict } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +82,9 @@ export default async function AdminPage({
         google: googleConfigured(),
         sms: smsConfigured(),
         smsSchedule: smsScheduleConfigured(),
+        /* Les quatre derniers chiffres seulement : de quoi reconnaître son
+           cellulaire sans l'écrire en entier dans la page. */
+        ownerCell: ownerSmsNumber()?.slice(-4) ?? null,
         origin: siteOrigin(),
       }}
       link={link}

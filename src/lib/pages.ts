@@ -42,12 +42,12 @@ export type PublicPage = {
    politique de confidentialité dit désormais (sa date, que les conditions
    affichent aussi, avance avec elle). */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-11-02", changeFrequency: "weekly", priority: 1 },
-  { path: "/tarifs", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/montreal", updated: "2026-11-01", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/presentation", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.6, video: true },
-  { path: "/conditions", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-02", changeFrequency: "yearly", priority: 0.3 },
+  { path: "", updated: "2026-11-06", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/presentation", updated: "2026-11-06", changeFrequency: "yearly", priority: 0.6, video: true },
+  { path: "/conditions", updated: "2026-11-06", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-06", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

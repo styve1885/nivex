@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureSchema, logEvent, sql } from "@/lib/db";
+import { logEvent } from "@/lib/db";
 import { siteOrigin } from "@/lib/google";
 import {
-  forwardedReply, isCanadianNumber, ownerSmsNumber, stopHint, toE164, TWIML_EMPTY, twilioSignatureValid, twimlForward,
+  forwardedReply, isCanadianNumber, knownClientName, ownerSmsNumber, stopHint, toE164, TWIML_EMPTY, twilioSignatureValid,
+  twimlForward,
 } from "@/lib/sms";
 
 export const runtime = "nodejs";
@@ -49,20 +50,7 @@ export async function POST(req: NextRequest) {
 
   /* Le nom du client, si on le connaît. Une base muette ne doit pas empêcher
      le message de passer : il part alors avec le numéro seul. */
-  let name: string | null = null;
-  try {
-    await ensureSchema();
-    const ten = from.slice(-10);
-    const rows = (await sql()`
-      SELECT client_name FROM (
-        SELECT client_name, client_phone, created_at FROM nivex_subscriptions
-        UNION ALL
-        SELECT client_name, client_phone, created_at FROM nivex_bookings
-      ) t
-      WHERE right(regexp_replace(client_phone, '\\D', '', 'g'), 10) = ${ten}
-      ORDER BY created_at DESC LIMIT 1`) as { client_name: string }[];
-    name = rows[0]?.client_name ?? null;
-  } catch { /* le numéro suffit */ }
+  const name = await knownClientName(from);
 
   /* Un « ARRÊT » ne désabonne pas chez Twilio : on dit au client le mot qui
      le fait. Jamais vers un numéro où l'on n'écrirait pas de toute façon. */

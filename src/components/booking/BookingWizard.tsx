@@ -552,7 +552,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               <Field label={t.booking.step2.email} value={email} onChange={setEmail} type="email" autoComplete="email"
                 error={touched.email ? errors.email : null} onBlur={() => setTouched((x) => ({ ...x, email: true }))} />
               <Field label={t.booking.step2.phone} value={phone} onChange={(v) => setPhone(formatPhone(v))}
-                type="tel" autoComplete="tel" placeholder="450 943-1217"
+                type="tel" autoComplete="tel" placeholder="514 555-0123"
                 error={touched.phone ? errors.phone : null} onBlur={() => setTouched((x) => ({ ...x, phone: true }))} />
               <Field label={t.booking.step2.city} value={city} onChange={setCity} autoComplete="address-level2"
                 error={touched.city ? errors.city : null} onBlur={() => setTouched((x) => ({ ...x, city: true }))} />

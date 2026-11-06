@@ -430,7 +430,7 @@ const base = {
   startsAt: new Date("2026-11-04T18:00:00Z"), durationMinutes: 120,
   estimateCents: 5000, currency: "CAD", firstHourFree: true,
   timezone: "America/Toronto", manageUrl: "https://x/fr/reservation/t",
-  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217",
+  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 514 555 0142",
   businessEmail: "nivexrepassage@gmail.com",
 };
 

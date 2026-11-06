@@ -24,7 +24,7 @@ const d: BookingEmailData = {
   timezone: "America/Toronto",
   manageUrl: "https://nivex-repassage.vercel.app/fr/reservation/exemple",
   siteUrl: "https://nivex-repassage.vercel.app",
-  businessPhone: "+1 450 943 1217",
+  businessPhone: "+1 450 367 6231",
   businessEmail: "contact@nivexrepassage.ca",
 };
 

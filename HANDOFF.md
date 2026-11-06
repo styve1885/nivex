@@ -163,7 +163,7 @@ avec des étapes qu'on lui donne.
 | Google Cloud (OAuth) | La connexion de l'espace artisan | URI de retour : `https://www.nivexrepassage.ca/api/auth/google/callback` |
 | Compte Google de l'artisan | Agenda des rendez-vous, envoi des courriels | Branché depuis `/admin`, onglet Connexion ; les avis internes vont à `REQUEST_INBOX` |
 | ImprovMX et OVH | `contact@nivexrepassage.ca` (`CONTACT_EMAIL`), renvoyé vers le Gmail de l'artisan | Domaine acheté chez OVH ; MX et SPF dans sa zone DNS. L'adresse ne reçoit rien elle-même |
-| Twilio | Les textos et les appels du +1 450 367 6231 | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308). Appels renvoyés au cellulaire par le TwiML Bin « NIVEX - transfert ». Service de messagerie « NIVEX » pour le texto de deux heures avant. Permissions géographiques : textos au Canada seulement, appels « United States and Canada » (`CLAUDE.md`, « Les textos ») |
+| Twilio | Les textos et les appels du +1 450 367 6231, le numéro de la maison (`PHONE`) | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308). Appels : webhook `/api/voice/incoming` en méthode principale, TwiML Bin « NIVEX - transfert » en secours. Service de messagerie « NIVEX » pour le texto de deux heures avant. Permissions géographiques : textos au Canada seulement, appels « United States and Canada » (`CLAUDE.md`, « Les textos ») |
 | Search Console, Bing Webmaster Tools | Indexation | Propriété www validée (`GOOGLE_SITE_VERIFICATION`) ; plans du site lus |
 | Fiche Google (Business Profile) | La fiche de la maison, les avis | `GOOGLE_MAPS_URL` (identifiant `cid`). Le lien d'avis se colle dans `/admin`, Réglages. L'horaire de la fiche se recopie à la main |
 | Bing Places | La fiche de la maison chez Bing (Bing Maps) | Importée de la fiche Google. On corrige la fiche Google, puis on touche « Synchronisation » dans Bing Places. Adresse masquée |
@@ -199,6 +199,23 @@ défaut du code. Changer une constante ne change rien en production
 
 - **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
   https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation.
+- **Le numéro de la maison et l'alerte d'appel manqué** (code mis en ligne
+  le 6 novembre 2026), à faire dans l'ordre :
+  1. dans `/admin`, Connexion : « Votre cellulaire, qui finit par … » au
+     vert, et le texto de test reçu sur son cellulaire. Sinon, poser
+     `SMS_OWNER_TO` chez Vercel (Production), puis Redeploy ;
+  2. chez Twilio, onglet « Voice and emergency address » du numéro :
+     méthode principale « Webhook »,
+     `https://www.nivexrepassage.ca/api/voice/incoming`, HTTP POST ; méthode
+     de secours « TwiML Bin », « NIVEX - transfert » ;
+  3. deux essais depuis un autre téléphone : un appel répondu, puis un
+     appel laissé sonner (message d'absence, texto « appel manqué »). Si sa
+     boîte vocale décroche avant la fin de la sonnerie, raccourcir
+     `RING_SECONDS` (`lib/voice.ts`) ;
+  4. le nouveau numéro sur la fiche Google, puis « Synchronisation » dans
+     Bing Places, sur Facebook et Instagram, et dans ses publicités.
+  La vidéo de présentation dit encore l'ancien numéro, qui sonne toujours
+  chez lui ; la changer demanderait de remonter sa fin.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -257,6 +274,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #28, #29 | 4 et 6 nov. 2026 | Passation : l'indexation, les fiches, Twilio réglé |
 | #27 | 2 nov. 2026 | Passation : banc d'essai local et ce document |
 | #26 | 2 nov. 2026 | Vidéo de présentation : accueil, page `/presentation`, VideoObject, lectures comptées |
 | #25 | 1er nov. 2026 | Horaire : samedi soir, une seule source, « et le samedi » ; note du tunnel d'abonnement réparée |
@@ -301,6 +319,10 @@ a changé et vérifié.
   introuvable (vu avec `.mp4`).
 - **Les versions d'essai gardent Google et Twilio** : jamais de vraie
   réservation dessus.
+- **Un numéro masqué chez Twilio** s'écrit en chiffres de clavier :
+  « +7378742833 » (RESTRICTED) passe pour un numéro d'ici si l'on retire le
+  « + ». `toE164`, fait pour les formulaires, l'accepterait : les appels
+  passent par `callerNumber`.
 - **Un appel renvoyé qui échoue en 0 seconde** (ligne « Outgoing Dial »,
   « Failed », dans les journaux d'appels de Twilio), le client entendant
   « la communication n'a pas pu être établie » : les permissions
