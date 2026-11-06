@@ -166,8 +166,15 @@ export const SOON_TEXT_MINUTES = 120;
 /** La signature des textos aux clients : le prénom de l'artisan. */
 export const SMS_SIGNATURE = "Styve";
 
-export const PHONE = "+1 450 943 1217";
-export const PHONE_HREF = "tel:+14509431217";
+/**
+ * Le numéro de la maison, celui que voient les clients partout : le numéro
+ * de Twilio, depuis le 6 novembre 2026. Ses appels sonnent sur le cellulaire
+ * de l'artisan, ses textos lui sont relayés (CLAUDE.md, « Les textos »). Le
+ * cellulaire lui-même ne s'écrit nulle part dans le code : il vit dans
+ * SMS_OWNER_TO, chez Vercel.
+ */
+export const PHONE = "+1 450 367 6231";
+export const PHONE_HREF = "tel:+14503676231";
 
 export function contactEmail(): string {
   return CONTACT_EMAIL;

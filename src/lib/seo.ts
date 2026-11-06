@@ -155,7 +155,7 @@ export function notFoundMeta(locale: string): Metadata {
 /** Le nom de la maison dans les données structurées, dans les deux langues. */
 export const BUSINESS_NAME = "NIVEX Repassage à domicile";
 
-/** « +1-450-943-1217 » : le numéro, au format international des fiches. */
+/** « +1-450-367-6231 » : le numéro, au format international des fiches. */
 export function phoneSchema(): string {
   const d = PHONE.replace(/\D/g, "").slice(-10);
   return `+1-${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;

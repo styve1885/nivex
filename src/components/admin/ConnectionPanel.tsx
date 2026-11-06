@@ -13,7 +13,7 @@ export function ConnectionPanel({
 }: {
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
-  env: { database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; origin: string };
+  env: { database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string };
   link: GoogleLink;
   missingScopes: string[];
 }) {
@@ -275,6 +275,18 @@ export function ConnectionPanel({
               avec cette adresse :
             </p>
             <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/sms/incoming</code>
+            <p className="mt-5 text-ink-700">Les appels</p>
+            <p className="mt-1">
+              Pour que les appels au numéro de la maison sonnent sur votre cellulaire, et qu&apos;un appel manqué vous
+              arrive par texto avec le numéro de la personne, ouvrez votre numéro dans la console Twilio, onglet
+              « Voice and emergency address ». Méthode principale : « Webhook », méthode HTTP POST, avec cette
+              adresse :
+            </p>
+            <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/voice/incoming</code>
+            <p className="mt-2">
+              Méthode de secours : « TwiML Bin », « NIVEX - transfert ». Elle fait sonner votre cellulaire si le site
+              ne répond pas.
+            </p>
             <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
             <p className="mt-1">
               {env.smsSchedule
@@ -296,6 +308,11 @@ export function ConnectionPanel({
             fail={link.reason ? `Google refuse le jeton (${link.reason}) — reconnectez le compte` : "Jeton inutilisable — reconnectez le compte"} />
           <Check ok={!settings.paused} label="Réservations ouvertes" fail="Réservations suspendues (onglet Réglages)" />
           <Check ok={env.sms} label="Textos (Twilio)" fail="Clés Twilio absentes — seuls les courriels partent" />
+          {env.sms && (
+            <Check ok={Boolean(env.ownerCell)}
+              label={env.ownerCell ? `Votre cellulaire, qui finit par ${env.ownerCell}` : "Votre cellulaire"}
+              fail="SMS_OWNER_TO absente, ou égale au numéro de la maison — vos avis, les réponses des clients et les alertes d'appel ne vous parviennent pas" />
+          )}
           {env.sms && (
             <Check ok={env.smsSchedule} label="Texto de deux heures avant"
               fail="Service de messagerie Twilio absent (TWILIO_MESSAGING_SERVICE_SID) — ce texto ne part pas" />

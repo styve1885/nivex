@@ -12,7 +12,10 @@ const {
   twilioSignatureValid, twimlForward, forwardedReply, stopHint, scheduleSms, cancelScheduledSms, smsScheduleConfigured,
 } = await import("../src/lib/sms.ts");
 const { fromWall } = await import("../src/lib/time.ts");
-const { SMS_SIGNATURE } = await import("../src/lib/brand.ts");
+const { SMS_SIGNATURE, PHONE } = await import("../src/lib/brand.ts");
+const {
+  twimlRingOwner, twimlMissedMessage, missedCallAlert, callMissed, callerNumber, MISSED_MESSAGE, RING_SECONDS,
+} = await import("../src/lib/voice.ts");
 
 const TZ = "America/Toronto";
 const flat = (x) => x.replace(/[   ]/g, " ");
@@ -22,22 +25,22 @@ const test = async (name, fn) => { await fn(); n++; console.log(`  ✓ ${name}`)
 console.log("\nTextos\n");
 
 await test("les numéros saisis au formulaire se ramènent au format E.164", () => {
-  assert.equal(toE164("450 943-1217"), "+14509431217");
-  assert.equal(toE164("(450) 943 1217"), "+14509431217");
-  assert.equal(toE164("+1 450 943 1217"), "+14509431217");
+  assert.equal(toE164("514 555-0142"), "+15145550142");
+  assert.equal(toE164("(514) 555 0142"), "+15145550142");
+  assert.equal(toE164("+1 514 555 0142"), "+15145550142");
   assert.equal(toE164("1-514-555-0101"), "+15145550101");
 });
 
 await test("ce qui n'est pas un numéro nord-américain est refusé", () => {
-  assert.equal(toE164("943-1217"), null);          // sept chiffres
-  assert.equal(toE164("050 943 1217"), null);      // indicatif impossible
+  assert.equal(toE164("555-0142"), null);          // sept chiffres
+  assert.equal(toE164("050 555 0142"), null);      // indicatif impossible
   assert.equal(toE164("+33 6 12 34 56 78"), null);
   assert.equal(toE164(""), null);
   assert.equal(toE164(null), null);
 });
 
 await test("on n'écrit qu'aux numéros canadiens : ni les Caraïbes, ni les États-Unis", () => {
-  for (const ok of ["450 943-1217", "514 555-0101", "438 555-0101", "613 555-0101", "604 555-0101"]) {
+  for (const ok of ["514 555-0142", "514 555-0101", "438 555-0101", "613 555-0101", "604 555-0101"]) {
     assert.equal(isCanadianNumber(toE164(ok)), true, ok);
   }
   /* Jamaïque, République dominicaine, Antigua, îles Turques-et-Caïques, New York. */
@@ -47,12 +50,69 @@ await test("on n'écrit qu'aux numéros canadiens : ni les Caraïbes, ni les Ét
   assert.equal(isCanadianNumber("+33612345678"), false);
 });
 
-await test("l'artisan reçoit ses textos sur le numéro de la maison, sauf SMS_OWNER_TO", () => {
+await test("l'artisan reçoit ses textos sur SMS_OWNER_TO seulement, jamais sur le numéro de la maison", () => {
+  /* Le numéro de la maison est celui de Twilio depuis le 6 novembre 2026 :
+     il ne sert plus de repli, il ne peut pas s'écrire à lui-même. */
   delete process.env.SMS_OWNER_TO;
-  assert.equal(ownerSmsNumber(), "+14509431217");
+  assert.equal(ownerSmsNumber(), null);
   process.env.SMS_OWNER_TO = "514 555-0199";
   assert.equal(ownerSmsNumber(), "+15145550199");
+  process.env.SMS_OWNER_TO = PHONE;
+  assert.equal(ownerSmsNumber(), null, "le numéro de la maison n'est pas un cellulaire");
+  process.env.TWILIO_FROM = "+14385550000";
+  process.env.SMS_OWNER_TO = "438 555-0000";
+  assert.equal(ownerSmsNumber(), null, "ni le numéro d'envoi de Twilio");
+  delete process.env.TWILIO_FROM;
+  process.env.SMS_OWNER_TO = "pas un numéro";
+  assert.equal(ownerSmsNumber(), null);
   delete process.env.SMS_OWNER_TO;
+});
+
+await test("les appels : le cellulaire sonne sous le numéro de la maison, puis l'action dit le sort de l'appel", () => {
+  const xml = twimlRingOwner({ owner: "+15145550199", callerId: "+14503676231", action: "https://www.nivexrepassage.ca/api/voice/missed" });
+  assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?><Response><Dial /);
+  assert.match(xml, new RegExp(`timeout="${RING_SECONDS}"`));
+  assert.ok(RING_SECONDS >= 15 && RING_SECONDS <= 22, "la sonnerie s'arrête avant la boîte vocale de l'opérateur");
+  assert.match(xml, /answerOnBridge="true"/);
+  assert.match(xml, /callerId="\+14503676231"/);
+  assert.match(xml, /action="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/missed" method="POST"/);
+  assert.match(xml, /<Number>\+15145550199<\/Number><\/Dial><\/Response>$/);
+  /* Rien ne s'injecte dans l'instruction. */
+  assert.ok(!twimlRingOwner({ owner: "<x>", callerId: "\"y", action: "a&b" }).includes("<x>"));
+  assert.equal(callMissed("completed"), false);
+  for (const s of ["no-answer", "busy", "failed", "canceled", undefined, null, ""]) assert.equal(callMissed(s), true, String(s));
+});
+
+await test("l'appelant entend un message d'absence en français puis en anglais, sans boîte vocale", () => {
+  const xml = twimlMissedMessage();
+  assert.match(xml, /<Say language="fr-CA" voice="Polly\.Chantal">Bonjour, vous avez joint NIVEX/);
+  assert.match(xml, /<Say language="en-US" voice="Polly\.Joanna">Hello, you have reached NIVEX/);
+  assert.match(xml, /<Hangup\/><\/Response>$/);
+  assert.ok(!xml.includes("<Record"), "rien n'est enregistré");
+  for (const m of Object.values(MISSED_MESSAGE)) {
+    assert.ok(!m.includes("!"), m);
+    assert.match(m, /nivexrepassage\.ca/);
+  }
+});
+
+await test("l'alerte d'appel manqué donne le nom, le numéro et l'heure de Montréal, en alphabet des textos", () => {
+  const at = fromWall({ year: 2026, month: 11, day: 6, hour: 14, minute: 5 }, TZ);
+  assert.equal(missedCallAlert({ from: "+15145550123", name: "Marie Tremblay", at, tz: TZ }),
+    "NIVEX : appel manqué de Marie Tremblay (514 555-0123), à 14 h 05.");
+  assert.equal(missedCallAlert({ from: "+15145550123", name: null, at, tz: TZ }),
+    "NIVEX : appel manqué du 514 555-0123, à 14 h 05.");
+  assert.equal(missedCallAlert({ from: null, name: null, at, tz: TZ }),
+    "NIVEX : appel manqué d'un numéro masqué, à 14 h 05.");
+  /* Un nom hors de l'alphabet des textos perd ses accents, comme les autres avis de l'artisan. */
+  assert.equal(missedCallAlert({ from: "+15145550123", name: "Françoise Côté", at, tz: TZ }),
+    "NIVEX : appel manqué de Francoise Coté (514 555-0123), à 14 h 05.");
+  /* Un numéro masqué arrive en chiffres de clavier : il reste masqué. RESTRICTED
+     (+7378742833) ressemble à un numéro d'ici une fois le « + » retiré. */
+  for (const hidden of ["+266696687", "anonymous", "+7378742833", "+2562533", "+86282452253", "", undefined]) {
+    assert.equal(callerNumber(hidden), null, String(hidden));
+  }
+  assert.equal(callerNumber("+15145550123"), "+15145550123");
+  assert.equal(callerNumber("5145550123"), null, "Twilio donne toujours le +1");
 });
 
 const when = smsWhen(fromWall({ year: 2026, month: 10, day: 20, hour: 14, minute: 0 }, TZ), TZ, "fr");
@@ -159,7 +219,7 @@ await test("aucun point d'exclamation, et chaque texto signé NIVEX", () => {
 await test("sans clés Twilio, rien ne part et rien ne lève", async () => {
   delete process.env.TWILIO_ACCOUNT_SID;
   assert.equal(smsConfigured(), false);
-  assert.equal(await sendSms("450 943-1217", "essai"), false);
+  assert.equal(await sendSms("514 555-0142", "essai"), false);
 });
 
 await test("avec les clés, le texto part vers Twilio au bon format", async () => {
@@ -171,17 +231,17 @@ await test("avec les clés, le texto part vers Twilio au bon format", async () =
     return new Response(JSON.stringify({ sid: "SM1" }), { status: 201 });
   };
   try {
-    assert.equal(await sendSms("450 943-1217", "NIVEX : essai"), true);
+    assert.equal(await sendSms("514 555-0142", "NIVEX : essai"), true);
     assert.equal(calls[0].url, "https://api.twilio.com/2010-04-01/Accounts/AC123/Messages.json");
     const body = new URLSearchParams(calls[0].init.body.toString());
-    assert.equal(body.get("To"), "+14509431217");
+    assert.equal(body.get("To"), "+15145550142");
     assert.equal(body.get("From"), "+14385550000");
     assert.equal(body.get("Body"), "NIVEX : essai");
     assert.equal(calls[0].init.headers.authorization, `Basic ${Buffer.from("AC123:jeton").toString("base64")}`);
 
     /* Un refus de Twilio ne lève pas : il rend faux. */
     globalThis.fetch = async () => new Response(JSON.stringify({ code: 21608, message: "unverified" }), { status: 400 });
-    assert.equal(await sendSms("450 943-1217", "NIVEX : essai"), false);
+    assert.equal(await sendSms("514 555-0142", "NIVEX : essai"), false);
     /* Un numéro invalide n'appelle même pas Twilio. */
     let called = false;
     globalThis.fetch = async () => { called = true; return new Response("{}", { status: 201 }); };
@@ -208,11 +268,11 @@ await test("le texto de deux heures avant se programme chez Twilio par le servic
   try {
     /* Sans service de messagerie, rien n'est programmé, et Twilio n'est pas appelé. */
     assert.equal(smsScheduleConfigured(), false);
-    assert.deepEqual(await scheduleSms("450 943-1217", "NIVEX - essai", t14), { sid: null, retry: true });
+    assert.deepEqual(await scheduleSms("514 555-0142", "NIVEX - essai", t14), { sid: null, retry: true });
     assert.equal(calls.length, 0);
 
     process.env.TWILIO_MESSAGING_SERVICE_SID = "MG1";
-    const r = await scheduleSms("450 943-1217", "NIVEX - Je serai chez vous à 14 h. Styve", t14);
+    const r = await scheduleSms("514 555-0142", "NIVEX - Je serai chez vous à 14 h. Styve", t14);
     assert.deepEqual(r, { sid: "SM0123456789abcdef0123456789abcdef", retry: false });
     const body = new URLSearchParams(calls[0].init.body.toString());
     assert.equal(body.get("MessagingServiceSid"), "MG1");
@@ -223,7 +283,7 @@ await test("le texto de deux heures avant se programme chez Twilio par le servic
     /* Un numéro étranger ne se réessaie pas ; un refus de Twilio, si. */
     assert.deepEqual(await scheduleSms("876 555 0123", "x", t14), { sid: null, retry: false });
     globalThis.fetch = async () => new Response(JSON.stringify({ code: 35111 }), { status: 400 });
-    assert.deepEqual(await scheduleSms("450 943-1217", "x", t14), { sid: null, retry: true });
+    assert.deepEqual(await scheduleSms("514 555-0142", "x", t14), { sid: null, retry: true });
 
     globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response("{}", { status: 200 }); };
     assert.equal(await cancelScheduledSms("SM0123456789abcdef0123456789abcdef"), true);
@@ -280,10 +340,10 @@ await test("« ARRÊT » ne désabonne pas chez Twilio : l'artisan n'est pas tro
 });
 
 await test("l'instruction TwiML échappe le texte du client", () => {
-  const x = twimlForward("+14509431217", "Bonjour <b> & \"merci\"");
-  assert.equal(x, '<?xml version="1.0" encoding="UTF-8"?><Response><Message to="+14509431217">Bonjour &lt;b&gt; &amp; &quot;merci&quot;</Message></Response>');
+  const x = twimlForward("+15145550142", "Bonjour <b> & \"merci\"");
+  assert.equal(x, '<?xml version="1.0" encoding="UTF-8"?><Response><Message to="+15145550142">Bonjour &lt;b&gt; &amp; &quot;merci&quot;</Message></Response>');
   /* Avec une réponse au client : un second message, sans destinataire, qui revient à l'expéditeur. */
-  const y = twimlForward("+14509431217", "NIVEX : réponse", stopHint("ARRÊT"));
+  const y = twimlForward("+15145550142", "NIVEX : réponse", stopHint("ARRÊT"));
   assert.match(y, /<\/Message><Message>NIVEX : pour ne plus recevoir de textos, répondez STOP\.<\/Message><\/Response>$/);
 });
 

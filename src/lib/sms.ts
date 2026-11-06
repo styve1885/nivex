@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { logEvent } from "./db";
+import { ensureSchema, logEvent, sql } from "./db";
 import { PHONE, SMS_SIGNATURE } from "./brand";
 import { toWall } from "./time";
 
@@ -12,8 +12,10 @@ import { toWall } from "./time";
  * journal et la maison continue.
  *
  * Trois variables : TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (le
- * numéro acheté chez Twilio). Une quatrième, facultative, SMS_OWNER_TO, dit
- * où l'artisan reçoit les siens ; sans elle, le numéro de la maison. Une
+ * numéro acheté chez Twilio, qui est aussi le numéro de la maison). Une
+ * quatrième, SMS_OWNER_TO, est le cellulaire de l'artisan : ses avis, les
+ * réponses des clients et les appels y arrivent ; sans elle, rien de tout
+ * cela ne lui parvient, et l'onglet Connexion le dit. Une
  * cinquième, TWILIO_MESSAGING_SERVICE_SID, ouvre les textos programmés : le
  * « je serai chez vous » de deux heures avant. Twilio ne programme un envoi
  * que par un service de messagerie, jamais depuis un simple numéro.
@@ -29,9 +31,9 @@ export function smsScheduleConfigured(): boolean {
 }
 
 /**
- * Un numéro nord-américain au format E.164, « +14509431217 », ou rien.
+ * Un numéro nord-américain au format E.164, « +15145550123 », ou rien.
  *
- * Le formulaire accepte « 450 943-1217 », « (450) 943 1217 » ou « +1 450… » :
+ * Le formulaire accepte « 514 555-0123 », « (514) 555 0123 » ou « +1 514… » :
  * on garde les chiffres, on retire l'indicatif 1 s'il y est, et il doit en
  * rester dix. Ce qui ne s'y ramène pas n'est pas un numéro où écrire.
  * Qu'il soit canadien se vérifie à part, au moment d'écrire.
@@ -65,9 +67,19 @@ export function isCanadianNumber(e164: string): boolean {
   return /^\+1\d{10}$/.test(e164) && CANADA.has(e164.slice(2, 5));
 }
 
-/** Le numéro où l'artisan reçoit ses textos. */
+/**
+ * Le cellulaire de l'artisan : SMS_OWNER_TO, et rien d'autre.
+ *
+ * Jusqu'au 6 novembre 2026, le numéro de la maison (PHONE) servait de repli :
+ * c'était le cellulaire. C'est désormais le numéro de Twilio, qui ne peut pas
+ * s'écrire à lui-même, et vers lequel un appel renvoyé tournerait en rond.
+ * Une variable absente, ou qui désigne ce numéro, ne rend donc rien : les avis
+ * de l'artisan ne partent pas, et l'onglet Connexion le signale.
+ */
 export function ownerSmsNumber(): string | null {
-  return toE164(process.env.SMS_OWNER_TO || PHONE);
+  const own = toE164(process.env.SMS_OWNER_TO);
+  if (!own) return null;
+  return own === toE164(process.env.TWILIO_FROM) || own === toE164(PHONE) ? null : own;
 }
 
 /**
@@ -341,7 +353,8 @@ export function twilioSignatureValid(
   });
 }
 
-function xml(s: string): string {
+/** Un texte sûr dans une instruction TwiML, attribut compris. */
+export function xmlEscape(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!);
 }
 
@@ -353,8 +366,8 @@ export const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Re
  * l'expéditeur — et, s'il y a lieu, un second vers l'expéditeur lui-même.
  */
 export function twimlForward(to: string, body: string, reply?: string | null): string {
-  const back = reply ? `<Message>${xml(reply)}</Message>` : "";
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message to="${xml(to)}">${xml(body)}</Message>${back}</Response>`;
+  const back = reply ? `<Message>${xmlEscape(reply)}</Message>` : "";
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message to="${xmlEscape(to)}">${xmlEscape(body)}</Message>${back}</Response>`;
 }
 
 /**
@@ -377,9 +390,34 @@ export function stopHint(body: string): string | null {
 }
 
 /** « +1 450 555 0222 » — lisible sur un téléphone. */
-function readable(e164: string): string {
+/** « 514 555-0123 » : un numéro tel qu'on le lit et qu'on le rappelle. */
+export function readable(e164: string): string {
   const d = e164.replace(/\D/g, "").slice(-10);
   return d.length === 10 ? `${d.slice(0, 3)} ${d.slice(3, 6)}-${d.slice(6)}` : e164;
+}
+
+/**
+ * Le nom de la personne qui porte ce numéro, si elle a déjà réservé ou
+ * souscrit ; sinon rien. Les dix derniers chiffres suffisent : « 514 555-0123 »
+ * et « +1 (514) 5550123 » se rejoignent. Une base muette ne bloque rien : le
+ * numéro seul suffit à rappeler.
+ */
+export async function knownClientName(e164: string): Promise<string | null> {
+  try {
+    await ensureSchema();
+    const ten = e164.slice(-10);
+    const rows = (await sql()`
+      SELECT client_name FROM (
+        SELECT client_name, client_phone, created_at FROM nivex_subscriptions
+        UNION ALL
+        SELECT client_name, client_phone, created_at FROM nivex_bookings
+      ) t
+      WHERE right(regexp_replace(client_phone, '\\D', '', 'g'), 10) = ${ten}
+      ORDER BY created_at DESC LIMIT 1`) as { client_name: string }[];
+    return rows[0]?.client_name ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

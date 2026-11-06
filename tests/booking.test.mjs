@@ -48,7 +48,7 @@ const d = {
   locale: "fr",
   clientName: "Claire Beaulieu",
   clientEmail: "claire@example.com",
-  clientPhone: "450 943-1217",
+  clientPhone: "514 555-0142",
   address: "88 rue Saint-Charles Ouest, app. 3",
   city: "Longueuil",
   postalCode: "J4H 1C6",
@@ -114,7 +114,7 @@ test("une heure du matin s'écrit sans zéro de tête, en français comme en ang
 
 test("l'artisan reçoit de quoi se déplacer et de quoi appeler", () => {
   const m = ownerNotification(d);
-  for (const bit of ["Claire Beaulieu", "450 943-1217", "claire@example.com",
+  for (const bit of ["Claire Beaulieu", "514 555-0142", "claire@example.com",
                      "88 rue Saint-Charles Ouest", "samedi 3 octobre 2026", "NVX-ABC123"]) {
     assert.ok(flat(m.text).includes(bit), `texte : « ${bit} » manquant`);
   }
@@ -490,7 +490,7 @@ test("l'invitation ne montre ni la provenance ni l'espace artisan", () => {
 test("l'invitation se lit dans la langue du client, l'artisan y garde ses repères", () => {
   const fr = calendarEvent(booking, origin, TZ);
   assert.match(fr.summary, /Repassage à domicile · Claire Beaulieu/);
-  for (const bit of ["Séance : samedi 3 octobre 2026", "450 943-1217", "Chemises × 6",
+  for (const bit of ["Séance : samedi 3 octobre 2026", "514 555-0142", "Chemises × 6",
                      "Frais de déplacement (Zone B) : 15 $", "Total estimé : 65 $", "Référence : NVX-ABC123",
                      `${origin}/fr/reservation/tok123`]) {
     assert.ok(flat(fr.description).includes(bit), `fr : « ${bit} » manquant`);

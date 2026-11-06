@@ -1824,7 +1824,7 @@ export async function releaseClientChange(id: string | null): Promise<void> {
  */
 export const ONLINE_SUBSCRIPTIONS_PER_DAY = 4;
 
-/** Les dix derniers chiffres d'un numéro, l'indicatif 1 retiré : « 450 943-1217 » et « +1 (450) 9431217 » se rejoignent. */
+/** Les dix derniers chiffres d'un numéro, l'indicatif 1 retiré : « 514 555-0123 » et « +1 (514) 5550123 » se rejoignent. */
 export function phoneKey(phone: string): string | null {
   const d = phone.replace(/\D/g, "");
   const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;

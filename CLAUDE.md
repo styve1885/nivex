@@ -179,6 +179,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
+| `lib/voice.ts` | Les appels au numéro de la maison : sonnerie du cellulaire, message d'absence, alerte d'appel manqué |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : en-tête de chaque page (titre, description, canonique, hreflang), fiche LocalBusiness, site, FAQ structurée |
 | `lib/i18n/seo.ts` | Le titre et la description de chaque page, dans les deux langues, hors des dictionnaires |
 | `lib/pages.ts` | Les pages publiques et la date de leur dernière modification : plan du site et IndexNow |
@@ -484,7 +485,18 @@ nom.
 Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client reçoit la confirmation
 (séance ou abonnement), le rappel de la veille, et toute annulation ou tout
 déplacement ; l'artisan, chaque nouvelle réservation et ce que le client
-annule ou déplace lui-même, sur `SMS_OWNER_TO` ou, à défaut, `PHONE`.
+annule ou déplace lui-même, sur `SMS_OWNER_TO`, son cellulaire, et nulle
+part ailleurs (`ownerSmsNumber`).
+
+**Le numéro de la maison** (`PHONE`, +1 450 367 6231) est celui de Twilio
+depuis le 6 novembre 2026 : il paraît partout, pages, courriels, textos,
+fiche lue par Google, `/llms.txt`. Le cellulaire de l'artisan ne s'écrit
+nulle part dans le code, seulement dans `SMS_OWNER_TO` chez Vercel ; il ne
+sert plus de repli, puisque Twilio ne peut pas s'écrire à lui-même, et une
+variable absente, ou égale au numéro de la maison, se lit comme absente.
+L'onglet Connexion le dit (« Votre cellulaire, qui finit par … »). Seule la
+vidéo de présentation cite encore l'ancien numéro, le cellulaire : sa
+transcription est mot pour mot, et elle le reste.
 
 Un texto **double** le courriel, il ne le remplace pas : il ne fait jamais
 échouer une réservation, et un compte Google débranché ne l'empêche pas de
@@ -530,18 +542,31 @@ est vérifiée, le nom du client retrouvé par son numéro, et une instruction
 TwiML fait suivre le message au cellulaire de l'artisan. Rien n'est
 conservé : ni le texte, ni le numéro.
 
-Les **appels** au numéro NIVEX (+1 450 367 6231) ne passent pas par le
-code : un TwiML Bin de la console Twilio, « NIVEX - transfert », les
-renvoie au cellulaire de l'artisan (`PHONE`) avec
-`<Dial answerOnBridge="true" timeout="30" callerId="+14503676231">`. Le
-client entend sonner jusqu'à ce que l'artisan décroche, et le cellulaire
-affiche le numéro NIVEX. Le renvoi demande, dans les permissions
-géographiques Voice, « United States and Canada » : sans elles, jusqu'au
-6 novembre 2026, l'appel vers le cellulaire échouait en 0 seconde et le
-client entendait « la communication n'a pas pu être établie ». Le bin
-n'appelle qu'un numéro fixe : cette permission n'ouvre rien aux appels
-surtaxés. Pas d'adresse d'urgence sur le numéro : il n'appelle jamais le
-911.
+Les **appels** au numéro de la maison arrivent sur `/api/voice/incoming`
+(réglage « A call comes in » du numéro, méthode principale, signature
+vérifiée), qui fait sonner le cellulaire de l'artisan sous le numéro de la
+maison (`lib/voice.ts`). La sonnerie dure `RING_SECONDS` (20), moins que la
+boîte vocale de l'opérateur : si elle décrochait la première, l'appel
+compterait comme répondu. Sans réponse, refusé ou échoué, Twilio passe à
+`/api/voice/missed` : l'appelant entend un court message d'absence, en
+français puis en anglais, sans boîte vocale, et l'artisan reçoit un texto
+« appel manqué de … » avec le numéro, le nom s'il est déjà client, et
+l'heure. Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
+RESTRICTED, ressemble à un numéro d'ici) : `callerNumber` n'accepte qu'un
+« +1 » suivi de dix chiffres. Au-delà de `MISSED_ALERTS_PER_HOUR` (20)
+alertes dans l'heure, les suivantes ne partent pas. Le journal note le sort
+de l'appel, jamais le numéro, et le site n'en garde rien (la politique le
+dit). Sans `SMS_OWNER_TO`, la route répond 503 et Twilio passe à la méthode
+de secours du numéro : le TwiML Bin « NIVEX - transfert »
+(`<Dial answerOnBridge="true" timeout="30" callerId="+14503676231">` vers le
+cellulaire), qui sonne comme avant, sans alerte.
+
+Le renvoi demande, dans les permissions géographiques Voice, « United
+States and Canada » : sans elles, jusqu'au 6 novembre 2026, l'appel vers le
+cellulaire échouait en 0 seconde, et le client entendait « la communication
+n'a pas pu être établie ». Seul le cellulaire est appelé : cette permission
+n'ouvre rien aux appels surtaxés. Pas d'adresse d'urgence sur le numéro :
+il n'appelle jamais le 911.
 
 ## Zones et frais de déplacement
 
@@ -847,7 +872,8 @@ date dans `LEGAL_UPDATED`.
 toujours `SITE_URL`), `CRON_SECRET` (ouvre la tâche quotidienne et
 `/api/indexnow` ; la même valeur, en secret du dépôt GitHub, sert au
 workflow IndexNow), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-`TWILIO_FROM` (les textos). Facultatives : `SMS_OWNER_TO`,
+`TWILIO_FROM` (les textos), `SMS_OWNER_TO` (le cellulaire de l'artisan :
+sans elle, ni avis, ni réponses relayées, ni alertes d'appel). Facultatives :
 `TWILIO_MESSAGING_SERVICE_SID` (le texto de deux heures avant),
 `ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
 `.env.example`.
@@ -868,7 +894,8 @@ pas.
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, durées,
 trois temps, séance d'essai, pièces à l'unité, foire aux questions),
-`sms` (modèles, numéros canadiens, alphabet), `provenance` (zone
+`sms` (modèles, numéros canadiens, alphabet, appels et alerte d'appel
+manqué), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan,
 lectures de la vidéo),
 `travel` (secteurs, zones, frais,

@@ -442,21 +442,21 @@ test("l'artisan ne peut pas entrer une prochaine visite déjà passée", () => {
 /* ————— Les garde-fous de l'abonnement en ligne ————— */
 
 test("un même téléphone ou une même adresse, écrits autrement, se reconnaissent", () => {
-  assert.equal(phoneKey("450 943-1217"), "4509431217");
-  assert.equal(phoneKey("+1 (450) 9431217"), "4509431217");
+  assert.equal(phoneKey("514 555-0142"), "5145550142");
+  assert.equal(phoneKey("+1 (514) 5550142"), "5145550142");
   assert.equal(phoneKey("abc"), null);
   assert.equal(addressKey("88, rue Saint-Édouard", "j4h 1c6"), addressKey("88 RUE SAINT-EDOUARD", "J4H1C6"));
   assert.notEqual(addressKey("88 rue Saint-Édouard", "J4H 1C6"), addressKey("90 rue Saint-Édouard", "J4H 1C6"));
 });
 
 test("un abonnement en ligne de plus est refusé : même téléphone, même adresse, ou trop pour la journée", () => {
-  const sub = (o) => ({ phone: "450 943-1217", address: "88 rue Saint-Charles Ouest", postalCode: "J4H 1C6", active: true, recent: false, ...o });
+  const sub = (o) => ({ phone: "514 555-0142", address: "88 rue Saint-Charles Ouest", postalCode: "J4H 1C6", active: true, recent: false, ...o });
   const ask = { phone: "514 555-0101", address: "12 rue Notre-Dame", postalCode: "J4P 2A1" };
   assert.equal(onlineSubscriptionRefused([sub()], ask), false);
-  assert.equal(onlineSubscriptionRefused([sub()], { ...ask, phone: "+1 450 943 1217" }), true);
+  assert.equal(onlineSubscriptionRefused([sub()], { ...ask, phone: "+1 514 555 0142" }), true);
   assert.equal(onlineSubscriptionRefused([sub()], { ...ask, address: "88, Rue Saint-Charles Ouest", postalCode: "j4h1c6" }), true);
   /* Un abonnement terminé ne retient ni le téléphone ni l'adresse. */
-  assert.equal(onlineSubscriptionRefused([sub({ active: false, recent: true })], { ...ask, phone: "450 943-1217" }), false);
+  assert.equal(onlineSubscriptionRefused([sub({ active: false, recent: true })], { ...ask, phone: "514 555-0142" }), false);
   const day = Array.from({ length: ONLINE_SUBSCRIPTIONS_PER_DAY }, (_, i) => sub({ phone: `450 555-01${10 + i}`, address: `${i} rue X`, recent: true }));
   assert.equal(onlineSubscriptionRefused(day.slice(1), ask), false);
   assert.equal(onlineSubscriptionRefused(day, ask), true);
@@ -485,12 +485,12 @@ test("fin d'abonnement, série renouvelée, visite replacée : un texto calme, s
 
 const base = {
   ref: "ABO-TEST01", locale: "fr", clientName: "Claire Beaulieu", clientEmail: "claire@example.com",
-  clientPhone: "450 943-1217", address: "88 rue Saint-Charles Ouest", city: "Longueuil", postalCode: "J4H 1C6",
+  clientPhone: "514 555-0142", address: "88 rue Saint-Charles Ouest", city: "Longueuil", postalCode: "J4H 1C6",
   planName: "VIP", perCycle: 4, everyWeeks: 1, minutesPerVisit: 120,
   visits: gridDates(gridFrom(at(2026, 11, 6), 1, TZ), 0, 24),
   planCents: 36000, travelCents: 4000, totalCents: 40000, feePerVisitCents: 1000, travelZone: "Quartiers de Montréal",
   currency: "CAD", timezone: TZ, manageUrl: "https://nivexrepassage.ca/fr/abonnement/abc",
-  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217", businessEmail: "contact@nivexrepassage.ca",
+  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 514 555 0142", businessEmail: "contact@nivexrepassage.ca",
 };
 
 test("la confirmation dit le rythme, la série, le montant du cycle et la règle de la veille", () => {

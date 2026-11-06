@@ -540,8 +540,8 @@ test("la réponse sur les zones le dit à l'accueil, et se tait si un quartier p
 
 console.log("\nCe que lisent les moteurs et les assistants");
 
-test("le numéro des fiches s'écrit +1-450-943-1217", () => {
-  assert.equal(phoneSchema(), "+1-450-943-1217");
+test("le numéro des fiches est celui de la maison, +1-450-367-6231", () => {
+  assert.equal(phoneSchema(), "+1-450-367-6231");
 });
 
 test("chaque page a son titre, qui commence par le nom de la maison, dans chaque langue", () => {
@@ -597,7 +597,7 @@ test("la fiche de la maison : un DryCleaningOrLaundry, son identité, ses lieux 
   assert.equal(ld.url, `${o}/fr`);
   assert.equal(ld.logo, `${o}/logo-nivex.png`);
   assert.equal(ld.image, `${o}/opengraph-image.jpg`);
-  assert.equal(ld.telephone, "+1-450-943-1217");
+  assert.equal(ld.telephone, "+1-450-367-6231");
   assert.equal(ld.email, CONTACT_EMAIL, "le courriel affiché sur le site");
   assert.deepEqual(ld.founder, {
     "@type": "Person", name: FOUNDER, sameAs: ["https://www.linkedin.com/in/styve-ketchandji-ngaleu-70a765362"],
@@ -1117,11 +1117,11 @@ test("llms.txt, version courte : le service, les zones, les prix, le contact et 
     "- Essentiel : 100 $ / cycle, 1 visite de 2 h", "- Premium : 150 $ / cycle, 1 visite de 3 h", "- Premium Plus : 200 $ / cycle",
     "- VIP : 400 $ / cycle", "- Prestige : 600 $ / cycle", "- Essential: $100 / cycle, one 2-hour visit",
     "## Séance d'essai", "Pour un premier essai : la séance de 2 heures, 110 $.",
-    "- Téléphone : +1 450 943 1217", "- Courriel : contact@nivexrepassage.ca",
+    "- Téléphone : +1 450 367 6231", "- Courriel : contact@nivexrepassage.ca",
     "/fr/tarifs)", "/fr/montreal)", "/fr/reserver)", "/fr/abonnement)", "/llms-full.txt)",
     "# NIVEX In-Home Ironing", "> NIVEX, in-home ironing in Montreal and on the South Shore",
     "## Areas served", "No travel fees in Montreal.", "- VIP: $400 / cycle, four 2-hour visits", "## Trial session",
-    "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 943 1217", "/en/tarifs)",
+    "For a first try: a session of 2 hours, $110.", "- Phone: +1 450 367 6231", "/en/tarifs)",
     "- Horaire : 7 h – 22 h, du lundi au samedi", "- Hours: 7 am – 10 pm, Monday to Saturday",
   ]) assert.ok(txt.includes(bit), `« ${bit} » manquant`);
   /* Deux langues, l'horaire et la présentation en vidéo compris : environ 4 Ko. */
@@ -1395,7 +1395,7 @@ const base = {
   startsAt: new Date("2026-11-04T18:00:00Z"), durationMinutes: 180,
   estimateCents: 10000, currency: "CAD", firstHourFree: true,
   timezone: "America/Toronto", manageUrl: "https://x/fr/reservation/t",
-  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 943 1217",
+  siteUrl: "https://nivexrepassage.ca", businessPhone: "+1 450 367 6231",
   businessEmail: "nivexrepassage@gmail.com",
 };
 const avec = { ...base, travelFeeCents: 1000, travelZone: "Zone B" };
