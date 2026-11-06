@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
  * POST /api/voice/missed — la fin de la sonnerie chez l'artisan.
  *
  * Twilio appelle cette adresse quand le cellulaire a fini de sonner (l'action
- * du <Dial> de /api/voice/incoming). Répondu : rien à faire. Sinon (sans
- * réponse, refusé, échoué, abandonné) : l'appelant entend le message
- * d'absence, et l'artisan reçoit un texto avec son numéro, et son nom s'il est
- * déjà client. Le journal note le sort de l'appel, jamais le numéro.
+ * du <Dial> de /api/voice/incoming). Relié à l'artisan : rien à faire. Sinon
+ * (sans réponse, refusé, échoué, abandonné, ou pris par une boîte vocale que
+ * le filtre a écartée) : l'appelant entend le message d'absence, et l'artisan
+ * reçoit un texto avec son numéro, et son nom s'il est déjà client. Le
+ * journal note le sort de l'appel, jamais le numéro.
  */
 export async function POST(req: NextRequest) {
   const got = await readTwilioWebhook(req, "/api/voice/missed");
@@ -25,7 +26,8 @@ export async function POST(req: NextRequest) {
   }
 
   const status = got.params.DialCallStatus ?? null;
-  if (!callMissed(status)) return twimlResponse(TWIML_EMPTY);
+  const bridged = got.params.DialBridged ?? null;
+  if (!callMissed(status, bridged)) return twimlResponse(TWIML_EMPTY);
 
   /* Un numéro masqué arrive en chiffres de clavier : il reste masqué dans
      l'alerte. */
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
     alerted = await sendSms(owner, missedCallAlert({ from, name, at: new Date(), tz: timezone }), "missed-call");
   }
 
-  await logEvent("missed_call", { status, known: Boolean(name), hidden: !from, alerted });
+  await logEvent("missed_call", { status, bridged, known: Boolean(name), hidden: !from, alerted });
   return twimlResponse(twimlMissedMessage());
 }
 

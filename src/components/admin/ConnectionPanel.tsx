@@ -287,6 +287,11 @@ export function ConnectionPanel({
               Méthode de secours : « TwiML Bin », « NIVEX - transfert ». Elle fait sonner votre cellulaire si le site
               ne répond pas.
             </p>
+            <p className="mt-2">
+              Quand vous décrochez, une voix annonce l&apos;appelant : appuyez sur une touche pour lui parler. Sans
+              touche, par exemple si votre boîte vocale répond, l&apos;appel compte comme manqué, et le texto
+              d&apos;alerte part.
+            </p>
             <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
             <p className="mt-1">
               {env.smsSchedule

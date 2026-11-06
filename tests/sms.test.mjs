@@ -15,6 +15,7 @@ const { fromWall } = await import("../src/lib/time.ts");
 const { SMS_SIGNATURE, PHONE } = await import("../src/lib/brand.ts");
 const {
   twimlRingOwner, twimlMissedMessage, missedCallAlert, callMissed, callerNumber, MISSED_MESSAGE, RING_SECONDS,
+  ACCEPT_SECONDS, callerKey, callerFromKey, spokenNumber, screenPrompt, twimlScreen, twimlAccept,
 } = await import("../src/lib/voice.ts");
 
 const TZ = "America/Toronto";
@@ -68,19 +69,48 @@ await test("l'artisan reçoit ses textos sur SMS_OWNER_TO seulement, jamais sur 
   delete process.env.SMS_OWNER_TO;
 });
 
-await test("les appels : le cellulaire sonne sous le numéro de la maison, puis l'action dit le sort de l'appel", () => {
-  const xml = twimlRingOwner({ owner: "+15145550199", callerId: "+14503676231", action: "https://www.nivexrepassage.ca/api/voice/missed" });
+await test("les appels : le cellulaire sonne sous le numéro de la maison, l'annonce filtre, l'action dit le sort", () => {
+  const xml = twimlRingOwner({
+    owner: "+15145550199", callerId: "+14503676231",
+    screen: "https://www.nivexrepassage.ca/api/voice/screen/15145550123",
+    action: "https://www.nivexrepassage.ca/api/voice/missed",
+  });
   assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?><Response><Dial /);
   assert.match(xml, new RegExp(`timeout="${RING_SECONDS}"`));
-  assert.ok(RING_SECONDS >= 15 && RING_SECONDS <= 22, "la sonnerie s'arrête avant la boîte vocale de l'opérateur");
-  assert.match(xml, /answerOnBridge="true"/);
+  assert.match(xml, /answerOnBridge="true"/, "le filtre l'exige : l'appelant entend sonner pendant l'annonce");
   assert.match(xml, /callerId="\+14503676231"/);
   assert.match(xml, /action="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/missed" method="POST"/);
-  assert.match(xml, /<Number>\+15145550199<\/Number><\/Dial><\/Response>$/);
+  assert.match(xml, /<Number url="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/screen\/15145550123" method="POST">\+15145550199<\/Number><\/Dial><\/Response>$/);
   /* Rien ne s'injecte dans l'instruction. */
-  assert.ok(!twimlRingOwner({ owner: "<x>", callerId: "\"y", action: "a&b" }).includes("<x>"));
-  assert.equal(callMissed("completed"), false);
-  for (const s of ["no-answer", "busy", "failed", "canceled", undefined, null, ""]) assert.equal(callMissed(s), true, String(s));
+  assert.ok(!twimlRingOwner({ owner: "<x>", callerId: "\"y", screen: "s", action: "a&b" }).includes("<x>"));
+  /* Manqué : tout ce qui n'a pas relié l'appelant à l'artisan, boîte vocale écartée comprise. */
+  assert.equal(callMissed("completed", "true"), false);
+  assert.equal(callMissed("completed", undefined), false, "sans DialBridged, un appel abouti compte comme répondu");
+  assert.equal(callMissed("completed", "false"), true, "une boîte vocale a décroché, personne n'a appuyé");
+  for (const st of ["no-answer", "busy", "failed", "canceled", undefined, null, ""]) assert.equal(callMissed(st), true, String(st));
+});
+
+await test("l'annonce dit qui appelle, chiffre par chiffre, et attend une touche ; une boîte vocale n'en tape aucune", () => {
+  assert.equal(callerKey("+15145550123"), "15145550123");
+  assert.equal(callerKey(null), "masque");
+  assert.equal(callerFromKey("15145550123"), "+15145550123");
+  for (const bad of ["masque", "", undefined, "1514555012", "25145550123", "15145550123x", "../admin"]) {
+    assert.equal(callerFromKey(bad), null, String(bad));
+  }
+  assert.equal(spokenNumber("+15145550123"), "5 1 4, 5 5 5, 0 1 2 3");
+  assert.equal(screenPrompt({ from: "+15145550123", name: "Marie Tremblay" }),
+    "Appel NIVEX de Marie Tremblay, 5 1 4, 5 5 5, 0 1 2 3. Appuyez sur une touche pour répondre.");
+  assert.equal(screenPrompt({ from: "+15145550123", name: null }),
+    "Appel NIVEX du 5 1 4, 5 5 5, 0 1 2 3. Appuyez sur une touche pour répondre.");
+  assert.equal(screenPrompt({ from: null, name: null }),
+    "Appel NIVEX d'un numéro masqué. Appuyez sur une touche pour répondre.");
+  const xml = twimlScreen({ prompt: "Appel NIVEX <test>", accept: "https://www.nivexrepassage.ca/api/voice/accept" });
+  assert.match(xml, new RegExp(`<Gather numDigits="1" timeout="${ACCEPT_SECONDS}" action="https://www\\.nivexrepassage\\.ca/api/voice/accept" method="POST">`));
+  assert.match(xml, /<Say language="fr-CA" voice="Polly\.Chantal">Appel NIVEX &lt;test&gt;<\/Say><\/Gather><Hangup\/><\/Response>$/,
+    "sans touche, on raccroche du côté du cellulaire");
+  assert.equal(twimlAccept("1"), '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', "une touche : on relie");
+  assert.equal(twimlAccept("#"), '<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  for (const none of ["", undefined, null, " "]) assert.match(twimlAccept(none), /<Hangup\/>/, String(none));
 });
 
 await test("l'appelant entend un message d'absence en français puis en anglais, sans boîte vocale", () => {

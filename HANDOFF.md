@@ -208,10 +208,10 @@ défaut du code. Changer une constante ne change rien en production
      méthode principale « Webhook »,
      `https://www.nivexrepassage.ca/api/voice/incoming`, HTTP POST ; méthode
      de secours « TwiML Bin », « NIVEX - transfert » ;
-  3. deux essais depuis un autre téléphone : un appel répondu, puis un
-     appel laissé sonner (message d'absence, texto « appel manqué »). Si sa
-     boîte vocale décroche avant la fin de la sonnerie, raccourcir
-     `RING_SECONDS` (`lib/voice.ts`) ;
+  3. deux essais depuis un autre téléphone : un appel décroché, l'annonce
+     écoutée, une touche pressée (les deux sont reliés) ; puis un appel
+     laissé sonner, ou repris par sa boîte vocale (message d'absence, texto
+     « appel manqué ») ;
   4. le nouveau numéro sur la fiche Google, puis « Synchronisation » dans
      Bing Places, sur Facebook et Instagram, et dans ses publicités.
   La vidéo de présentation dit encore l'ancien numéro, qui sonne toujours
