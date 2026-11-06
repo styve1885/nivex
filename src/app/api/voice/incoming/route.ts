@@ -4,7 +4,7 @@ import { logEvent } from "@/lib/db";
 import { siteOrigin } from "@/lib/google";
 import { ownerSmsNumber, toE164 } from "@/lib/sms";
 import { readTwilioWebhook, twimlResponse } from "@/lib/twilio-webhook";
-import { twimlRingOwner } from "@/lib/voice";
+import { callerKey, callerNumber, twimlRingOwner } from "@/lib/voice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
  *
  * Twilio appelle cette adresse à chaque appel (réglage « A call comes in » du
  * numéro, méthode principale). On lui répond de faire sonner le cellulaire de
- * l'artisan, sous le numéro de la maison ; s'il ne répond pas, Twilio passe à
- * /api/voice/missed. Rien n'est conservé de l'appelant.
+ * l'artisan, sous le numéro de la maison ; quand le cellulaire décroche,
+ * /api/voice/screen annonce l'appelant ; à la fin, /api/voice/missed dit si
+ * l'appel a été manqué. Rien n'est conservé de l'appelant.
  */
 export async function POST(req: NextRequest) {
   const got = await readTwilioWebhook(req, "/api/voice/incoming");
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   const callerId = toE164(got.params.To) ?? toE164(process.env.TWILIO_FROM) ?? toE164(PHONE)!;
+  const origin = siteOrigin();
   await logEvent("call_received");
-  return twimlResponse(twimlRingOwner({ owner, callerId, action: `${siteOrigin()}/api/voice/missed` }));
+  return twimlResponse(twimlRingOwner({
+    owner, callerId,
+    screen: `${origin}/api/voice/screen/${callerKey(callerNumber(got.params.From))}`,
+    action: `${origin}/api/voice/missed`,
+  }));
 }

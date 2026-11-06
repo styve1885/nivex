@@ -545,13 +545,18 @@ conservé : ni le texte, ni le numéro.
 Les **appels** au numéro de la maison arrivent sur `/api/voice/incoming`
 (réglage « A call comes in » du numéro, méthode principale, signature
 vérifiée), qui fait sonner le cellulaire de l'artisan sous le numéro de la
-maison (`lib/voice.ts`). La sonnerie dure `RING_SECONDS` (20), moins que la
-boîte vocale de l'opérateur : si elle décrochait la première, l'appel
-compterait comme répondu. Sans réponse, refusé ou échoué, Twilio passe à
-`/api/voice/missed` : l'appelant entend un court message d'absence, en
-français puis en anglais, sans boîte vocale, et l'artisan reçoit un texto
-« appel manqué de … » avec le numéro, le nom s'il est déjà client, et
-l'heure. Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
+maison, `RING_SECONDS` (25) au plus (`lib/voice.ts`). **Quand le cellulaire
+décroche, une voix annonce l'appelant** (`/api/voice/screen/<onze chiffres>`
+ou `…/masque`) : numéro chiffre par chiffre, nom s'il est déjà client, puis
+une touche attendue (`/api/voice/accept`). Une touche relie les deux ; rien,
+et on raccroche du côté du cellulaire. C'est le seul moyen de reconnaître
+une boîte vocale : pour Twilio, elle décroche comme une personne, et le
+6 novembre 2026, le premier essai finissait dans la boîte vocale de
+l'artisan, sans alerte. L'appel non relié (`DialBridged` à « false »), sans
+réponse, refusé ou échoué passe à `/api/voice/missed` : l'appelant entend un
+court message d'absence, en français puis en anglais, sans boîte vocale, et
+l'artisan reçoit un texto « appel manqué de … » avec le numéro, le nom s'il
+est déjà client, et l'heure. Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
 RESTRICTED, ressemble à un numéro d'ici) : `callerNumber` n'accepte qu'un
 « +1 » suivi de dix chiffres. Au-delà de `MISSED_ALERTS_PER_HOUR` (20)
 alertes dans l'heure, les suivantes ne partent pas. Le journal note le sort
