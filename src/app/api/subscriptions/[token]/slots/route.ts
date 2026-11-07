@@ -29,6 +29,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ ok: false, error: visit.doneAt ? "done" : "ended" }, { status: 409 });
   }
 
-  const slots = await visitMoveSlots(visit, { from: sp.get("from"), days: Number(sp.get("days") ?? 14) });
+  const slots = await visitMoveSlots(full, visit, { from: sp.get("from"), days: Number(sp.get("days") ?? 14) });
   return NextResponse.json({ ok: true, ...slots }, { headers: { "cache-control": "no-store" } });
 }

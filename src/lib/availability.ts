@@ -1,5 +1,5 @@
 import type { Settings } from "./settings";
-import { freeBusy, type Busy } from "./google";
+import { freeBusy, listEvents, type Busy, type CalendarItem } from "./google";
 import { ensureSchema, sql } from "./db";
 import { EARLY_ARRIVAL_MINUTES, INSTALL_MINUTES, PACKUP_MINUTES } from "./brand";
 import {
@@ -7,6 +7,28 @@ import {
 } from "./time";
 
 export type Interval = { start: number; end: number }; // ms epoch
+
+/** Qui occupe un créneau : un rendez-vous de la base, ou un événement de l'agenda Google. */
+export type Occupant =
+  | {
+      kind: "booking"; id: string; ref: string; name: string; subscriptionId: string | null;
+      /** L'heure de la séance elle-même, hors arrivée anticipée : celle qu'on nomme. */
+      startsAt: number; endsAt: number;
+    }
+  | { kind: "calendar"; summary: string | null; allDay: boolean };
+
+/**
+ * Un temps occupé, et par qui quand on le sait. `sameHome` : une autre
+ * visite de l'abonnement qu'on retouche, à la même adresse. Elle ne doit
+ * pas chevaucher, mais aucun battement de route ne la sépare de la visite
+ * qu'on place : l'artisan ne bouge pas.
+ */
+export type Occupation = Interval & { who?: Occupant; sameHome?: boolean };
+
+/** Le temps qu'une occupation interdit : elle-même, plus le battement de route de part et d'autre. */
+function padded(b: Occupation, bufferMinutes: number): Interval {
+  return b.sameHome ? { start: b.start, end: b.end } : { start: b.start - bufferMinutes * 60_000, end: b.end + bufferMinutes * 60_000 };
+}
 
 export type DaySlots = {
   date: string;          // « 2026-08-25 » dans le fuseau de l'artisan
@@ -88,7 +110,7 @@ export function computeSlots(opts: {
   days: number;
   durationMinutes: number;
   settings: Settings;
-  busy: Interval[];
+  busy: Occupation[];
   now?: Date;
   setupMinutes?: number;
 }): DaySlots[] {
@@ -100,12 +122,7 @@ export function computeSlots(opts: {
   const lastMs = horizonEnd(s, now);
 
   // Le tampon protège l'artisan de part et d'autre de chaque engagement.
-  const blocked = merge(
-    opts.busy.map((b) => ({
-      start: b.start - s.bufferMinutes * 60_000,
-      end: b.end + s.bufferMinutes * 60_000,
-    })),
-  );
+  const blocked = merge(opts.busy.map((b) => padded(b, s.bufferMinutes)));
 
   const out: DaySlots[] = [];
 
@@ -193,6 +210,92 @@ export async function loadBusy(opts: {
 }
 
 /**
+ * Les événements de l'agenda qui occupent l'artisan, et leur nom.
+ *
+ * Les mêmes que retiendrait la disponibilité de Google : ni un événement
+ * marqué « Disponible », ni une invitation refusée, ni un lieu de travail.
+ * Une journée entière bloquée l'est de minuit à minuit, à l'heure de
+ * l'artisan. `exclude` écarte les événements d'un abonnement, par leur
+ * identifiant ou par leur série : pour ses visites, c'est la base qui fait
+ * foi, et un événement resté à l'ancienne heure ne doit rien bloquer.
+ */
+export function occupationsFromEvents(
+  items: CalendarItem[], tz: string, exclude: { eventIds?: Iterable<string>; seriesIds?: Iterable<string> } = {},
+): Occupation[] {
+  const ids = new Set(exclude.eventIds ?? []);
+  const series = new Set(exclude.seriesIds ?? []);
+  const midnight = (key: string) => fromWall({ ...parseDateKey(key), hour: 0, minute: 0 }, tz).getTime();
+  const out: Occupation[] = [];
+  for (const e of items) {
+    if (e.status === "cancelled" || e.transparency === "transparent" || e.eventType === "workingLocation") continue;
+    if (e.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue;
+    if (ids.has(e.id) || (e.recurringEventId && series.has(e.recurringEventId))) continue;
+    const allDay = !e.start?.dateTime && Boolean(e.start?.date);
+    const start = allDay ? midnight(e.start!.date!) : Date.parse(e.start?.dateTime ?? "");
+    const end = allDay ? midnight(e.end?.date ?? addDaysToKey(e.start!.date!, 1)) : Date.parse(e.end?.dateTime ?? "");
+    if (!(Number.isFinite(start) && Number.isFinite(end) && end > start)) continue;
+    out.push({ start, end, who: { kind: "calendar", summary: e.summary?.trim() || null, allDay } });
+  }
+  return out;
+}
+
+/**
+ * Ce qui occupe l'artisan autour d'un rendez-vous qu'on place ou qu'on
+ * déplace, chaque temps avec son nom : la base, puis l'agenda Google lu
+ * événement par événement.
+ *
+ * `excludeId` : le rendez-vous qu'on déplace, qui ne se gêne pas lui-même.
+ * `home` : l'abonnement de ce rendez-vous. Ses événements Google ne comptent
+ * pas — la base dit où sont ses visites, et l'agenda peut avoir gardé une
+ * heure périmée — et ses autres visites, à la même adresse, ne demandent
+ * pas de battement de route.
+ *
+ * Un agenda qui ne répond pas laisse la base seule juge, comme `loadBusy`.
+ */
+export async function loadOccupations(opts: {
+  accessToken: string | null;
+  settings: Settings;
+  timeMin: Date;
+  timeMax: Date;
+  excludeId?: string;
+  home?: { subscriptionId: string; eventIds: string[]; seriesIds: string[] };
+}): Promise<Occupation[]> {
+  const { accessToken, settings, timeMin, timeMax, home } = opts;
+  const excludeId = opts.excludeId ?? "00000000-0000-0000-0000-000000000000";
+
+  const [items, rows] = await Promise.all([
+    accessToken
+      ? listEvents(accessToken, settings.calendarId, timeMin.toISOString(), timeMax.toISOString())
+          .catch(() => [] as CalendarItem[])
+      : Promise.resolve([] as CalendarItem[]),
+    ensureSchema()
+      .then(() => sql()`
+        SELECT id, ref, client_name, subscription_id, starts_at, ends_at, setup_minutes FROM nivex_bookings
+        WHERE status IN ('confirmed','pending')
+          AND id <> ${excludeId}
+          AND ends_at   > ${new Date(timeMin.getTime() - EARLY_ARRIVAL_MINUTES * 60_000).toISOString()}
+          AND starts_at < ${new Date(timeMax.getTime() + EARLY_ARRIVAL_MINUTES * 60_000).toISOString()}`)
+      .catch(() => [] as Record<string, unknown>[]),
+  ]);
+
+  const fromDb: Occupation[] = (rows as Record<string, unknown>[]).map((r) => {
+    const startsAt = new Date(r.starts_at as string).getTime();
+    const endsAt = new Date(r.ends_at as string).getTime();
+    return {
+      ...withSetup({ start: startsAt, end: endsAt }, Number(r.setup_minutes ?? EARLY_ARRIVAL_MINUTES) || 0),
+      who: {
+        kind: "booking", id: String(r.id), ref: String(r.ref ?? ""), name: String(r.client_name ?? ""),
+        subscriptionId: (r.subscription_id as string) ?? null, startsAt, endsAt,
+      },
+      sameHome: Boolean(home && r.subscription_id === home.subscriptionId),
+    };
+  });
+  const fromGoogle = occupationsFromEvents(items, settings.timezone, { eventIds: home?.eventIds, seriesIds: home?.seriesIds });
+
+  return [...fromDb, ...fromGoogle].filter((x) => Number.isFinite(x.start) && Number.isFinite(x.end));
+}
+
+/**
  * Le créneau qu'un client demande est-il encore réellement libre ? Contrôle
  * final avant écriture d'une séance ponctuelle.
  *
@@ -219,33 +322,60 @@ export function slotIsFree(startISO: string, durationMinutes: number, busy: Inte
  */
 export type SlotProblem = "invalid" | "lead" | "closed" | "busy";
 
+/**
+ * Le verdict détaillé : ce qui ne va pas, et de quoi le dire en clair.
+ * `closed` porte l'horaire du jour (`open` nul : jour fermé) ; `busy`,
+ * l'occupation qui gêne, et `overlap` faux quand seul le battement de route
+ * manque, sans chevauchement.
+ */
+export type SlotVerdict =
+  | { problem: null }
+  | { problem: "invalid" }
+  | { problem: "lead" }
+  | { problem: "closed"; weekday: number; open: string | null; close: string | null }
+  | { problem: "busy"; with: Occupation; overlap: boolean };
+
 export function slotProblem(
-  start: number, durationMinutes: number, busy: Interval[], s: Settings,
+  start: number, durationMinutes: number, busy: Occupation[], s: Settings,
   now = new Date(), opts: { checkLead?: boolean; setupMinutes?: number } = {},
 ): SlotProblem | null {
-  if (!Number.isFinite(start)) return "invalid";
-  if ((opts.checkLead ?? true) && start < now.getTime() + s.leadHours * 3600_000 - 60_000) return "lead";
+  return slotVerdict(start, durationMinutes, busy, s, now, opts).problem;
+}
+
+/* Le plus parlant d'abord : un vrai chevauchement avant un battement trop
+   court, un rendez-vous de la base avant un événement de l'agenda, qui en
+   est souvent la copie, puis le plus tôt. */
+const occupantRank = (o: Occupation) => (o.who?.kind === "booking" ? 0 : o.who ? 1 : 2);
+
+export function slotVerdict(
+  start: number, durationMinutes: number, busy: Occupation[], s: Settings,
+  now = new Date(), opts: { checkLead?: boolean; setupMinutes?: number } = {},
+): SlotVerdict {
+  if (!Number.isFinite(start)) return { problem: "invalid" };
+  if ((opts.checkLead ?? true) && start < now.getTime() + s.leadHours * 3600_000 - 60_000) return { problem: "lead" };
 
   const candidate = { start, end: start + durationMinutes * 60_000 };
 
   // Doit tenir dans les heures d'ouverture du jour.
   const key = dateKey(new Date(start), s.timezone);
-  const rule = s.hours.find((h) => h.day === weekdayOfKey(key));
-  if (!rule?.enabled) return "closed";
+  const weekday = weekdayOfKey(key);
+  const rule = s.hours.find((h) => h.day === weekday);
+  if (!rule?.enabled) return { problem: "closed", weekday, open: null, close: null };
 
   const ymd = parseDateKey(key);
   const openMs  = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.open) / 60),  minute: parseHM(rule.open) % 60 },  s.timezone).getTime();
   const closeMs = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.close) / 60), minute: parseHM(rule.close) % 60 }, s.timezone).getTime();
-  if (start < openMs || candidate.end > closeMs) return "closed";
+  if (start < openMs || candidate.end > closeMs) return { problem: "closed", weekday, open: rule.open, close: rule.close };
 
   // L'horaire porte sur la séance ; l'occupation, sur le bloc entier.
-  const blocked = merge(busy.map((b) => ({
-    start: b.start - s.bufferMinutes * 60_000,
-    end: b.end + s.bufferMinutes * 60_000,
-  })));
-  if (blocked.some((b) => overlaps(withSetup(candidate, opts.setupMinutes ?? 0), b))) return "busy";
+  const block = withSetup(candidate, opts.setupMinutes ?? 0);
+  const hit = busy
+    .filter((b) => overlaps(block, padded(b, s.bufferMinutes)))
+    .map((b) => ({ b, overlap: overlaps(block, b) }))
+    .sort((x, y) => Number(y.overlap) - Number(x.overlap) || occupantRank(x.b) - occupantRank(y.b) || x.b.start - y.b.start)[0];
+  if (hit) return { problem: "busy", with: hit.b, overlap: hit.overlap };
 
-  return null;
+  return { problem: null };
 }
 
 /**

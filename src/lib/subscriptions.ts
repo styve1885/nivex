@@ -4,11 +4,14 @@ import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
 import { getSettings, getSettingsStrict, type Settings } from "./settings";
 import { PLANS, type Plan } from "./pricing";
-import { computeSlots, horizonEnd, loadBusy, loadBusyRange, onSlotGrid, slotProblem } from "./availability";
+import {
+  computeSlots, horizonEnd, loadBusyRange, loadOccupations, onSlotGrid, slotProblem, slotVerdict,
+  type Occupation, type SlotVerdict,
+} from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import {
-  createEvent, createRecurringEvent, deleteEvent, listInstances, ownerAccessToken, patchEvent,
-  sendGmail, siteOrigin, GoogleError,
+  createEvent, createRecurringEvent, deleteEvent, goneGoogleError, listInstances, moveEvent, ownerAccessToken, patchEvent,
+  sendGmail, siteOrigin, withRetry, GoogleError, type EventMove,
 } from "./google";
 import {
   ownerVisitChanged, reviewRequest, seriesNotice, sessionReminder, subscriptionConfirmation, subscriptionEnded,
@@ -23,14 +26,14 @@ import { rhythmPhrase } from "./email";
 import {
   canSubscriberChange, cycleAmount, gridDate, subscriberFeeCents, gridDates, gridFrom, gridIndexAfter, quoteCycle,
   moveHorizonDays, paidCycleAmount, renewalFrom, seriesConflicts, seriesOfCycle, seriesSpanEnd, startOffset,
-  viewSubscription, visitsToEndOfSeries, withoutInterval,
+  viewSubscription, visitsToEndOfSeries,
   type Grid, type SeriesConflict, type SubscriptionView, type VisitNumber,
 } from "./cycles";
 import {
   contactEmail, EARLY_ARRIVAL_MINUTES, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, TERM_SERIES,
 } from "./brand";
 import { purgeCalendarCopies, purgeExpired } from "./retention";
-import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, parseDateKey, parseHM } from "./time";
+import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, minutesToText, parseDateKey, parseHM, toWall } from "./time";
 
 /**
  * Les abonnements : la série posée, puis tout ce qui la retouche.
@@ -101,6 +104,8 @@ export class SubscriptionError extends Error {
       | "out_of_range",
     public conflicts: SeriesConflict[] = [],
     public alternatives: Date[] = [],
+    /** La raison en clair, pour l'artisan seulement : elle peut nommer un autre client. */
+    public detail?: string,
   ) {
     super(code);
     this.name = "SubscriptionError";
@@ -674,29 +679,176 @@ async function calendarSingle(full: SubscriptionFull, v: Booking, at: string, s:
 }
 
 /**
+ * Met l'événement d'une visite à son heure, son rang et sa description.
+ *
+ * Retouché sur place, vérifié, sinon remplacé, jamais doublé : voir
+ * `moveEvent`. La base suit. Un événement recréé hors de la série n'en porte
+ * plus l'identifiant, pour que la fin ou la suppression de l'abonnement le
+ * retire à part ; une visite dont l'ancien événement est parti sans que le
+ * nouveau puisse naître redevient « hors agenda », et se rattrape.
+ */
+async function placeVisitEvent(full: SubscriptionFull, v: Booking, at: string, s: Settings, origin: string): Promise<EventMove> {
+  const n = full.view.numbers.get(v.id);
+  const block = occupiedBlock(v);
+  const r = await moveEvent(at, s.calendarId, v.googleEventId, {
+    summary: summaryOf(full.sub, n),
+    description: descriptionOf(full.sub, v, n, origin, s.timezone),
+    location: locationOf(full.sub),
+    start: block.start.toISOString(), end: block.end.toISOString(), timeZone: s.timezone,
+  });
+  if (r.status !== "moved" && !(r.status === "failed" && r.stale)) {
+    const id = r.status === "failed" ? null : r.eventId;
+    await sql()`UPDATE nivex_bookings SET google_event_id = ${id}, google_series_id = NULL WHERE id = ${v.id}`;
+    v.googleEventId = id;
+    v.googleSeriesId = null;
+  }
+  if (r.status !== "moved") {
+    await logEvent("subscription_calendar_move", {
+      ref: v.ref, status: r.status,
+      ...(r.status === "replaced" ? { reason: r.reason } : r.status === "failed" ? { error: r.error, stale: r.stale } : {}),
+    });
+  }
+  return r;
+}
+
+/**
  * Remet à jour le rang de chaque visite à venir dans l'agenda.
  *
  * Une annulation fait reculer toutes les visites suivantes d'un rang : la
- * troisième devient la deuxième, et le « 3/4 » affiché doit suivre.
+ * troisième devient la deuxième, et le « 3/4 » affiché doit suivre. Avec
+ * `times`, l'heure aussi, visite par visite (`placeVisitEvent`). `skip` : la
+ * visite qu'on vient de déplacer, déjà à jour.
  */
-async function renumberCalendar(full: SubscriptionFull, at: string, s: Settings, origin: string, opts: { times?: boolean } = {}): Promise<number> {
+async function renumberCalendar(
+  full: SubscriptionFull, at: string, s: Settings, origin: string, opts: { times?: boolean; skip?: string } = {},
+): Promise<number> {
   const now = Date.now();
-  const future = full.visits.filter((v) => v.status !== "cancelled" && v.googleEventId && v.endsAt.getTime() > now);
+  const future = full.visits.filter((v) =>
+    v.status !== "cancelled" && v.googleEventId && v.endsAt.getTime() > now && v.id !== opts.skip);
   /* Les retouches manquées ; un événement effacé à la main n'en est pas une. */
   let failed = 0;
+  if (opts.times) {
+    await eachLimit(future, 2, async (v) => {
+      if ((await placeVisitEvent(full, v, at, s, origin)).status === "failed") failed++;
+    });
+    return failed;
+  }
   await eachLimit(future, 4, async (v) => {
     const n = full.view.numbers.get(v.id);
-    const block = occupiedBlock(v);
-    await patchEvent(at, s.calendarId, v.googleEventId!, {
+    await withRetry(() => patchEvent(at, s.calendarId, v.googleEventId!, {
       summary: summaryOf(full.sub, n),
       description: descriptionOf(full.sub, v, n, origin, s.timezone),
-      ...(opts.times ? { start: block.start.toISOString(), end: block.end.toISOString(), timeZone: s.timezone } : {}),
-    }).catch((e) => {
-      if (!(e instanceof GoogleError && (e.status === 404 || e.status === 410))) failed++;
+    })).catch((e) => {
+      if (!goneGoogleError(e)) failed++;
       return logEvent("subscription_patch_failed", { ref: v.ref, error: describe(e) });
     });
   });
   return failed;
+}
+
+/* ============================ Créneaux refusés ============================ */
+
+/** Les identifiants Google d'un abonnement. Pour ses visites, la base fait foi, pas l'agenda. */
+function homeOf(full: SubscriptionFull) {
+  const ids = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => Boolean(x)))];
+  return {
+    subscriptionId: full.sub.id,
+    eventIds: ids(full.visits.map((v) => v.googleEventId)),
+    seriesIds: ids(full.visits.map((v) => v.googleSeriesId)),
+  };
+}
+
+/**
+ * Ce qui occupe l'artisan autour d'une visite qu'on place ou qu'on déplace.
+ *
+ * La visite elle-même ne compte pas, ni aucun événement Google de son
+ * abonnement : un événement resté à l'ancienne heure — Google qui n'avait
+ * pas suivi un déplacement — bloquait jusqu'ici le créneau qu'il aurait dû
+ * libérer. Les autres visites de l'abonnement comptent par leur ligne en
+ * base, sans battement de route : même adresse.
+ */
+async function visitOccupations(
+  full: SubscriptionFull, at: string | null, settings: Settings, timeMin: Date, timeMax: Date, excludeId?: string,
+): Promise<Occupation[]> {
+  return loadOccupations({ accessToken: at, settings, timeMin, timeMax, excludeId, home: homeOf(full) });
+}
+
+const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
+/** « 18 h », « 18 h 30 », pour des minutes depuis minuit. */
+function hmFr(minutes: number): string {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
+}
+
+/** L'heure d'un instant, lue à l'heure de l'artisan. */
+function hourFr(t: number, tz: string): string {
+  const w = toWall(new Date(t), tz);
+  return hmFr(w.hour * 60 + w.minute);
+}
+
+/** « ven. 13 nov. » */
+function dayFr(t: number, tz: string): string {
+  return new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).format(new Date(t));
+}
+
+/** Les rangs d'un abonnement, « 3/4 », par visite. */
+function rankLabels(full: SubscriptionFull): Map<string, string> {
+  return new Map([...full.view.numbers].map(([id, n]) => [id, `${n.index}/${full.sub.perCycle}`]));
+}
+
+/**
+ * Pourquoi un créneau est refusé, en clair, pour l'artisan : hors de
+ * l'horaire (et quel horaire), en conflit avec tel rendez-vous ou tel
+ * événement de son agenda (et à quelle heure), ou trop près d'un autre pour
+ * la route. Jamais montré au client : la phrase peut nommer un autre client.
+ */
+export function refusalText(v: SlotVerdict, c: {
+  tz: string; bufferMinutes: number; durationMinutes: number; ranks?: Map<string, string>;
+}): string {
+  switch (v.problem) {
+    case null: return "";
+    case "invalid": return "Date ou heure invalide.";
+    case "lead": return "Trop proche : le délai de prévenance n'est pas respecté.";
+    case "closed": {
+      const day = WEEKDAYS_FR[v.weekday] ?? "";
+      if (!v.open || !v.close) return `Hors de l'horaire : la maison est fermée le ${day}.`;
+      const length = minutesToText(c.durationMinutes, "fr");
+      const latest = parseHM(v.close) - c.durationMinutes;
+      const open = hmFr(parseHM(v.open)), close = hmFr(parseHM(v.close));
+      if (latest < parseHM(v.open)) {
+        return `Hors de l'horaire : le ${day}, de ${open} à ${close}, une visite de ${length} ne tient pas.`;
+      }
+      return `Hors de l'horaire : le ${day}, une visite de ${length} se place entre ${open} et ${close}, `
+        + `donc au plus tard à ${hmFr(latest)}.`;
+    }
+    case "busy": {
+      const o = v.with;
+      const who = o.who;
+      let what: string;
+      let start = o.start, end = o.end;
+      if (who?.kind === "booking") {
+        /* L'heure de la séance, pas celle de l'arrivée anticipée. */
+        start = who.startsAt;
+        end = who.endsAt;
+        const rank = c.ranks?.get(who.id);
+        what = o.sameHome
+          ? `la visite${rank ? ` ${rank}` : ""} de ce même abonnement`
+          : `${who.subscriptionId ? "la visite d'abonné" : "la séance"} de ${who.name} (${who.ref})`;
+      } else if (who?.kind === "calendar") {
+        what = who.summary ? `« ${who.summary} », dans votre agenda Google` : "un événement de votre agenda Google";
+      } else {
+        what = "un autre rendez-vous";
+      }
+      const span = who?.kind === "calendar" && who.allDay
+        ? (end - start > DAY ? `du ${dayFr(start, c.tz)} au ${dayFr(end - 1, c.tz)}` : `toute la journée du ${dayFr(start, c.tz)}`)
+        : `${dayFr(start, c.tz)}, ${hourFr(start, c.tz)} – ${hourFr(end, c.tz)}`;
+      /* « sam. 14 nov. » finit déjà la phrase : pas de second point. */
+      return v.overlap
+        ? `Conflit avec ${what}, ${span}${span.endsWith(".") ? "" : "."}`
+        : `Trop près de ${what}, ${span} : il faut ${c.bufferMinutes} min entre deux rendez-vous, pour la route.`;
+    }
+  }
 }
 
 /* ============================ Courriels ============================ */
@@ -906,27 +1058,38 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
   return { replacement };
 }
 
-/**
- * Ce qui occupe l'agenda autour d'une visite qu'on déplace, sans elle : ni
- * sa ligne en base, ni son événement Google, qui couvre son installation et
- * son rangement. Elle peut ainsi glisser d'une heure dans la même journée.
- */
-async function busyWithout(b: Booking, at: string | null, settings: Settings, timeMin: Date, timeMax: Date) {
-  const own = occupiedBlock(b);
-  const busy = await loadBusy({ accessToken: at, settings, excludeId: b.id, timeMin, timeMax }).catch(() => []);
-  return withoutInterval(busy, { start: own.start.getTime(), end: own.end.getTime() });
-}
+/** Un déplacement fait : la visite à sa nouvelle heure, et ce qu'est devenu son événement Google. */
+export type VisitMoved = { visit: Booking; calendar: EventMove | null };
 
-/** Déplace une visite. Les autres ne bougent pas ; les rangs suivent l'ordre des dates. */
-export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", host?: string | null): Promise<Booking> {
+/**
+ * Déplace une visite. Les autres ne bougent pas ; les rangs suivent l'ordre
+ * des dates. L'événement Google de la visite suit seul, retouché sur place
+ * puis vérifié, sinon remplacé : jamais de doublon, et l'ancien créneau se
+ * libère (`placeVisitEvent`). Les autres événements ne reçoivent que leur
+ * nouveau rang.
+ *
+ * L'artisan place où il veut, deux visites dans la même semaine comprises,
+ * tant que le créneau est dans l'horaire et libre. Un refus dit pourquoi
+ * (`detail`, pour lui seul).
+ */
+export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", host?: string | null): Promise<VisitMoved> {
   if (b.status === "cancelled") throw new SubscriptionError("ended");
   if (b.doneAt) throw new SubscriptionError("done");
-  if (!Number.isFinite(to.getTime())) throw new SubscriptionError("invalid_slot");
-  /* La même heure : rien ne bouge, et personne n'est prévenu d'un changement
-     qui n'en est pas un. */
-  if (to.getTime() === b.startsAt.getTime()) return b;
+  if (!Number.isFinite(to.getTime())) throw new SubscriptionError("invalid_slot", [], [], "Date ou heure invalide.");
   const settings = await getSettingsStrict();
   const tz = settings.timezone;
+
+  /* La même heure : rien ne bouge, et personne n'est prévenu d'un changement
+     qui n'en est pas un. L'artisan s'en sert pour remettre l'agenda à l'heure
+     de la visite, si Google n'avait pas suivi : seul l'événement est
+     retouché, sans message à personne. */
+  if (to.getTime() === b.startsAt.getTime()) {
+    if (by === "client" || to.getTime() <= Date.now()) return { visit: b, calendar: null };
+    const [full, at] = await Promise.all([findSubscription(b.subscriptionId!), ownerAccessToken().catch(() => null)]);
+    const v = full?.visits.find((x) => x.id === b.id);
+    if (!full || !v || !at) return { visit: b, calendar: null };
+    return { visit: v, calendar: await placeVisitEvent(full, v, at, settings, siteOrigin(host)) };
+  }
   if (by === "client" && !canSubscriberChange(b.startsAt, tz)) throw new SubscriptionError("too_late");
 
   /* Un abonnement terminé ne reprend pas vie par une visite restée en
@@ -948,13 +1111,18 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
       throw new SubscriptionError("invalid_slot");
     }
   } else if (to.getTime() <= Date.now()) {
-    throw new SubscriptionError("past");
+    throw new SubscriptionError("past", [], [], "Cette date est déjà passée : une visite se déplace vers une date à venir.");
   }
 
   const at = await ownerAccessToken().catch(() => null);
-  const busy = await busyWithout(b, at, settings, new Date(to.getTime() - DAY), new Date(to.getTime() + 2 * DAY));
-  if (slotProblem(to.getTime(), b.durationMinutes, busy, settings, new Date(), { checkLead: by === "client", setupMinutes: b.setupMinutes })) {
-    throw new SubscriptionError("invalid_slot");
+  const busy = await visitOccupations(current, at, settings, new Date(to.getTime() - DAY), new Date(to.getTime() + 2 * DAY), b.id);
+  const verdict = slotVerdict(to.getTime(), b.durationMinutes, busy, settings, new Date(), {
+    checkLead: by === "client", setupMinutes: b.setupMinutes,
+  });
+  if (verdict.problem) {
+    throw new SubscriptionError("invalid_slot", [], [], by === "owner"
+      ? refusalText(verdict, { tz, bufferMinutes: settings.bufferMinutes, durationMinutes: b.durationMinutes, ranks: rankLabels(current) })
+      : undefined);
   }
 
   /* Une visite annulée ou marquée effectuée entre la lecture et l'écriture ne
@@ -984,13 +1152,10 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   moved.smsSoonSid = null;
   await scheduleSoonText(moved, tz).catch(() => false);
 
+  let calendar: EventMove | null = null;
   if (at) {
-    if (moved.googleEventId) {
-      await renumberCalendar(full, at, settings, origin, { times: true });
-    } else {
-      await calendarSingle(full, moved, at, settings, origin);
-      await renumberCalendar(full, at, settings, origin);
-    }
+    calendar = await placeVisitEvent(full, moved, at, settings, origin);
+    await renumberCalendar(full, at, settings, origin, { skip: moved.id });
     const change: VisitChange = { kind: "moved", from: b.startsAt };
     const d = visitData(full, moved, settings, origin);
     await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change));
@@ -1008,8 +1173,9 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
 
   await logEvent("subscription_visit_moved", {
     ref: b.ref, subscription: full.sub.ref, by, from: b.startsAt.toISOString(), to: to.toISOString(),
+    calendar: calendar?.status ?? null,
   });
-  return moved;
+  return { visit: moved, calendar };
 }
 
 /**
@@ -1172,13 +1338,16 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
   const when = ownerInstant(date, time, settings.timezone);
   /* Une année mal tapée poserait une visite passée, annoncée au client par
      texto. */
-  if (!(when.getTime() > Date.now())) throw new SubscriptionError("past");
+  if (!(when.getTime() > Date.now())) throw new SubscriptionError("past", [], [], "Cette date est déjà passée.");
   const at = await ownerAccessToken().catch(() => null);
-  const busy = await loadBusy({
-    accessToken: at, settings, timeMin: new Date(when.getTime() - DAY), timeMax: new Date(when.getTime() + 2 * DAY),
-  }).catch(() => []);
-  if (slotProblem(when.getTime(), full.sub.minutesPerVisit, busy, settings, new Date(), { checkLead: false, setupMinutes: full.sub.setupMinutes })) {
-    throw new SubscriptionError("invalid_slot");
+  const busy = await visitOccupations(full, at, settings, new Date(when.getTime() - DAY), new Date(when.getTime() + 2 * DAY));
+  const verdict = slotVerdict(when.getTime(), full.sub.minutesPerVisit, busy, settings, new Date(), {
+    checkLead: false, setupMinutes: full.sub.setupMinutes,
+  });
+  if (verdict.problem) {
+    throw new SubscriptionError("invalid_slot", [], [], refusalText(verdict, {
+      tz: settings.timezone, bufferMinutes: settings.bufferMinutes, durationMinutes: full.sub.minutesPerVisit, ranks: rankLabels(full),
+    }));
   }
   const series = Math.max(1, ...full.visits.map((v) => v.seriesNo ?? 1));
   let row: Row;
@@ -1731,12 +1900,13 @@ export function offsetOf(sub: Subscription): number {
  *
  * L'horaire et le délai de prévenance de la maison, la durée de la visite
  * telle qu'elle est en base — jamais celle du navigateur —, et ce qui occupe
- * l'agenda, sans la visite elle-même. L'horizon va jusqu'à deux semaines
- * après elle : une visite de mars doit pouvoir glisser d'un jour, même si la
- * grille publique des séances s'arrête bien avant. Le serveur revérifie tout
- * au moment du déplacement.
+ * l'artisan, comme au déplacement (`visitOccupations`) : ni la visite
+ * elle-même, ni un événement Google de son abonnement. L'horizon va jusqu'à
+ * deux semaines après elle : une visite de mars doit pouvoir glisser d'un
+ * jour, même si la grille publique des séances s'arrête bien avant. Le
+ * serveur revérifie tout au moment du déplacement.
  */
-export async function visitMoveSlots(visit: Booking, opts: { from?: string | null; days?: number }) {
+export async function visitMoveSlots(full: SubscriptionFull, visit: Booking, opts: { from?: string | null; days?: number }) {
   const settings = await getSettings();
   const tz = settings.timezone;
   const today = dateKey(new Date(), tz);
@@ -1746,9 +1916,9 @@ export async function visitMoveSlots(visit: Booking, opts: { from?: string | nul
   const horizonDays = moveHorizonDays(today, dateKey(visit.startsAt, tz), settings.horizonDays);
 
   const at = await ownerAccessToken().catch(() => null);
-  const busy = await busyWithout(visit, at, settings,
+  const busy = await visitOccupations(full, at, settings,
     fromWall({ ...parseDateKey(from), hour: 0, minute: 0 }, tz),
-    fromWall({ ...parseDateKey(addDaysToKey(from, days)), hour: 0, minute: 0 }, tz));
+    fromWall({ ...parseDateKey(addDaysToKey(from, days)), hour: 0, minute: 0 }, tz), visit.id);
 
   return {
     timezone: tz, duration: visit.durationMinutes, horizonDays, leadHours: settings.leadHours, today,

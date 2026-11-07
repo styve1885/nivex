@@ -44,6 +44,13 @@ Pour un outil qui lance des commandes en arrière-plan, lancer le relais et
   `/api/admin/settings` enregistre des réglages comme l'onglet le ferait.
 - **Captures** : `node tools/local/shots.cjs http://localhost:3000/fr /tmp/captures "#presentation"`
   (390 px et 1280 px).
+- **Déplacer des visites d'abonné, par le vrai code** :
+  `bash -c 'source tools/local/env.sh && npx tsx tools/local/scenario-deplacement.mjs'`
+  (relais lancé, pas besoin de construire). Google et Twilio sont simulés
+  (`tests/tools/fake-google.mjs`) : rien ne sort du conteneur. Le scénario
+  pose un abonné VIP, déplace sa 3/4 au mardi puis sa 4/4 au vendredi
+  libéré, éprouve chaque refus et les replis quand Google refuse, puis
+  efface ce qu'il a écrit.
 - **Une autre base** : `NIVEX_DB=essai` pour `setup.sh`, le relais, `build.sh` et `start.sh`.
 
 ## Ce qui surprend

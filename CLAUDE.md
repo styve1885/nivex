@@ -169,7 +169,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | Fichier | Ce qu'il tranche |
 |---|---|
 | `lib/settings.ts` | Les réglages, lus en base, avec les valeurs par défaut du code |
-| `lib/availability.ts` | Les créneaux libres, la durée et le prix d'une séance |
+| `lib/availability.ts` | Les créneaux libres, la durée et le prix d'une séance ; qui occupe un créneau, et pourquoi il est refusé (`slotVerdict`) |
 | `lib/bookings.ts` | La création d'un rendez-vous — c'est **lui** qui engage la maison |
 | `lib/travel.ts` | Les secteurs et les zones, les frais de déplacement, le texte de la zone desservie, les conflits de préfixes |
 | `lib/pricing.ts` | La grille publiée : blocs, forfaits, abonnements |
@@ -177,7 +177,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/subscriptions.ts` | Les abonnements en base, dans l'agenda et par courriel ; la tâche quotidienne |
 | `lib/attribution.ts` | D'où vient un client, la question qu'on lui pose, les familles de sources, les robots |
 | `lib/visits.ts` | Le journal anonyme des pages vues |
-| `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur |
+| `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur ; un événement déplacé sans jamais le doubler (`moveEvent`) |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
 | `lib/voice.ts` | Les appels au numéro de la maison : sonnerie du cellulaire, message d'absence, alerte d'appel manqué |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : en-tête de chaque page (titre, description, canonique, hreflang), fiche LocalBusiness, site, FAQ structurée |
@@ -457,6 +457,27 @@ nom.
 - **Agenda** : un événement récurrent par série (RRULE), sans invité ; chaque
   occurrence est retouchée pour porter son rang (« 3/4 »). Une visite annulée
   supprime son occurrence ; un remplacement est un événement simple.
+- **Déplacer une visite** (refait le 7 novembre 2026). Seul l'événement de
+  la visite bouge, et il est vérifié : retouché sur place (une occurrence
+  devient une exception et garde son identifiant), l'heure relue dans la
+  réponse de Google ; si Google refuse, supprimé puis recréé à la bonne
+  heure, hors de la série (`google_series_id` vidé) ; si même la
+  suppression échoue, rien n'est créé et l'onglet le dit (`moveEvent`,
+  `placeVisitEvent`). Jamais de doublon, et l'ancien créneau se libère. Les
+  autres événements ne reçoivent que leur rang. Avant, l'heure partait dans
+  un lot de retouches sans contrôle : un refus de Google laissait
+  l'événement à l'ancienne heure, et le créneau restait bloqué. **Le même
+  déplacement, à la même heure**, ne prévient personne et remet l'événement
+  à l'heure de la base : c'est le rattrapage. Le contrôle d'un déplacement
+  (et d'un remplacement placé à la main, et du sélecteur de l'abonné) lit
+  l'agenda événement par événement (`loadOccupations`, `listEvents`), pas
+  par disponibilité : aucun événement Google de l'abonnement ne compte, la
+  base fait foi pour ses visites, et ses autres visites comptent sans
+  battement de route (même adresse) ; deux visites la même semaine, ou
+  collées, passent. Un refus dit sa raison à l'artisan (`refusalText` :
+  l'horaire du jour, le rendez-vous ou l'événement en conflit et son heure,
+  le battement de route) ; le client ne reçoit que `invalid_slot`, la phrase
+  pouvant nommer un autre client.
 - **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
   rappel de la veille, par courriel et par texto, aux abonnés comme aux
   séances ponctuelles, qui annonce le paiement à la première visite d'un
@@ -910,10 +931,15 @@ www, IndexNow, la vidéo : fichier en lecture continue, VideoObject, page de
 présentation, middleware), `subscription`
 (les cinq formules, leurs clés et leurs mots d'adresse, le nom lu par la
 clé, les noms de la migration, grille des dates, rang des visites, montants,
-délai de la veille). Plus un
+délai de la veille, déplacement d'une visite sur un agenda simulé —
+`tests/tools/fake-google.mjs` — et la raison d'un refus). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 
 Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
+
+- **Un déplacement de visite, par le vrai code.** `moveVisit` écrit en base :
+  le banc le rejoue sur PostgreSQL, Google simulé, aucun appel sortant
+  (`tools/local/scenario-deplacement.mjs`, relais lancé).
 
 - **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Passez-le
   sur un vrai PostgreSQL, **deux fois** pour l'idempotence : le banc le

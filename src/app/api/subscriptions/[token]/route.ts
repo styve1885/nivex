@@ -46,7 +46,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       const { replacement } = await cancelVisit(visit, "client", req.headers.get("host"));
       return NextResponse.json({ ok: true, replacement: replacement?.startsAt.toISOString() ?? null });
     }
-    const moved = await moveVisit(visit, new Date(parsed.data.startsAt), "client", req.headers.get("host"));
+    const { visit: moved } = await moveVisit(visit, new Date(parsed.data.startsAt), "client", req.headers.get("host"));
     /* La même heure : rien n'a bougé, le changement n'est pas compté. */
     if (moved.startsAt.getTime() === visit.startsAt.getTime()) await releaseClientChange(claim.id);
     return NextResponse.json({ ok: true, startsAt: moved.startsAt.toISOString() });

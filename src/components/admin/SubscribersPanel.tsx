@@ -195,6 +195,9 @@ function startsWithin(iso: string, ms: number): boolean {
 type ActResult = {
   ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; fields?: string[];
   replacement?: string | null; cents?: number; price?: number;
+  /* La raison précise d'un refus (horaire, rendez-vous en conflit, règle), et
+     ce qu'il faut savoir de l'agenda après un déplacement. */
+  reason?: string; note?: string;
 };
 
 async function act(body: Record<string, unknown>): Promise<ActResult> {
@@ -208,10 +211,10 @@ async function act(body: Record<string, unknown>): Promise<ActResult> {
   }
 }
 
-function errorText(d: Pick<ActResult, "error" | "detail" | "fields">): string {
+function errorText(d: Pick<ActResult, "error" | "detail" | "fields" | "reason">): string {
   const named = (d.fields ?? []).map((f) => FIELDS[f]).filter(Boolean);
   if (d.error === "invalid_input" && named.length > 0) return `Vérifiez ${named.length > 1 ? "ces champs" : "ce champ"} : ${named.join(", ")}.`;
-  return (d.error && ERRORS[d.error]) || d.detail || "L'action n'a pas abouti. Réessayez.";
+  return d.reason || (d.error && ERRORS[d.error]) || d.detail || "L'action n'a pas abouti. Réessayez.";
 }
 
 /* ============================ Une fiche ============================ */
@@ -496,15 +499,19 @@ function VisitRow({ v, perCycle, when, onChange }: {
   const [to, setTo] = useState({ date: "", time: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const cancelled = v.status === "cancelled";
   const startedish = startsWithin(v.startsAt, 2 * 3600_000);
 
   async function run(body: Record<string, unknown>) {
     setBusy(true);
     setErr(null);
+    setNote(null);
     const d = await act(body);
     setBusy(false);
     if (!d.ok) { setErr(errorText(d)); return; }
+    /* Fait, mais l'agenda Google n'a peut-être pas suivi : on le dit. */
+    setNote(d.note ?? null);
     setMode("idle");
     await onChange();
   }
@@ -561,6 +568,7 @@ function VisitRow({ v, perCycle, when, onChange }: {
         </div>
       )}
       {err && <p role="alert" className="mt-1.5 text-[0.8rem] text-[#8E332C]">{err}</p>}
+      {note && <p role="status" className="mt-1.5 text-[0.8rem] text-gold-700">{note}</p>}
     </li>
   );
 }

@@ -11,7 +11,7 @@ import {
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
   placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
   setPaid, setTravelFee,
-  SubscriptionError, type SubscriptionFull,
+  SubscriptionError, type SubscriptionFull, type VisitMoved,
 } from "@/lib/subscriptions";
 
 export const runtime = "nodejs";
@@ -71,6 +71,25 @@ function serialise(f: SubscriptionFull, tz: string) {
 }
 
 export type AdminSubscription = ReturnType<typeof serialise>;
+
+/**
+ * Ce que l'onglet dit de l'agenda après un déplacement. Rien quand
+ * l'événement a suivi ; la marche à suivre quand Google l'a refusé. Le même
+ * déplacement, à la même heure, ne prévient personne et retente l'agenda.
+ */
+function calendarNote(r: VisitMoved, from: Date, tz: string): string | undefined {
+  const c = r.calendar;
+  if (!c) return undefined;
+  const same = r.visit.startsAt.getTime() === from.getTime();
+  if (c.status !== "failed") return same ? "L'agenda Google est à l'heure de la visite." : undefined;
+  const old = new Intl.DateTimeFormat("fr-CA", {
+    timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+  }).format(from);
+  if (!c.stale) return "L'agenda Google n'a pas suivi : la visite n'y est plus. Recommencez le même déplacement pour l'y remettre.";
+  return same
+    ? "L'agenda Google n'a pas pu être remis à l'heure de la visite. Réessayez dans un moment, ou corrigez l'événement dans l'agenda."
+    : `L'agenda Google n'a pas suivi : l'événement est resté à l'ancienne heure (${old}). Recommencez le même déplacement pour réessayer, ou corrigez-le dans l'agenda.`;
+}
 
 export async function GET() {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
@@ -167,8 +186,8 @@ export async function POST(req: NextRequest) {
       case "move": {
         const v = await findById(a.visitId);
         if (!v?.subscriptionId) throw new SubscriptionError("not_found");
-        await moveVisit(v, ownerInstant(a.date, a.time, settings.timezone), "owner", host);
-        return NextResponse.json({ ok: true });
+        const r = await moveVisit(v, ownerInstant(a.date, a.time, settings.timezone), "owner", host);
+        return NextResponse.json({ ok: true, note: calendarNote(r, v.startsAt, settings.timezone) });
       }
       case "place":
         await placeMakeup(a.id, a.date, a.time, host);
@@ -196,7 +215,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof SubscriptionError) {
       return NextResponse.json({
-        ok: false, error: e.code,
+        ok: false, error: e.code, reason: e.detail,
         conflicts: e.conflicts.map((c) => ({ startsAt: c.startsAt.toISOString(), reason: c.reason })),
         alternatives: e.alternatives.map((d) => d.toISOString()),
       }, { status: 409 });
