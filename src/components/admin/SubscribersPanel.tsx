@@ -100,6 +100,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
       const d = await (await fetch("/api/cron/daily", { cache: "no-store" })).json();
       setDaily(d.ok
         ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.soon ?? 0} texto(s) de deux heures avant programmé(s), ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
+          + (d.calendarFixed ? ` ${d.calendarFixed} visite(s) remise(s) à l'heure dans l'agenda.` : "")
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {
@@ -526,6 +527,7 @@ function VisitRow({ v, perCycle, when, onChange }: {
           {cancelled ? "annulée" : v.index ? `${v.index}/${perCycle} · cycle ${v.cycle}` : ""}
           {v.makeup && !cancelled ? " · remplacement" : ""}
           {!cancelled && !v.inCalendar ? " · hors agenda" : ""}
+          {!cancelled && v.inCalendar && v.calendarStale ? " · agenda à l'ancienne heure" : ""}
         </span>
         {v.doneAt && <span className="text-[10px] uppercase tracking-[0.14em] text-gold-700">effectuée</span>}
         <span className="ml-auto flex gap-4">
@@ -538,6 +540,13 @@ function VisitRow({ v, perCycle, when, onChange }: {
           {v.doneAt && (
             <button type="button" disabled={busy} onClick={() => run({ action: "done", visitId: v.id, done: false })} className={`${small} text-ink-400`}>
               Retirer
+            </button>
+          )}
+          {/* L'agenda Google n'a pas suivi la base : on le remet à l'heure de la
+              visite, sans message au client. */}
+          {!cancelled && !v.doneAt && !isOver(v.endsAt) && (!v.inCalendar || v.calendarStale) && (
+            <button type="button" disabled={busy} onClick={() => run({ action: "sync", visitId: v.id })} className={`${small} text-gold-700`}>
+              {v.inCalendar ? "Remettre à l'heure" : "Remettre dans l'agenda"}
             </button>
           )}
           {!cancelled && !v.doneAt && (

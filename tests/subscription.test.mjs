@@ -602,8 +602,8 @@ const noWait = { sleep: async () => {} };
  * 20 nov. 4/4, puis 27 nov. et 4 déc. au cycle suivant. Une autre cliente
  * a sa séance le vendredi 13 de 16 h à 18 h.
  */
-async function vipSeries() {
-  const g = fakeGoogle({ tz: TZ });
+async function vipSeries(opts = {}) {
+  const g = fakeGoogle({ tz: TZ, ...opts });
   g.install();
   const master = await createRecurringEvent(TOKEN, {
     calendarId: CAL, summary: "NIVEX — Client essai · VIP", description: "", location: "",
@@ -790,13 +790,30 @@ await testAsync("un refus passager se retente : débit dépassé, puis la retouc
   s.g.uninstall();
 });
 
-await testAsync("un événement effacé à la main : la visite en reçoit un nouveau, à la nouvelle heure", async () => {
+for (const deletedPatch of ["ok", "gone"]) {
+  await testAsync(`un événement effacé à la main (Google répond ${deletedPatch === "ok" ? "200, supprimé" : "410"}) : la visite en reçoit un nouveau`, async () => {
+    const s = await vipSeries({ deletedPatch });
+    const v3 = s.visit(13), id3 = v3.googleEventId;
+    await deleteEvent(TOKEN, CAL, id3, { notify: false });
+    const r = await s.move(v3, nov(10, 18, 30));
+    assert.equal(r.calendar.status, "created");
+    assert.deepEqual(s.g.at(nov(10, 18, 30)).map((e) => e.id), [r.calendar.eventId]);
+    assert.equal(s.g.events.get(id3).status, "cancelled", "l'ancien ne revient pas");
+    s.g.uninstall();
+  });
+}
+
+await testAsync("une création réussie dont la réponse se perd : la reprise ne double rien", async () => {
   const s = await vipSeries();
   const v3 = s.visit(13), id3 = v3.googleEventId;
-  await deleteEvent(TOKEN, CAL, id3, { notify: false });
+  s.g.fail({ op: "events.patch", id: id3, status: 400, message: "Invalid start time" });
+  s.g.fail({ op: "events.insert", status: 503, reason: "backendError", message: "Backend Error", after: true });
   const r = await s.move(v3, nov(10, 18, 30));
-  assert.equal(r.calendar.status, "created");
+  assert.equal(r.calendar.status, "replaced");
   assert.deepEqual(s.g.at(nov(10, 18, 30)).map((e) => e.id), [r.calendar.eventId]);
+  assert.equal(s.g.visible().length, 6, "un retiré, un seul créé");
+  assert.equal(s.g.calls.filter((c) => c.op === "events.insert").length, 2, "la création reprise une fois");
+  assert.match(r.calendar.eventId, /^[0-9a-v]{26}$/, "un identifiant choisi par nous, dans l'alphabet de Google");
   s.g.uninstall();
 });
 
@@ -837,6 +854,36 @@ test("la raison d'un refus ne cite jamais de point d'exclamation, et dit « ferm
   for (const t of [refusalText(v, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 }), refusalText(anon, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 })]) {
     assert.ok(!t.includes("!"));
   }
+});
+
+test("la raison dit l'arrivée anticipée quand c'est elle qui gêne", () => {
+  const other = (setup) => ({
+    start: nov(13, 16).getTime() - setup * 60_000, end: nov(13, 18).getTime() + setup * 60_000,
+    who: { kind: "booking", id: "x", ref: "NVX-AUTRE", name: "Marie Tremblay", subscriptionId: null,
+      startsAt: nov(13, 16).getTime(), endsAt: nov(13, 18).getTime() },
+  });
+  const say = (at, setup, theirs) => refusalText(
+    slotVerdict(at.getTime(), 120, [other(theirs)], house, NOW, { checkLead: false, setupMinutes: setup }),
+    { tz: TZ, bufferMinutes: 30, durationMinutes: 120 });
+  assert.equal(say(nov(13, 18), 15, 0),
+    "Conflit avec la séance de Marie Tremblay (NVX-AUTRE), ven. 13 nov., 16 h – 18 h, en comptant l'arrivée 15 min avant.");
+  assert.equal(say(nov(13, 18), 0, 15),
+    "Conflit avec la séance de Marie Tremblay (NVX-AUTRE), ven. 13 nov., 16 h – 18 h, en comptant l'arrivée 15 min avant.");
+  assert.equal(say(nov(13, 18, 30), 15, 0),
+    "Trop près de la séance de Marie Tremblay (NVX-AUTRE), ven. 13 nov., 16 h – 18 h, en comptant l'arrivée 15 min avant : il faut 30 min entre deux rendez-vous, pour la route.");
+  assert.equal(say(nov(13, 17), 15, 0), "Conflit avec la séance de Marie Tremblay (NVX-AUTRE), ven. 13 nov., 16 h – 18 h.");
+});
+
+test("une journée entière, le jour du changement d'heure, reste une seule journée", () => {
+  /* Le 7 novembre 2027, l'heure recule : ce dimanche dure 25 heures. */
+  const busy = occupationsFromEvents([{ id: "conge", summary: "Congé", start: { date: "2027-11-07" }, end: { date: "2027-11-08" } }], TZ);
+  const v = slotVerdict(at(2027, 11, 7, 13).getTime(), 120, busy, house, NOW, { checkLead: false });
+  assert.equal(refusalText(v, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 }),
+    "Conflit avec « Congé », dans votre agenda Google, toute la journée du dim. 7 nov.");
+  const two = occupationsFromEvents([{ id: "c2", summary: "Congé", start: { date: "2027-11-06" }, end: { date: "2027-11-08" } }], TZ);
+  const w = slotVerdict(at(2027, 11, 7, 13).getTime(), 120, two, house, NOW, { checkLead: false });
+  assert.equal(refusalText(w, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 }),
+    "Conflit avec « Congé », dans votre agenda Google, du sam. 6 nov. au dim. 7 nov.");
 });
 
 test("le moteur de créneaux et le contrôle disent la même chose : pas de battement avec le même abonnement", () => {

@@ -6,7 +6,13 @@
  * occurrences (une occurrence retouchée garde son identifiant, comme chez
  * Google), retouches, suppressions, liste et disponibilité. Toute autre
  * adresse part au vrai fetch, sauf celles qu'on confie à `route`. Des refus
- * se programment (`fail`) pour éprouver les replis.
+ * se programment (`fail`) pour éprouver les replis ; `after: true` fait
+ * l'opération puis répond l'erreur, comme une réponse perdue.
+ *
+ * Un événement supprimé reste en mémoire, à l'état « cancelled », comme
+ * chez Google. Sa retouche répond 200 sans le rendre visible
+ * (`deletedPatch: "ok"`, par défaut), ou 410 (`"gone"`) : Google ne
+ * documente pas lequel, le code doit tenir les deux.
  *
  * Sert aux tests (tests/subscription.test.mjs) et au scénario du banc
  * (tools/local/scenario-deplacement.mjs). Rien ici ne parle à Google.
@@ -42,7 +48,7 @@ function weekly(startIso, endIso, tz, interval, count) {
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const googleError = (status, reason, message) => json(status, { error: { code: status, message, errors: [{ reason, message }] } });
 
-export function fakeGoogle({ tz = "America/Toronto" } = {}) {
+export function fakeGoogle({ tz = "America/Toronto", deletedPatch = "ok" } = {}) {
   /** id → { id, master?, recurringEventId?, originalStart?, status, summary, description, location, start, end, transparency?, allDay? } */
   const events = new Map();
   const failures = [];
@@ -66,9 +72,9 @@ export function fakeGoogle({ tz = "America/Toronto" } = {}) {
     };
   }
 
-  /** Un refus programmé pour cette opération, s'il en reste un. */
-  function refusal(op, id) {
-    const f = failures.find((x) => x.op === op && x.times > 0
+  /** Un refus programmé pour cette opération, s'il en reste un : avant elle, ou après (`after`). */
+  function refusal(op, id, after = false) {
+    const f = failures.find((x) => x.op === op && x.times > 0 && Boolean(x.after) === after
       && (x.id === undefined || (x.id instanceof RegExp ? x.id.test(id ?? "") : x.id === id)));
     if (!f) return null;
     f.times--;
@@ -80,7 +86,8 @@ export function fakeGoogle({ tz = "America/Toronto" } = {}) {
     const rule = (body.recurrence ?? []).map((r) => /FREQ=WEEKLY;INTERVAL=(\d+);COUNT=(\d+)/.exec(r)).find(Boolean);
     const base = { status: "confirmed", summary: body.summary, description: body.description, location: body.location, transparency: body.transparency };
     if (!rule) {
-      const id = `evt${++seq}`;
+      const id = body.id ?? `evt${++seq}`;
+      if (events.has(id)) return null;
       events.set(id, { ...base, id, start: new Date(start).toISOString(), end: new Date(end).toISOString() });
       return { id, htmlLink: `https://calendar.google.com/event?eid=${id}` };
     }
@@ -124,8 +131,12 @@ export function fakeGoogle({ tz = "America/Toronto" } = {}) {
     const q = new URLSearchParams(m[3] ?? "");
 
     if (!id && method === "POST") {
-      calls.push({ op: "events.insert" });
-      return refusal("events.insert") ?? json(200, insert(body));
+      calls.push({ op: "events.insert", id: body?.id });
+      const r = refusal("events.insert", body?.id);
+      if (r) return r;
+      const made = insert(body);
+      if (!made) return googleError(409, "duplicate", "The requested identifier already exists.");
+      return refusal("events.insert", body?.id, true) ?? json(200, made);
     }
     if (!id && method === "GET") {
       calls.push({ op: "events.list" });
@@ -147,7 +158,7 @@ export function fakeGoogle({ tz = "America/Toronto" } = {}) {
       const r = refusal("events.patch", id);
       if (r) return r;
       if (!e) return googleError(404, "notFound", "Not Found");
-      if (e.status === "cancelled") return googleError(410, "deleted", "Resource has been deleted");
+      if (e.status === "cancelled" && deletedPatch === "gone") return googleError(410, "deleted", "Resource has been deleted");
       if (body.summary !== undefined) e.summary = body.summary;
       if (body.description !== undefined) e.description = body.description;
       if (body.start?.dateTime) e.start = new Date(body.start.dateTime).toISOString();
@@ -179,7 +190,10 @@ export function fakeGoogle({ tz = "America/Toronto" } = {}) {
       events.set(id, { status: "confirmed", ...e, id, start: new Date(e.start).toISOString(), end: new Date(e.end).toISOString() });
       return id;
     },
-    /** Un refus de Google, `times` fois : `fail({ op: "events.patch", status: 400, reason: "invalid", message: "Invalid start time" })`. */
+    /**
+     * Un refus de Google, `times` fois : `fail({ op: "events.patch", status: 400, reason: "invalid", message: "Invalid start time" })`.
+     * `after: true` : l'opération se fait, puis l'erreur part, comme une réponse perdue.
+     */
     fail(f) { failures.push({ times: 1, reason: "error", message: "Refusé", ...f }); },
     /** Une autre adresse à intercepter (Twilio, par exemple). */
     route(pattern, respond) { routes.push({ pattern, respond }); },

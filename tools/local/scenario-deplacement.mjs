@@ -10,8 +10,9 @@
  * venir. L'artisan déplace la 3/4 au mardi d'avant, 18 h 30, puis la 4/4 au
  * vendredi libéré, 13 h : deux visites dans la même semaine. L'agenda doit
  * suivre sans doublon, et le second déplacement passer. Viennent ensuite les
- * refus, chacun avec sa raison, les replis quand Google refuse, et la remise
- * à l'heure d'un événement resté en arrière. Le scénario efface ce qu'il a
+ * refus, chacun avec sa raison, les replis quand Google refuse, Google
+ * injoignable, et la remise à l'heure d'un événement resté en arrière, par
+ * le bouton comme par la tâche du matin. Le scénario efface ce qu'il a
  * écrit en base.
  */
 import assert from "node:assert/strict";
@@ -21,8 +22,10 @@ const { sql, ensureSchema } = await import("../../src/lib/db.ts");
 const { encrypt } = await import("../../src/lib/crypto.ts");
 const { fromWall, dateKey, addDaysToKey, weekdayOfKey } = await import("../../src/lib/time.ts");
 const { findById } = await import("../../src/lib/bookings.ts");
+const { clearTokenCache } = await import("../../src/lib/google.ts");
 const {
-  createOwnerSubscription, deleteSubscription, findSubscription, moveVisit, visitMoveSlots, SubscriptionError,
+  createOwnerSubscription, deleteSubscription, findSubscription, moveVisit, runDaily, syncVisitCalendar, visitMoveSlots,
+  SubscriptionError,
 } = await import("../../src/lib/subscriptions.ts");
 
 const TZ = "America/Toronto";
@@ -151,10 +154,44 @@ try {
     assert.deepEqual([r.calendar.status, r.calendar.stale], ["failed", true]);
     assert.deepEqual(g.at(at(day(21), 13)).map((e) => e.id), [id6], "resté à l'ancienne heure");
     assert.equal(g.at(at(day(22), 18)).length, 0);
+    assert.ok((await findById(v6.id)).calendarStaleAt, "la visite est marquée");
     const fix = await moveVisit(await findById(v6.id), at(day(22), 18), "owner", HOST);
     assert.deepEqual(fix.calendar, { status: "moved", eventId: id6 });
     assert.deepEqual(g.at(at(day(22), 18)).map((e) => e.id), [id6]);
     assert.equal(g.at(at(day(21), 13)).length, 0);
+    assert.equal((await findById(v6.id)).calendarStaleAt, null, "la marque tombe");
+  });
+
+  /* Google injoignable : le jeton ne se renouvelle pas. */
+  const offline = () => {
+    clearTokenCache();
+    g.fail({ op: "token", status: 400, reason: "invalid_grant", message: "Token has been expired or revoked." });
+  };
+
+  await step("Google injoignable : la visite se déplace, elle est marquée, et « Remettre à l'heure » la rattrape", async () => {
+    const v7 = await visitAt(day(28), 13);
+    const id7 = v7.googleEventId;
+    offline();
+    const r = await moveVisit(await findById(v7.id), at(day(29), 18), "owner", HOST);
+    assert.deepEqual([r.offline, r.calendar], [true, null]);
+    assert.ok((await findById(v7.id)).calendarStaleAt);
+    assert.deepEqual(g.at(at(day(28), 13)).map((e) => e.id), [id7], "l'agenda n'a pas bougé");
+    const fix = await syncVisitCalendar(await findById(v7.id), HOST);
+    assert.deepEqual([fix.offline, fix.calendar], [false, { status: "moved", eventId: id7 }]);
+    assert.deepEqual(g.at(at(day(29), 18)).map((e) => e.id), [id7]);
+    assert.equal((await findById(v7.id)).calendarStaleAt, null);
+  });
+
+  await step("la tâche du matin remet à l'heure ce que Google n'avait pas suivi", async () => {
+    const v8 = await visitAt(day(35), 13);
+    offline();
+    await moveVisit(await findById(v8.id), at(day(36), 18), "owner", HOST);
+    assert.ok((await findById(v8.id)).calendarStaleAt);
+    const d = await runDaily(HOST);
+    assert.ok(d.calendarFixed >= 1, `remises à l'heure : ${d.calendarFixed}`);
+    assert.equal((await findById(v8.id)).calendarStaleAt, null);
+    assert.deepEqual(g.at(at(day(36), 18)).map((e) => e.id), [v8.googleEventId]);
+    assert.equal(g.at(at(day(35), 13)).length, 0);
   });
 } finally {
   await deleteSubscription(subId).catch((e) => console.error("nettoyage :", e));

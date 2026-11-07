@@ -325,15 +325,18 @@ export type SlotProblem = "invalid" | "lead" | "closed" | "busy";
 /**
  * Le verdict détaillé : ce qui ne va pas, et de quoi le dire en clair.
  * `closed` porte l'horaire du jour (`open` nul : jour fermé) ; `busy`,
- * l'occupation qui gêne, et `overlap` faux quand seul le battement de route
- * manque, sans chevauchement.
+ * l'occupation qui gêne, `overlap` faux quand seul le battement de route
+ * manque, sans chevauchement, et `arrival` les minutes d'arrivée anticipée
+ * sans lesquelles les deux séances ne se gêneraient pas (zéro sinon) : une
+ * séance de 18 h refusée à côté d'une autre qui finit à 18 h ne se comprend
+ * qu'avec elles.
  */
 export type SlotVerdict =
   | { problem: null }
   | { problem: "invalid" }
   | { problem: "lead" }
   | { problem: "closed"; weekday: number; open: string | null; close: string | null }
-  | { problem: "busy"; with: Occupation; overlap: boolean };
+  | { problem: "busy"; with: Occupation; overlap: boolean; arrival: number };
 
 export function slotProblem(
   start: number, durationMinutes: number, busy: Occupation[], s: Settings,
@@ -373,7 +376,16 @@ export function slotVerdict(
     .filter((b) => overlaps(block, padded(b, s.bufferMinutes)))
     .map((b) => ({ b, overlap: overlaps(block, b) }))
     .sort((x, y) => Number(y.overlap) - Number(x.overlap) || occupantRank(x.b) - occupantRank(y.b) || x.b.start - y.b.start)[0];
-  if (hit) return { problem: "busy", with: hit.b, overlap: hit.overlap };
+  if (hit) {
+    /* Les séances elles-mêmes, sans arrivée anticipée de part ni d'autre. */
+    const who = hit.b.who;
+    const other: Occupation = who?.kind === "booking"
+      ? { start: who.startsAt, end: who.endsAt, sameHome: hit.b.sameHome }
+      : hit.b;
+    const bare = hit.overlap ? overlaps(candidate, other) : overlaps(candidate, padded(other, s.bufferMinutes));
+    const arrival = bare ? 0 : Math.max(opts.setupMinutes ?? 0, Math.round((other.start - hit.b.start) / 60_000));
+    return { problem: "busy", with: hit.b, overlap: hit.overlap, arrival };
+  }
 
   return { problem: null };
 }

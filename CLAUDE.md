@@ -463,12 +463,21 @@ nom.
   réponse de Google ; si Google refuse, supprimé puis recréé à la bonne
   heure, hors de la série (`google_series_id` vidé) ; si même la
   suppression échoue, rien n'est créé et l'onglet le dit (`moveEvent`,
-  `placeVisitEvent`). Jamais de doublon, et l'ancien créneau se libère. Les
-  autres événements ne reçoivent que leur rang. Avant, l'heure partait dans
-  un lot de retouches sans contrôle : un refus de Google laissait
-  l'événement à l'ancienne heure, et le créneau restait bloqué. **Le même
-  déplacement, à la même heure**, ne prévient personne et remet l'événement
-  à l'heure de la base : c'est le rattrapage. Le contrôle d'un déplacement
+  `placeVisitEvent`). Un événement que Google rend « supprimé » compte comme
+  parti. La création porte un identifiant choisi par nous (`newEventId`) :
+  reprise après une réponse perdue, elle reçoit 409 au lieu de doubler ; la
+  base ne note le nouvel événement que si personne ne l'a remplacé
+  entre-temps. Jamais de doublon, et l'ancien créneau se libère. Les autres
+  événements ne reçoivent que leur rang. Avant, l'heure partait dans un lot
+  de retouches sans contrôle : un refus de Google laissait l'événement à
+  l'ancienne heure, et le créneau restait bloqué. **Une visite que l'agenda
+  n'a pas suivie** (Google qui refuse, ou injoignable au moment du geste,
+  client compris) est marquée (`calendar_stale_at`) : l'onglet Abonnés
+  affiche « agenda à l'ancienne heure » et un bouton « Remettre à l'heure »
+  (« Remettre dans l'agenda » pour une visite hors agenda), la tâche du matin
+  réessaie, et la marque tombe dès que l'événement est à l'heure. **Le même
+  déplacement, à la même heure**, fait la même chose sans prévenir
+  personne : c'est le rattrapage d'une visite déplacée avant le marqueur. Le contrôle d'un déplacement
   (et d'un remplacement placé à la main, et du sélecteur de l'abonné) lit
   l'agenda événement par événement (`loadOccupations`, `listEvents`), pas
   par disponibilité : aucun événement Google de l'abonnement ne compte, la
@@ -482,7 +491,8 @@ nom.
   rappel de la veille, par courriel et par texto, aux abonnés comme aux
   séances ponctuelles, qui annonce le paiement à la première visite d'un
   cycle et donne l'heure d'arrivée, programmation des textos de deux heures
-  avant, et courriel de fin de série à l'artisan. Chaque envoi est réservé
+  avant, courriel de fin de série à l'artisan, et remise à l'heure dans
+  l'agenda des visites marquées (`calendar_stale_at`). Chaque envoi est réservé
   en base avant de partir : un second passage, ou le bouton de l'onglet
   Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
   de conservation (`purgeExpired`, `lib/retention.ts`) : journal technique

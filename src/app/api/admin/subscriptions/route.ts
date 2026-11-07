@@ -10,9 +10,10 @@ import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
   placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
-  setPaid, setTravelFee,
+  setPaid, setTravelFee, syncVisitCalendar,
   SubscriptionError, type SubscriptionFull, type VisitMoved,
 } from "@/lib/subscriptions";
+import type { Booking } from "@/lib/bookings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,8 @@ function serialise(f: SubscriptionFull, tz: string) {
         id: v.id, ref: v.ref, status: v.status, startsAt: v.startsAt.toISOString(), endsAt: v.endsAt.toISOString(),
         doneAt: v.doneAt?.toISOString() ?? null, makeup: v.makeup, series: v.seriesNo ?? 1,
         cycle: n?.cycle ?? null, index: n?.index ?? null, inCalendar: Boolean(v.googleEventId),
+        /* L'événement Google n'a pas suivi la base : à remettre à l'heure. */
+        calendarStale: Boolean(v.calendarStaleAt),
       };
     }),
   };
@@ -73,22 +76,29 @@ function serialise(f: SubscriptionFull, tz: string) {
 export type AdminSubscription = ReturnType<typeof serialise>;
 
 /**
- * Ce que l'onglet dit de l'agenda après un déplacement. Rien quand
- * l'événement a suivi ; la marche à suivre quand Google l'a refusé. Le même
- * déplacement, à la même heure, ne prévient personne et retente l'agenda.
+ * Ce que l'onglet dit de l'agenda après un déplacement ou une remise à
+ * l'heure. Rien quand l'événement a suivi un déplacement ; la marche à
+ * suivre quand Google l'a refusé ou ne répondait pas. Une visite restée en
+ * retard est marquée : son bouton, ou la tâche du matin, la rattrape.
  */
-function calendarNote(r: VisitMoved, from: Date, tz: string): string | undefined {
+function calendarNote(r: VisitMoved, before: Booking, tz: string): string | undefined {
+  const same = r.visit.startsAt.getTime() === before.startsAt.getTime();
+  if (r.offline) {
+    return same
+      ? "Google ne répond pas : l'agenda n'a pas été retouché. Voyez l'onglet Connexion, puis réessayez."
+      : "Visite déplacée, mais Google ne répond pas : l'agenda n'a pas été retouché. La visite est marquée ; « Remettre à l'heure » la corrige quand Google répond, et la tâche du matin aussi.";
+  }
   const c = r.calendar;
   if (!c) return undefined;
-  const same = r.visit.startsAt.getTime() === from.getTime();
   if (c.status !== "failed") return same ? "L'agenda Google est à l'heure de la visite." : undefined;
+  if (!c.stale) return "L'agenda Google n'a pas suivi : la visite n'y est plus. « Remettre dans l'agenda » l'y remet, et la tâche du matin aussi.";
+  /* L'événement commence à l'arrivée : un quart d'heure avant la séance à l'ancien déroulement. */
   const old = new Intl.DateTimeFormat("fr-CA", {
     timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
-  }).format(from);
-  if (!c.stale) return "L'agenda Google n'a pas suivi : la visite n'y est plus. Recommencez le même déplacement pour l'y remettre.";
+  }).format(new Date(before.startsAt.getTime() - before.setupMinutes * 60_000));
   return same
-    ? "L'agenda Google n'a pas pu être remis à l'heure de la visite. Réessayez dans un moment, ou corrigez l'événement dans l'agenda."
-    : `L'agenda Google n'a pas suivi : l'événement est resté à l'ancienne heure (${old}). Recommencez le même déplacement pour réessayer, ou corrigez-le dans l'agenda.`;
+    ? "L'agenda Google n'a pas pu être remis à l'heure de la visite. Réessayez dans un moment ; la tâche du matin réessaiera aussi."
+    : `L'agenda Google n'a pas suivi : l'événement est resté à l'ancienne heure (${old}). La visite est marquée ; « Remettre à l'heure » réessaie, et la tâche du matin aussi.`;
 }
 
 export async function GET() {
@@ -116,6 +126,7 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("early"), id: Id, early: z.boolean() }),
   z.object({ action: z.literal("cancel"), visitId: Id }),
   z.object({ action: z.literal("move"), visitId: Id, ...When }),
+  z.object({ action: z.literal("sync"), visitId: Id }),
   z.object({ action: z.literal("place"), id: Id, ...When }),
   z.object({ action: z.literal("renew"), id: Id, skipConflicts: z.boolean().default(false) }),
   z.object({ action: z.literal("end"), id: Id }),
@@ -187,7 +198,13 @@ export async function POST(req: NextRequest) {
         const v = await findById(a.visitId);
         if (!v?.subscriptionId) throw new SubscriptionError("not_found");
         const r = await moveVisit(v, ownerInstant(a.date, a.time, settings.timezone), "owner", host);
-        return NextResponse.json({ ok: true, note: calendarNote(r, v.startsAt, settings.timezone) });
+        return NextResponse.json({ ok: true, note: calendarNote(r, v, settings.timezone) });
+      }
+      case "sync": {
+        const v = await findById(a.visitId);
+        if (!v?.subscriptionId) throw new SubscriptionError("not_found");
+        const r = await syncVisitCalendar(v, host);
+        return NextResponse.json({ ok: true, note: calendarNote(r, v, settings.timezone) });
       }
       case "place":
         await placeMakeup(a.id, a.date, a.time, host);

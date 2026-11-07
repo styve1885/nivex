@@ -686,27 +686,63 @@ async function calendarSingle(full: SubscriptionFull, v: Booking, at: string, s:
  * plus l'identifiant, pour que la fin ou la suppression de l'abonnement le
  * retire à part ; une visite dont l'ancien événement est parti sans que le
  * nouveau puisse naître redevient « hors agenda », et se rattrape.
+ *
+ * Un événement resté à l'ancienne heure marque la visite
+ * (`calendar_stale_at`) : l'onglet le signale, et la tâche du matin réessaie.
+ * La marque tombe dès que l'événement est à l'heure.
  */
 async function placeVisitEvent(full: SubscriptionFull, v: Booking, at: string, s: Settings, origin: string): Promise<EventMove> {
   const n = full.view.numbers.get(v.id);
   const block = occupiedBlock(v);
-  const r = await moveEvent(at, s.calendarId, v.googleEventId, {
+  let r = await moveEvent(at, s.calendarId, v.googleEventId, {
     summary: summaryOf(full.sub, n),
     description: descriptionOf(full.sub, v, n, origin, s.timezone),
     location: locationOf(full.sub),
     start: block.start.toISOString(), end: block.end.toISOString(), timeZone: s.timezone,
   });
-  if (r.status !== "moved" && !(r.status === "failed" && r.stale)) {
+
+  /* La marque est un signal, pas une garantie : une base qui hoquette ici
+     ne doit pas faire échouer un déplacement déjà écrit. */
+  const mark = (stale: boolean) => (stale
+    ? sql()`UPDATE nivex_bookings SET calendar_stale_at = now() WHERE id = ${v.id}`
+    : sql()`UPDATE nivex_bookings SET calendar_stale_at = NULL WHERE id = ${v.id}`).catch(() => {});
+  if (r.status === "moved") {
+    if (v.calendarStaleAt) await mark(false);
+    v.calendarStaleAt = null;
+  } else if (r.status === "failed" && r.stale) {
+    await mark(true);
+  } else {
     const id = r.status === "failed" ? null : r.eventId;
-    await sql()`UPDATE nivex_bookings SET google_event_id = ${id}, google_series_id = NULL WHERE id = ${v.id}`;
-    v.googleEventId = id;
-    v.googleSeriesId = null;
+    /* Sans événement du tout, la visite reste marquée : la tâche du matin
+       le recréera. */
+    const staleAt = r.status === "failed" ? new Date().toISOString() : null;
+    try {
+      /* Seulement si personne n'a remplacé l'événement entre-temps : deux
+         gestes croisés sur la même visite créeraient sinon deux événements. */
+      const kept = (await sql()`
+        UPDATE nivex_bookings SET google_event_id = ${id}, google_series_id = NULL, calendar_stale_at = ${staleAt}
+        WHERE id = ${v.id} AND google_event_id IS NOT DISTINCT FROM ${v.googleEventId}
+        RETURNING id`) as Row[];
+      if (kept.length === 0) {
+        if (id) await deleteEvent(at, s.calendarId, id, { notify: false }).catch(() => {});
+        await mark(true);
+        r = { status: "failed", eventId: null, stale: true, error: "un autre geste a retouché cette visite en même temps" };
+      } else {
+        v.googleEventId = id;
+        v.googleSeriesId = null;
+        v.calendarStaleAt = staleAt ? new Date(staleAt) : null;
+      }
+    } catch (e) {
+      /* La base n'a pas pu noter le nouvel événement : il serait orphelin. */
+      if (id) await deleteEvent(at, s.calendarId, id, { notify: false }).catch(() => {});
+      r = { status: "failed", eventId: null, stale: false, error: `base : ${describe(e)}` };
+    }
   }
   if (r.status !== "moved") {
     await logEvent("subscription_calendar_move", {
       ref: v.ref, status: r.status,
       ...(r.status === "replaced" ? { reason: r.reason } : r.status === "failed" ? { error: r.error, stale: r.stale } : {}),
-    });
+    }).catch(() => {});
   }
   return r;
 }
@@ -840,13 +876,19 @@ export function refusalText(v: SlotVerdict, c: {
       } else {
         what = "un autre rendez-vous";
       }
+      /* Par jours de calendrier : le jour du changement d'heure dure 25 h. */
       const span = who?.kind === "calendar" && who.allDay
-        ? (end - start > DAY ? `du ${dayFr(start, c.tz)} au ${dayFr(end - 1, c.tz)}` : `toute la journée du ${dayFr(start, c.tz)}`)
+        ? (dateKey(new Date(start), c.tz) !== dateKey(new Date(end - 1), c.tz)
+          ? `du ${dayFr(start, c.tz)} au ${dayFr(end - 1, c.tz)}`
+          : `toute la journée du ${dayFr(start, c.tz)}`)
         : `${dayFr(start, c.tz)}, ${hourFr(start, c.tz)} – ${hourFr(end, c.tz)}`;
+      /* Les deux séances se touchent sans se chevaucher : c'est l'arrivée
+         anticipée qui les fait se gêner, et il faut le dire. */
+      const why = v.arrival > 0 ? `${span}, en comptant l'arrivée ${v.arrival} min avant` : span;
       /* « sam. 14 nov. » finit déjà la phrase : pas de second point. */
       return v.overlap
-        ? `Conflit avec ${what}, ${span}${span.endsWith(".") ? "" : "."}`
-        : `Trop près de ${what}, ${span} : il faut ${c.bufferMinutes} min entre deux rendez-vous, pour la route.`;
+        ? `Conflit avec ${what}, ${why}${why.endsWith(".") ? "" : "."}`
+        : `Trop près de ${what}, ${why} : il faut ${c.bufferMinutes} min entre deux rendez-vous, pour la route.`;
     }
   }
 }
@@ -1058,8 +1100,28 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
   return { replacement };
 }
 
-/** Un déplacement fait : la visite à sa nouvelle heure, et ce qu'est devenu son événement Google. */
-export type VisitMoved = { visit: Booking; calendar: EventMove | null };
+/**
+ * Un déplacement fait : la visite à sa nouvelle heure, ce qu'est devenu son
+ * événement Google, et `offline` quand Google n'a pas pu être joint (rien
+ * n'a été retouché ; la visite est marquée, et se rattrape).
+ */
+export type VisitMoved = { visit: Booking; calendar: EventMove | null; offline: boolean };
+
+/**
+ * Remet l'événement Google d'une visite à l'heure de la base, sans message à
+ * personne : le bouton « Remettre à l'heure » de l'onglet Abonnés, le même
+ * déplacement refait à la même heure, et la tâche du matin.
+ */
+export async function syncVisitCalendar(b: Booking, host?: string | null): Promise<VisitMoved> {
+  const idle: VisitMoved = { visit: b, calendar: null, offline: false };
+  if (!b.subscriptionId || b.status === "cancelled" || b.doneAt || b.endsAt.getTime() <= Date.now()) return idle;
+  const settings = await getSettingsStrict();
+  const [full, at] = await Promise.all([findSubscription(b.subscriptionId), ownerAccessToken().catch(() => null)]);
+  const v = full?.visits.find((x) => x.id === b.id);
+  if (!full || !v) return idle;
+  if (!at) return { visit: v, calendar: null, offline: true };
+  return { visit: v, calendar: await placeVisitEvent(full, v, at, settings, siteOrigin(host)), offline: false };
+}
 
 /**
  * Déplace une visite. Les autres ne bougent pas ; les rangs suivent l'ordre
@@ -1084,11 +1146,8 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
      de la visite, si Google n'avait pas suivi : seul l'événement est
      retouché, sans message à personne. */
   if (to.getTime() === b.startsAt.getTime()) {
-    if (by === "client" || to.getTime() <= Date.now()) return { visit: b, calendar: null };
-    const [full, at] = await Promise.all([findSubscription(b.subscriptionId!), ownerAccessToken().catch(() => null)]);
-    const v = full?.visits.find((x) => x.id === b.id);
-    if (!full || !v || !at) return { visit: b, calendar: null };
-    return { visit: v, calendar: await placeVisitEvent(full, v, at, settings, siteOrigin(host)) };
+    if (by === "client") return { visit: b, calendar: null, offline: false };
+    return syncVisitCalendar(b, host);
   }
   if (by === "client" && !canSubscriberChange(b.startsAt, tz)) throw new SubscriptionError("too_late");
 
@@ -1153,6 +1212,10 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   await scheduleSoonText(moved, tz).catch(() => false);
 
   let calendar: EventMove | null = null;
+  if (!at && moved.googleEventId) {
+    /* Google injoignable : son événement est resté à l'ancienne heure. */
+    await sql()`UPDATE nivex_bookings SET calendar_stale_at = now() WHERE id = ${moved.id}`.catch(() => {});
+  }
   if (at) {
     calendar = await placeVisitEvent(full, moved, at, settings, origin);
     await renumberCalendar(full, at, settings, origin, { skip: moved.id });
@@ -1173,9 +1236,9 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
 
   await logEvent("subscription_visit_moved", {
     ref: b.ref, subscription: full.sub.ref, by, from: b.startsAt.toISOString(), to: to.toISOString(),
-    calendar: calendar?.status ?? null,
+    calendar: calendar?.status ?? (at ? null : "offline"),
   });
-  return { visit: moved, calendar };
+  return { visit: moved, calendar, offline: !at };
 }
 
 /**
@@ -1297,7 +1360,15 @@ export async function setEarlyArrival(subId: string, early: boolean, host?: stri
     await scheduleSoonText(v, settings.timezone).catch(() => false);
   }
   const at = await ownerAccessToken().catch(() => null);
-  if (at) await renumberCalendar(after, at, settings, siteOrigin(host), { times: true });
+  if (at) {
+    await renumberCalendar(after, at, settings, siteOrigin(host), { times: true });
+  } else {
+    /* Google injoignable : les heures d'arrivée de l'agenda sont à refaire. */
+    await sql()`
+      UPDATE nivex_bookings SET calendar_stale_at = now()
+      WHERE subscription_id = ${subId} AND status = 'confirmed' AND done_at IS NULL
+        AND starts_at > now() AND google_event_id IS NOT NULL`;
+  }
   await logEvent("subscription_arrival_set", { ref: full.sub.ref, minutes });
   return minutes;
 }
@@ -1616,6 +1687,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
   reminders: number; smsReminders: number; soon: number; notices: number; thanks: number; google: boolean;
+  calendarFixed: number;
 }> {
   await ensureSchema();
   const settings = await getSettings();
@@ -1785,8 +1857,27 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
-  await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at) };
+  /* — Agenda en retard — les visites dont l'événement Google n'a pas suivi
+     un geste (Google qui refusait, ou injoignable sur le moment) se remettent
+     à l'heure de la base, sans message à personne. Une qui échoue encore
+     reste marquée, et l'onglet Abonnés le montre. */
+  let calendarFixed = 0;
+  if (at) {
+    const late = (await sql()`
+      SELECT id, subscription_id FROM nivex_bookings
+      WHERE calendar_stale_at IS NOT NULL AND status = 'confirmed' AND done_at IS NULL
+        AND subscription_id IS NOT NULL AND ends_at > ${now.toISOString()}
+      ORDER BY starts_at LIMIT 40`.catch(() => [])) as Row[];
+    for (const r of late) {
+      const full = await subOf(r.subscription_id as string);
+      const v = full?.visits.find((x) => x.id === r.id);
+      if (!full || !v || full.sub.status !== "active") continue;
+      if ((await placeVisitEvent(full, v, at, settings, origin)).status !== "failed") calendarFixed++;
+    }
+  }
+
+  await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, calendarFixed, day: today, purged, calendarCopies });
+  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at), calendarFixed };
 }
 
 /**

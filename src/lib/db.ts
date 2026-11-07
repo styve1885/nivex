@@ -468,6 +468,11 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS done_at          timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS google_series_id text`;
+  /* Une visite dont l'événement Google n'a pas suivi la base : Google qui
+     refuse, ou injoignable au moment du geste. L'onglet Abonnés la signale,
+     son bouton ou la tâche du matin la remettent à l'heure, et la marque
+     tombe (7 novembre 2026). */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS calendar_stale_at timestamptz`;
 
   /* Le rappel par texto, noté à part du courriel : l'un peut partir sans
      l'autre, et une séance ponctuelle ne reçoit que le texto. */

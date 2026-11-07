@@ -213,10 +213,14 @@ défaut du code. Changer une constante ne change rien en production
   sonne toujours chez lui ; la changer demanderait de remonter sa fin.
 - **Un déplacement fait avant le correctif du 7 novembre 2026** a laissé
   un événement à l'ancienne heure (une visite passée au mardi 10 novembre,
-  18 h 30, restée au vendredi 13 dans l'agenda). Une fois le correctif en
+  18 h 30, restée au vendredi 13 dans l'agenda). Cette visite-là n'est pas
+  marquée : le marqueur est né avec le correctif. Une fois celui-ci en
   ligne : refaire ce déplacement à la même date et la même heure, dans
   l'onglet Abonnés ; l'événement se remet à l'heure, sans message au
   client. Le déplacement de la visite suivante au vendredi 13 passe ensuite.
+  Les visites que l'agenda ne suivrait plus à l'avenir sont marquées
+  « agenda à l'ancienne heure », avec un bouton « Remettre à l'heure », et
+  la tâche du matin les rattrape.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.

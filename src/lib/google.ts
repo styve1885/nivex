@@ -182,6 +182,8 @@ export async function freeBusy(
 
 export type EventInput = {
   calendarId: string;
+  /** L'identifiant choisi par nous (`newEventId`) : une création reprise ne double rien. */
+  id?: string;
   summary: string;
   description: string;
   location: string;
@@ -203,6 +205,7 @@ export async function createEvent(accessToken: string, e: EventInput): Promise<{
     source: { title: "NIVEX", url: siteOrigin() },
     transparency: "opaque",
   };
+  if (e.id) body.id = e.id;
   if (e.attendeeEmail) {
     body.attendees = [{ email: e.attendeeEmail, displayName: e.attendeeName, responseStatus: "needsAction" }];
   }
@@ -303,7 +306,7 @@ export type EventMoment = { dateTime?: string; date?: string };
 export async function patchEvent(
   accessToken: string, calendarId: string, eventId: string,
   p: { summary?: string; description?: string; start?: string; end?: string; timeZone?: string },
-): Promise<{ start?: EventMoment; end?: EventMoment } | undefined> {
+): Promise<{ status?: string; start?: EventMoment; end?: EventMoment } | undefined> {
   const body: Record<string, unknown> = {};
   if (p.summary !== undefined) body.summary = p.summary;
   if (p.description !== undefined) body.description = p.description;
@@ -408,7 +411,8 @@ export async function withRetry<T>(fn: () => Promise<T>, o: RetryOptions = {}): 
  * - `moved` : retouché sur place, même identifiant ; l'ancien créneau est libre.
  * - `replaced` : la retouche a été refusée ; l'ancien a été supprimé et un
  *   nouveau créé à la bonne heure (`reason` dit pourquoi).
- * - `created` : il n'y avait plus d'événement ; un nouveau est créé.
+ * - `created` : il n'y avait plus d'événement (effacé à la main, ou gardé
+ *   par Google à l'état supprimé) ; un nouveau est créé.
  * - `failed` : Google a refusé. `stale` : l'ancien événement est resté à
  *   l'ancienne heure, et rien n'a été créé à la nouvelle.
  */
@@ -417,6 +421,17 @@ export type EventMove =
   | { status: "replaced"; eventId: string; previous: string; reason: string }
   | { status: "created"; eventId: string }
   | { status: "failed"; eventId: string | null; stale: boolean; error: string };
+
+/**
+ * Un identifiant d'événement choisi par nous : 26 caractères de l'alphabet
+ * que Google accepte (base32hex, de 0 à 9 et de a à v), 130 bits de hasard.
+ * Une création reprise après une réponse perdue reçoit alors 409 au lieu de
+ * créer un second événement.
+ */
+export function newEventId(): string {
+  const alphabet = "0123456789abcdefghijklmnopqrstuv";
+  return Array.from(globalThis.crypto.getRandomValues(new Uint8Array(26)), (b) => alphabet[b % 32]).join("");
+}
 
 function sameInstant(m: EventMoment | undefined, iso: string): boolean {
   return Boolean(m?.dateTime) && Date.parse(m!.dateTime!) === Date.parse(iso);
@@ -452,12 +467,17 @@ export async function moveEvent(
   if (previous) {
     try {
       const ev = await withRetry(() => patchEvent(accessToken, calendarId, previous!, e), o);
-      /* Une réponse sans heure ne prouve rien contre la retouche : Google
-         l'a acceptée. */
-      if (!ev?.start || (sameInstant(ev.start, e.start) && sameInstant(ev.end, e.end))) {
+      if (ev?.status === "cancelled") {
+        /* Google garde quelque temps un événement supprimé, et peut en
+           accepter la retouche sans le rendre visible : il est parti. */
+        previous = null;
+      } else if (!ev?.start || (sameInstant(ev.start, e.start) && sameInstant(ev.end, e.end))) {
+        /* Une réponse sans heure ne prouve rien contre la retouche : Google
+           l'a acceptée. */
         return { status: "moved", eventId: previous };
+      } else {
+        reason = `l'événement n'a pas pris la nouvelle heure (${ev.start.dateTime ?? ev.start.date ?? "?"})`;
       }
-      reason = `l'événement n'a pas pris la nouvelle heure (${ev.start.dateTime ?? ev.start.date ?? "?"})`;
     } catch (err) {
       if (goneGoogleError(err)) previous = null;
       else reason = errorText(err);
@@ -470,11 +490,20 @@ export async function moveEvent(
       }
     }
   }
+  const id = newEventId();
   try {
-    const ev = await withRetry(() => createEvent(accessToken, { calendarId, ...e }), o);
+    await withRetry(async () => {
+      try {
+        await createEvent(accessToken, { calendarId, ...e, id });
+      } catch (err) {
+        /* Créé chez Google, mais la réponse s'est perdue : la reprise reçoit
+           409, et l'événement existe déjà sous notre identifiant. */
+        if (!(err instanceof GoogleError && err.status === 409)) throw err;
+      }
+    }, o);
     return previous
-      ? { status: "replaced", eventId: ev.id, previous, reason }
-      : { status: "created", eventId: ev.id };
+      ? { status: "replaced", eventId: id, previous, reason }
+      : { status: "created", eventId: id };
   } catch (err) {
     return { status: "failed", eventId: null, stale: false, error: errorText(err) };
   }
