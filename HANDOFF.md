@@ -141,7 +141,12 @@ bash tools/local/build.sh            # schéma, ligne de réglages, next build
 bash tools/local/start.sh &          # http://localhost:3000
 node tools/local/session.mjs         # jeton du cookie nivex_session (espace artisan)
 node tools/local/shots.cjs http://localhost:3000/fr /dossier "#presentation"
+bash -c 'source tools/local/env.sh && npx tsx tools/local/scenario-deplacement.mjs'
 ```
+
+Le dernier rejoue un déplacement de visites d'abonné par le vrai code, sur
+la base locale, avec un Google simulé (`tests/tools/fake-google.mjs`) :
+l'agenda suit, le créneau se libère, chaque refus dit sa raison.
 
 Éprouvé le 3 novembre 2026 sur une base vide : construction, pages
 publiques, espace artisan, captures. Les surprises connues (redémarrage
@@ -199,23 +204,23 @@ défaut du code. Changer une constante ne change rien en production
 
 - **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
   https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation.
-- **Le numéro de la maison et l'alerte d'appel manqué** (code mis en ligne
-  le 6 novembre 2026), à faire dans l'ordre :
-  1. dans `/admin`, Connexion : « Votre cellulaire, qui finit par … » au
-     vert, et le texto de test reçu sur son cellulaire. Sinon, poser
-     `SMS_OWNER_TO` chez Vercel (Production), puis Redeploy ;
-  2. chez Twilio, onglet « Voice and emergency address » du numéro :
-     méthode principale « Webhook »,
-     `https://www.nivexrepassage.ca/api/voice/incoming`, HTTP POST ; méthode
-     de secours « TwiML Bin », « NIVEX - transfert » ;
-  3. deux essais depuis un autre téléphone : un appel décroché, l'annonce
-     écoutée, une touche pressée (les deux sont reliés) ; puis un appel
-     laissé sonner, ou repris par sa boîte vocale (message d'absence, texto
-     « appel manqué ») ;
-  4. le nouveau numéro sur la fiche Google, puis « Synchronisation » dans
-     Bing Places, sur Facebook et Instagram, et dans ses publicités.
-  La vidéo de présentation dit encore l'ancien numéro, qui sonne toujours
-  chez lui ; la changer demanderait de remonter sa fin.
+- **Le numéro de la maison** : les appels sont réglés et éprouvés depuis
+  le 6 novembre 2026 (renvoi, annonce de l'appelant, touche pour répondre,
+  message d'absence et texto « appel manqué » : « Les 2 essais marchent »).
+  Reste de son côté : le nouveau numéro sur la fiche Google, puis
+  « Synchronisation » dans Bing Places, sur Facebook et Instagram, et dans
+  ses publicités. La vidéo de présentation dit encore l'ancien numéro, qui
+  sonne toujours chez lui ; la changer demanderait de remonter sa fin.
+- **Un déplacement fait avant le correctif du 7 novembre 2026** a laissé
+  un événement à l'ancienne heure (une visite passée au mardi 10 novembre,
+  18 h 30, restée au vendredi 13 dans l'agenda). Cette visite-là n'est pas
+  marquée : le marqueur est né avec le correctif. Une fois celui-ci en
+  ligne : refaire ce déplacement à la même date et la même heure, dans
+  l'onglet Abonnés ; l'événement se remet à l'heure, sans message au
+  client. Le déplacement de la visite suivante au vendredi 13 passe ensuite.
+  Les visites que l'agenda ne suivrait plus à l'avenir sont marquées
+  « agenda à l'ancienne heure », avec un bouton « Remettre à l'heure », et
+  la tâche du matin les rattrape.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -274,6 +279,8 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #32 | 7 nov. 2026 | Déplacer une visite d'abonné : l'agenda suit sans doublon, le créneau se libère, la vraie raison d'un refus |
+| #30, #31 | 6 nov. 2026 | Le numéro de la maison partout ; appels renvoyés, annonce de l'appelant, alerte d'appel manqué |
 | #28, #29 | 4 et 6 nov. 2026 | Passation : l'indexation, les fiches, Twilio réglé |
 | #27 | 2 nov. 2026 | Passation : banc d'essai local et ce document |
 | #26 | 2 nov. 2026 | Vidéo de présentation : accueil, page `/presentation`, VideoObject, lectures comptées |
@@ -330,6 +337,13 @@ a changé et vérifié.
   (réglé le 6 novembre 2026). Les journaux d'appels et d'erreurs de la
   console Twilio disent où un appel s'arrête ; Styve les envoie en
   captures.
+- **Une retouche Google qui échoue en silence** met l'agenda et la base en
+  désaccord, et l'agenda bloque alors un créneau que la base a libéré (vu le
+  7 novembre 2026 avec un déplacement de visite). Une écriture dans
+  l'agenda se vérifie dans la réponse, prévoit un repli et dit son échec à
+  l'artisan ; et l'agenda ne juge jamais les visites d'un abonnement dont la
+  base sait l'heure. Le journal (`nivex_events`, `subscription_calendar_move`)
+  garde la réponse de Google.
 - **Un texte à trous montre ses accolades** si un remplacement est oublié :
   `{duration}` est resté visible dans le tunnel d'abonnement du 22 octobre
   au 2 novembre 2026. Un test garde maintenant cette note dans les deux

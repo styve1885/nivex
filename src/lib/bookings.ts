@@ -92,6 +92,8 @@ export type Booking = {
   /* Une visite d'abonnement : vide pour une séance ponctuelle. */
   subscriptionId: string | null; seriesNo: number | null; makeup: boolean;
   doneAt: Date | null; reminderSentAt: Date | null; googleSeriesId: string | null;
+  /* L'événement Google n'a pas suivi la base : à remettre à l'heure. */
+  calendarStaleAt: Date | null;
   /* Le texto « je serai chez vous », programmé chez Twilio. */
   smsSoonAt: Date | null; smsSoonSid: string | null;
 };
@@ -157,6 +159,7 @@ export function hydrate(r: Row): Booking {
     doneAt: r.done_at ? new Date(r.done_at as string) : null,
     reminderSentAt: r.reminder_sent_at ? new Date(r.reminder_sent_at as string) : null,
     googleSeriesId: (r.google_series_id as string) ?? null,
+    calendarStaleAt: r.calendar_stale_at ? new Date(r.calendar_stale_at as string) : null,
     smsSoonAt: r.sms_soon_at ? new Date(r.sms_soon_at as string) : null,
     smsSoonSid: (r.sms_soon_sid as string) ?? null,
   };

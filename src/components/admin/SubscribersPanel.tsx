@@ -100,6 +100,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
       const d = await (await fetch("/api/cron/daily", { cache: "no-store" })).json();
       setDaily(d.ok
         ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.soon ?? 0} texto(s) de deux heures avant programmé(s), ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
+          + (d.calendarFixed ? ` ${d.calendarFixed} visite(s) remise(s) à l'heure dans l'agenda.` : "")
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {
@@ -195,6 +196,9 @@ function startsWithin(iso: string, ms: number): boolean {
 type ActResult = {
   ok: boolean; error?: string; conflicts?: Conflict[]; detail?: string; fields?: string[];
   replacement?: string | null; cents?: number; price?: number;
+  /* La raison précise d'un refus (horaire, rendez-vous en conflit, règle), et
+     ce qu'il faut savoir de l'agenda après un déplacement. */
+  reason?: string; note?: string;
 };
 
 async function act(body: Record<string, unknown>): Promise<ActResult> {
@@ -208,10 +212,10 @@ async function act(body: Record<string, unknown>): Promise<ActResult> {
   }
 }
 
-function errorText(d: Pick<ActResult, "error" | "detail" | "fields">): string {
+function errorText(d: Pick<ActResult, "error" | "detail" | "fields" | "reason">): string {
   const named = (d.fields ?? []).map((f) => FIELDS[f]).filter(Boolean);
   if (d.error === "invalid_input" && named.length > 0) return `Vérifiez ${named.length > 1 ? "ces champs" : "ce champ"} : ${named.join(", ")}.`;
-  return (d.error && ERRORS[d.error]) || d.detail || "L'action n'a pas abouti. Réessayez.";
+  return d.reason || (d.error && ERRORS[d.error]) || d.detail || "L'action n'a pas abouti. Réessayez.";
 }
 
 /* ============================ Une fiche ============================ */
@@ -496,15 +500,19 @@ function VisitRow({ v, perCycle, when, onChange }: {
   const [to, setTo] = useState({ date: "", time: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const cancelled = v.status === "cancelled";
   const startedish = startsWithin(v.startsAt, 2 * 3600_000);
 
   async function run(body: Record<string, unknown>) {
     setBusy(true);
     setErr(null);
+    setNote(null);
     const d = await act(body);
     setBusy(false);
     if (!d.ok) { setErr(errorText(d)); return; }
+    /* Fait, mais l'agenda Google n'a peut-être pas suivi : on le dit. */
+    setNote(d.note ?? null);
     setMode("idle");
     await onChange();
   }
@@ -519,6 +527,7 @@ function VisitRow({ v, perCycle, when, onChange }: {
           {cancelled ? "annulée" : v.index ? `${v.index}/${perCycle} · cycle ${v.cycle}` : ""}
           {v.makeup && !cancelled ? " · remplacement" : ""}
           {!cancelled && !v.inCalendar ? " · hors agenda" : ""}
+          {!cancelled && v.inCalendar && v.calendarStale ? " · agenda à l'ancienne heure" : ""}
         </span>
         {v.doneAt && <span className="text-[10px] uppercase tracking-[0.14em] text-gold-700">effectuée</span>}
         <span className="ml-auto flex gap-4">
@@ -531,6 +540,13 @@ function VisitRow({ v, perCycle, when, onChange }: {
           {v.doneAt && (
             <button type="button" disabled={busy} onClick={() => run({ action: "done", visitId: v.id, done: false })} className={`${small} text-ink-400`}>
               Retirer
+            </button>
+          )}
+          {/* L'agenda Google n'a pas suivi la base : on le remet à l'heure de la
+              visite, sans message au client. */}
+          {!cancelled && !v.doneAt && !isOver(v.endsAt) && (!v.inCalendar || v.calendarStale) && (
+            <button type="button" disabled={busy} onClick={() => run({ action: "sync", visitId: v.id })} className={`${small} text-gold-700`}>
+              {v.inCalendar ? "Remettre à l'heure" : "Remettre dans l'agenda"}
             </button>
           )}
           {!cancelled && !v.doneAt && (
@@ -561,6 +577,7 @@ function VisitRow({ v, perCycle, when, onChange }: {
         </div>
       )}
       {err && <p role="alert" className="mt-1.5 text-[0.8rem] text-[#8E332C]">{err}</p>}
+      {note && <p role="status" className="mt-1.5 text-[0.8rem] text-gold-700">{note}</p>}
     </li>
   );
 }
