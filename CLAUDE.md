@@ -104,6 +104,13 @@ ramènerait au prochain chargement ; elles se désactivent.
   taille, le type et la matière des vêtements. Aucune autre estimation de
   quantité ne s'écrit.
 - **Rien ne quitte le domicile** : pas de collecte, pas de livraison.
+- **Aucun jour férié n'est fermé** (décision de l'artisan, 9 novembre
+  2026). Les Fêtes — 24, 25, 26 et 31 décembre, 1er janvier — et tous les
+  jours fériés suivent l'horaire de la semaine, pour les séances comme pour
+  les abonnements. Aucune fermeture automatique ne s'écrit dans le code ; un
+  jour de congé se pose dans l'agenda Google de l'artisan (un événement
+  « toute la journée » marqué occupé), qui bloque alors les créneaux. Un
+  test tient les Fêtes ouvertes.
 - **Le client prévoit la planche à repasser**, une prise et environ deux
   mètres carrés ; l'artisan apporte tout le reste (générateur de vapeur,
   fer, pattemouilles, cintres). Le texto de confirmation le rappelle.
@@ -209,6 +216,7 @@ qu'une seconde instance froide ne la rejoue jamais, même si l'artisan a
 remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 50 $ à 55 $, seulement s'il valait encore 50 $. `zones-2026-ab` a ramené
 la grille à deux zones (plus bas, « Zones et frais de déplacement »).
+`horizon-2026-90` a porté la réservation en ligne à 90 jours à l'avance.
 Les noms des formules, eux, ne passent pas par cette table : ils
 convergent à chaque démarrage (`formules-2026-11`, plus bas, « Les
 abonnements »).
@@ -351,7 +359,12 @@ Les gardes posées là, et pourquoi :
   Rendez-vous montre les trois temps (`sessionPhases`) et le repassage
   effectif.
 - **L'horizon et la grille sont tenus par le serveur**, pas seulement par
-  le navigateur : pas de réservation au-delà de `horizonDays`.
+  le navigateur : pas de réservation au-delà de `horizonDays` (« Réservable
+  jusqu'à … jours à l'avance », dans Réglages). **90 jours depuis le
+  9 novembre 2026** (migration unique `horizon-2026-90`, qui ne relève
+  qu'un horizon plus court) : à 45 jours, une cliente ne trouvait plus rien
+  à partir du 25 décembre. Une série d'abonnement, elle, court sans horizon :
+  seule sa première visite, prise en ligne, doit y tenir.
 - **La facturation suit le pas des créneaux** (`slotStep`, 30 min par
   défaut) : au-delà du minimum, la durée et le prix s'arrondissent à cette
   tranche, et les conditions le disent (`{step}`). Décidé par l'artisan le

@@ -896,4 +896,29 @@ test("le moteur de créneaux et le contrôle disent la même chose : pas de batt
   assert.equal(slotProblem(nov(13, 15).getTime(), 120, [visit], house, NOW, { checkLead: false }), "busy");
 });
 
+/* ————— Les Fêtes (9 novembre 2026) —————
+   Aucun jour férié n'est fermé : une série d'abonnement passe par Noël et le
+   jour de l'An comme par n'importe quelle semaine, à l'horaire du jour. */
+
+console.log("\nLes abonnements à travers les Fêtes\n");
+
+test("une série VIP du vendredi, posée en décembre, passe par le 25 décembre et le 1er janvier sans refus", () => {
+  const starts = gridDates(gridFrom(at(2026, 12, 18, 13), 1, TZ), 0, visitsToEndOfSeries(4, 1, 0));
+  const keys = starts.map((d) => dateKey(d, TZ));
+  assert.equal(starts.length, 24, "six cycles de quatre visites");
+  assert.ok(keys.includes("2026-12-25") && keys.includes("2027-01-01"));
+  assert.equal(keys.at(-1), "2027-05-28", "la série court bien au-delà des 90 jours de la réservation en ligne");
+  assert.deepEqual(seriesConflicts(starts, 120, [], house, { now: at(2026, 11, 9, 10), checkLead: true }), []);
+});
+
+test("une série du jeudi soir passe par le 24 et le 31 décembre, de 18 h à 20 h", () => {
+  const starts = gridDates(gridFrom(at(2026, 12, 17, 18), 1, TZ), 0, 4);
+  assert.deepEqual(starts.map((d) => dateKey(d, TZ)), ["2026-12-17", "2026-12-24", "2026-12-31", "2027-01-07"]);
+  assert.deepEqual(seriesConflicts(starts, 120, [], house, { now: at(2026, 11, 9, 10), checkLead: true }), []);
+  /* Le samedi 26 décembre, 18 h, au rythme de deux semaines (Premium Plus). */
+  const sat = gridDates(gridFrom(at(2026, 12, 26, 18), 2, TZ), 0, 3);
+  assert.deepEqual(sat.map((d) => dateKey(d, TZ)), ["2026-12-26", "2027-01-09", "2027-01-23"]);
+  assert.deepEqual(seriesConflicts(sat, 120, [], house, { now: at(2026, 11, 9, 10) }), []);
+});
+
 console.log(`\n${n} réussis, 0 échoués\n`);

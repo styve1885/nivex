@@ -55,6 +55,11 @@ Pour un outil qui lance des commandes en arrière-plan, lancer le relais et
 
 ## Ce qui surprend
 
+- **`next build` échoue sur les polices** (« next/font/google queries have
+  exactly one entry », ou « Cannot read properties of null (reading '1') »
+  dans le chargeur Google) : un téléchargement raté est resté en cache.
+  Effacer `.next`, puis relancer `build.sh` (vu le 9 novembre 2026).
+
 - **Après un enregistrement depuis `/admin`**, `next start` sert l'accueil
   en 404 et le reste en 500 : redémarrer `start.sh`. Vercel n'a pas ce
   défaut.

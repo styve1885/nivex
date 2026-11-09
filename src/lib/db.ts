@@ -63,7 +63,7 @@ async function bootstrap() {
       min_minutes     integer     NOT NULL DEFAULT 120,
       buffer_minutes  integer     NOT NULL DEFAULT 30,
       lead_hours      integer     NOT NULL DEFAULT 24,
-      horizon_days    integer     NOT NULL DEFAULT 45,
+      horizon_days    integer     NOT NULL DEFAULT 90,
       slot_step       integer     NOT NULL DEFAULT 30,
       first_hour_free boolean     NOT NULL DEFAULT true,
       paused          boolean     NOT NULL DEFAULT false,
@@ -558,6 +558,19 @@ async function bootstrap() {
     )
     UPDATE nivex_settings SET hourly_rate = 5500, updated_at = now()
     WHERE id = 1 AND hourly_rate = 5000 AND EXISTS (SELECT 1 FROM done)`;
+
+  /* La réservation en ligne passe de 45 à 90 jours à l'avance le 9 novembre
+     2026 : une cliente ne trouvait plus rien à partir du 25 décembre, au-delà
+     des 45 jours. Seulement si l'horizon était plus court : un horizon plus
+     long est un choix de l'artisan. */
+  await q`
+    WITH done AS (
+      INSERT INTO nivex_migrations (name) VALUES ('horizon-2026-90')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name
+    )
+    UPDATE nivex_settings SET horizon_days = 90, updated_at = now()
+    WHERE id = 1 AND horizon_days < 90 AND EXISTS (SELECT 1 FROM done)`;
 
   /* Le 23 octobre 2026, deux zones au lieu de trois : la zone A absorbe la
      zone B, sans frais ; la zone C devient la zone B, à 15 $ et 10 $
