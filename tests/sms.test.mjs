@@ -14,7 +14,7 @@ const {
 const { fromWall } = await import("../src/lib/time.ts");
 const { SMS_SIGNATURE, PHONE } = await import("../src/lib/brand.ts");
 const {
-  twimlRingOwner, twimlMissedMessage, missedCallAlert, callMissed, callerNumber, MISSED_MESSAGE, RING_SECONDS,
+  twimlRingOwner, twimlMissedMessage, missedCallAlert, answeredCallAlert, callMissed, callerNumber, MISSED_MESSAGE, RING_SECONDS,
   ACCEPT_SECONDS, callerKey, callerFromKey, spokenNumber, screenPrompt, twimlScreen, twimlAccept,
 } = await import("../src/lib/voice.ts");
 
@@ -143,6 +143,24 @@ await test("l'alerte d'appel manqué donne le nom, le numéro et l'heure de Mont
   }
   assert.equal(callerNumber("+15145550123"), "+15145550123");
   assert.equal(callerNumber("5145550123"), null, "Twilio donne toujours le +1");
+});
+
+await test("après un appel répondu, l'artisan reçoit le numéro du client, l'heure du début et la durée", () => {
+  /* Son téléphone n'a montré que le numéro de la maison, « Nivex Clients » :
+     le texto lui donne de quoi rappeler ou réserver (9 novembre 2026). */
+  const start = fromWall({ year: 2026, month: 11, day: 9, hour: 10, minute: 57 }, TZ);
+  assert.equal(answeredCallAlert({ from: "+15145550123", name: "Marie Tremblay", at: start, tz: TZ, seconds: 371 }),
+    "NIVEX : appel de Marie Tremblay (514 555-0123), à 10 h 57, 6 min.");
+  assert.equal(answeredCallAlert({ from: "+15145550123", name: null, at: start, tz: TZ, seconds: 371 }),
+    "NIVEX : appel du 514 555-0123, à 10 h 57, 6 min.");
+  assert.equal(answeredCallAlert({ from: "+15145550123", name: null, at: start, tz: TZ, seconds: 25 }),
+    "NIVEX : appel du 514 555-0123, à 10 h 57.", "sous une demi-minute, la durée ne se dit pas");
+  assert.equal(answeredCallAlert({ from: "+15145550123", name: "Françoise Côté", at: start, tz: TZ }),
+    "NIVEX : appel de Francoise Coté (514 555-0123), à 10 h 57.");
+  const t = answeredCallAlert({ from: "+15145550123", name: "Marie Tremblay", at: start, tz: TZ, seconds: 3600 });
+  assert.ok(!t.includes("!") && !t.includes("—") && t.length <= 160, "un seul texto, sans tiret cadratin");
+  /* Un appel relié n'est pas manqué : c'est ce texto-là qui part, pas l'alerte. */
+  assert.equal(callMissed("completed", "true"), false);
 });
 
 const when = smsWhen(fromWall({ year: 2026, month: 10, day: 20, hour: 14, minute: 0 }, TZ), TZ, "fr");
