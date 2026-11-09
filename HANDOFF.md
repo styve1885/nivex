@@ -255,6 +255,16 @@ conteneur n'atteint ni Google ni Bing (section 9).
   horaire du samedi compris ; adresse masquée ; `contact@nivexrepassage.ca`
   ajouté.
 - **Fiche Google** : l'horaire du samedi y est depuis le 4 novembre.
+- **Au 9 novembre** : Google a les 12 pages du plan du site, plus les deux
+  pages d'abonnement ; les documents légaux y gardent leur ancien titre
+  (« · NIVEX »), en attendant qu'il les relise. Bing n'a toujours rien,
+  alors que l'envoi IndexNow du 6 novembre (12 adresses) a reçu 200 : le
+  site n'y est pour rien. À Styve : capture de l'inspection de `/fr` et des
+  « Plans de site » dans Bing Webmaster Tools, et l'adresse du site sur
+  Facebook, Instagram et la fiche Google. Les avertissements de la Search
+  Console (`/$` et `/&` introuvables, l'icône « explorée, non indexée »,
+  `/` redirigée, `?formule=` canoniques) sont attendus : `/$` et `/&` sont
+  des repères internes de React lus comme des liens.
 - **À refaire vers le 10 novembre** : `site:nivexrepassage.ca` sur Google
   et sur Bing, en captures. Si Bing n'a toujours rien : ses « Plans de
   site » dans Bing Webmaster Tools, puis des liens vers le site depuis la
@@ -279,6 +289,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #33 | 9 nov. 2026 | Réservation en ligne à 90 jours à l'avance ; aucun jour férié fermé, Fêtes comprises |
 | #32 | 7 nov. 2026 | Déplacer une visite d'abonné : l'agenda suit sans doublon, le créneau se libère, la vraie raison d'un refus |
 | #30, #31 | 6 nov. 2026 | Le numéro de la maison partout ; appels renvoyés, annonce de l'appelant, alerte d'appel manqué |
 | #28, #29 | 4 et 6 nov. 2026 | Passation : l'indexation, les fiches, Twilio réglé |

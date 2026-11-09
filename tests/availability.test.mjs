@@ -375,5 +375,59 @@ try {
   console.log("  ✓ une plage de plusieurs années est refusée d'emblée"); pass++;
 } catch (e) { console.log(`  ✗ une plage de plusieurs années est refusée d'emblée\n      ${e.message}`); fail++; }
 
+/* ————— Les Fêtes et la réservation à 90 jours (9 novembre 2026) —————
+
+   Une cliente ne trouvait plus rien à partir du 25 décembre : l'horizon était
+   de 45 jours, et le 9 novembre + 45 jours tombe le 24 décembre. Il passe à
+   90 jours. Aucun jour férié n'est fermé : l'artisan travaille aux Fêtes,
+   selon son horaire de la semaine. */
+
+console.log("\nLes Fêtes et la réservation à 90 jours\n");
+{
+  const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
+  const house = {
+    ...settings, leadHours: 24, horizonDays: FALLBACK_SETTINGS.horizonDays, bufferMinutes: 30, slotStep: 30,
+    hours: [
+      { day: 0, enabled: true, open: "07:00", close: "22:00" },
+      ...[1, 2, 3, 4].map((day) => ({ day, enabled: true, open: "18:00", close: "22:00" })),
+      { day: 5, enabled: true, open: "07:00", close: "22:00" },
+      { day: 6, enabled: true, open: "18:00", close: "22:00" },
+    ],
+  };
+  const nov9 = fromWall({ year: 2026, month: 11, day: 9, hour: 10, minute: 0 }, TZ);
+  const slotsOn = (key, s = house) => computeSlots({
+    fromKey: key, days: 1, durationMinutes: 120, settings: s, busy: [], now: nov9,
+  })[0].slots.map((x) => x.time);
+
+  t("la réservation en ligne porte sur 90 jours par défaut", () => {
+    assert.equal(FALLBACK_SETTINGS.horizonDays, 90);
+  });
+
+  t("le 9 novembre, à 45 jours, le 24 décembre était le dernier jour : d'où la panne du 25", () => {
+    const short = { ...house, horizonDays: 45 };
+    assert.ok(slotsOn("2026-12-24", short).length > 0);
+    assert.deepEqual(slotsOn("2026-12-25", short), []);
+    assert.deepEqual(slotsOn("2026-12-28", short), []);
+  });
+
+  t("à 90 jours, les Fêtes sont réservables comme n'importe quel jour, à l'horaire de la semaine", () => {
+    assert.deepEqual(slotsOn("2026-12-24"), ["18:00", "18:30", "19:00", "19:30", "20:00"], "jeudi 24 : 18 h – 22 h");
+    assert.equal(slotsOn("2026-12-25")[0], "07:00", "vendredi 25 : dès 7 h");
+    assert.equal(slotsOn("2026-12-25").at(-1), "20:00", "une séance de 2 h finit à 22 h au plus tard");
+    assert.deepEqual(slotsOn("2026-12-26"), ["18:00", "18:30", "19:00", "19:30", "20:00"], "samedi 26");
+    assert.deepEqual(slotsOn("2026-12-28"), ["18:00", "18:30", "19:00", "19:30", "20:00"], "lundi 28");
+    assert.deepEqual(slotsOn("2026-12-31"), ["18:00", "18:30", "19:00", "19:30", "20:00"], "jeudi 31");
+    assert.equal(slotsOn("2027-01-01")[0], "07:00", "vendredi 1er janvier");
+  });
+
+  t("le dernier jour réservable est le 7 février 2027 ; le 8, rien", () => {
+    assert.ok(slotsOn("2027-02-07").length > 0, "dimanche 7 février, 9 novembre + 90 jours");
+    assert.deepEqual(slotsOn("2027-02-08"), []);
+    assert.ok(slotIsFree(fromWall({ year: 2026, month: 12, day: 25, hour: 10, minute: 0 }, TZ).toISOString(), 120, [], house, nov9));
+    assert.ok(slotIsFree(fromWall({ year: 2026, month: 12, day: 28, hour: 18, minute: 0 }, TZ).toISOString(), 120, [], house, nov9));
+    assert.ok(!slotIsFree(fromWall({ year: 2027, month: 2, day: 8, hour: 18, minute: 0 }, TZ).toISOString(), 120, [], house, nov9));
+  });
+}
+
 console.log(`\n${pass} réussis, ${fail} échoués\n`);
 process.exit(fail === 0 ? 0 : 1);
