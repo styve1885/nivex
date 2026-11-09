@@ -186,7 +186,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur ; un événement déplacé sans jamais le doubler (`moveEvent`) |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
-| `lib/voice.ts` | Les appels au numéro de la maison : sonnerie du cellulaire, message d'absence, alerte d'appel manqué |
+| `lib/voice.ts` | Les appels au numéro de la maison : sonnerie du cellulaire, message d'absence, texto après chaque appel, manqué ou répondu |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : en-tête de chaque page (titre, description, canonique, hreflang), fiche LocalBusiness, site, FAQ structurée |
 | `lib/i18n/seo.ts` | Le titre et la description de chaque page, dans les deux langues, hors des dictionnaires |
 | `lib/pages.ts` | Les pages publiques et la date de leur dernière modification : plan du site et IndexNow |
@@ -600,10 +600,16 @@ l'artisan, sans alerte. L'appel non relié (`DialBridged` à « false »), sans
 réponse, refusé ou échoué passe à `/api/voice/missed` : l'appelant entend un
 court message d'absence, en français puis en anglais, sans boîte vocale, et
 l'artisan reçoit un texto « appel manqué de … » avec le numéro, le nom s'il
-est déjà client, et l'heure. Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
+est déjà client, et l'heure. **Un appel relié vaut aussi un texto**, une
+fois raccroché (`answeredCallAlert`, depuis le 9 novembre 2026) : « NIVEX :
+appel de … (514 …), à 10 h 57, 6 min ». Le téléphone de l'artisan n'affiche
+que le numéro de la maison (« Nivex Clients » dans ses contacts), et il lui
+faut celui du client pour rappeler ou réserver ; rien pour un numéro masqué.
+Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
 RESTRICTED, ressemble à un numéro d'ici) : `callerNumber` n'accepte qu'un
 « +1 » suivi de dix chiffres. Au-delà de `MISSED_ALERTS_PER_HOUR` (20)
-alertes dans l'heure, les suivantes ne partent pas. Le journal note le sort
+textos d'une même sorte dans l'heure (appels manqués, appels répondus), les
+suivants ne partent pas. Le journal note le sort
 de l'appel, jamais le numéro, et le site n'en garde rien (la politique le
 dit). Sans `SMS_OWNER_TO`, la route répond 503 et Twilio passe à la méthode
 de secours du numéro : le TwiML Bin « NIVEX - transfert »

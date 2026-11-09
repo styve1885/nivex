@@ -12,9 +12,12 @@ import { readable, smsTime, toGsm7, xmlEscape } from "./sms";
  *    son côté, sans relier. Sans ce filtre, une boîte vocale qui décroche
  *    compte pour Twilio comme un appel répondu, et aucune alerte ne part (vu
  *    le 6 novembre 2026).
- * 3. À la fin de la sonnerie, /api/voice/missed : un appel non relié est
+ * 3. À la fin de l'appel, /api/voice/missed : un appel non relié est
  *    manqué. L'appelant entend un court message, et l'artisan reçoit un texto
- *    avec son numéro, et son nom s'il est déjà client. Rien n'est conservé.
+ *    avec son numéro, et son nom s'il est déjà client. Un appel relié lui
+ *    vaut aussi un texto, une fois raccroché : son téléphone n'a montré que
+ *    le numéro de la maison, et il lui faut celui du client pour rappeler ou
+ *    réserver (depuis le 9 novembre 2026). Rien n'est conservé.
  *
  * Le TwiML Bin « NIVEX - transfert », réglé chez Twilio comme méthode de
  * secours, prend le relais si le site ne répond pas : l'appel sonne alors
@@ -30,7 +33,10 @@ export const RING_SECONDS = 25;
 /** Le temps laissé à l'artisan, après l'annonce, pour appuyer sur une touche. */
 export const ACCEPT_SECONDS = 6;
 
-/** Au-delà de ce nombre d'alertes dans l'heure, les suivantes ne partent pas. */
+/**
+ * Au-delà de ce nombre de textos dans l'heure, les suivants ne partent pas :
+ * vingt pour les appels manqués, vingt pour les appels répondus.
+ */
 export const MISSED_ALERTS_PER_HOUR = 20;
 
 const XML = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -150,4 +156,17 @@ export function missedCallAlert(o: { from: string | null; name: string | null; a
     : o.name ? `de ${o.name} (${readable(o.from)})`
     : `du ${readable(o.from)}`;
   return toGsm7(`NIVEX : appel manqué ${who}, à ${smsTime(o.at, o.tz, "fr")}.`);
+}
+
+/**
+ * Le texto que reçoit l'artisan après un appel répondu : le numéro du client,
+ * son nom s'il est déjà client, l'heure du début et la durée. Son téléphone,
+ * lui, n'a montré que le numéro de la maison. Pour un numéro masqué, rien :
+ * il n'y aurait rien à donner. La durée s'arrondit à la minute ; sous une
+ * demi-minute, elle ne se dit pas.
+ */
+export function answeredCallAlert(o: { from: string; name: string | null; at: Date; tz: string; seconds?: number | null }): string {
+  const who = o.name ? `de ${o.name} (${readable(o.from)})` : `du ${readable(o.from)}`;
+  const minutes = Math.round((o.seconds ?? 0) / 60);
+  return toGsm7(`NIVEX : appel ${who}, à ${smsTime(o.at, o.tz, "fr")}${minutes >= 1 ? `, ${minutes} min` : ""}.`);
 }

@@ -277,8 +277,9 @@ export function ConnectionPanel({
             <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/sms/incoming</code>
             <p className="mt-5 text-ink-700">Les appels</p>
             <p className="mt-1">
-              Pour que les appels au numéro de la maison sonnent sur votre cellulaire, et qu&apos;un appel manqué vous
-              arrive par texto avec le numéro de la personne, ouvrez votre numéro dans la console Twilio, onglet
+              Pour que les appels au numéro de la maison sonnent sur votre cellulaire, et que chaque appel, répondu
+              ou manqué, vous arrive ensuite par texto avec le numéro de la personne, ouvrez votre numéro dans la
+              console Twilio, onglet
               « Voice and emergency address ». Méthode principale : « Webhook », méthode HTTP POST, avec cette
               adresse :
             </p>
@@ -288,8 +289,9 @@ export function ConnectionPanel({
               ne répond pas.
             </p>
             <p className="mt-2">
-              Quand vous décrochez, une voix annonce l&apos;appelant : appuyez sur une touche pour lui parler. Sans
-              touche, par exemple si votre boîte vocale répond, l&apos;appel compte comme manqué, et le texto
+              Quand vous décrochez, une voix annonce l&apos;appelant : appuyez sur une touche pour lui parler. Votre
+              téléphone affiche le numéro de la maison ; celui du client vous arrive par texto une fois raccroché.
+              Sans touche, par exemple si votre boîte vocale répond, l&apos;appel compte comme manqué, et le texto
               d&apos;alerte part.
             </p>
             <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
