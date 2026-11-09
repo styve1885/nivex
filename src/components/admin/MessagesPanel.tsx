@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
+import { TextsSection } from "./TextsSection";
 
 type Msg = {
   id: string; locale: string; name: string; email: string | null; phone: string | null;
@@ -16,7 +17,25 @@ const when = (iso: string, tz: string) =>
     timeZone: tz, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
 
+/**
+ * L'onglet Messages : les textos échangés avec les clients en haut, puis
+ * les messages du formulaire de contact du site.
+ */
 export function MessagesPanel({ timezone }: { timezone: string }) {
+  return (
+    <div>
+      <TextsSection timezone={timezone} />
+      <section aria-labelledby="formulaire-titre" className="mt-16 border-t border-gold-300/50 pt-10">
+        <h2 id="formulaire-titre" className="mb-6 text-[11px] uppercase tracking-[0.18em] text-gold-600">
+          Formulaire du site
+        </h2>
+        <FormMessages timezone={timezone} />
+      </section>
+    </div>
+  );
+}
+
+function FormMessages({ timezone }: { timezone: string }) {
   const [messages, setMessages] = useState<Msg[] | null>(null);
   const [error, setError] = useState<LoadError | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -55,15 +74,15 @@ export function MessagesPanel({ timezone }: { timezone: string }) {
     }
   }
 
-  if (error) return <LoadFailure error={error} className="py-20 text-center" />;
+  if (error) return <LoadFailure error={error} className="py-6" />;
 
   if (messages === null) {
-    return <p className="py-20 text-center text-[0.9rem] text-ink-400">Lecture des messages…</p>;
+    return <p className="py-6 text-[0.9rem] text-ink-400">Lecture des messages…</p>;
   }
 
   if (messages.length === 0) {
     return (
-      <p className="py-20 text-center text-[0.9rem] text-ink-400">
+      <p className="py-6 text-[0.9rem] text-ink-400">
         Aucun message pour l&apos;instant. Le formulaire de contact du site arrive ici.
       </p>
     );

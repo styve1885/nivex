@@ -4,8 +4,10 @@ import { readable, smsTime, toGsm7, xmlEscape } from "./sms";
  * Les appels au numéro de la maison, par Twilio.
  *
  * 1. Twilio demande à /api/voice/incoming quoi faire de chaque appel : on lui
- *    répond de faire sonner le cellulaire de l'artisan, sous le numéro de la
- *    maison.
+ *    répond de faire sonner le cellulaire de l'artisan, sous le numéro de
+ *    l'appelant (depuis le 9 novembre 2026 ; avant, sous celui de la maison,
+ *    et l'artisan ne voyait pas qui appelait). Un numéro masqué sonne sous
+ *    celui de la maison.
  * 2. Quand le cellulaire décroche, /api/voice/screen/<appelant> annonce qui
  *    appelle, et attend une touche (/api/voice/accept). L'artisan appuie : les
  *    deux sont reliés. Une boîte vocale n'appuie sur rien : on raccroche de
@@ -15,9 +17,9 @@ import { readable, smsTime, toGsm7, xmlEscape } from "./sms";
  * 3. À la fin de l'appel, /api/voice/missed : un appel non relié est
  *    manqué. L'appelant entend un court message, et l'artisan reçoit un texto
  *    avec son numéro, et son nom s'il est déjà client. Un appel relié lui
- *    vaut aussi un texto, une fois raccroché : son téléphone n'a montré que
- *    le numéro de la maison, et il lui faut celui du client pour rappeler ou
- *    réserver (depuis le 9 novembre 2026). Rien n'est conservé.
+ *    vaut aussi un texto, une fois raccroché : le numéro du client par écrit,
+ *    son nom s'il est déjà client, et la marque d'un appel NIVEX, que
+ *    l'affichage du téléphone ne donne plus. Rien n'est conservé.
  *
  * Le TwiML Bin « NIVEX - transfert », réglé chez Twilio comme méthode de
  * secours, prend le relais si le site ne répond pas : l'appel sonne alors
@@ -43,18 +45,47 @@ const XML = '<?xml version="1.0" encoding="UTF-8"?>';
 const FR_VOICE = 'language="fr-CA" voice="Polly.Chantal"';
 
 /**
- * Faire sonner le cellulaire de l'artisan. `callerId` est le numéro de la
- * maison : l'artisan sait qu'un client appelle, et son opérateur ne refuse
- * pas un appel transféré sous un numéro qui n'est pas celui de Twilio.
- * `screen` annonce l'appelant à qui décroche ; `action` reçoit le sort de
- * l'appel. L'appelant entend sonner jusqu'à ce que les deux soient reliés
- * (`answerOnBridge`, que le filtre exige).
+ * Faire sonner le cellulaire de l'artisan. Sans `callerId`, Twilio garde le
+ * numéro de l'appelant : c'est lui qui s'affiche sur le cellulaire. Avec, le
+ * cellulaire affiche ce numéro-là, celui de la maison. `screen` annonce
+ * l'appelant à qui décroche ; `action` reçoit le sort de l'appel. L'appelant
+ * entend sonner jusqu'à ce que les deux soient reliés (`answerOnBridge`, que
+ * le filtre exige).
  */
-export function twimlRingOwner(o: { owner: string; callerId: string; screen: string; action: string; seconds?: number }): string {
+export function twimlRingOwner(o: { owner: string; callerId: string | null; screen: string; action: string; seconds?: number }): string {
   const seconds = o.seconds ?? RING_SECONDS;
-  return `${XML}<Response><Dial answerOnBridge="true" timeout="${seconds}" callerId="${xmlEscape(o.callerId)}" `
+  const callerId = o.callerId ? ` callerId="${xmlEscape(o.callerId)}"` : "";
+  return `${XML}<Response><Dial answerOnBridge="true" timeout="${seconds}"${callerId} `
     + `action="${xmlEscape(o.action)}" method="POST">`
     + `<Number url="${xmlEscape(o.screen)}" method="POST">${xmlEscape(o.owner)}</Number></Dial></Response>`;
+}
+
+/**
+ * La sonnerie d'un appel : sous le numéro du client quand on le connaît et
+ * que `passthrough` le permet, sinon sous celui de la maison (`house`). Un
+ * appel sonné sous le numéro du client le dit à /api/voice/missed
+ * (`?via=client`), qui peut alors refaire sonner sous celui de la maison.
+ */
+export function ringFor(o: { owner: string; from: string | null | undefined; house: string; origin: string; passthrough: boolean }): string {
+  const caller = callerNumber(o.from);
+  const through = o.passthrough && caller !== null;
+  return twimlRingOwner({
+    owner: o.owner,
+    callerId: through ? null : o.house,
+    screen: `${o.origin}/api/voice/screen/${callerKey(caller)}`,
+    action: `${o.origin}/api/voice/missed${through ? "?via=client" : ""}`,
+  });
+}
+
+/**
+ * L'appel sonné sous le numéro du client a échoué d'emblée : un opérateur a
+ * pu refuser un numéro qui n'appartient pas à Twilio. On refait sonner une
+ * fois, sous celui de la maison, comme avant le 9 novembre 2026. Seul l'échec
+ * compte : « occupé » dit aussi que l'artisan a refusé l'appel, et le
+ * cellulaire ne doit pas sonner une seconde fois.
+ */
+export function passthroughRefused(status: string | null, via: string | null): boolean {
+  return via === "client" && status === "failed";
 }
 
 /**

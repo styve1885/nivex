@@ -289,6 +289,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #35 | 9 nov. 2026 | Le numéro du client sur le cellulaire de l'artisan ; les textos avec chaque client dans l'onglet Messages, envoi depuis le numéro de la maison |
 | #34 | 9 nov. 2026 | Un texto à l'artisan après chaque appel répondu : le numéro du client, son nom, l'heure, la durée |
 | #33 | 9 nov. 2026 | Réservation en ligne à 90 jours à l'avance ; aucun jour férié fermé, Fêtes comprises |
 | #32 | 7 nov. 2026 | Déplacer une visite d'abonné : l'agenda suit sans doublon, le créneau se libère, la vraie raison d'un refus |
