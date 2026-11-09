@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PHONE } from "@/lib/brand";
 import { ensureSchema, logEvent, sql } from "@/lib/db";
+import { siteOrigin } from "@/lib/google";
 import { getSettings } from "@/lib/settings";
-import { knownClientName, ownerSmsNumber, sendSms, TWIML_EMPTY } from "@/lib/sms";
+import { knownClientName, ownerSmsNumber, sendSms, toE164, TWIML_EMPTY } from "@/lib/sms";
 import { readTwilioWebhook, twimlResponse } from "@/lib/twilio-webhook";
 import {
-  answeredCallAlert, callerNumber, callMissed, MISSED_ALERTS_PER_HOUR, missedCallAlert, twimlMissedMessage,
+  answeredCallAlert, callerNumber, callMissed, MISSED_ALERTS_PER_HOUR, missedCallAlert, passthroughRefused, ringFor,
+  twimlMissedMessage,
 } from "@/lib/voice";
 
 export const runtime = "nodejs";
@@ -14,7 +17,9 @@ export const dynamic = "force-dynamic";
  * POST /api/voice/missed — la fin de l'appel chez l'artisan.
  *
  * Twilio appelle cette adresse quand le <Dial> de /api/voice/incoming prend
- * fin. Relié à l'artisan : l'appel est fini, et l'artisan reçoit un texto
+ * fin. Sonné sous le numéro du client et refusé d'emblée : on refait sonner,
+ * une fois, sous celui de la maison. Relié à l'artisan : l'appel est fini, et
+ * l'artisan reçoit un texto
  * avec le numéro du client, son nom s'il est déjà client, l'heure et la
  * durée, pour rappeler ou réserver ; son téléphone n'a montré que le numéro
  * de la maison. Sinon (sans réponse, refusé, échoué, abandonné, ou pris par
@@ -31,6 +36,17 @@ export async function POST(req: NextRequest) {
 
   const status = got.params.DialCallStatus ?? null;
   const bridged = got.params.DialBridged ?? null;
+
+  /* Un opérateur a pu refuser l'appel sous le numéro du client : le client
+     entend encore sonner, et le cellulaire sonne de nouveau, sous le numéro
+     de la maison. Le journal le note, pour savoir si cela se reproduit. */
+  const owner = ownerSmsNumber();
+  if (owner && passthroughRefused(status, req.nextUrl.searchParams.get("via"))) {
+    await logEvent("call_passthrough_failed");
+    const house = toE164(got.params.To) ?? toE164(process.env.TWILIO_FROM) ?? toE164(PHONE)!;
+    return twimlResponse(ringFor({ owner, from: got.params.From, house, origin: siteOrigin(), passthrough: false }));
+  }
+
   if (!callMissed(status, bridged)) {
     await textAnsweredCall(got.params);
     return twimlResponse(TWIML_EMPTY);
@@ -41,7 +57,6 @@ export async function POST(req: NextRequest) {
   const from = callerNumber(got.params.From);
   const name = from ? await knownClientName(from) : null;
 
-  const owner = ownerSmsNumber();
   let alerted = false;
   if (owner && !(await alertsCapped("missed_call"))) {
     const { timezone } = await getSettings();

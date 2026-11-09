@@ -14,7 +14,8 @@ const {
 const { fromWall } = await import("../src/lib/time.ts");
 const { SMS_SIGNATURE, PHONE } = await import("../src/lib/brand.ts");
 const {
-  twimlRingOwner, twimlMissedMessage, missedCallAlert, answeredCallAlert, callMissed, callerNumber, MISSED_MESSAGE, RING_SECONDS,
+  twimlRingOwner, ringFor, passthroughRefused, twimlMissedMessage, missedCallAlert, answeredCallAlert, callMissed, callerNumber,
+  MISSED_MESSAGE, RING_SECONDS,
   ACCEPT_SECONDS, callerKey, callerFromKey, spokenNumber, screenPrompt, twimlScreen, twimlAccept,
 } = await import("../src/lib/voice.ts");
 
@@ -69,7 +70,7 @@ await test("l'artisan reçoit ses textos sur SMS_OWNER_TO seulement, jamais sur 
   delete process.env.SMS_OWNER_TO;
 });
 
-await test("les appels : le cellulaire sonne sous le numéro de la maison, l'annonce filtre, l'action dit le sort", () => {
+await test("les appels : l'instruction de sonnerie, l'annonce qui filtre, l'action qui dit le sort", () => {
   const xml = twimlRingOwner({
     owner: "+15145550199", callerId: "+14503676231",
     screen: "https://www.nivexrepassage.ca/api/voice/screen/15145550123",
@@ -88,6 +89,31 @@ await test("les appels : le cellulaire sonne sous le numéro de la maison, l'ann
   assert.equal(callMissed("completed", undefined), false, "sans DialBridged, un appel abouti compte comme répondu");
   assert.equal(callMissed("completed", "false"), true, "une boîte vocale a décroché, personne n'a appuyé");
   for (const st of ["no-answer", "busy", "failed", "canceled", undefined, null, ""]) assert.equal(callMissed(st), true, String(st));
+});
+
+await test("le cellulaire affiche le numéro du client ; un numéro masqué sonne sous celui de la maison", () => {
+  /* Depuis le 9 novembre 2026 : sans callerId, Twilio garde le numéro de
+     l'appelant, et c'est lui que le cellulaire affiche. */
+  const base = { owner: "+15145550199", house: "+14503676231", origin: "https://www.nivexrepassage.ca" };
+  const client = ringFor({ ...base, from: "+15145550123", passthrough: true });
+  assert.ok(!client.includes("callerId"), "aucun callerId : Twilio garde celui du client");
+  assert.match(client, /action="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/missed\?via=client"/);
+  assert.match(client, /<Number url="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/screen\/15145550123"/);
+  assert.match(client, /answerOnBridge="true"/);
+  /* Masqué (RESTRICTED, en chiffres de clavier) : le numéro de la maison, et pas de nouvel essai. */
+  const hidden = ringFor({ ...base, from: "+7378742833", passthrough: true });
+  assert.match(hidden, /callerId="\+14503676231"/);
+  assert.match(hidden, /action="https:\/\/www\.nivexrepassage\.ca\/api\/voice\/missed" /);
+  assert.match(hidden, /\/api\/voice\/screen\/masque"/);
+  /* Le nouvel essai, après un refus : sous le numéro de la maison, sans ?via, donc une seule fois. */
+  const retry = ringFor({ ...base, from: "+15145550123", passthrough: false });
+  assert.match(retry, /callerId="\+14503676231"/);
+  assert.ok(!retry.includes("via=client"));
+  assert.match(retry, /\/api\/voice\/screen\/15145550123"/, "l'annonce dit toujours qui appelle");
+  /* Seul l'échec sous le numéro du client relance : « occupé », c'est aussi l'artisan qui refuse. */
+  assert.equal(passthroughRefused("failed", "client"), true);
+  for (const st of ["busy", "no-answer", "completed", "canceled", null]) assert.equal(passthroughRefused(st, "client"), false, String(st));
+  assert.equal(passthroughRefused("failed", null), false, "déjà sous le numéro de la maison : pas de troisième sonnerie");
 });
 
 await test("l'annonce dit qui appelle, chiffre par chiffre, et attend une touche ; une boîte vocale n'en tape aucune", () => {
@@ -393,6 +419,275 @@ await test("l'instruction TwiML échappe le texte du client", () => {
   /* Avec une réponse au client : un second message, sans destinataire, qui revient à l'expéditeur. */
   const y = twimlForward("+15145550142", "NIVEX : réponse", stopHint("ARRÊT"));
   assert.match(y, /<\/Message><Message>NIVEX : pour ne plus recevoir de textos, répondez STOP\.<\/Message><\/Response>$/);
+});
+
+
+/* ============================ L'onglet Messages : les textos ============================ */
+
+const { smsSegments, ADMIN_TEXT_MAX } = await import("../src/lib/phone.ts");
+const {
+  groupConversations, textFrom, threadFrom, optedOut, deliveryProblem, excerpt, listTwilioMessages, loadConversation,
+  sendText, fetchMedia, readFailure, TwilioReadError, CONVERSATION_MAX,
+} = await import("../src/lib/conversations.ts");
+
+console.log("\nL'onglet Messages : les textos\n");
+
+await test("la longueur d'un texto se compte comme Twilio la facture", () => {
+  assert.deepEqual(smsSegments(""), { unicode: false, length: 0, segments: 0 });
+  assert.deepEqual(smsSegments("Bonjour Marie, à demain."), { unicode: false, length: 24, segments: 1 });
+  assert.equal(smsSegments("a".repeat(160)).segments, 1);
+  assert.equal(smsSegments("a".repeat(161)).segments, 2, "153 signes par tranche au-delà de 160");
+  assert.equal(smsSegments("a".repeat(306)).segments, 2);
+  assert.equal(smsSegments("a".repeat(307)).segments, 3);
+  assert.equal(smsSegments("€".repeat(80)).length, 160, "la table d'extension compte double");
+  assert.equal(smsSegments("€".repeat(81)).segments, 2);
+  assert.equal(smsSegments("Ça marche").unicode, false, "le Ç majuscule est de l'alphabet");
+  assert.equal(smsSegments("ça marche").unicode, true, "le ç minuscule n'en est pas");
+  const tete = smsSegments("Je m'arrête là");
+  assert.equal(tete.unicode, true);
+  assert.equal(tete.segments, 1);
+  assert.equal(smsSegments("ê" + "a".repeat(69)).segments, 1, "70 signes en Unicode");
+  assert.equal(smsSegments("ê" + "a".repeat(70)).segments, 2, "puis 67 par tranche");
+  assert.equal(smsSegments("ê" + "a".repeat(133)).segments, 2);
+  assert.equal(smsSegments("ê" + "a".repeat(134)).segments, 3);
+  assert.equal(smsSegments("👍").length, 2, "un émoji vaut deux unités");
+  assert.ok(ADMIN_TEXT_MAX >= 300 && ADMIN_TEXT_MAX <= 1600);
+});
+
+const MARIE = "+15145550123", PAUL = "+14505550177", NY = "+12125550100", OWNER = "+15145550199";
+const at = (h, m = 0) => `Mon, 09 Nov 2026 ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00 +0000`;
+const msg = (o) => ({ status: "delivered", num_media: "0", error_code: null, date_created: o.date_sent ?? null, ...o });
+const sid = (k) => `SM${String(k).padStart(32, "0")}`;
+
+await test("les conversations : la plus récente d'abord, « à répondre » quand le client a écrit le dernier", () => {
+  const raw = [
+    msg({ sid: sid(1), direction: "outbound-api", to: MARIE, from: PHONE, body: "NIVEX - Votre séance est confirmée", date_sent: at(14) }),
+    msg({ sid: sid(2), direction: "inbound", from: MARIE, to: PHONE, body: "Merci, à jeudi", status: "received", date_sent: at(15) }),
+    msg({ sid: sid(3), direction: "outbound-reply", to: OWNER, from: PHONE, body: "NIVEX : réponse de Marie", date_sent: at(15, 1) }),
+    msg({ sid: sid(4), direction: "outbound-api", to: PAUL, from: PHONE, body: "NIVEX - Rappel", date_sent: at(16) }),
+    msg({ sid: sid(5), direction: "outbound-api", to: PAUL, from: null, body: "Je serai chez vous", status: "canceled", date_sent: null, date_created: at(17) }),
+    msg({ sid: sid(6), direction: "inbound", from: NY, to: PHONE, body: "STOP", status: "received", date_sent: at(13) }),
+    msg({ sid: sid(7), direction: "outbound-api", to: "whatsapp:+15145550000", body: "?", date_sent: at(18) }),
+  ];
+  const names = new Map([["5145550123", "Marie Tremblay"]]);
+  const list = groupConversations(raw, { exclude: [OWNER, PHONE], names });
+  assert.deepEqual(list.map((c) => c.number), [PAUL, MARIE, NY], "les avis à l'artisan n'en sont pas ; un texto décommandé ne compte pas");
+  const marie = list.find((c) => c.number === MARIE);
+  assert.equal(marie.name, "Marie Tremblay");
+  assert.equal(marie.awaiting, true);
+  assert.equal(marie.direction, "in");
+  assert.equal(marie.excerpt, "Merci, à jeudi");
+  const paul = list.find((c) => c.number === PAUL);
+  assert.equal(paul.awaiting, false);
+  assert.equal(paul.excerpt, "NIVEX - Rappel", "le texto décommandé n'est jamais parti");
+  const ny = list.find((c) => c.number === NY);
+  assert.equal(ny.awaiting, false, "un STOP n'attend pas de réponse");
+  assert.equal(ny.canText, false, "New York : on n'y écrit pas");
+  assert.equal(marie.canText, true);
+});
+
+await test("un texto se lit dans l'ordre, avec ce qu'il est devenu", () => {
+  const failed = textFrom(msg({ sid: sid(8), direction: "outbound-api", to: MARIE, body: "x", status: "undelivered", error_code: 30006, date_sent: at(9) }));
+  assert.equal(failed.direction, "out");
+  assert.equal(failed.problem, "ligne fixe, ou numéro qui ne reçoit pas de textos");
+  assert.equal(failed.at, "2026-11-09T09:00:00.000Z");
+  const queued = textFrom(msg({ sid: sid(9), direction: "outbound-api", to: MARIE, body: "x", status: "scheduled", date_sent: null, date_created: at(10) }));
+  assert.equal(queued.at, "2026-11-09T10:00:00.000Z", "pas encore parti : l'heure de création");
+  assert.equal(queued.problem, null);
+  assert.equal(textFrom(msg({ sid: sid(10), direction: "inbound", from: MARIE, body: "", num_media: "2", date_sent: at(11) })).numMedia, 2);
+  assert.equal(deliveryProblem(21610), "le client a répondu STOP : Twilio ne lui écrit plus tant qu'il n'a pas répondu START");
+  assert.equal(deliveryProblem(12345), "refusé par Twilio (code 12345)");
+  assert.equal(deliveryProblem(null), "non remis");
+  assert.equal(excerpt({ body: "", numMedia: 1 }), "Une pièce jointe");
+  assert.equal(excerpt({ body: "  Bonjour\n\n  Marie ", numMedia: 0 }), "Bonjour Marie");
+  assert.equal(excerpt({ body: "x".repeat(200), numMedia: 0 }).length, 140);
+
+  const thread = threadFrom([
+    msg({ sid: sid(12), direction: "inbound", from: MARIE, body: "deux", date_sent: at(12) }),
+    msg({ sid: sid(11), direction: "outbound-api", to: MARIE, body: "un", date_sent: at(11) }),
+    msg({ sid: sid(11), direction: "outbound-api", to: MARIE, body: "un", date_sent: at(11) }),
+    msg({ sid: sid(13), direction: "outbound-api", to: MARIE, body: "jamais parti", status: "canceled", date_sent: null, date_created: at(13) }),
+  ]);
+  assert.deepEqual(thread.map((t) => t.body), ["un", "deux"], "dans l'ordre, sans doublon, sans le décommandé");
+  const long = threadFrom(Array.from({ length: CONVERSATION_MAX + 5 }, (_, k) =>
+    msg({ sid: sid(100 + k), direction: "inbound", from: MARIE, body: String(k), date_sent: new Date(Date.UTC(2026, 10, 1, 0, k)).toUTCString() })));
+  assert.equal(long.length, CONVERSATION_MAX);
+  assert.equal(long.at(-1).body, String(CONVERSATION_MAX + 4), "les plus récents");
+});
+
+await test("un client qui a répondu STOP n'est plus joignable, jusqu'à son START", () => {
+  const t = (body, direction = "in") => ({ direction, body });
+  assert.equal(optedOut([t("Bonjour"), t("STOP")]), true);
+  assert.equal(optedOut([t("stop"), t("Start")]), false);
+  assert.equal(optedOut([t("STOP"), t("STOP", "out")]), true, "seuls ses messages à lui comptent");
+  assert.equal(optedOut([t("Stop, je vous rappelle")]), false, "un mot seul, comme chez Twilio");
+});
+
+/* Un Twilio simulé : la liste des messages, les pièces jointes, l'envoi. */
+function fakeTwilio(o = {}) {
+  const calls = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, init });
+    const u = new URL(url);
+    if (o.fail) return new Response(JSON.stringify({ code: 20003, message: "Authenticate" }), { status: o.fail });
+    if (u.hostname === "media.example.com") {
+      return new Response("image", { status: 200, headers: { "content-type": o.mediaType ?? "image/png" } });
+    }
+    if (/\/Messages\/MM[0-9a-f]{32}\/Media\/ME[0-9a-f]{32}$/.test(u.pathname)) {
+      return new Response(null, { status: 307, headers: { location: "https://media.example.com/photo" } });
+    }
+    if (/\/Messages\/(MM[0-9a-f]{32})\/Media\.json$/.test(u.pathname)) {
+      return Response.json({ media_list: [
+        { sid: `ME${"a".repeat(32)}`, content_type: "image/jpeg" },
+        { sid: `ME${"b".repeat(32)}`, content_type: "image/svg+xml" },
+      ] });
+    }
+    if (u.pathname.endsWith("/Messages.json") && (init.method ?? "GET") === "GET") {
+      const to = u.searchParams.get("To"), from = u.searchParams.get("From");
+      const page = Number(u.searchParams.get("Page") ?? 0);
+      const all = (o.messages ?? []).filter((m) => (!to || m.to === to) && (!from || m.from === from));
+      const next = page === 0 && o.paged ? `${u.pathname}?Page=1&PageSize=1&PageToken=PA1${to ? `&To=${encodeURIComponent(to)}` : ""}` : null;
+      return Response.json({ messages: o.paged ? all.slice(page, page + 1) : all, next_page_uri: next });
+    }
+    if (u.pathname.endsWith("/Messages.json") && init.method === "POST") {
+      if (o.refuse) return new Response(JSON.stringify({ code: o.refuse, message: "Refusé +15145550123" }), { status: 400 });
+      const b = new URLSearchParams(String(init.body));
+      return Response.json({ sid: sid(999), status: "queued", to: b.get("To"), from: b.get("From"), body: b.get("Body"), date_created: at(20), date_sent: null, num_media: "0" }, { status: 201 });
+    }
+    return new Response("inconnu", { status: 404 });
+  };
+  return { calls, restore: () => { globalThis.fetch = real; } };
+}
+
+await test("une conversation se lit chez Twilio : envoyés et reçus, photos comprises, rien n'est gardé", async () => {
+  Object.assign(process.env, { TWILIO_ACCOUNT_SID: "AC123", TWILIO_AUTH_TOKEN: "jeton", TWILIO_FROM: "+14385550000" });
+  const photo = `MM${"c".repeat(32)}`;
+  const tw = fakeTwilio({ messages: [
+    msg({ sid: sid(1), direction: "outbound-api", to: MARIE, from: "+14385550000", body: "Bonjour Marie", date_sent: at(14) }),
+    msg({ sid: photo, direction: "inbound", from: MARIE, to: "+14385550000", body: "Voici la tache", num_media: "2", status: "received", date_sent: at(15) }),
+    msg({ sid: sid(3), direction: "inbound", from: PAUL, to: "+14385550000", body: "Autre client", status: "received", date_sent: at(16) }),
+  ] });
+  try {
+    const c = await loadConversation(MARIE);
+    assert.deepEqual(c.messages.map((t) => t.body), ["Bonjour Marie", "Voici la tache"]);
+    assert.equal(c.canText, true);
+    assert.equal(c.optedOut, false);
+    assert.equal(c.truncated, false);
+    assert.deepEqual(c.messages[1].media.map((m) => m.inline), [true, false], "une image ordinaire s'affiche ; un SVG se télécharge");
+    const lists = tw.calls.filter((x) => x.url.includes("Messages.json?"));
+    assert.equal(lists.length, 2, "une liste par sens");
+    assert.ok(lists.some((x) => x.url.includes("To=%2B15145550123")) && lists.some((x) => x.url.includes("From=%2B15145550123")));
+    assert.ok(lists.every((x) => x.init.headers.authorization === `Basic ${Buffer.from("AC123:jeton").toString("base64")}`));
+  } finally {
+    tw.restore();
+  }
+
+  /* Les pages suivent, jusqu'à la limite demandée. */
+  const paged = fakeTwilio({ paged: true, messages: [
+    msg({ sid: sid(1), direction: "outbound-api", to: MARIE, body: "a", date_sent: at(14) }),
+    msg({ sid: sid(2), direction: "outbound-api", to: MARIE, body: "b", date_sent: at(13) }),
+  ] });
+  try {
+    const one = await listTwilioMessages({ To: MARIE }, { pages: 1 });
+    assert.equal(one.messages.length, 1);
+    assert.equal(one.more, true);
+    const two = await listTwilioMessages({ To: MARIE }, { pages: 2 });
+    assert.equal(two.messages.length, 2);
+  } finally {
+    paged.restore();
+  }
+
+  /* Une clé refusée se dit sans rien montrer de la clé. */
+  const denied = fakeTwilio({ fail: 401 });
+  try {
+    const e = await loadConversation(MARIE).catch((x) => x);
+    assert.ok(e instanceof TwilioReadError);
+    assert.match(readFailure(e), /TWILIO_AUTH_TOKEN chez Vercel/);
+    assert.ok(!readFailure(e).includes("jeton"));
+  } finally {
+    denied.restore();
+  }
+});
+
+await test("l'artisan écrit depuis l'onglet : le texto part du numéro de la maison, les refus disent pourquoi", async () => {
+  Object.assign(process.env, { TWILIO_ACCOUNT_SID: "AC123", TWILIO_AUTH_TOKEN: "jeton", TWILIO_FROM: "+14385550000" });
+  let tw = fakeTwilio();
+  try {
+    const ok = await sendText({ to: "514 555-0123", body: "  Bonjour Marie, je serai là à 18 h.\nStyve  " });
+    assert.equal(ok.ok, true);
+    assert.equal(ok.message.direction, "out");
+    assert.equal(ok.message.status, "queued");
+    assert.equal(ok.message.body, "Bonjour Marie, je serai là à 18 h.\nStyve");
+    const sent = new URLSearchParams(String(tw.calls[0].init.body));
+    assert.equal(sent.get("To"), "+15145550123");
+    assert.equal(sent.get("From"), "+14385550000", "le numéro de la maison");
+    assert.equal(sent.get("Body"), "Bonjour Marie, je serai là à 18 h.\nStyve");
+
+    tw.calls.length = 0;
+    for (const [to, body, why] of [
+      ["212 555 0100", "Bonjour", /canadiens/],
+      ["555-0123", "Bonjour", /dix chiffres/],
+      ["514 555-0123", "   ", /vide/],
+      ["514 555-0123", "x".repeat(ADMIN_TEXT_MAX + 1), new RegExp(String(ADMIN_TEXT_MAX))],
+    ]) {
+      const r = await sendText({ to, body });
+      assert.equal(r.ok, false);
+      assert.match(r.reason, why);
+    }
+    assert.equal(tw.calls.length, 0, "aucun refus évident ne va jusqu'à Twilio");
+  } finally {
+    tw.restore();
+  }
+
+  tw = fakeTwilio({ refuse: 21610 });
+  try {
+    const stop = await sendText({ to: "514 555-0123", body: "Bonjour" });
+    assert.equal(stop.ok, false);
+    assert.match(stop.reason, /répondu STOP/);
+    assert.ok(!stop.reason.includes("555"), "le message de Twilio, qui cite le numéro, ne remonte pas");
+  } finally {
+    tw.restore();
+  }
+
+  delete process.env.TWILIO_FROM;
+  const off = await sendText({ to: "514 555-0123", body: "Bonjour" });
+  assert.equal(off.ok, false);
+  assert.equal(off.status, 503);
+  delete process.env.TWILIO_ACCOUNT_SID;
+});
+
+await test("une photo jointe se lit chez Twilio, renvoi suivi sans la clé ; seules les images ordinaires s'affichent", async () => {
+  Object.assign(process.env, { TWILIO_ACCOUNT_SID: "AC123", TWILIO_AUTH_TOKEN: "jeton", TWILIO_FROM: "+14385550000" });
+  const MM = `MM${"c".repeat(32)}`, ME = `ME${"a".repeat(32)}`;
+  let tw = fakeTwilio();
+  try {
+    const r = await fetchMedia(MM, ME);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get("content-type"), "image/png");
+    assert.equal(r.headers.get("content-disposition"), "inline");
+    assert.equal(r.headers.get("cache-control"), "private, no-store");
+    assert.equal(tw.calls.length, 2);
+    assert.ok(tw.calls[0].init.headers.authorization, "Twilio demande la clé");
+    assert.equal(tw.calls[1].url, "https://media.example.com/photo");
+    assert.equal(tw.calls[1].init.headers, undefined, "le stockage ne reçoit jamais la clé");
+    for (const [m, e] of [["MM../x", ME], [MM, "../../Messages.json"], ["", ""]]) {
+      assert.equal((await fetchMedia(m, e)).status, 404);
+    }
+  } finally {
+    tw.restore();
+  }
+  tw = fakeTwilio({ mediaType: "image/svg+xml" });
+  try {
+    const svg = await fetchMedia(MM, ME);
+    assert.equal(svg.headers.get("content-type"), "application/octet-stream");
+    assert.match(svg.headers.get("content-disposition"), /^attachment/);
+  } finally {
+    tw.restore();
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_FROM;
+  }
 });
 
 console.log(`\n${n} réussis, 0 échoués\n`);

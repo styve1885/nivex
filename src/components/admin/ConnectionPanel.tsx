@@ -275,6 +275,11 @@ export function ConnectionPanel({
               avec cette adresse :
             </p>
             <code className="mt-2 block break-all font-mono text-[0.78rem] text-ink-700">{env.origin}/api/sms/incoming</code>
+            <p className="mt-2">
+              Les réponses paraissent aussi dans l&apos;onglet Messages, avec toute la conversation : c&apos;est de là
+              qu&apos;on leur répond, depuis le numéro de la maison. Une réponse tapée sur votre cellulaire ne parvient
+              pas au client.
+            </p>
             <p className="mt-5 text-ink-700">Les appels</p>
             <p className="mt-1">
               Pour que les appels au numéro de la maison sonnent sur votre cellulaire, et que chaque appel, répondu
@@ -289,10 +294,11 @@ export function ConnectionPanel({
               ne répond pas.
             </p>
             <p className="mt-2">
-              Quand vous décrochez, une voix annonce l&apos;appelant : appuyez sur une touche pour lui parler. Votre
-              téléphone affiche le numéro de la maison ; celui du client vous arrive par texto une fois raccroché.
-              Sans touche, par exemple si votre boîte vocale répond, l&apos;appel compte comme manqué, et le texto
-              d&apos;alerte part.
+              Votre téléphone affiche le numéro du client (celui de la maison pour un numéro masqué, ou si un
+              opérateur refuse le premier essai). Quand vous décrochez, une voix annonce l&apos;appelant : appuyez sur
+              une touche pour lui parler. Sans touche, par exemple si votre boîte vocale répond, l&apos;appel compte
+              comme manqué, et le texto d&apos;alerte part. Si vous rappelez un client depuis votre cellulaire, il
+              verra votre numéro personnel.
             </p>
             <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
             <p className="mt-1">

@@ -4,7 +4,7 @@ import { logEvent } from "@/lib/db";
 import { siteOrigin } from "@/lib/google";
 import { ownerSmsNumber, toE164 } from "@/lib/sms";
 import { readTwilioWebhook, twimlResponse } from "@/lib/twilio-webhook";
-import { callerKey, callerNumber, twimlRingOwner } from "@/lib/voice";
+import { ringFor } from "@/lib/voice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +14,11 @@ export const dynamic = "force-dynamic";
  *
  * Twilio appelle cette adresse à chaque appel (réglage « A call comes in » du
  * numéro, méthode principale). On lui répond de faire sonner le cellulaire de
- * l'artisan, sous le numéro de la maison ; quand le cellulaire décroche,
- * /api/voice/screen annonce l'appelant ; à la fin, /api/voice/missed dit si
- * l'appel a été manqué. Rien n'est conservé de l'appelant.
+ * l'artisan, sous le numéro de l'appelant (celui de la maison pour un numéro
+ * masqué) ; quand le cellulaire décroche, /api/voice/screen annonce
+ * l'appelant ; à la fin, /api/voice/missed dit si l'appel a été manqué, ou
+ * refait sonner sous le numéro de la maison si un opérateur a refusé celui
+ * du client. Rien n'est conservé de l'appelant.
  */
 export async function POST(req: NextRequest) {
   const got = await readTwilioWebhook(req, "/api/voice/incoming");
@@ -34,12 +36,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse("owner number missing", { status: 503 });
   }
 
-  const callerId = toE164(got.params.To) ?? toE164(process.env.TWILIO_FROM) ?? toE164(PHONE)!;
-  const origin = siteOrigin();
+  const house = toE164(got.params.To) ?? toE164(process.env.TWILIO_FROM) ?? toE164(PHONE)!;
   await logEvent("call_received");
-  return twimlResponse(twimlRingOwner({
-    owner, callerId,
-    screen: `${origin}/api/voice/screen/${callerKey(callerNumber(got.params.From))}`,
-    action: `${origin}/api/voice/missed`,
-  }));
+  return twimlResponse(ringFor({ owner, from: got.params.From, house, origin: siteOrigin(), passthrough: true }));
 }

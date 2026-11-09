@@ -186,6 +186,8 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/visits.ts` | Le journal anonyme des pages vues |
 | `lib/google.ts` | OAuth, agenda et Gmail, en `fetch` pur ; un événement déplacé sans jamais le doubler (`moveEvent`) |
 | `lib/sms.ts` | Les textos par Twilio, et leurs messages |
+| `lib/phone.ts` | Les numéros (E.164, canadiens, lisibles) et la longueur d'un texto en tranches, sans dépendance : l'onglet Messages les importe dans le navigateur |
+| `lib/conversations.ts` | Les textos échangés avec chaque client, lus chez Twilio à la demande ; l'envoi depuis l'onglet Messages ; les photos jointes |
 | `lib/voice.ts` | Les appels au numéro de la maison : sonnerie du cellulaire, message d'absence, texto après chaque appel, manqué ou répondu |
 | `lib/seo.ts` | Ce que lisent les moteurs et les assistants : en-tête de chaque page (titre, description, canonique, hreflang), fiche LocalBusiness, site, FAQ structurée |
 | `lib/i18n/seo.ts` | Le titre et la description de chaque page, dans les deux langues, hors des dictionnaires |
@@ -288,7 +290,9 @@ abonnement : « VIP : 400 $ + 60 $ de déplacement, soit 4 visites ×
 `/admin`, derrière une session Google. Sept onglets : Rendez-vous,
 Abonnés, Messages, Visites, Réglages, Zones et frais, Connexion. Presque
 tout ce qui est commercial s'y règle — tarifs, horaire, prestations,
-secteurs, zones et frais.
+secteurs, zones et frais. L'onglet Messages porte en haut les textos
+échangés avec les clients (plus bas, « Les textos »), puis les messages du
+formulaire de contact.
 
 ### Les adresses courriel
 
@@ -584,12 +588,42 @@ Les **réponses des clients** arrivent sur `/api/sms/incoming` (réglage « A
 message comes in » du numéro chez Twilio). La signature `X-Twilio-Signature`
 est vérifiée, le nom du client retrouvé par son numéro, et une instruction
 TwiML fait suivre le message au cellulaire de l'artisan. Rien n'est
-conservé : ni le texte, ni le numéro.
+conservé : ni le texte, ni le numéro. Une réponse que l'artisan tape sur son
+cellulaire au texto relayé arrive au numéro de la maison et s'arrête là :
+on ne devine pas à quel client elle s'adresse.
+
+**Écrire à un client** (depuis le 9 novembre 2026) : l'onglet Messages,
+section Textos (`TextsSection`, `/api/admin/sms`, `lib/conversations.ts`).
+L'artisan choisit un client (l'annuaire tiré des rendez-vous et des
+abonnements, `clientDirectory`) ou tape un numéro, lit la conversation et
+écrit ; le texto part du numéro de la maison, signé « Styve » s'il le veut
+(case retenue dans le navigateur). **Rien n'est gardé sur le site** : les
+conversations se lisent chez Twilio à l'affichage (`Messages.json` filtré
+par `To`, puis par `From`), textos automatiques compris, et les photos
+jointes passent par `/api/admin/sms/media`, qui suit le renvoi de Twilio
+sans la clé et n'affiche en ligne que les images ordinaires (un SVG se
+télécharge). Les avis de l'artisan n'y figurent jamais. La liste montre les
+deux derniers mois (`RECENT_DAYS`), « à répondre » quand le client a écrit
+le dernier ; un client qui a répondu STOP ne peut plus recevoir (Twilio
+refuse, code 21610), et la zone d'écriture se ferme. Mêmes gardes qu'ailleurs :
+numéros canadiens seulement, `ADMIN_TEXT_MAX` (600) caractères,
+`ADMIN_TEXTS_PER_HOUR` (60) envois dans l'heure, et le journal n'en note
+que le nombre de tranches (`sms_admin_sent`), jamais le numéro ni le texte.
+Le compteur de la zone d'écriture compte comme Twilio (`smsSegments`) : un
+ê, un ô ou un ç fait passer tout le texte en Unicode, 70 signes par texto.
 
 Les **appels** au numéro de la maison arrivent sur `/api/voice/incoming`
 (réglage « A call comes in » du numéro, méthode principale, signature
-vérifiée), qui fait sonner le cellulaire de l'artisan sous le numéro de la
-maison, `RING_SECONDS` (25) au plus (`lib/voice.ts`). **Quand le cellulaire
+vérifiée), qui fait sonner le cellulaire de l'artisan, `RING_SECONDS` (25)
+au plus (`lib/voice.ts`). **Le cellulaire affiche le numéro du client**
+(depuis le 9 novembre 2026) : le `<Dial>` ne pose pas de `callerId`, et
+Twilio garde celui de l'appelant (`ringFor`). Un numéro masqué sonne sous le
+numéro de la maison. Si l'appel sous le numéro du client échoue d'emblée
+(`DialCallStatus` « failed » : un opérateur a pu refuser un numéro qui
+n'est pas celui de Twilio), `/api/voice/missed?via=client` refait sonner une
+fois sous celui de la maison et le journal le note
+(`call_passthrough_failed`) ; « occupé » ne relance jamais, c'est aussi
+l'artisan qui refuse l'appel. **Quand le cellulaire
 décroche, une voix annonce l'appelant** (`/api/voice/screen/<onze chiffres>`
 ou `…/masque`) : numéro chiffre par chiffre, nom s'il est déjà client, puis
 une touche attendue (`/api/voice/accept`). Une touche relie les deux ; rien,
@@ -602,9 +636,11 @@ court message d'absence, en français puis en anglais, sans boîte vocale, et
 l'artisan reçoit un texto « appel manqué de … » avec le numéro, le nom s'il
 est déjà client, et l'heure. **Un appel relié vaut aussi un texto**, une
 fois raccroché (`answeredCallAlert`, depuis le 9 novembre 2026) : « NIVEX :
-appel de … (514 …), à 10 h 57, 6 min ». Le téléphone de l'artisan n'affiche
-que le numéro de la maison (« Nivex Clients » dans ses contacts), et il lui
-faut celui du client pour rappeler ou réserver ; rien pour un numéro masqué.
+appel de … (514 …), à 10 h 57, 6 min ». Ce texto est né quand le téléphone
+n'affichait que le numéro de la maison (« Nivex Clients ») ; l'artisan a
+choisi de le garder : il donne le nom du client quand on le connaît, et
+marque les appels NIVEX, que l'affichage ne distingue plus de ses appels
+personnels. Rien pour un numéro masqué.
 Un numéro masqué arrive en chiffres de clavier (« +7378742833 »,
 RESTRICTED, ressemble à un numéro d'ici) : `callerNumber` n'accepte qu'un
 « +1 » suivi de dix chiffres. Au-delà de `MISSED_ALERTS_PER_HOUR` (20)
@@ -950,7 +986,9 @@ Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, durées,
 trois temps, séance d'essai, pièces à l'unité, foire aux questions),
 `sms` (modèles, numéros canadiens, alphabet, appels et alerte d'appel
-manqué), `provenance` (zone
+manqué, numéro du client sur le cellulaire et nouvel essai, longueur d'un
+texto, conversations lues chez Twilio, envoi depuis l'onglet, photos
+jointes), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan,
 lectures de la vidéo),
 `travel` (secteurs, zones, frais,
