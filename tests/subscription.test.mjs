@@ -578,7 +578,7 @@ test("aucun point d'exclamation dans les courriels d'abonnement", () => {
 const { fakeGoogle } = await import("./tools/fake-google.mjs");
 const { createRecurringEvent, listInstances, listEvents, freeBusy, moveEvent, deleteEvent } = await import("../src/lib/google.ts");
 const { slotVerdict, occupationsFromEvents, computeSlots } = await import("../src/lib/availability.ts");
-const { refusalText } = await import("../src/lib/subscriptions.ts");
+const { refusalText, packsAfterClosing, packingRefusal } = await import("../src/lib/subscriptions.ts");
 
 const testAsync = async (name, fn) => { await fn(); n++; console.log(`  ✓ ${name}`); };
 console.log("\nDéplacer une visite : l'agenda suit, l'ancien créneau se libère\n");
@@ -854,6 +854,40 @@ test("la raison d'un refus ne cite jamais de point d'exclamation, et dit « ferm
   for (const t of [refusalText(v, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 }), refusalText(anon, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 })]) {
     assert.ok(!t.includes("!"));
   }
+});
+
+test("on finit à la fermeture au plus tard : le rangement d'un abonné « arrivée 15 min avant » se compte", () => {
+  /* Décision de l'artisan, 10 novembre 2026 : « on finit à 22 h 00 max ». */
+  const early = { checkLead: false, setupMinutes: 15 };
+  const v = slotVerdict(nov(10, 20).getTime(), 120, [], house, NOW, early);
+  assert.equal(v.problem, "closed");
+  assert.equal(refusalText(v, { tz: TZ, bufferMinutes: 30, durationMinutes: 120 }),
+    "Hors de l'horaire : le mardi, une visite de 2 heures se place entre 18 h et 22 h, rangement de 15 min compris, donc au plus tard à 19 h 45.");
+  assert.equal(slotVerdict(nov(10, 19, 45).getTime(), 120, [], house, NOW, early).problem, null);
+  assert.equal(slotVerdict(nov(10, 20).getTime(), 120, [], house, NOW, { checkLead: false }).problem, null, "sans arrivée anticipée, 20 h tient");
+
+  /* La seconde série d'un tel abonné : ses dates se vérifient avec le rangement. */
+  const tuesdays = [10, 17, 24].map((d) => nov(d, 20));
+  assert.deepEqual(seriesConflicts(tuesdays, 120, [], house, { now: NOW, checkLead: false, setupMinutes: 15 }).map((c) => c.reason),
+    ["closed", "closed", "closed"]);
+  assert.equal(seriesConflicts(tuesdays, 120, [], house, { now: NOW, checkLead: false }).length, 0);
+
+  /* La case « arrivée 15 min avant » : la première visite à venir qui rangerait après la fermeture. */
+  const visit = (d, h, min = 0, extra = {}) => ({
+    id: `v${d}${h}${min}`, status: "confirmed", doneAt: null, durationMinutes: 120,
+    startsAt: nov(d, h, min), endsAt: new Date(nov(d, h, min).getTime() + 2 * 3600_000), ...extra,
+  });
+  const late = visit(17, 20), fine = visit(24, 19, 45), later = visit(24, 20);
+  assert.equal(packsAfterClosing([later, fine, late], 15, house, NOW), late, "la plus proche d'abord");
+  assert.equal(packsAfterClosing([fine], 15, house, NOW), null);
+  assert.equal(packsAfterClosing([{ ...late, doneAt: nov(17, 22) }], 15, house, NOW), null, "une visite effectuée ne compte pas");
+  assert.equal(packsAfterClosing([{ ...late, status: "cancelled" }], 15, house, NOW), null);
+  assert.equal(packsAfterClosing([visit(3, 20)], 15, house, NOW), null, "une visite passée non plus");
+  assert.equal(packsAfterClosing([visit(17, 21)], 15, house, NOW), null, "déjà hors de l'horaire : la case n'y change rien");
+  const why = packingRefusal(late, 15, TZ);
+  assert.equal(why, "La visite du mar. 17 nov. finit à 22 h : avec l'arrivée 15 min avant, le rangement irait jusqu'à 22 h 15, "
+    + "après la fermeture. Avancez-la d'abord de 15 min.");
+  assert.ok(!why.includes("!"));
 });
 
 test("la raison dit l'arrivée anticipée quand c'est elle qui gêne", () => {

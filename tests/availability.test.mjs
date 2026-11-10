@@ -340,11 +340,19 @@ t("la vérification finale refuse 20 h 30 pour 2 h et 19 h 30 pour 3 h, le samed
   /* L'artisan qui place lui-même une visite n'y échappe pas non plus. */
   assert.equal(slotProblem(sam(20, 30).getTime(), 120, [], SOIRS, NOW, { checkLead: false }), "closed");
 });
-t("l'horaire porte sur la séance : un abonné « arrivée 15 min avant » garde les mêmes heures", () => {
-  assert.deepEqual(heures("2026-08-29", 120, 15), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
-  assert.deepEqual(heures("2026-08-29", 180, 15), ["18:00", "18:30", "19:00"]);
+t("on finit à 22 h au plus : un abonné « arrivée 15 min avant » range avant la fermeture", () => {
+  /* Décision de l'artisan, 10 novembre 2026 : le quart d'heure de rangement
+     tient avant la fermeture ; l'arrivée, elle, peut précéder l'ouverture. */
+  assert.deepEqual(heures("2026-08-29", 120, 15), ["18:00", "18:30", "19:00", "19:30"]);
+  assert.deepEqual(heures("2026-08-29", 180, 15), ["18:00", "18:30"]);
+  assert.deepEqual(heures("2026-08-29", 120), ["18:00", "18:30", "19:00", "19:30", "20:00"], "sans arrivée anticipée, rien ne change");
   const sam = (h, mi) => fromWall({ year: 2026, month: 8, day: 29, hour: h, minute: mi }, TZ).getTime();
-  assert.equal(slotProblem(sam(20, 30), 120, [], SOIRS, NOW, { checkLead: false, setupMinutes: 15 }), "closed");
+  const early = { checkLead: false, setupMinutes: 15 };
+  assert.equal(slotProblem(sam(19, 45), 120, [], SOIRS, NOW, early), null, "rangé à 22 h tout rond");
+  assert.equal(slotProblem(sam(20, 0), 120, [], SOIRS, NOW, early), "closed", "rangerait jusqu'à 22 h 15");
+  assert.equal(slotProblem(sam(20, 30), 120, [], SOIRS, NOW, early), "closed");
+  assert.equal(slotProblem(sam(20, 0), 120, [], SOIRS, NOW, { checkLead: false }), null);
+  assert.equal(slotProblem(sam(18, 0), 120, [], SOIRS, NOW, early), null, "arrivée à 17 h 45 : acceptée, comme avant");
 });
 
 console.log("\nBascule d'heure avancée");
