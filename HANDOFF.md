@@ -259,9 +259,15 @@ conteneur n'atteint ni Google ni Bing (section 9).
   Console (`/$` et `/&` introuvables, l'icône « explorée, non indexée »,
   `/` redirigée, `?formule=` canoniques) sont attendus : `/$` et `/&` sont
   des repères internes de React lus comme des liens.
-- **Au 10 novembre** : selon Styve, `site:nivexrepassage.ca` « n'affiche
-  rien », sans préciser le moteur ; demandé, avec une capture. Sur Bing,
-  c'est attendu ; sur Google, ce serait nouveau (12 pages la veille).
+- **Au 10 novembre** : Bing n'a toujours rien (`site:nivexrepassage.ca`
+  vide) ; Google a ses pages. Styve a demandé qu'on « fasse
+  l'indexation » : ces demandes se font dans ses comptes Google et Bing, que
+  le conteneur n'atteint pas, et IndexNow n'envoie que les pages changées.
+  La marche à suivre lui a été redonnée : inspection d'URL et « Demander
+  l'indexation » dans les deux consoles, « Plans de site » dans Bing
+  Webmaster Tools, adresse du site sur la fiche Google, Facebook et
+  Instagram. La fiche Bing Places, resynchronisée le 4 novembre, devait se
+  publier vers le 11 à 16 novembre.
 - **À refaire vers le 10 novembre** : `site:nivexrepassage.ca` sur Google
   et sur Bing, en captures. Si Bing n'a toujours rien : ses « Plans de
   site » dans Bing Webmaster Tools, puis des liens vers le site depuis la
