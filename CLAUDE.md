@@ -73,7 +73,8 @@ page qui récite de mémoire finit par contredire le moteur.
   rendue à la visite dont la base n'a pas répondu tait l'horaire
   (`adminHours`) plutôt que de citer celui du code. Le moteur de créneaux
   lit le même horaire : une séance tient entière entre l'ouverture et la
-  fermeture du jour.
+  fermeture du jour, rangement compris pour un rendez-vous à l'ancien
+  déroulement (plus bas, « Le temps passé hors séance »).
 - **Délais** : `CANCEL_WINDOW_HOURS`, `FIRST_FREE_MIN_MINUTES`,
   `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES`,
   `SOON_TEXT_MINUTES` dans `src/lib/brand.ts`.
@@ -361,7 +362,15 @@ Les gardes posées là, et pourquoi :
   L'invitation et le courriel disent ce que contient la séance
   (`setupLine`) ou, à l'ancien régime, l'arrivée anticipée. L'onglet
   Rendez-vous montre les trois temps (`sessionPhases`) et le repassage
-  effectif.
+  effectif. **On finit à la fermeture au plus tard** (décision de
+  l'artisan, 10 novembre 2026 : « on finit à 22 h 00 max ») : le rangement
+  d'un rendez-vous à l'ancien régime tient avant la fermeture du jour
+  (`slotVerdict`, `computeSlots`, `seriesConflicts`), si bien qu'une visite
+  de 2 h d'un tel abonné commence au plus tard à 19 h 45 un soir qui ferme à
+  22 h. L'arrivée, elle, peut précéder l'ouverture, comme avant le
+  22 octobre 2026. Les visites déjà posées ne bougent pas ; un refus le dit
+  à l'artisan (« rangement de 15 min compris, donc au plus tard à
+  19 h 45 »).
 - **L'horizon et la grille sont tenus par le serveur**, pas seulement par
   le navigateur : pas de réservation au-delà de `horizonDays` (« Réservable
   jusqu'à … jours à l'avance », dans Réglages). **90 jours depuis le
@@ -444,7 +453,9 @@ nom.
   (« Prix garanti », `setGuaranteedPrice`) et cocher « Arrivée 15 min
   avant » (`setEarlyArrival`) : ses visites à venir reprennent l'ancien
   déroulement, agenda et texto de deux heures avant décalés, ou rien ne
-  change si une séance déjà posée y touche (`slot_taken`). Les frais : ceux
+  change si une séance déjà posée y touche (`slot_taken`), ou si le
+  rangement d'une visite à venir finirait après la fermeture
+  (`packsAfterClosing` : la phrase nomme la visite à avancer). Les frais : ceux
   de la zone pour la durée d'une visite, comme pour une séance, multipliés
   par les visites du cycle — en zone B, 15 $ par visite de 2 h (Essentiel,
   Premium Plus, VIP), 10 $ par visite de 3 h (Premium, Prestige). Jusqu'au

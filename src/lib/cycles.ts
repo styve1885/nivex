@@ -356,15 +356,19 @@ export type SeriesConflict = { startsAt: Date; reason: SlotProblem };
  * Les dates d'une série qui ne tiennent pas : jour fermé, heure hors de
  * l'horaire, créneau déjà pris. Le délai de prévenance ne vaut que pour la
  * première visite, et seulement quand c'est un client qui réserve.
+ * `setupMinutes` : l'arrivée anticipée d'un abonné à l'ancien déroulement,
+ * comptée dans l'occupation et dans l'heure de fermeture.
  */
 export function seriesConflicts(
   starts: Date[], durationMinutes: number, busy: Interval[], s: Settings,
-  opts: { now?: Date; checkLead?: boolean } = {},
+  opts: { now?: Date; checkLead?: boolean; setupMinutes?: number } = {},
 ): SeriesConflict[] {
   const now = opts.now ?? new Date();
   const out: SeriesConflict[] = [];
   starts.forEach((d, i) => {
-    const p = slotProblem(d.getTime(), durationMinutes, busy, s, now, { checkLead: i === 0 && (opts.checkLead ?? true) });
+    const p = slotProblem(d.getTime(), durationMinutes, busy, s, now, {
+      checkLead: i === 0 && (opts.checkLead ?? true), setupMinutes: opts.setupMinutes,
+    });
     if (p) out.push({ startsAt: d, reason: p });
   });
   return out;

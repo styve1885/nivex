@@ -202,25 +202,19 @@ défaut du code. Changer une constante ne change rien en production
 
 À lui rappeler s'il en parle, sans insister.
 
-- **Vidéo de présentation** : essai sur iPhone ; test des résultats enrichis,
-  https://search.google.com/test/rich-results?url=https%3A%2F%2Fwww.nivexrepassage.ca%2Ffr%2Fpresentation.
-- **Le numéro de la maison** : les appels sont réglés et éprouvés depuis
-  le 6 novembre 2026 (renvoi, annonce de l'appelant, touche pour répondre,
-  message d'absence et texto « appel manqué » : « Les 2 essais marchent »).
-  Reste de son côté : le nouveau numéro sur la fiche Google, puis
-  « Synchronisation » dans Bing Places, sur Facebook et Instagram, et dans
-  ses publicités. La vidéo de présentation dit encore l'ancien numéro, qui
-  sonne toujours chez lui ; la changer demanderait de remonter sa fin.
-- **Un déplacement fait avant le correctif du 7 novembre 2026** a laissé
-  un événement à l'ancienne heure (une visite passée au mardi 10 novembre,
-  18 h 30, restée au vendredi 13 dans l'agenda). Cette visite-là n'est pas
-  marquée : le marqueur est né avec le correctif. Une fois celui-ci en
-  ligne : refaire ce déplacement à la même date et la même heure, dans
-  l'onglet Abonnés ; l'événement se remet à l'heure, sans message au
-  client. Le déplacement de la visite suivante au vendredi 13 passe ensuite.
-  Les visites que l'agenda ne suivrait plus à l'avenir sont marquées
-  « agenda à l'ancienne heure », avec un bouton « Remettre à l'heure », et
-  la tâche du matin les rattrape.
+- **Le numéro de la maison** : réglé et éprouvé. Appels depuis le
+  6 novembre 2026 ; depuis le 9, le cellulaire affiche le numéro du client,
+  un texto suit chaque appel, et l'onglet Messages écrit aux clients
+  (« Les 3 marchent », 10 novembre). Le numéro est sur la fiche Google,
+  Bing Places, Facebook, Instagram et ses publicités (10 novembre). La
+  vidéo de présentation dit encore l'ancien numéro, qui sonne toujours chez
+  lui ; la changer demanderait de remonter sa fin. Facultatif : retirer le
+  `callerId` du TwiML Bin « NIVEX - transfert », pour voir aussi le numéro
+  du client quand le site ne répond pas.
+- **Documents légaux** : leur texte a changé le 9 novembre 2026. La marche
+  à suivre pour en redemander l'indexation (Search Console, inspection de
+  l'URL, « Demander une indexation », quatre adresses) lui a été donnée le
+  10 novembre.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -265,6 +259,15 @@ conteneur n'atteint ni Google ni Bing (section 9).
   Console (`/$` et `/&` introuvables, l'icône « explorée, non indexée »,
   `/` redirigée, `?formule=` canoniques) sont attendus : `/$` et `/&` sont
   des repères internes de React lus comme des liens.
+- **Au 10 novembre** : Bing n'a toujours rien (`site:nivexrepassage.ca`
+  vide) ; Google a ses pages. Styve a demandé qu'on « fasse
+  l'indexation » : ces demandes se font dans ses comptes Google et Bing, que
+  le conteneur n'atteint pas, et IndexNow n'envoie que les pages changées.
+  La marche à suivre lui a été redonnée : inspection d'URL et « Demander
+  l'indexation » dans les deux consoles, « Plans de site » dans Bing
+  Webmaster Tools, adresse du site sur la fiche Google, Facebook et
+  Instagram. La fiche Bing Places, resynchronisée le 4 novembre, devait se
+  publier vers le 11 à 16 novembre.
 - **À refaire vers le 10 novembre** : `site:nivexrepassage.ca` sur Google
   et sur Bing, en captures. Si Bing n'a toujours rien : ses « Plans de
   site » dans Bing Webmaster Tools, puis des liens vers le site depuis la
@@ -276,9 +279,10 @@ Décisions de Styve : ne rien changer sans lui.
 
 - **L'heure en anglais** s'écrit « 6 pm » dans l'horaire et « 11:59 p.m. »
   dans le délai des abonnés. Harmoniser, et dans quel sens ?
-- **Abonnés « arrivée 15 min avant »** : le temps hors séance n'entre pas
-  dans l'horaire, si bien qu'une visite qui finit à 22 h se range jusqu'à
-  22 h 15. À garder, ou à refuser ?
+
+Tranchée : **abonnés « arrivée 15 min avant »**, « on finit à 22 h 00
+max » (10 novembre 2026). Le rangement tient avant la fermeture ; voir
+CLAUDE.md, « Le temps passé hors séance ».
 
 ---
 
@@ -289,6 +293,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #36 | 10 nov. 2026 | Abonnés « arrivée 15 min avant » : on finit à la fermeture au plus tard, rangement compris |
 | #35 | 9 nov. 2026 | Le numéro du client sur le cellulaire de l'artisan ; les textos avec chaque client dans l'onglet Messages, envoi depuis le numéro de la maison |
 | #34 | 9 nov. 2026 | Un texto à l'artisan après chaque appel répondu : le numéro du client, son nom, l'heure, la durée |
 | #33 | 9 nov. 2026 | Réservation en ligne à 90 jours à l'avance ; aucun jour férié fermé, Fêtes comprises |

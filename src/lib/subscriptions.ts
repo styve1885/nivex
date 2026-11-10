@@ -828,6 +828,29 @@ function dayFr(t: number, tz: string): string {
   return new Intl.DateTimeFormat("fr-CA", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).format(new Date(t));
 }
 
+/**
+ * La première visite à venir dont le rangement, avec `minutes` d'arrivée
+ * anticipée, finirait après la fermeture du jour alors que la séance seule y
+ * tient. Une visite déjà hors de l'horaire (l'horaire a changé depuis) ne
+ * compte pas : la case n'y change rien.
+ */
+export function packsAfterClosing(visits: Booking[], minutes: number, s: Settings, now = new Date()): Booking | null {
+  const problem = (v: Booking, setup: number) =>
+    slotVerdict(v.startsAt.getTime(), v.durationMinutes, [], s, now, { checkLead: false, setupMinutes: setup }).problem;
+  return visits
+    .filter((v) => v.status === "confirmed" && !v.doneAt && v.startsAt.getTime() > now.getTime())
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .find((v) => problem(v, minutes) === "closed" && problem(v, 0) !== "closed") ?? null;
+}
+
+/** Pourquoi la case « arrivée 15 min avant » ne se coche pas, et quelle visite avancer. */
+export function packingRefusal(v: Pick<Booking, "startsAt" | "endsAt">, minutes: number, tz: string): string {
+  const end = v.endsAt.getTime();
+  return `La visite du ${dayFr(v.startsAt.getTime(), tz)} finit à ${hourFr(end, tz)} : avec l'arrivée ${minutes} min `
+    + `avant, le rangement irait jusqu'à ${hourFr(end + minutes * 60_000, tz)}, après la fermeture. `
+    + `Avancez-la d'abord de ${minutes} min.`;
+}
+
 /** Les rangs d'un abonnement, « 3/4 », par visite. */
 function rankLabels(full: SubscriptionFull): Map<string, string> {
   return new Map([...full.view.numbers].map(([id, n]) => [id, `${n.index}/${full.sub.perCycle}`]));
@@ -850,12 +873,15 @@ export function refusalText(v: SlotVerdict, c: {
       const day = WEEKDAYS_FR[v.weekday] ?? "";
       if (!v.open || !v.close) return `Hors de l'horaire : la maison est fermée le ${day}.`;
       const length = minutesToText(c.durationMinutes, "fr");
-      const latest = parseHM(v.close) - c.durationMinutes;
+      const latest = parseHM(v.close) - c.durationMinutes - v.setup;
       const open = hmFr(parseHM(v.open)), close = hmFr(parseHM(v.close));
+      /* Un abonné « arrivée 15 min avant » range après la séance : on finit
+         à la fermeture au plus tard. */
+      const packing = v.setup > 0 ? `, rangement de ${v.setup} min compris` : "";
       if (latest < parseHM(v.open)) {
-        return `Hors de l'horaire : le ${day}, de ${open} à ${close}, une visite de ${length} ne tient pas.`;
+        return `Hors de l'horaire : le ${day}, de ${open} à ${close}, une visite de ${length} ne tient pas${packing}.`;
       }
-      return `Hors de l'horaire : le ${day}, une visite de ${length} se place entre ${open} et ${close}, `
+      return `Hors de l'horaire : le ${day}, une visite de ${length} se place entre ${open} et ${close}${packing}, `
         + `donc au plus tard à ${hmFr(latest)}.`;
     }
     case "busy": {
@@ -1330,7 +1356,9 @@ export async function setGuaranteedPrice(subId: string, cents: number, host?: st
  * Ses visites à venir suivent dans la même transaction : si l'une est collée
  * à un autre rendez-vous, le quart d'heure de plus ne tient pas, et rien ne
  * change. L'agenda, ses rappels et le texto de deux heures avant suivent
- * l'heure d'arrivée.
+ * l'heure d'arrivée. On finit à la fermeture au plus tard : si le rangement
+ * d'une visite à venir la dépassait, la case ne se coche pas, et l'artisan
+ * apprend laquelle avancer.
  */
 export async function setEarlyArrival(subId: string, early: boolean, host?: string | null): Promise<number> {
   const settings = await getSettingsStrict();
@@ -1338,6 +1366,11 @@ export async function setEarlyArrival(subId: string, early: boolean, host?: stri
   if (!full) throw new SubscriptionError("not_found");
   const minutes = early ? EARLY_ARRIVAL_MINUTES : 0;
   if (full.sub.setupMinutes === minutes) return minutes;
+
+  if (minutes > 0) {
+    const late = packsAfterClosing(full.visits, minutes, settings);
+    if (late) throw new SubscriptionError("invalid_slot", [], [], packingRefusal(late, minutes, settings.timezone));
+  }
 
   const q = sql();
   try {
@@ -1491,10 +1524,14 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
     accessToken: at, settings,
     timeMin: new Date(window[0].getTime() - DAY), timeMax: seriesSpanEnd(window, sub.minutesPerVisit),
   });
-  const conflicts = seriesConflicts(window.slice(0, count), sub.minutesPerVisit, busy, settings, { checkLead: false });
+  const conflicts = seriesConflicts(window.slice(0, count), sub.minutesPerVisit, busy, settings, {
+    checkLead: false, setupMinutes: sub.setupMinutes,
+  });
   if (conflicts.length > 0 && !opts.skipConflicts) throw new SubscriptionError("conflicts", conflicts);
 
-  const taken = new Set(seriesConflicts(window, sub.minutesPerVisit, busy, settings, { checkLead: false }).map((c) => c.startsAt.getTime()));
+  const taken = new Set(seriesConflicts(window, sub.minutesPerVisit, busy, settings, {
+    checkLead: false, setupMinutes: sub.setupMinutes,
+  }).map((c) => c.startsAt.getTime()));
   const starts = window.filter((d) => !taken.has(d.getTime())).slice(0, count);
   if (starts.length < count) throw new SubscriptionError("conflicts", conflicts);
 

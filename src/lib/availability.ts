@@ -97,7 +97,9 @@ export function onSlotGrid(start: number, s: Settings): boolean {
  * Créneaux libres pour une plage de dates.
  *
  * Un créneau est retenu si :
- *  – il tient entièrement dans les heures d'ouverture du jour ;
+ *  – il tient entièrement dans les heures d'ouverture du jour, et le
+ *    rangement d'un abonné « arrivée 15 min avant » aussi : on finit à la
+ *    fermeture au plus tard (décision de l'artisan, 10 novembre 2026) ;
  *  – il commence après le délai de prévenance (leadHours) ;
  *  – le temps qu'il occupe ne chevauche aucune occupation élargie du
  *    tampon de déplacement. Entre deux séances, il reste donc tout le tampon.
@@ -136,10 +138,11 @@ export function computeSlots(opts: {
 
     const openM = parseHM(rule.open);
     const closeM = parseHM(rule.close);
-    if (closeM - openM < durationMinutes) { out.push(day); continue; }
+    const setup = opts.setupMinutes ?? 0;
+    if (closeM - openM < durationMinutes + setup) { out.push(day); continue; }
 
     const ymd = parseDateKey(key);
-    const lastStart = closeM - durationMinutes;
+    const lastStart = closeM - durationMinutes - setup;
 
     for (let m = openM; m <= lastStart; m += s.slotStep) {
       const start = fromWall({ ...ymd, hour: Math.floor(m / 60), minute: m % 60 }, tz);
@@ -149,7 +152,7 @@ export function computeSlots(opts: {
       if (startMs < earliest) continue;
       if (startMs >= lastMs) break;
 
-      const candidate = withSetup({ start: startMs, end: endMs }, opts.setupMinutes ?? 0);
+      const candidate = withSetup({ start: startMs, end: endMs }, setup);
       if (blocked.some((b) => overlaps(candidate, b))) continue;
 
       day.slots.push({ time: formatHM(m), iso: start.toISOString() });
@@ -324,7 +327,8 @@ export type SlotProblem = "invalid" | "lead" | "closed" | "busy";
 
 /**
  * Le verdict détaillé : ce qui ne va pas, et de quoi le dire en clair.
- * `closed` porte l'horaire du jour (`open` nul : jour fermé) ; `busy`,
+ * `closed` porte l'horaire du jour (`open` nul : jour fermé) et les minutes
+ * de rangement qui devaient y tenir (`setup`) ; `busy`,
  * l'occupation qui gêne, `overlap` faux quand seul le battement de route
  * manque, sans chevauchement, et `arrival` les minutes d'arrivée anticipée
  * sans lesquelles les deux séances ne se gêneraient pas (zéro sinon) : une
@@ -335,7 +339,7 @@ export type SlotVerdict =
   | { problem: null }
   | { problem: "invalid" }
   | { problem: "lead" }
-  | { problem: "closed"; weekday: number; open: string | null; close: string | null }
+  | { problem: "closed"; weekday: number; open: string | null; close: string | null; setup: number }
   | { problem: "busy"; with: Occupation; overlap: boolean; arrival: number };
 
 export function slotProblem(
@@ -358,20 +362,27 @@ export function slotVerdict(
   if ((opts.checkLead ?? true) && start < now.getTime() + s.leadHours * 3600_000 - 60_000) return { problem: "lead" };
 
   const candidate = { start, end: start + durationMinutes * 60_000 };
+  const setup = opts.setupMinutes ?? 0;
 
   // Doit tenir dans les heures d'ouverture du jour.
   const key = dateKey(new Date(start), s.timezone);
   const weekday = weekdayOfKey(key);
   const rule = s.hours.find((h) => h.day === weekday);
-  if (!rule?.enabled) return { problem: "closed", weekday, open: null, close: null };
+  if (!rule?.enabled) return { problem: "closed", weekday, open: null, close: null, setup };
 
   const ymd = parseDateKey(key);
   const openMs  = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.open) / 60),  minute: parseHM(rule.open) % 60 },  s.timezone).getTime();
   const closeMs = fromWall({ ...ymd, hour: Math.floor(parseHM(rule.close) / 60), minute: parseHM(rule.close) % 60 }, s.timezone).getTime();
-  if (start < openMs || candidate.end > closeMs) return { problem: "closed", weekday, open: rule.open, close: rule.close };
+  /* La séance tient dans l'horaire, et le rangement d'un abonné « arrivée
+     15 min avant » aussi : on finit à la fermeture au plus tard (décision de
+     l'artisan, 10 novembre 2026). L'arrivée, elle, peut précéder
+     l'ouverture, comme avant le 22 octobre 2026. */
+  if (start < openMs || candidate.end + setup * 60_000 > closeMs) {
+    return { problem: "closed", weekday, open: rule.open, close: rule.close, setup };
+  }
 
-  // L'horaire porte sur la séance ; l'occupation, sur le bloc entier.
-  const block = withSetup(candidate, opts.setupMinutes ?? 0);
+  // L'occupation porte sur le bloc entier.
+  const block = withSetup(candidate, setup);
   const hit = busy
     .filter((b) => overlaps(block, padded(b, s.bufferMinutes)))
     .map((b) => ({ b, overlap: overlaps(block, b) }))
@@ -383,7 +394,7 @@ export function slotVerdict(
       ? { start: who.startsAt, end: who.endsAt, sameHome: hit.b.sameHome }
       : hit.b;
     const bare = hit.overlap ? overlaps(candidate, other) : overlaps(candidate, padded(other, s.bufferMinutes));
-    const arrival = bare ? 0 : Math.max(opts.setupMinutes ?? 0, Math.round((other.start - hit.b.start) / 60_000));
+    const arrival = bare ? 0 : Math.max(setup, Math.round((other.start - hit.b.start) / 60_000));
     return { problem: "busy", with: hit.b, overlap: hit.overlap, arrival };
   }
 
