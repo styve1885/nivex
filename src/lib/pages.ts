@@ -46,8 +46,8 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/tarifs", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.8 },
   { path: "/montreal", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.7 },
   { path: "/presentation", updated: "2026-11-06", changeFrequency: "yearly", priority: 0.6, video: true },
-  { path: "/conditions", updated: "2026-11-09", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-09", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/conditions", updated: "2026-11-11", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-11", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

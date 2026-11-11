@@ -10,6 +10,7 @@ import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
   placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
+  setSubscriptionReminders,
   setPaid, setTravelFee, syncVisitCalendar,
   SubscriptionError, type SubscriptionFull, type VisitMoved,
 } from "@/lib/subscriptions";
@@ -37,6 +38,8 @@ function serialise(f: SubscriptionFull, tz: string) {
     feePerVisitCents: sub.feePerVisitCents, travelZone: sub.travelZone, currency: sub.currency,
     /* Le prix garanti d'un cycle, hors frais, et l'arrivée de l'abonné. */
     cycleCents: sub.cycleCents, setupMinutes: sub.setupMinutes,
+    /* Les rappels de séance de ses visites : coupés par défaut. */
+    reminders: sub.reminders,
     currentCycle: view.currentCycle, doneInCurrent: view.doneInCurrent,
     currentPaidAt: current?.paidAt ?? null,
     currentDueAt: currentFirst?.startsAt.toISOString() ?? null,
@@ -124,6 +127,7 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("fee"), id: Id, cents: z.union([z.number().int().min(0).max(50_000), z.literal("zone")]) }),
   z.object({ action: z.literal("price"), id: Id, cents: z.number().int().min(0).max(1_000_000) }),
   z.object({ action: z.literal("early"), id: Id, early: z.boolean() }),
+  z.object({ action: z.literal("reminders"), id: Id, on: z.boolean() }),
   z.object({ action: z.literal("cancel"), visitId: Id }),
   z.object({ action: z.literal("move"), visitId: Id, ...When }),
   z.object({ action: z.literal("sync"), visitId: Id }),
@@ -187,6 +191,10 @@ export async function POST(req: NextRequest) {
       case "early": {
         const minutes = await setEarlyArrival(a.id, a.early, host);
         return NextResponse.json({ ok: true, minutes });
+      }
+      case "reminders": {
+        const on = await setSubscriptionReminders(a.id, a.on);
+        return NextResponse.json({ ok: true, on });
       }
       case "cancel": {
         const v = await findById(a.visitId);

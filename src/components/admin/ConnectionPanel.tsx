@@ -303,7 +303,7 @@ export function ConnectionPanel({
             <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
             <p className="mt-1">
               {env.smsSchedule
-                ? "Programmé chez Twilio par votre service de messagerie : il part deux heures avant votre arrivée, et se retire si la séance est annulée ou déplacée."
+                ? "Programmé chez Twilio par votre service de messagerie : il part deux heures avant votre arrivée, et se retire si la séance est annulée ou déplacée. Comme le rappel de la veille, il ne part que si les rappels de séance sont actifs : par défaut pour une séance à la carte, sur demande pour un abonné (sa fiche, onglet Abonnés)."
                 : "Twilio ne programme un texto que par un service de messagerie. Dans la console Twilio, créez-en un sous « Messaging › Services », ajoutez-y votre numéro, laissez « Defer to sender's webhook » dans ses réglages d'intégration, puis copiez son identifiant (MG…) dans la variable TWILIO_MESSAGING_SERVICE_SID chez Vercel."}
             </p>
           </div>

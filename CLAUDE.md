@@ -516,8 +516,9 @@ nom.
   le battement de route) ; le client ne reçoit que `invalid_slot`, la phrase
   pouvant nommer un autre client.
 - **Tâche quotidienne** (`/api/cron/daily`, `vercel.json`, `CRON_SECRET`) :
-  rappel de la veille, par courriel et par texto, aux abonnés comme aux
-  séances ponctuelles, qui annonce le paiement à la première visite d'un
+  rappel de la veille, par courriel et par texto, aux séances ponctuelles et
+  aux abonnés qui ont demandé leurs rappels (plus bas, « Les rappels de
+  séance »), qui annonce le paiement à la première visite d'un
   cycle et donne l'heure d'arrivée, programmation des textos de deux heures
   avant, courriel de fin de série à l'artisan, et remise à l'heure dans
   l'agenda des visites marquées (`calendar_stale_at`). Chaque envoi est réservé
@@ -541,11 +542,33 @@ nom.
 
 ## Les textos
 
-Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client reçoit la confirmation
-(séance ou abonnement), le rappel de la veille, et toute annulation ou tout
-déplacement ; l'artisan, chaque nouvelle réservation et ce que le client
-annule ou déplace lui-même, sur `SMS_OWNER_TO`, son cellulaire, et nulle
-part ailleurs (`ownerSmsNumber`).
+Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client à la séance reçoit la
+confirmation, le rappel de la veille et le texto de deux heures avant ;
+l'abonné, la confirmation de son abonnement, puis un message seulement quand
+une visite est déplacée ou annulée (et à la série suivante, à la fin de
+l'abonnement). L'artisan reçoit chaque nouvelle réservation et ce que le
+client annule ou déplace lui-même, sur `SMS_OWNER_TO`, son cellulaire, et
+nulle part ailleurs (`ownerSmsNumber`).
+
+**Les rappels de séance** (11 novembre 2026, les abonnés les trouvaient
+répétitifs) : le rappel de la veille, par courriel et par texto, et le
+texto de deux heures avant. Ils partent selon `reminders` : celle de
+l'abonnement pour une visite d'abonné (fausse par défaut), celle de la ligne
+pour une séance à la carte (vraie par défaut) — jamais la ligne d'une
+visite, qui suit son abonnement. L'artisan les règle sur la fiche :
+« Rappels de séance » dans l'onglet Abonnés (`setSubscriptionReminders`) et
+sur le rendez-vous dans l'onglet Rendez-vous (`setBookingReminders`). La
+condition est dans la requête de la tâche du matin et dans la réservation
+même du texto de deux heures avant (`scheduleSoonText`, `dueSoonTexts`) :
+aucun chemin ne la contourne. Un texto déjà programmé chez Twilio pour une
+séance aux rappels coupés est retiré (`withdrawQueuedReminders` : retrait
+d'abord, ligne libérée ensuite, si bien qu'un échec se reprend) : au
+décochage, chaque matin, et juste après chaque mise en ligne par le second
+travail du workflow IndexNow (`reminders`, qui appelle
+`/api/cron/reminders` avec `CRON_SECRET` ; son journal, public, ne montre
+que des nombres : `withdrawn`, `failed`, `remaining`). Le rappel de la
+veille annonçait aussi le paiement à la première visite d'un cycle : un
+abonné sans rappels ne l'a plus. Rien ne change pour les avis de l'artisan.
 
 **Le numéro de la maison** (`PHONE`, +1 450 367 6231) est celui de Twilio
 depuis le 6 novembre 2026 : il paraît partout, pages, courriels, textos,
@@ -1018,6 +1041,11 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 - **Un déplacement de visite, par le vrai code.** `moveVisit` écrit en base :
   le banc le rejoue sur PostgreSQL, Google simulé, aucun appel sortant
   (`tools/local/scenario-deplacement.mjs`, relais lancé).
+- **Les rappels de séance, par le vrai code** : un faux client à la séance
+  et une fausse abonnée, Google et Twilio simulés ; qui reçoit quoi à la
+  réservation, à l'abonnement, à la tâche du matin, au déplacement et à
+  l'annulation, et le retrait des textos programmés
+  (`tools/local/scenario-rappels.mjs`, relais lancé).
 
 - **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Passez-le
   sur un vrai PostgreSQL, **deux fois** pour l'idempotence : le banc le

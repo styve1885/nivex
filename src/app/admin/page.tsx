@@ -56,7 +56,7 @@ export default async function AdminPage({
       currency: b.currency, firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
-      subscription: Boolean(b.subscriptionId), done: Boolean(b.doneAt),
+      subscription: Boolean(b.subscriptionId), done: Boolean(b.doneAt), reminders: b.reminders,
       origin: {
         heardFrom: b.origin.heardFrom,
         heardFromLabel: heardFromText(b.origin),

@@ -215,6 +215,10 @@ défaut du code. Changer une constante ne change rien en production
   à suivre pour en redemander l'indexation (Search Console, inspection de
   l'URL, « Demander une indexation », quatre adresses) lui a été donnée le
   10 novembre.
+- **Changer l'horaire d'un abonnement** (jour ou heure de toutes ses
+  visites) se fait visite par visite, un message par visite déplacée. Un
+  « Changer l'horaire » qui n'enverrait qu'un message lui a été proposé le
+  11 novembre 2026 ; pas fait.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -293,6 +297,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #37 | 11 nov. 2026 | Abonnés : plus de rappel de la veille ni de texto de deux heures avant par défaut ; interrupteur « Rappels de séance » sur la fiche ; textos déjà programmés retirés après la mise en ligne |
 | #36 | 10 nov. 2026 | Abonnés « arrivée 15 min avant » : on finit à la fermeture au plus tard, rangement compris |
 | #35 | 9 nov. 2026 | Le numéro du client sur le cellulaire de l'artisan ; les textos avec chaque client dans l'onglet Messages, envoi depuis le numéro de la maison |
 | #34 | 9 nov. 2026 | Un texto à l'artisan après chaque appel répondu : le numéro du client, son nom, l'heure, la durée |

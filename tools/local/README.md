@@ -51,6 +51,14 @@ Pour un outil qui lance des commandes en arrière-plan, lancer le relais et
   pose un abonné VIP, déplace sa 3/4 au mardi puis sa 4/4 au vendredi
   libéré, éprouve chaque refus et les replis quand Google refuse, puis
   efface ce qu'il a écrit.
+- **Les rappels de séance, par le vrai code** :
+  `bash -c 'source tools/local/env.sh && npx tsx tools/local/scenario-rappels.mjs'`
+  (relais lancé). Un faux client à la séance et une fausse abonnée VIP ;
+  Google et Twilio simulés, rien ne sort. Le scénario vérifie qui reçoit
+  quoi (confirmations, rappel de la veille, texto de deux heures avant,
+  déplacement, annulation, avis de l'artisan), retire un texto programmé
+  avant le changement, rallume puis coupe les rappels, et termine par la
+  liste de ce que chacun a reçu. Il efface ce qu'il a écrit.
 - **Une autre base** : `NIVEX_DB=essai` pour `setup.sh`, le relais, `build.sh` et `start.sh`.
 
 ## Ce qui surprend

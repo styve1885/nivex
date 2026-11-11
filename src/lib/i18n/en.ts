@@ -46,7 +46,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you, and remind you of each visit the day before. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, the reminder the day before, a note two hours before the artisan arrives and any change to an appointment, as well as the messages the artisan writes to you directly; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone, and can also be reread in the artisan's workspace; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you and, for a single session, remind you of it the day before; a subscriber receives these reminders only on request. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, any change to an appointment and the messages the artisan writes to you directly, and, when reminders are on, the reminder the day before and a note two hours before the artisan arrives; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone, and can also be reread in the artisan's workspace; the site does not keep it.",
         "The session and any single pieces you chose are how we book the right time slot and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -178,7 +178,7 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, another reminds you of the appointment the day before, and a last one lets you know two hours before the artisan arrives.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, another reminds you of the appointment the day before, and a last one lets you know two hours before the artisan arrives. A subscriber receives the confirmation of the subscription, then a message when a visit is moved, cancelled or replaced, and when the next series is set; reminders, on request.",
       ],
     },
     {
@@ -594,7 +594,7 @@ export const en: Dict = {
       submitting: "Confirming…",
     },
     legal: {
-      data: "Your details are used for your appointments: the confirmation, reminders and any change reach you by email or text message. They are stored outside Quebec, with the providers named in the privacy policy.",
+      data: "Your details are used for your appointments: the confirmation, any change and, for a single session, reminders reach you by email or text message. They are stored outside Quebec, with the providers named in the privacy policy.",
       accept: "I accept the {terms} and the {privacy}, revised on {date}.",
       terms: "terms of use",
       privacy: "privacy policy",
