@@ -20,6 +20,7 @@ import {
 } from "./email";
 import {
   bookingEmailData, cancelSoonText, cleanOrigin, dueSoonTexts, hydrate, occupiedBlock, scheduleSoonText, type Booking,
+  withdrawQueuedReminders, withdrawSoonText,
 } from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
@@ -61,6 +62,12 @@ export type Subscription = {
   cycleCents: number; feePerVisitCents: number; travelZone: string | null; currency: string;
   /** Les minutes d'arrivée anticipée : 15 pour l'ancien déroulement, 0 aujourd'hui. Ses visites en héritent. */
   setupMinutes: number;
+  /**
+   * Les rappels de séance de ses visites : la veille, par courriel et par
+   * texto, et le texto de deux heures avant. Coupés par défaut (11 novembre
+   * 2026) ; l'artisan les rallume pour qui les demande.
+   */
+  reminders: boolean;
   startCycle: number; startDone: number;
   paidCycles: Record<string, string>;
   /** Le montant encaissé de chaque cycle payé, noté au moment du paiement. */
@@ -86,6 +93,7 @@ function hydrateSub(r: Row): Subscription {
     cycleCents: Number(r.cycle_cents), feePerVisitCents: Number(r.travel_fee_cents ?? 0),
     travelZone: (r.travel_zone as string) ?? null, currency: (r.currency as string) || "CAD",
     setupMinutes: r.setup_minutes == null ? EARLY_ARRIVAL_MINUTES : Number(r.setup_minutes),
+    reminders: r.reminders === true,
     startCycle: Number(r.start_cycle ?? 1), startDone: Number(r.start_done ?? 0),
     paidCycles: (r.paid_cycles as Record<string, string>) ?? {},
     paidAmounts: (r.paid_amounts as Record<string, number>) ?? {},
@@ -1418,6 +1426,32 @@ async function scheduleSoonTexts(visits: Booking[], tz: string): Promise<void> {
  * valent pour les cycles suivants, et ne réécrivent ni la fiche d'un cycle
  * déjà reçu, ni les revenus du mois.
  */
+/**
+ * Les rappels de séance d'un abonné : celui de la veille, par courriel et par
+ * texto, et le texto de deux heures avant. Coupés par défaut depuis le
+ * 11 novembre 2026, ses abonnés les trouvant répétitifs ; l'artisan les
+ * rallume pour qui les demande. Coupés : les textos déjà programmés pour ses
+ * visites sont retirés chez Twilio (ce qui échoue, la tâche du matin le
+ * reprend). Rallumés : ceux qui tombent dans la fenêtre se programment, et
+ * le rappel de la veille part au passage suivant de la tâche du matin.
+ * Aucun message au client : c'est lui qui l'a demandé.
+ */
+export async function setSubscriptionReminders(subId: string, on: boolean): Promise<boolean> {
+  const settings = await getSettingsStrict();
+  const rows = (await sql()`UPDATE nivex_subscriptions SET reminders = ${on} WHERE id = ${subId} RETURNING id`) as Row[];
+  if (rows.length === 0) throw new SubscriptionError("not_found");
+  const full = (await findSubscription(subId))!;
+  const now = Date.now();
+  const upcoming = full.visits.filter((v) => v.status === "confirmed" && !v.doneAt && v.startsAt.getTime() > now);
+  if (on) {
+    for (const v of upcoming) await scheduleSoonText(v, settings.timezone).catch(() => false);
+  } else {
+    for (const v of upcoming.filter((x) => x.smsSoonSid)) await withdrawSoonText(v).catch(() => false);
+  }
+  await logEvent("subscription_reminders_set", { ref: full.sub.ref, on });
+  return on;
+}
+
 export async function setPaid(subId: string, cycle: number, paid: boolean): Promise<void> {
   await ensureSchema();
   const key = String(Math.max(1, Math.floor(cycle)));
@@ -1724,7 +1758,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
   reminders: number; smsReminders: number; soon: number; notices: number; thanks: number; google: boolean;
-  calendarFixed: number;
+  calendarFixed: number; withdrawn: number;
 }> {
   await ensureSchema();
   const settings = await getSettings();
@@ -1741,8 +1775,9 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     return cache.get(id)!;
   };
 
-  /* — Rappels — par courriel et par texto, pour les visites d'abonné comme
-     pour les séances ponctuelles. */
+  /* — Rappels — par courriel et par texto, aux séances ponctuelles, et aux
+     visites des abonnés qui les ont demandés : depuis le 11 novembre 2026,
+     un abonné n'en reçoit plus par défaut (« Rappels de séance »). */
   const due = ((await sql()`
     SELECT * FROM nivex_bookings
     WHERE status = 'confirmed'
@@ -1760,9 +1795,10 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     const isToday = key === today;
 
     let payment: string | null = null;
+    if (!v.subscriptionId && !v.reminders) continue;
     if (v.subscriptionId) {
       const full = await subOf(v.subscriptionId);
-      if (!full || full.sub.status !== "active") continue;
+      if (!full || full.sub.status !== "active" || !full.sub.reminders) continue;
       const d = visitData(full, v, settings, origin);
       if (d.paymentDue) payment = formatMoney(d.totalCents, d.currency, v.locale);
       if (at && !v.reminderSentAt) {
@@ -1797,7 +1833,15 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
   }
 
   /* — Texto de deux heures avant — programmé chez Twilio pour les séances
-     du lendemain ; celles réservées d'ici là le sont à la réservation. */
+     du lendemain ; celles réservées d'ici là le sont à la réservation. Les
+     séances aux rappels coupés n'en reçoivent pas (`dueSoonTexts`, et la
+     réservation de `scheduleSoonText`), et ceux qu'on aurait programmés
+     avant la coupure sont retirés. */
+  const { withdrawn } = await withdrawQueuedReminders(now)
+    .catch(async (e) => {
+      await logEvent("reminders_withdraw_failed", { error: describe(e) });
+      return { withdrawn: 0 };
+    });
   let soon = 0;
   for (const v of await dueSoonTexts(now).catch(() => [] as Booking[])) {
     if (v.subscriptionId) {
@@ -1914,7 +1958,7 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
   }
 
   await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, calendarFixed, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at), calendarFixed };
+  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at), calendarFixed, withdrawn };
 }
 
 /**

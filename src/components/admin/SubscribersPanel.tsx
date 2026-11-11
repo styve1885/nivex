@@ -101,6 +101,7 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
       setDaily(d.ok
         ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.soon ?? 0} texto(s) de deux heures avant programmé(s), ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
           + (d.calendarFixed ? ` ${d.calendarFixed} visite(s) remise(s) à l'heure dans l'agenda.` : "")
+          + (d.withdrawn ? ` ${d.withdrawn} texto(s) de deux heures avant retiré(s), rappels coupés.` : "")
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {
@@ -366,6 +367,22 @@ function SubscriptionCard({ s, when, onChange }: {
                 </label>
                 <span className="mt-1 block text-[0.74rem] text-ink-400">
                   L&apos;ancien déroulement, pour un abonné d&apos;avant le changement : installation avant la visite, rangement après, et ce temps bloqué. Décochée, l&apos;installation et le rangement se font dans la visite. S&apos;applique aux visites à venir.
+                </span>
+              </Line>
+            )}
+            {!ended && (
+              <Line label="Rappels">
+                <label className="flex items-center gap-2.5">
+                  <input type="checkbox" checked={s.reminders} disabled={busy === "reminders"}
+                    onChange={(e) => run("reminders", { action: "reminders", id: s.id, on: e.target.checked },
+                      e.target.checked
+                        ? "Rappels de séance activés : la veille et deux heures avant chaque visite."
+                        : "Rappels de séance coupés : les textos déjà programmés sont retirés.")}
+                    className="h-4 w-4 accent-[#866836]" />
+                  <span>Rappels de séance</span>
+                </label>
+                <span className="mt-1 block text-[0.74rem] text-ink-400">
+                  Le rappel de la veille, par courriel et par texto, et le texto de deux heures avant. Coupés par défaut pour un abonné : il reçoit sa confirmation, puis un message seulement quand une visite change (déplacée, annulée, remplacée) ou que sa série suivante est posée. À cocher pour qui les demande.
                 </span>
               </Line>
             )}

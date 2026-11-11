@@ -102,8 +102,34 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState<{ ok: boolean; error: string | null } | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [reminders, setReminders] = useState(b.reminders);
+  const [remindersBusy, setRemindersBusy] = useState(false);
+  const [remindersError, setRemindersError] = useState<string | null>(null);
   const router = useRouter();
   const cancelled = b.status === "cancelled";
+
+  /* Les rappels de séance d'une séance à la carte : la veille et deux heures
+     avant. Le changement s'affiche aussitôt, et revient s'il n'a pas pris. */
+  async function toggleReminders(on: boolean) {
+    setRemindersBusy(true);
+    setRemindersError(null);
+    setReminders(on);
+    try {
+      const res = await fetch(`/api/admin/bookings?id=${b.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ reminders: on }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !d?.ok) {
+        setReminders(!on);
+        setRemindersError(res.status === 401 ? "Votre session a expiré : reconnectez-vous." : "Le réglage n'a pas été enregistré. Réessayez.");
+      }
+    } catch {
+      setReminders(!on);
+      setRemindersError("Le site n'a pas répondu. Réessayez.");
+    } finally {
+      setRemindersBusy(false);
+    }
+  }
 
   /* Une réservation prise pendant une rupture du lien avec Google existe,
      mais personne n'en a été averti. Elle se rattrape. */
@@ -224,6 +250,23 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               </>
             )}
             <Line label="Référence"><code className="font-mono text-xs tracking-wider">{b.ref}</code></Line>
+            {!cancelled && (b.subscription ? (
+              <Line label="Rappels">
+                <span className="text-ink-500">Réglés sur la fiche de l&apos;abonné, dans l&apos;onglet Abonnés.</span>
+              </Line>
+            ) : (
+              <Line label="Rappels">
+                <label className="flex items-center gap-2.5">
+                  <input type="checkbox" checked={reminders} disabled={remindersBusy}
+                    onChange={(e) => toggleReminders(e.target.checked)} className="h-4 w-4 accent-[#866836]" />
+                  <span>Rappels de séance</span>
+                </label>
+                <span className="mt-1 block text-[0.74rem] text-ink-400">
+                  La veille, par courriel et par texto, et le texto de deux heures avant. Activés par défaut pour une séance à la carte.
+                </span>
+                {remindersError && <span role="alert" className="mt-1 block text-[0.78rem] text-[#8E332C]">{remindersError}</span>}
+              </Line>
+            ))}
 
             <Origin origin={b.origin} tz={tz} />
 

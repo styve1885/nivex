@@ -96,6 +96,9 @@ export type Booking = {
   calendarStaleAt: Date | null;
   /* Le texto « je serai chez vous », programmé chez Twilio. */
   smsSoonAt: Date | null; smsSoonSid: string | null;
+  /* Les rappels de séance (la veille, et deux heures avant) d'une séance à
+     la carte ; une visite d'abonné suit son abonnement (voir db.ts). */
+  reminders: boolean;
 };
 
 /**
@@ -158,6 +161,7 @@ export function hydrate(r: Row): Booking {
     makeup: r.makeup === true,
     doneAt: r.done_at ? new Date(r.done_at as string) : null,
     reminderSentAt: r.reminder_sent_at ? new Date(r.reminder_sent_at as string) : null,
+    reminders: r.reminders !== false,
     googleSeriesId: (r.google_series_id as string) ?? null,
     calendarStaleAt: r.calendar_stale_at ? new Date(r.calendar_stale_at as string) : null,
     smsSoonAt: r.sms_soon_at ? new Date(r.sms_soon_at as string) : null,
@@ -386,10 +390,15 @@ export async function scheduleSoonText(b: Booking, tz: string, now = new Date())
   if (b.status !== "confirmed" || b.smsSoonAt || !smsScheduleConfigured()) return false;
   const at = soonTextAt(b);
   if (at.getTime() < now.getTime() + SOON_MIN_LEAD_MS || at.getTime() > now.getTime() + SOON_WINDOW_MS) return false;
+  /* Seulement si les rappels de cette séance sont actifs : ceux de sa ligne
+     pour une séance à la carte, ceux de son abonnement pour une visite. La
+     condition est dans la réservation même : aucun chemin ne la contourne. */
   const claimed = (await sql()`
     UPDATE nivex_bookings SET sms_soon_at = ${at.toISOString()}
     WHERE id = ${b.id} AND status = 'confirmed' AND sms_soon_at IS NULL
       AND starts_at = ${b.startsAt.toISOString()} AND setup_minutes = ${b.setupMinutes}
+      AND (CASE WHEN subscription_id IS NULL THEN reminders
+           ELSE COALESCE((SELECT s.reminders FROM nivex_subscriptions s WHERE s.id = nivex_bookings.subscription_id), false) END)
     RETURNING id`) as Row[];
   if (claimed.length === 0) return false;
   const arrival = new Date(b.startsAt.getTime() - b.setupMinutes * 60_000);
@@ -423,12 +432,75 @@ export async function cancelSoonText(b: Pick<Booking, "id" | "ref">): Promise<vo
 export async function dueSoonTexts(now: Date): Promise<Booking[]> {
   await ensureSchema();
   const rows = (await sql()`
-    SELECT * FROM nivex_bookings
-    WHERE status = 'confirmed' AND sms_soon_at IS NULL
-      AND starts_at > ${new Date(now.getTime() + SOON_TEXT_MINUTES * 60_000).toISOString()}
-      AND starts_at < ${new Date(now.getTime() + SOON_WINDOW_MS + 3 * 3600_000).toISOString()}
-    ORDER BY starts_at LIMIT 100`) as Row[];
+    SELECT b.* FROM nivex_bookings b
+    LEFT JOIN nivex_subscriptions s ON s.id = b.subscription_id
+    WHERE b.status = 'confirmed' AND b.sms_soon_at IS NULL
+      AND b.starts_at > ${new Date(now.getTime() + SOON_TEXT_MINUTES * 60_000).toISOString()}
+      AND b.starts_at < ${new Date(now.getTime() + SOON_WINDOW_MS + 3 * 3600_000).toISOString()}
+      AND (CASE WHEN b.subscription_id IS NULL THEN b.reminders ELSE COALESCE(s.reminders, false) END)
+    ORDER BY b.starts_at LIMIT 100`) as Row[];
   return rows.map(hydrate);
+}
+
+/**
+ * Retire chez Twilio le texto de deux heures avant déjà programmé, puis
+ * libère la ligne. Dans cet ordre, à l'inverse de `cancelSoonText` : un
+ * retrait qui échoue garde l'identifiant, et le passage suivant réessaie.
+ * Vrai quand plus rien ne partira.
+ */
+export async function withdrawSoonText(b: Pick<Booking, "id" | "ref">): Promise<boolean> {
+  const rows = (await sql()`SELECT sms_soon_sid FROM nivex_bookings WHERE id = ${b.id}`) as Row[];
+  const sid = rows[0]?.sms_soon_sid as string | null | undefined;
+  if (!sid) return true;
+  if (!(await cancelScheduledSms(sid, b.ref))) return false;
+  await sql()`UPDATE nivex_bookings SET sms_soon_at = NULL, sms_soon_sid = NULL WHERE id = ${b.id} AND sms_soon_sid = ${sid}`;
+  return true;
+}
+
+/**
+ * Les textos de deux heures avant encore programmés chez Twilio pour des
+ * séances dont les rappels sont coupés : retirés. Passe après chaque mise en
+ * ligne (/api/cron/reminders, appelé par le workflow) et chaque matin, si
+ * bien qu'aucun ne part à un abonné qui ne les veut plus. Rend ce qui a été
+ * retiré, ce qui a échoué et ce qui reste programmé : des nombres, jamais
+ * un nom ni un numéro, puisque le journal du workflow est public.
+ */
+export async function withdrawQueuedReminders(now = new Date()): Promise<{ withdrawn: number; failed: number; remaining: number }> {
+  await ensureSchema();
+  const queued = async () => (await sql()`
+    SELECT b.id, b.ref FROM nivex_bookings b
+    LEFT JOIN nivex_subscriptions s ON s.id = b.subscription_id
+    WHERE b.sms_soon_sid IS NOT NULL AND b.sms_soon_at > ${now.toISOString()}
+      AND NOT (CASE WHEN b.subscription_id IS NULL THEN b.reminders ELSE COALESCE(s.reminders, false) END)
+    ORDER BY b.sms_soon_at LIMIT 200`) as Row[];
+  let withdrawn = 0;
+  let failed = 0;
+  for (const r of await queued()) {
+    if (await withdrawSoonText({ id: r.id as string, ref: r.ref as string }).catch(() => false)) withdrawn++;
+    else failed++;
+  }
+  const remaining = (await queued()).length;
+  if (withdrawn || failed || remaining) await logEvent("reminders_withdrawn", { withdrawn, failed, remaining });
+  return { withdrawn, failed, remaining };
+}
+
+/**
+ * Les rappels d'une séance à la carte, réglés par l'artisan sur le
+ * rendez-vous. Coupés : le texto déjà programmé est retiré. Rallumés : il se
+ * programme s'il tombe dans la fenêtre, et le rappel de la veille part au
+ * passage de la tâche du matin. Une visite d'abonné ne se règle pas ici, mais
+ * sur la fiche de l'abonné : rend nul.
+ */
+export async function setBookingReminders(id: string, on: boolean, tz: string): Promise<Booking | null> {
+  const rows = (await sql()`
+    UPDATE nivex_bookings SET reminders = ${on}
+    WHERE id = ${id} AND subscription_id IS NULL RETURNING *`) as Row[];
+  if (!rows[0]) return null;
+  const b = hydrate(rows[0]);
+  if (on) await scheduleSoonText(b, tz).catch(() => false);
+  else await withdrawSoonText(b).catch(() => false);
+  await logEvent("booking_reminders_set", { ref: b.ref, on });
+  return b;
 }
 
 /** Rien n'a pu être vu sur le site avant 2020 : une date plus ancienne est une saleté. */

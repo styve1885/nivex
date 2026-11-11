@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/lib/session";
-import { cancelBooking, findById, listBookings, resendBooking, stats } from "@/lib/bookings";
+import { cancelBooking, findById, listBookings, resendBooking, setBookingReminders, stats } from "@/lib/bookings";
+import { getSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,4 +74,27 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * PATCH /api/admin/bookings?id=… { reminders } — les rappels de séance d'une
+ * séance à la carte : la veille, par courriel et par texto, et le texto de
+ * deux heures avant. Une visite d'abonné se règle sur la fiche de l'abonné.
+ */
+export async function PATCH(req: NextRequest) {
+  if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
+
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
+  }
+  const body = (await req.json().catch(() => null)) as { reminders?: unknown } | null;
+  if (typeof body?.reminders !== "boolean") {
+    return NextResponse.json({ ok: false, error: "invalid" }, { status: 400 });
+  }
+
+  const { timezone } = await getSettings();
+  const booking = await setBookingReminders(id, body.reminders, timezone);
+  if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
+  return NextResponse.json({ ok: true, reminders: booking.reminders });
 }
