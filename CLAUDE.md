@@ -180,6 +180,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/availability.ts` | Les créneaux libres, la durée et le prix d'une séance ; qui occupe un créneau, et pourquoi il est refusé (`slotVerdict`) |
 | `lib/bookings.ts` | La création d'un rendez-vous — c'est **lui** qui engage la maison |
 | `lib/travel.ts` | Les secteurs et les zones, les frais de déplacement, le texte de la zone desservie, les conflits de préfixes |
+| `lib/areas.ts` | Les quartiers que la maison met en avant (la liste de l'artisan), chacun tenu par ses codes postaux : il ne paraît que si la réservation les accepte tous |
 | `lib/pricing.ts` | La grille publiée : blocs, forfaits, abonnements |
 | `lib/cycles.ts` | Le calendrier d'un abonnement, en fonctions pures : dates, rang des visites, montant d'un cycle, délai de la veille |
 | `lib/subscriptions.ts` | Les abonnements en base, dans l'agenda et par courriel ; la tâche quotidienne |
@@ -220,7 +221,8 @@ remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 50 $ à 55 $, seulement s'il valait encore 50 $. `zones-2026-ab` a ramené
 la grille à deux zones (plus bas, « Zones et frais de déplacement »).
 `horizon-2026-90` a porté la réservation en ligne à 90 jours à l'avance.
-Les noms des formules, eux, ne passent pas par cette table : ils
+`secteurs-2026-11` a fait entrer Ville de Mont-Royal et Griffintown dans la
+grille (plus bas, « Les secteurs desservis »). Les noms des formules, eux, ne passent pas par cette table : ils
 convergent à chaque démarrage (`formules-2026-11`, plus bas, « Les
 abonnements »).
 
@@ -230,7 +232,8 @@ L'accueil suit l'ordre du 23 octobre 2026, deux fois plus court qu'avant :
 héros, la vidéo de présentation (depuis le 2 novembre 2026, plus bas),
 déroulement, prestations (cinq cartes d'une phrase, puis les photos
 de la galerie sans légende), avant/après (la chemise blanche et le pantalon
-de complet), tarifs (les cinq abonnements, en cinq cartes qui se rangent
+de complet), les secteurs desservis (depuis le 13 novembre 2026, plus bas),
+tarifs (les cinq abonnements, en cinq cartes qui se rangent
 sur une, deux, trois ou cinq colonnes, et la séance d'essai en une ligne), l'histoire en version courte, sept
 questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
 les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
@@ -261,8 +264,9 @@ même adresse, et le fichier réel avec `ffmpeg` (décodage complet, niveau
 sonore).
 
 La page Tarifs tient dans cet ordre : abonnements, séance d'essai, pièces à
-l'unité, frais de déplacement par zone (avec la vérification du code
-postal, puis, pour chaque zone payante, le coût d'un cycle de chaque
+l'unité, frais de déplacement par zone (avec la liste des quartiers et la
+vérification du code postal, puis le tableau de toutes les zones et de leurs
+secteurs, puis, pour chaque zone payante, le coût d'un cycle de chaque
 abonnement : « VIP : 400 $ + 60 $ de déplacement, soit 4 visites ×
 15 $ », `cycleTravel`), première heure offerte, cinq conditions au plus.
 
@@ -722,10 +726,12 @@ zone qu'ils portent.
   un préfixe (J5R, La Prairie et Candiac) ; deux zones, jamais.
   `policyProblems` le refuse, à la saisie comme au serveur, en nommant les
   deux secteurs. On ne tranche pas à la place de l'artisan.
-- Le texte de la zone desservie (accueil, Tarifs, tunnel, pied de page,
-  conditions, FAQ, données structurées), le tableau des frais et la liste
+- Le texte de la zone desservie (bloc « Nous écrire », tunnel, pied de
+  page, conditions, données structurées), le tableau des frais et la liste
   « Copier pour Google » s'écrivent depuis les secteurs actifs. Aucune
-  phrase de zone ne s'écrit à la main.
+  phrase de zone ne s'écrit à la main. La liste de quartiers de l'artisan
+  (section de l'accueil, Tarifs, foire aux questions) en est la vitrine,
+  tenue par les mêmes secteurs (plus bas, « Les secteurs desservis »).
 - **La Rive-Sud d'abord, Montréal ensuite.** Un secteur dont tous les
   préfixes commencent par H (sauf H7, Laval) est un quartier de Montréal
   (`isMontrealSector`), quelle que soit sa zone. Partout où les secteurs
@@ -738,15 +744,53 @@ zone qu'ils portent.
   Rien n'y est écrit à la main. Tant qu'aucun quartier de l'île ne paie de
   déplacement (`montrealTravelFree`), « Aucuns frais de déplacement à
   Montréal » paraît en tête de la page, dans ses conditions, dans sa
-  question sur les frais, en tête de la dernière phrase de la réponse sur
-  les zones de l'accueil (`{check}`, qui garde ainsi ses trois phrases) et
-  dans `/llms.txt` ; la phrase s'efface d'elle-même si
-  l'onglet remet un quartier dans une zone payante.
+  question sur les frais et dans `/llms.txt` ; la phrase s'efface
+  d'elle-même si l'onglet remet un quartier dans une zone payante. La
+  réponse sur les zones de l'accueil, qui la portait (`{check}`), a cédé
+  sa place le 13 novembre 2026 à « Venez-vous dans mon quartier ? ».
 - L'ancienne colonne `service_area` n'est plus lue du tout. Elle reste en
   base, sans effet.
 - La bascule vers les secteurs est écrite une fois par `bootstrap()` : toute
   grille qui n'est pas à la forme 2 est remplacée, et une grille déjà
   migrée n'est jamais touchée. `saveConnection` suit la même règle.
+
+**Les secteurs desservis** (13 novembre 2026). L'artisan a donné sa liste
+de quartiers, dans cet ordre et avec ces mots : à Montréal, centre-ville,
+Vieux-Montréal, Griffintown, L'Île-des-Sœurs, Westmount, Outremont, Ville de
+Mont-Royal et Verdun ; sur la Rive-Sud, Saint-Lambert, Brossard et Longueuil
+(dont le Vieux-Longueuil). Elle vit dans `lib/areas.ts` (`AREAS`), en
+français et en anglais, chaque quartier avec ses codes (les vingt-neuf de
+l'artisan). Montréal y vient d'abord, comme il l'a écrite : l'exception à
+« la Rive-Sud d'abord », qui gouverne toujours les listes de secteurs.
+Ce n'est pas la grille : la réservation dessert davantage (Chambly,
+Candiac, Saint-Jean-sur-Richelieu…), et rien n'en est retiré. C'est une
+vitrine tenue par la grille : un quartier ne paraît que si la réservation
+accepte chacun de ses codes (`servedAreas`), si bien qu'un secteur
+désactivé dans l'onglet l'efface de lui-même. Elle paraît :
+- sur l'accueil, juste avant les tarifs (`#secteurs`, `components/home/Areas.tsx`),
+  centrée, des noms sans code postal, puis « Votre secteur n'y est pas ?
+  Écrivez-nous : nous vous répondons rapidement. », le lien menant au bloc
+  « Nous écrire » ;
+- sur Tarifs, en tête du bloc des frais de déplacement, à la place de la
+  phrase de tous les secteurs, que le tableau des zones donne juste
+  dessous ;
+- dans la foire aux questions : « Venez-vous dans mon quartier ? », la
+  liste en une phrase et la même invitation (`{areas}`, `{missing}`). La
+  question qu'elle remplace, « Quelles zones desservez-vous ? », dort dans
+  `lib/i18n/retired.ts` avec ses deux fins de phrase ;
+- dans `/llms.txt` et `/llms-full.txt`, avant la phrase de tous les
+  secteurs ;
+- dans la description de l'accueil (plus bas, « Moteurs de recherche et
+  assistants »).
+
+La production refusait H3P et H3R (relevé le 13 novembre 2026 sur
+`/api/zone`). La migration unique `secteurs-2026-11` (`addAreaSectors`,
+dans `bootstrap()`) y a ajouté deux secteurs, en zone A, à la suite :
+Ville de Mont-Royal (H3P, H3R) et Griffintown (H3C, que le centre-ville
+garde aussi), pour que chaque quartier de la liste soit aussi un lieu de
+`areaServed`. Même garde que `zones-2026-ab` : grille relue, rien de
+retiré, chaque ajout noté dans `nivex_zone_history`. La grille par défaut
+les porte au même rang.
 
 Deux règles tiennent ensemble dans une seule décision — les frais vivent
 dans **leur propre colonne**, jamais fondus dans l'estimation :
@@ -789,7 +833,14 @@ titre commence par « NIVEX Repassage » (« NIVEX In-Home Ironing ») et
 n'appartient qu'à sa page ; chaque description tient en 150 à 160
 caractères et nomme le repassage à domicile, Montréal et la Rive-Sud. Les
 montants s'y remplissent depuis les réglages (`pageDescription`). Un test
-tient ces trois règles, à 50, 55 et 60 $ de l'heure.
+tient ces trois règles, à 50, 55 et 60 $ de l'heure. Une seule exception,
+celle de l'accueil, dictée mot pour mot par l'artisan le 13 novembre 2026 :
+« Repassage à domicile à Montréal (Westmount, Outremont, L'Île-des-Sœurs,
+centre-ville) et sur la Rive-Sud (Saint-Lambert, Brossard, Longueuil). »,
+142 caractères, sans prix. Elle nomme sept quartiers de sa liste
+(`DESCRIPTION_AREAS`) : si la réservation en refuse un, l'ancienne
+description, sans quartier et avec le prix d'entrée, reprend sa place
+(`fallback`). La fiche LocalBusiness et `/llms.txt` la reprennent.
 
 **La fiche de la maison** (`localBusinessJsonLd`) est posée par la racine
 `app/[locale]/layout.tsx`, la même sur toutes les pages, avec le même `@id`
@@ -1026,7 +1077,8 @@ jointes), `provenance` (zone
 desservie, journal, provenance, familles de sources, robots, bilan,
 lectures de la vidéo),
 `travel` (secteurs, zones, frais,
-conflits de préfixes, historique, Montréal, titres et descriptions de chaque
+conflits de préfixes, historique, Montréal, les quartiers de l'artisan et
+leur migration, titres et descriptions de chaque
 page, hreflang, fiche LocalBusiness, llms.txt, robots, plan du site, origine
 www, IndexNow, la vidéo : fichier en lecture continue, VideoObject, page de
 présentation, middleware), `subscription`

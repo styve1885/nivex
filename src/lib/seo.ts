@@ -10,6 +10,7 @@ import {
 } from "./pricing";
 import { setupSentence, shortDuration } from "./capacity";
 import { isMontrealSector, sectorsByRegion, thresholdText, type Sector } from "./travel";
+import { descriptionAreasServed } from "./areas";
 import { openDays } from "@/components/home/opening-line";
 import { PRESENTATION, isoDuration, uploadDateTime } from "./video";
 import { presentationTranscript, presentationVideoText } from "./i18n/video";
@@ -62,17 +63,23 @@ export const siteViewport: Viewport = {
   initialScale: 1,
 };
 
-/** Les réglages qui remplissent les montants des descriptions. */
-type PriceSettings = Pick<Settings, "hourlyRate" | "minMinutes" | "currency">;
+/** Les réglages qui remplissent les montants des descriptions, et la grille qui tient celle de l'accueil. */
+type PriceSettings = Pick<Settings, "hourlyRate" | "minMinutes" | "currency"> & Partial<Pick<Settings, "zonePolicy">>;
 
 /**
  * La description d'une page, montants remplis depuis les réglages : le plus
  * bas montant par cycle ({plan}), l'éventail des abonnements ({from}, {to})
  * et la séance d'essai ({min}, {price}). Une description sans montant se
  * passe des réglages.
+ *
+ * Celle de l'accueil nomme sept quartiers de la liste de l'artisan : si la
+ * grille de la réservation en refuse un, elle cède la place à l'ancienne,
+ * qui n'en nomme aucun (`fallback`). Une description ne doit pas promettre
+ * un quartier que le tunnel refuserait.
  */
 export function pageDescription(page: SeoPage, lang: Lang, s?: PriceSettings): string {
-  const text = getSeo(lang)[page].description;
+  const seo = getSeo(lang)[page];
+  const text = seo.fallback && s?.zonePolicy && !descriptionAreasServed(s.zonePolicy) ? seo.fallback : seo.description;
   if (!s) return text;
   const money = (c: number) => formatMoney(c, s.currency, lang);
   const cycles = PLANS.map((p) => planCents(p, s));

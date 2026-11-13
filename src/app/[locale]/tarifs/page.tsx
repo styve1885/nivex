@@ -8,6 +8,8 @@ import { formatMoney, minutesToText } from "@/lib/time";
 import { feeTable, feeZones, servedText } from "@/lib/travel";
 import { pageMeta } from "@/lib/seo";
 import { ZoneChecker } from "@/components/ZoneChecker";
+import { AreaList, AreaMissing } from "@/components/AreaList";
+import { servedAreas } from "@/lib/areas";
 import { RetiredSections } from "@/components/tarifs/RetiredSections";
 import { setupSentence } from "@/lib/capacity";
 import {
@@ -175,11 +177,23 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
       <section className="px-7 py-24 sm:px-10">
         <div className="mx-auto max-w-4xl">
           <h2 className="font-display text-3xl font-light text-ink-800 sm:text-4xl">{t.tarifs.terms.travel}</h2>
-          {/* De quoi vérifier son adresse avant de lire les montants. */}
+          {/* De quoi vérifier son adresse avant de lire les montants : les
+              quartiers de l'artisan que la réservation accepte (lib/areas.ts),
+              la même liste que sur l'accueil. Le tableau qui suit nomme, zone
+              par zone, tous les secteurs desservis. Sans aucun quartier de la
+              liste, la phrase des secteurs actifs reprend sa place. */}
           <div className="paper mt-10 px-7 py-8 sm:px-9">
-            <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
-              {servedText(s.zonePolicy, locale, t.zoneText)}
-            </p>
+            {servedAreas(s.zonePolicy).length > 0 ? (
+              <>
+                <p className="eyebrow">{t.areas.title}</p>
+                <AreaList t={t.areas} locale={locale} policy={s.zonePolicy} align="left" className="mt-6" />
+                <AreaMissing t={t.areas} href={`/${locale}#contact`} className="mt-6" />
+              </>
+            ) : (
+              <p className="text-[0.9rem] font-light leading-[1.85] text-ink-600">
+                {servedText(s.zonePolicy, locale, t.zoneText)}
+              </p>
+            )}
             <Link href={`/${locale}/montreal`}
               className="mt-3 inline-block text-[0.82rem] text-gold-700 underline decoration-gold-400 decoration-1 underline-offset-4 transition-colors hover:text-gold-600">
               {t.montreal.link}

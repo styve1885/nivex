@@ -418,8 +418,8 @@ export const en: Dict = {
         a: "Ideally to let us in and see us out. In between, go about your day. Some clients leave for work after opening the door: we arrange it in advance.",
       },
       {
-        q: "Which areas do you serve?",
-        a: "{zone} {check}",
+        q: "Do you come to my neighbourhood?",
+        a: "{areas} {missing}",
       },
       {
         q: "How does payment work?",
@@ -442,9 +442,17 @@ export const en: Dict = {
     served: "Areas served: {list}.",
     montreal: "In Montreal: {list}.",
     montrealFree: "No travel fees in Montreal.",
-    check: "Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
-    checkMontrealFree: "No travel fees in Montreal; elsewhere, enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
     none: "Online booking is closed for every area at the moment. Call us.",
+  },
+  areas: {
+    eyebrow: "We come to you",
+    title: "Areas we serve",
+    montreal: "Montreal",
+    south: "South Shore",
+    sentenceMontreal: "in Montreal: {list}",
+    sentenceSouth: "on the South Shore: {list}",
+    missing: "Your area isn't listed? {write}: we reply quickly.",
+    write: "Write to us",
   },
   montreal: {
     eyebrow: "Montreal",
