@@ -6,6 +6,7 @@ import { formatMoney, minutesToText } from "./time";
 import { feeTable, feeZones, montrealTravelFree, servedText, type FeeRow } from "./travel";
 import { setupSentence } from "./capacity";
 import { pageDescription } from "./seo";
+import { areasSentence } from "./areas";
 import { faqFill } from "@/components/home/faq-fill";
 import { openingLine } from "@/components/home/opening-line";
 import {
@@ -16,9 +17,10 @@ import {
 /**
  * Ce que les assistants lisent de la maison, en Markdown, en français puis
  * en anglais, sur deux fichiers :
- *  — /llms.txt, court : le service, les zones, les cinq abonnements et la
- *    séance d'essai avec leurs prix, le contact et l'horaire, les pages
- *    principales, dont la présentation en vidéo ;
+ *  — /llms.txt, court : le service, les quartiers de la liste de l'artisan
+ *    puis toutes les zones, les cinq abonnements et la séance d'essai avec
+ *    leurs prix, le contact et l'horaire, les pages principales, dont la
+ *    présentation en vidéo ;
  *  — /llms-full.txt, le détail : pièces à l'unité, frais par zone et coût
  *    d'un cycle en zone payante, conditions, les sept questions et leurs
  *    réponses.
@@ -43,6 +45,14 @@ function feeLine(f: FeeRow, t: ReturnType<typeof getDict>): string {
       : `${t.tarifs.terms.travelShort.replace("{fee}", f.short).replace("{hours}", f.threshold)} ; `
         + t.tarifs.terms.travelLong.replace("{fee}", f.long).replace("{hours}", f.threshold);
   return `- ${f.zone} (${f.sectors.join(", ")}) : ${price}`;
+}
+
+/* Les quartiers de l'artisan que la réservation accepte (lib/areas.ts), la
+   liste de l'accueil en une phrase, et l'invitation à écrire ; rien sans
+   aucun quartier. La phrase de tous les secteurs suit. */
+function areaLines(s: Settings, lang: "fr" | "en", t: ReturnType<typeof getDict>): string[] {
+  const areas = areasSentence(s.zonePolicy, lang, t.areas);
+  return areas ? [`${areas} ${t.areas.missing.replace("{write}", t.areas.write)}`, ""] : [];
 }
 
 /* Le français met une espace avant les deux-points ; l'anglais, non. */
@@ -79,6 +89,7 @@ function shortSection(s: Settings, lang: "fr" | "en"): string {
     "",
     `## ${L.zones}`,
     "",
+    ...areaLines(s, lang, t),
     servedText(s.zonePolicy, lang, t.zoneText),
     ...(montrealTravelFree(s.zonePolicy) ? ["", t.zoneText.montrealFree] : []),
     "",
@@ -159,6 +170,7 @@ function section(s: Settings, lang: "fr" | "en"): string {
     "",
     `## ${t.tarifs.terms.travel}`,
     "",
+    ...areaLines(s, lang, t),
     servedText(s.zonePolicy, lang, t.zoneText),
     ...(montrealTravelFree(s.zonePolicy) ? ["", t.zoneText.montrealFree] : []),
     "",

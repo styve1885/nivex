@@ -10,6 +10,7 @@ import { Services } from "@/components/home/Services";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { BeforeAfter, BeforeAfterBanner } from "@/components/home/BeforeAfter";
 import { Pricing } from "@/components/home/Pricing";
+import { Areas } from "@/components/home/Areas";
 import { Faq } from "@/components/home/Faq";
 import { faqFill } from "@/components/home/faq-fill";
 import { faqJsonLd, jsonLdHtml, pageMeta, presentationVideoJsonLd, websiteJsonLd } from "@/lib/seo";
@@ -62,13 +63,15 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           maintenant sous les prestations) et le protocole (Protocol) ont
           quitté la page ; leurs composants et leurs textes restent, pour
           pouvoir les remettre. La vidéo de présentation s'est glissée entre
-          le héros et le déroulement le 2 novembre 2026. */}
+          le héros et le déroulement le 2 novembre 2026, les secteurs
+          desservis juste avant les tarifs le 13 novembre 2026. */}
       <Hero t={t} locale={locale} settings={settings} />
       <VideoIntro t={{ video: t.video }} locale={locale} />
       <HowItWorks t={t} />
       <Services t={t} />
       <BeforeAfter t={t} />
       <BeforeAfterBanner t={t} />
+      <Areas t={t} locale={locale} policy={settings.zonePolicy} />
       <Pricing t={t} locale={locale} settings={settings} />
       <Story t={t} />
       <Faq eyebrow={t.faq.eyebrow} title={t.faq.title} items={faqItems} />

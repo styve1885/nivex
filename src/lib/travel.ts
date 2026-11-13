@@ -111,6 +111,14 @@ export const DEFAULT_ZONE_POLICY: ZonePolicy = {
       ["H3A", "H3B", "H3G", "H3H", "H3C", "H2Z", "H2L", "H2X"]),
     sector("plateau", "Le Plateau-Mont-Royal", "Plateau-Mont-Royal", "a", ["H2J", "H2T", "H2W", "H2H"]),
     sector("saint-jean", "Saint-Jean-sur-Richelieu", "Saint-Jean-sur-Richelieu", "b", ["J2W", "J2X", "J2Y", "J3A", "J3B"]),
+    /* Griffintown et Ville de Mont-Royal depuis le 13 novembre 2026, pour la
+       liste de quartiers de l'artisan (lib/areas.ts), à la suite, comme la
+       migration `secteurs-2026-11` les a posés en production
+       (`addAreaSectors`) : la zone A les range après ses autres quartiers de
+       l'île. H3C reste aussi au centre-ville : deux secteurs de la même
+       zone peuvent partager un préfixe. */
+    sector("griffintown", "Griffintown", "Griffintown", "a", ["H3C"]),
+    sector("ville-mont-royal", "Ville de Mont-Royal", "Town of Mount Royal", "a", ["H3P", "H3R"]),
   ],
 };
 
@@ -148,6 +156,71 @@ export function mergeZonesAB(stored: unknown): ZonePolicy | null {
     .sort((x, y) => x.r - y.r || x.i - y.i)
     .map(({ s }) => (s.zoneKey === "b" ? { ...s, zoneKey: "a" } : s.zoneKey === "c" ? { ...s, zoneKey: "b" } : s));
   return { version: POLICY_VERSION, zones, sectors };
+}
+
+/** Les deux secteurs que la liste de quartiers du 13 novembre 2026 fait entrer dans la grille. */
+const AREA_SECTORS = [
+  /* Déjà desservi par le centre-ville, qui garde H3C : Griffintown le nomme. */
+  { key: "griffintown", nameFr: "Griffintown", nameEn: "Griffintown", prefixes: ["H3C"], shares: true },
+  /* Refusé jusqu'ici : aucun secteur ne portait H3P ni H3R. */
+  { key: "ville-mont-royal", nameFr: "Ville de Mont-Royal", nameEn: "Town of Mount Royal", prefixes: ["H3P", "H3R"], shares: false },
+] as const;
+
+/**
+ * La grille du 13 novembre 2026, à partir de celle que la production porte
+ * (`secteurs-2026-11`, db.ts).
+ *
+ * La liste de quartiers de l'artisan (lib/areas.ts) nomme Ville de
+ * Mont-Royal, que la réservation refusait (H3P, H3R), et Griffintown, que le
+ * secteur du centre-ville couvrait sans le nommer (H3C). Les deux entrent,
+ * actifs, à la suite des secteurs de leur zone : Griffintown dans celle qui
+ * reconnaît déjà H3C, pour qu'aucun préfixe ne tienne à deux zones ; Ville
+ * de Mont-Royal dans celle des quartiers de l'île — sans frais aujourd'hui,
+ * comme tout Montréal. Rien n'est retiré, renommé ni déplacé.
+ *
+ * La grille reste celle de l'artisan partout ailleurs : un secteur qui
+ * porte déjà la clé ou le nom l'emporte ; Ville de Mont-Royal n'entre pas si
+ * un secteur, actif ou non, porte déjà H3P ou H3R ; Griffintown n'entre pas
+ * si H3C n'est porté que par des secteurs désactivés, ce qui serait le
+ * choix de l'artisan. Une grille qui n'est pas à la forme 2, ou que l'ajout
+ * rendrait invalide, ne se touche pas. Sans rien à ajouter, la fonction ne
+ * rend rien. Elle lit la colonne telle quelle, comme `mergeZonesAB`.
+ */
+export function addAreaSectors(stored: unknown): ZonePolicy | null {
+  if (!stored || typeof stored !== "object") return null;
+  const p = stored as Partial<ZonePolicy>;
+  if (p.version !== POLICY_VERSION || !Array.isArray(p.zones) || !Array.isArray(p.sectors) || p.zones.length === 0) return null;
+  const zones = p.zones;
+  const sectors = p.sectors.filter((s): s is Sector => Boolean(s) && typeof s === "object" && Array.isArray(s.prefixes));
+  if (sectors.length !== p.sectors.length) return null;
+
+  const zoneExists = (key: string) => zones.some((z) => z?.key === key);
+  const active = (s: Sector) => s.enabled && zoneExists(s.zoneKey);
+  /* La zone des quartiers de l'île : celle du premier secteur de Montréal actif. */
+  const island = sectors.find((s) => active(s) && isMontrealSector(s))?.zoneKey
+    ?? (zoneExists("a") ? "a" : zones[0].key);
+
+  const added: Sector[] = [];
+  for (const x of AREA_SECTORS) {
+    const named = sectors.some((s) => s.key === x.key
+      || (typeof s.nameFr === "string" && s.nameFr.trim().toLowerCase() === x.nameFr.toLowerCase()));
+    if (named) continue;
+    const users = sectors.filter((s) => x.prefixes.some((pre) => s.prefixes.includes(pre)));
+    const owner = users.find(active);
+    if (x.shares ? !owner && users.length > 0 : users.length > 0) continue;
+    /* Griffintown rejoint la zone qui reconnaît déjà H3C : un préfixe, une zone. */
+    added.push(sector(x.key, x.nameFr, x.nameEn, owner?.zoneKey ?? island, [...x.prefixes]));
+  }
+  if (!added.length) return null;
+
+  const after: ZonePolicy = { version: POLICY_VERSION, zones, sectors: [...sectors, ...added] };
+  /* Une grille enregistrée hors de la forme attendue (un nom absent) ferait
+     lever le contrôle : on n'y touche pas, plutôt que d'arrêter bootstrap(). */
+  try {
+    return policyProblems(after).length ? null : after;
+  } catch {
+    return null;
+  }
 }
 
 /* ============================ Verdict ============================ */

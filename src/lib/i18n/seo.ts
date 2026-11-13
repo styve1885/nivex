@@ -11,7 +11,11 @@
  *  — chaque titre commence par « NIVEX Repassage » (« NIVEX In-Home
  *    Ironing » en anglais) et n'appartient qu'à sa page ;
  *  — chaque description tient entre 150 et 160 caractères une fois remplie,
- *    et nomme le repassage à domicile, Montréal et la Rive-Sud ;
+ *    et nomme le repassage à domicile, Montréal et la Rive-Sud. Une seule
+ *    exception : celle de l'accueil, dictée par l'artisan le 13 novembre
+ *    2026, plus courte, qui nomme sept quartiers de sa liste (lib/areas.ts).
+ *    Si la réservation en refuse un, elle cède la place à `fallback`,
+ *    l'ancienne, qui suit la règle ;
  *  — les montants ({plan}, {from}, {to}, {min}, {price}) se remplissent
  *    depuis les réglages, jamais à la main (`pageDescription`, lib/seo.ts).
  *    Un changement de taux ne change la longueur que si un montant gagne ou
@@ -22,13 +26,20 @@ export type SeoPage =
   | "home" | "tarifs" | "montreal" | "presentation" | "reserver" | "abonnement" | "conditions" | "confidentialite"
   | "reservation" | "subscription" | "notFound" | "optOut";
 
-type SeoText = { title: string; description: string };
+type SeoText = {
+  title: string;
+  description: string;
+  /** L'accueil seul : sa description quand l'un des quartiers qu'elle nomme n'est plus desservi. */
+  fallback?: string;
+};
 
 export const seoFr: Record<SeoPage, SeoText> = {
   home: {
     title: "NIVEX Repassage à domicile — Montréal et Rive-Sud",
+    /* Dictée par l'artisan, le 13 novembre 2026. */
+    description: "Repassage à domicile à Montréal (Westmount, Outremont, L'Île-des-Sœurs, centre-ville) et sur la Rive-Sud (Saint-Lambert, Brossard, Longueuil).",
     /* {plan} : le plus bas montant par cycle. */
-    description: "NIVEX, repassage à domicile à Montréal et sur la Rive-Sud\u00a0: vos vêtements et votre literie repassés chez vous, sans collecte. Abonnements dès {plan} par cycle.",
+    fallback: "NIVEX, repassage à domicile à Montréal et sur la Rive-Sud\u00a0: vos vêtements et votre literie repassés chez vous, sans collecte. Abonnements dès {plan} par cycle.",
   },
   tarifs: {
     title: "NIVEX Repassage — Tarifs et abonnements",
@@ -81,7 +92,8 @@ export const seoFr: Record<SeoPage, SeoText> = {
 export const seoEn: Record<SeoPage, SeoText> = {
   home: {
     title: "NIVEX In-Home Ironing — Montreal and South Shore",
-    description: "NIVEX, in-home ironing in Montreal and on the South Shore: your clothes and bed linen pressed in your home, with no pickup. Subscriptions from {plan} per cycle.",
+    description: "In-home ironing in Montreal (Westmount, Outremont, Nuns' Island, Downtown) and on the South Shore (Saint-Lambert, Brossard, Longueuil).",
+    fallback: "NIVEX, in-home ironing in Montreal and on the South Shore: your clothes and bed linen pressed in your home, with no pickup. Subscriptions from {plan} per cycle.",
   },
   tarifs: {
     title: "NIVEX In-Home Ironing — Prices and subscriptions",

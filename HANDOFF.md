@@ -108,8 +108,11 @@ au code.
    partirait par courriel et par texto.
 7. **Fusion** par commit de fusion (merge), seulement avec l'accord de la
    section 2.
-8. **Confirmer la mise en ligne.** La production n'est pas joignable depuis
-   le conteneur. Après chaque déploiement de production, le workflow
+8. **Confirmer la mise en ligne.** Depuis le 13 novembre 2026,
+   l'environnement « nivex » joint `www.nivexrepassage.ca` : une page, un
+   `/llms.txt` ou `/api/zone?postal=H3P%201A1` (ce que la réservation
+   accepte en production) se lisent directement. Le contrôle qui fait foi
+   reste celui-ci : après chaque déploiement de production, le workflow
    IndexNow (`.github/workflows/indexnow.yml`) appelle
    `/api/indexnow?sha=<commit>`, qui répond 409 tant que le domaine sert une
    autre version. Un 200 prouve donc que le commit fusionné est en ligne.
@@ -219,6 +222,10 @@ défaut du code. Changer une constante ne change rien en production
   visites) se fait visite par visite, un message par visite déplacée. Un
   « Changer l'horaire » qui n'enverrait qu'un message lui a été proposé le
   11 novembre 2026 ; pas fait.
+- **Fiche Google et Bing Places** : la grille compte deux secteurs de plus
+  depuis le 13 novembre 2026, Griffintown et Ville de Mont-Royal. La liste
+  « Copier pour Google » de l'onglet Zones et frais les donne, à reporter
+  dans les zones desservies des deux fiches.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -297,6 +304,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #38 | 13 nov. 2026 | Secteurs desservis : la liste de quartiers de Styve sur l'accueil, Tarifs, la foire aux questions, `/llms.txt` et la description de l'accueil ; Ville de Mont-Royal entre dans la grille, Griffintown y est nommé (`secteurs-2026-11`) |
 | #37 | 11 nov. 2026 | Abonnés : plus de rappel de la veille ni de texto de deux heures avant par défaut ; interrupteur « Rappels de séance » sur la fiche ; textos déjà programmés retirés après la mise en ligne |
 | #36 | 10 nov. 2026 | Abonnés « arrivée 15 min avant » : on finit à la fermeture au plus tard, rangement compris |
 | #35 | 9 nov. 2026 | Le numéro du client sur le cellulaire de l'artisan ; les textos avec chaque client dans l'onglet Messages, envoi depuis le numéro de la maison |
@@ -324,9 +332,12 @@ a changé et vérifié.
 ## 9. Ce que l'expérience a appris
 
 - **Hôtes injoignables** depuis le conteneur (réglages réseau de
-  l'environnement) : `www.nivexrepassage.ca`, `search.google.com`,
-  `validator.schema.org`, `www.google.com`, `www.bing.com`. La mise en
-  ligne se confirme par le workflow IndexNow (section 3, étape 8) ; pour
+  l'environnement) : `search.google.com`, `validator.schema.org`,
+  `www.google.com`, `www.bing.com`. `www.nivexrepassage.ca`, lui, se joint
+  depuis le 13 novembre 2026 : Styve a accepté l'environnement « nivex »,
+  qui l'autorise et installe les dépendances (`npm ci`) au démarrage d'une
+  session. La mise en ligne se confirme par le workflow IndexNow (section
+  3, étape 8) ; pour
   les validateurs, on éprouve en local selon les règles publiées, puis on
   donne le lien à Styve. L'indexation, c'est Styve qui la regarde, en
   captures : la recherche `site:nivexrepassage.ca`, puis l'inspection d'URL

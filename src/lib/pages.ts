@@ -40,14 +40,17 @@ export type PublicPage = {
    avance. Le même jour, la vidéo de présentation entre sur l'accueil et sur
    sa page, et les lectures entrent au journal des visites, ce que la
    politique de confidentialité dit désormais (sa date, que les conditions
-   affichent aussi, avance avec elle). */
+   affichent aussi, avance avec elle). Le 13 novembre, les secteurs
+   desservis entrent sur l'accueil et sur Tarifs, et la description de
+   l'accueil, que reprend la fiche LocalBusiness de toutes les pages, nomme
+   des quartiers : toutes avancent. */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-11-06", changeFrequency: "weekly", priority: 1 },
-  { path: "/tarifs", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/montreal", updated: "2026-11-06", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/presentation", updated: "2026-11-06", changeFrequency: "yearly", priority: 0.6, video: true },
-  { path: "/conditions", updated: "2026-11-11", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-11", changeFrequency: "yearly", priority: 0.3 },
+  { path: "", updated: "2026-11-13", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/presentation", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.6, video: true },
+  { path: "/conditions", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

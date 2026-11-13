@@ -458,8 +458,11 @@ export const fr = {
         a: "Idéalement pour l'accueil et le départ. Entre les deux, vous vaquez à vos occupations. Certains clients partent travailler après nous avoir ouvert\u00a0: il suffit d'en convenir d'avance.",
       },
       {
-        q: "Quelles zones desservez-vous\u202f?",
-        a: "{zone} {check}",
+        /* La liste de quartiers (lib/areas.ts), en une phrase ({areas}), et
+           l'invitation \u00e0 \u00e9crire ({missing}). Depuis le 13 novembre 2026, \u00e0 la
+           place de \u00ab Quelles zones desservez-vous ? \u00bb (i18n/retired.ts). */
+        q: "Venez-vous dans mon quartier\u202f?",
+        a: "{areas} {missing}",
       },
       {
         q: "Comment se fait le paiement\u202f?",
@@ -484,13 +487,26 @@ export const fr = {
     served: "Secteurs desservis\u00a0: {list}.",
     montreal: "À Montréal\u00a0: {list}.",
     /* Tant qu'aucun quartier de l'île ne paie de déplacement
-       (`montrealTravelFree`) : /llms.txt, et la fin de la réponse sur les
-       zones de la foire aux questions ({check}), qui tient ainsi en trois
-       phrases. */
+       (`montrealTravelFree`) : /llms.txt. */
     montrealFree: "Aucuns frais de déplacement à Montréal.",
-    check: "Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
-    checkMontrealFree: "Aucuns frais de déplacement à Montréal\u00a0; ailleurs, entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
     none: "La réservation en ligne est fermée pour tous les secteurs en ce moment. Appelez-nous.",
+  },
+  /* Les quartiers mis en avant (lib/areas.ts), dans la liste et les mots de
+     l'artisan : la section de l'accueil, la page Tarifs, la foire aux
+     questions et /llms.txt. Un quartier que la réservation refuse ne paraît
+     pas. */
+  areas: {
+    eyebrow: "Nous venons chez vous",
+    title: "Secteurs desservis",
+    montreal: "Montréal",
+    south: "Rive-Sud",
+    /* La liste en une phrase ({list} : les quartiers de la région). */
+    sentenceMontreal: "à Montréal\u00a0: {list}",
+    sentenceSouth: "sur la Rive-Sud\u00a0: {list}",
+    /* {write} : « Écrivez-nous », un lien vers le bloc « Nous écrire » sur
+       les pages, du texte simple dans la foire aux questions. */
+    missing: "Votre secteur n'y est pas\u202f? {write}\u00a0: nous vous répondons rapidement.",
+    write: "Écrivez-nous",
   },
   /* La page Montréal. Les montants, la durée minimale et les délais y sont
      remplis depuis les réglages, comme sur la page Tarifs. */

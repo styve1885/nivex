@@ -270,7 +270,7 @@ test("la foire aux questions : sept questions, dans l'ordre demandé, deux ou tr
     "Faut-il fournir la planche et le fer ?",
     "Combien de vêtements repassez-vous en une séance ?",
     "Dois-je être présent pendant la séance ?",
-    "Quelles zones desservez-vous ?",
+    "Venez-vous dans mon quartier ?",
     "Comment se fait le paiement ?",
     "Puis-je annuler ou déplacer mon rendez-vous ?",
   ]);
@@ -280,6 +280,11 @@ test("la foire aux questions : sept questions, dans l'ordre demandé, deux ou tr
   assert.deepEqual(retiredFr.faq.map((x) => flat(x.q)),
     ["Combien de temps prévoir ?", "L'installation est-elle comprise dans la séance ?", "Et les pièces fragiles ?"]);
   assert.equal(retiredEn.faq.length, 3);
+  /* La question sur les zones, remplacée le 13 novembre 2026, et ses deux
+     fins de phrase, retirées du dictionnaire avec elle. */
+  assert.equal(flat(retiredFr.zoneQuestion.q), "Quelles zones desservez-vous ?");
+  assert.equal(retiredEn.zoneQuestion.q, "Which areas do you serve?");
+  for (const t of [fr, en]) assert.ok(!("check" in t.zoneText) && !("checkMontrealFree" in t.zoneText));
   /* Deux ou trois phrases, une fois remplies : la zone desservie en compte deux. */
   for (const t of [fr, en]) {
     for (const item of t.faq.items) {

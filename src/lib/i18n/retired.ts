@@ -142,6 +142,17 @@ export const retiredFr = {
       a: "Chaque fibre est identifiée avant traitement. Soie, dentelle, cachemire et plissés sont travaillés à la vapeur sans contact ou sous pattemouille. En cas de doute sur une pièce, nous vous consultons avant d'y toucher.",
     },
   ],
+  /* La question sur les zones, remplacée le 13 novembre 2026 par « Venez-vous
+     dans mon quartier ? ». {zone} : la phrase des secteurs actifs
+     (`servedText`) ; {check} : `check`, ou `checkMontrealFree` tant qu'aucun
+     quartier de l'île ne paie de déplacement (`montrealTravelFree`).
+     `faqFill` ne les remplit plus : à rebrancher avant de la remettre. */
+  zoneQuestion: {
+    q: "Quelles zones desservez-vous\u202f?",
+    a: "{zone} {check}",
+    check: "Entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
+    checkMontrealFree: "Aucuns frais de déplacement à Montréal\u00a0; ailleurs, entrez votre code postal sur l'accueil ou sur la page Tarifs\u00a0: vous saurez tout de suite si votre adresse est desservie, et ce que coûte le déplacement.",
+  },
   /* Les paires « avant, après » retirées : le pantalon de velours (le
      23 octobre 2026), le t-shirt en coton et la veste doublée. */
   beforeAfter: [
@@ -405,6 +416,12 @@ export const retiredEn: Retired = {
       a: "Every fibre is identified before treatment. Silk, lace, cashmere and pleats are worked with contactless steam or under a pressing cloth. If we have any doubt about a piece, we ask you before touching it.",
     },
   ],
+  zoneQuestion: {
+    q: "Which areas do you serve?",
+    a: "{zone} {check}",
+    check: "Enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
+    checkMontrealFree: "No travel fees in Montreal; elsewhere, enter your postal code on the home page or the pricing page: you will know straight away whether your address is served, and what the journey costs.",
+  },
   /* Les paires « avant, après » retirées : le pantalon de velours (le
      23 octobre 2026), le t-shirt en coton et la veste doublée. */
   beforeAfter: [

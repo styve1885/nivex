@@ -1,5 +1,5 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { DEFAULT_ZONE_POLICY, describeChanges, mergeZonesAB, type ZonePolicy } from "./travel";
+import { DEFAULT_ZONE_POLICY, addAreaSectors, describeChanges, mergeZonesAB, type ZonePolicy } from "./travel";
 import { DATACENTER_CITIES, PERSONAL_PATH } from "./attribution";
 
 /**
@@ -617,6 +617,43 @@ async function bootstrap() {
     }
   }
 
+  /* Le 13 novembre 2026, la liste de quartiers de l'artisan (lib/areas.ts) :
+     Ville de Mont-Royal entre dans la grille (H3P, H3R), que la réservation
+     refusait, et Griffintown y est nommé (H3C, que le centre-ville couvrait
+     déjà), tous deux sans frais, dans la zone des quartiers de l'île
+     (`addAreaSectors`). Rien n'est retiré. Même garde que la migration des
+     zones : la grille ne change que si elle est encore celle qu'on vient de
+     lire, et l'historique de l'onglet « Zones et frais » note chaque ajout.
+     Une grille qui porte déjà ces secteurs n'a rien à recevoir : la
+     migration s'inscrit seule. */
+  const areasDone = (await q`SELECT 1 FROM nivex_migrations WHERE name = 'secteurs-2026-11'`).length > 0;
+  if (!areasDone) {
+    const row = (await q`SELECT travel_policy FROM nivex_settings WHERE id = 1`)[0] as { travel_policy?: unknown } | undefined;
+    const before = row?.travel_policy;
+    const after = addAreaSectors(before);
+    if (!after) {
+      await q`INSERT INTO nivex_migrations (name) VALUES ('secteurs-2026-11') ON CONFLICT (name) DO NOTHING`;
+    } else {
+      const changes = [AREAS_NOTE, ...describeChanges(before as ZonePolicy, after)];
+      await q`
+        WITH upd AS (
+          UPDATE nivex_settings SET travel_policy = ${JSON.stringify(after)}::jsonb, updated_at = now()
+          WHERE id = 1 AND travel_policy = ${JSON.stringify(before)}::jsonb
+            AND NOT EXISTS (SELECT 1 FROM nivex_migrations WHERE name = 'secteurs-2026-11')
+          RETURNING 1
+        ), done AS (
+          INSERT INTO nivex_migrations (name) SELECT 'secteurs-2026-11' FROM upd
+          ON CONFLICT (name) DO NOTHING
+          RETURNING name
+        )
+        INSERT INTO nivex_zone_history (summary, author)
+        SELECT value, 'migration'
+        FROM jsonb_array_elements_text(${JSON.stringify(changes)}::jsonb) WITH ORDINALITY
+        WHERE EXISTS (SELECT 1 FROM done)
+        ORDER BY ordinality`;
+    }
+  }
+
   /* Le 1er novembre 2026 (`formules-2026-11`), les formules changent de nom
      sans changer de clé (lib/pricing.ts) : un abonné garde sa formule, son
      prix et son rythme, figés dans sa ligne, et prend le nom nouveau. Son
@@ -658,6 +695,9 @@ async function bootstrap() {
 /* La première ligne de l'historique de la migration des zones. */
 const ZONES_NOTE = "Deux zones au lieu de trois : la zone A réunit les anciennes zones A et B, sans frais ; "
   + "l'ancienne zone C devient la zone B, à 15 $ sous 3 h et 10 $ à partir de 3 h.";
+
+/* La première ligne de l'historique de la migration des quartiers. */
+const AREAS_NOTE = "Liste de quartiers du site : Ville de Mont-Royal entre dans la grille, et Griffintown y est nommé.";
 
 /* La note de la bascule, écrite depuis la grille qu'elle pose. */
 const MIGRATION_NOTE = (() => {
