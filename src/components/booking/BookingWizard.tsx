@@ -11,6 +11,7 @@ import type { ZoneStatus } from "@/lib/travel";
 import { arrivalHint, readAttribution } from "../SiteMeasurement";
 import { Stepper } from "./Stepper";
 import { HeardFromField } from "./HeardFromField";
+import { BOARD_ANSWERS, boardNeedsContact, type BoardAnswer } from "@/lib/board";
 import {
   EMAIL_RE, POSTAL_RE, formatPhone, groupSlots, isPhoneValid, normalisePostal, pastHorizon, rejectedContactFields,
 } from "./Stepper.helpers";
@@ -101,6 +102,8 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
      plus et que l'étape Adresse attend la nouvelle réponse. */
   const [zoneRound, setZoneRound] = useState(0);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  /* « Avez-vous une planche à repasser en bon état ? » — obligatoire. */
+  const [board, setBoard] = useState<BoardAnswer | "">("");
 
   const [sched, setSched] = useState<Schedule | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -261,6 +264,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
     address: address.trim().length < 4 ? t.booking.errors.required : null,
     city: city.trim().length < 2 ? t.booking.errors.required : null,
     postal: !POSTAL_RE.test(postal.trim()) ? t.booking.errors.postal : null,
+    board: board ? null : t.booking.step2.board.required,
   };
   const step2Valid =
     Object.values(errors).every((e) => e === null)
@@ -307,6 +311,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
              bien l'état du navigateur au moment d'envoyer. */
           heardFrom: heardFrom || undefined,
           referredBy: heardFrom === "recommandation" ? referredBy.trim() || undefined : undefined,
+          board: board || undefined,
           attribution: readAttribution(),
         }),
       });
@@ -622,6 +627,12 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               </div>
             )}
 
+            {/* La planche à repasser (14 novembre 2026) : une réponse obligatoire.
+                « Non » et « Je ne suis pas sûr » laissent réserver ; Styve
+                appelle avant la séance, et sa fiche le lui signale. */}
+            <BoardQuestion t={t} value={board} onChange={setBoard}
+              error={touched.board ? errors.board : null} />
+
             <HeardFromField t={t} id="heard" value={heardFrom} onChange={setHeardFrom}
               referredBy={referredBy} onReferredBy={setReferredBy} />
 
@@ -688,6 +699,7 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
                   ...chosen.map((u) => `${u.label} × ${u.qty} · ${moneyRange(u.cents * u.qty, (u.toCents ?? u.cents) * u.qty, money)}`),
                 ].join("\n")} />
               <Row label={t.booking.step4.who} value={[name, phone, email.trim()].filter(Boolean).join(" · ")} />
+              {board && <Row label={t.booking.step2.board.summary} value={t.booking.step2.board.options[board]} />}
               {notes.trim() && <Row label={t.booking.step1.notes} value={notes.trim()} />}
               {comment.trim() && <Row label={t.booking.step3.comment} value={comment.trim()} />}
               {heardFrom && (
@@ -736,9 +748,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
               onClick={() => {
                 if (!canContinue) {
                   if (step === 1) {
-                    setTouched({ name: true, email: true, phone: true, address: true, city: true, postal: true });
+                    setTouched({ name: true, email: true, phone: true, address: true, city: true, postal: true, board: true });
                     requestAnimationFrame(() =>
-                      cardRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+                      cardRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-invalid="true"]')?.focus());
                   }
                   return;
                 }
@@ -841,6 +853,48 @@ function Choice({ name, value, checked, onPick, title, line, price, hint, struck
         </span>
       </span>
     </label>
+  );
+}
+
+/**
+ * « Avez-vous une planche à repasser en bon état ? » — trois réponses, une
+ * obligatoire, et l'aide de l'artisan dessous. « Non » et « Je ne suis pas
+ * sûr » n'empêchent rien : un mot dit que Styve appellera avant la séance.
+ */
+function BoardQuestion({ t, value, onChange, error }: {
+  t: Dict; value: BoardAnswer | ""; onChange: (v: BoardAnswer) => void; error: string | null;
+}) {
+  const b = t.booking.step2.board;
+  return (
+    /* Le filet et la marge sur un bloc autour : dans un cadre à bordure, la
+       légende se pose sur le filet, et la marge du cadre passait sous elle. */
+    <div className="mt-8 border-t border-gold-300/40 pt-7">
+      <fieldset aria-describedby={error ? "board-help board-err" : "board-help"}>
+        <legend className="label">{b.question}</legend>
+        <p id="board-help" className="text-[0.8rem] font-light leading-relaxed text-ink-500">{b.help}</p>
+        <div className="mt-4 grid gap-px bg-gold-300/30 sm:grid-cols-3">
+          {BOARD_ANSWERS.map((k) => (
+            <label key={k}
+              className={`flex cursor-pointer items-center gap-3 px-5 py-4 text-[0.92rem] transition-colors duration-300 ${value === k ? "bg-linen-100 text-ink-800" : "bg-linen-50 text-ink-600 hover:bg-linen-100/60"}`}>
+              {/* `aria-invalid` ne vaut pas pour un bouton radio : l'erreur se lit
+                  par la description du groupe, et `data-invalid` guide la mise
+                  au point de l'étape vers la première réponse. */}
+              <input type="radio" name="board" value={k} checked={value === k} onChange={() => onChange(k)}
+                data-invalid={error ? "true" : undefined}
+                className="h-4 w-4 flex-none accent-[var(--color-gold-500)]" />
+              {b.options[k]}
+            </label>
+          ))}
+        </div>
+        {error && <p id="board-err" className="mt-1.5 text-[11px] text-[#8E332C]">{error}</p>}
+        {boardNeedsContact(value || null) && (
+          <p role="status"
+            className="mt-4 border-l-2 border-gold-400 bg-linen-50 px-5 py-4 text-[0.85rem] font-light leading-[1.8] text-ink-600">
+            {b.contact}
+          </p>
+        )}
+      </fieldset>
+    </div>
   );
 }
 

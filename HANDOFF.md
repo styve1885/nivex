@@ -304,6 +304,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #41 | 14 nov. 2026 | Planche à repasser : question obligatoire au tunnel (Oui, Non, Je ne suis pas sûr) ; « À contacter » sur la fiche, dans l'avis par courriel et par texto ; « Pensez à préparer votre planche à repasser. » dans la confirmation et le rappel de la veille |
 | #40 | 14 nov. 2026 | Le texto de deux heures avant est retiré : seul reste le rappel de la veille ; ceux déjà programmés sont annulés après la mise en ligne et chaque matin ; « Vous recevrez un rappel la veille de votre séance. » sur la page de réservation et dans les conditions ; politique de confidentialité à jour |
 | #39 | 14 nov. 2026 | Onglet Connexion : essai du rappel de la veille (le vrai courriel et le vrai texto, séance fictive de demain, vers l'artisan seul) et décompte des textos de deux heures avant programmés |
 | #38 | 13 nov. 2026 | Secteurs desservis : la liste de quartiers de Styve sur l'accueil, Tarifs, la foire aux questions, `/llms.txt` et la description de l'accueil ; Ville de Mont-Royal entre dans la grille, Griffintown y est nommé (`secteurs-2026-11`) |

@@ -641,7 +641,7 @@ test("l'essai du rappel de la veille : les vrais modèles, pour une séance fict
   const t = trialReminder(s, "https://www.nivexrepassage.ca", now);
   assert.equal(t.startsAt.toISOString(), fromWall({ year: 2026, month: 11, day: 15, hour: 7, minute: 0 }, tz).toISOString());
   /* Le texto est celui de la tâche du matin, mot pour mot. */
-  assert.equal(t.sms, "NIVEX - Rappel : demain dimanche 15 novembre, j'arrive à 7 h. À demain. Styve");
+  assert.equal(t.sms, "NIVEX - Rappel : demain dimanche 15 novembre, j'arrive à 7 h. Pensez à préparer votre planche à repasser. À demain. Styve");
   /* Le courriel aussi : même gabarit, adressé à l'artisan, à une adresse d'exemple. */
   assert.equal(t.email.subject, "Rappel : votre séance NIVEX demain");
   const text = t.email.text.replace(/[\u00a0\u202f]/g, " ");
@@ -681,6 +681,84 @@ test("un seul rappel promis, la veille ; plus aucun texte ne parle du texto de d
   assert.doesNotMatch(en.booking.legal.data, /reminder/);
   for (const [d, re] of [[fr, /deux heures avant|mot de deux heures|serai chez vous/i], [en, /two hours before|two-hour|will be at your door/i]]) {
     assert.doesNotMatch(JSON.stringify(d), re);
+  }
+});
+
+const { BookingInput: Input } = await import("../src/lib/bookings.ts");
+const { isBoardAnswer, boardNeedsContact } = await import("../src/lib/board.ts");
+
+test("la planche à repasser : la question du tunnel, mot pour mot, en français et en anglais (14 novembre 2026)", () => {
+  const en = getDict("en");
+  const bf = fr.booking.step2.board, be = en.booking.step2.board;
+  assert.equal(flat(bf.question), "Avez-vous une planche à repasser en bon état ?");
+  assert.deepEqual(bf.options, { yes: "Oui", no: "Non", unsure: "Je ne suis pas sûr" });
+  assert.equal(bf.help, "J'apporte le fer professionnel et tout le matériel. Vous fournissez seulement une planche stable, avec sa housse.");
+  assert.equal(bf.contact, "Merci de nous l'indiquer. Styve vous contactera avant votre séance pour trouver une solution.");
+  assert.equal(be.question, "Do you have an ironing board in good condition?");
+  assert.deepEqual(be.options, { yes: "Yes", no: "No", unsure: "Not sure" });
+  assert.equal(be.help, "I bring a professional iron and all the equipment. You only provide a sturdy ironing board with its cover.");
+  assert.equal(be.contact, "Thank you for letting us know. Styve will contact you before your session to find a solution.");
+  for (const t of [bf, be]) assert.doesNotMatch(Object.values(t).flatMap((v) => (typeof v === "string" ? [v] : Object.values(v))).join(" "), /!/);
+  /* Obligatoire au tunnel : l'étape des coordonnées ne passe pas sans réponse,
+     et la réponse part avec la réservation. */
+  const wizard = readFileSync(new URL("../src/components/booking/BookingWizard.tsx", import.meta.url), "utf8");
+  assert.match(wizard, /board: board \? null : t\.booking\.step2\.board\.required/);
+  assert.match(wizard, /board: board \|\| undefined/);
+  assert.match(wizard, /<BoardQuestion t=\{t\}/);
+  assert.match(wizard, /boardNeedsContact\(value \|\| null\) && \(/, "le mot de Styve pour Non et Pas sûr");
+});
+
+test("la planche à repasser : le serveur garde la réponse, et ne refuse jamais une séance pour elle", () => {
+  const base = {
+    locale: "fr", units: [], name: "Claire Beaulieu", email: "claire@example.com", phone: "514 555-0142",
+    address: "88 rue Saint-Charles Ouest", city: "Longueuil", postalCode: "J4H 1C6",
+    startsAt: "2026-12-03T23:00:00.000Z", consent: true,
+  };
+  for (const board of ["yes", "no", "unsure"]) {
+    const r = Input.safeParse({ ...base, board });
+    assert.ok(r.success && isBoardAnswer(r.data.board), board);
+  }
+  /* Une page restée ouverte pendant une mise en ligne, ou une valeur abîmée :
+     la séance passe, la réponse se note comme non renseignée. */
+  for (const board of [undefined, "peut-être", 3, null]) {
+    const r = Input.safeParse({ ...base, board });
+    assert.ok(r.success, String(board));
+    assert.equal(isBoardAnswer(r.data.board), false);
+  }
+  assert.equal(boardNeedsContact("yes"), false);
+  assert.equal(boardNeedsContact("no"), true);
+  assert.equal(boardNeedsContact("unsure"), true);
+  assert.equal(boardNeedsContact(null), false);
+  const src = readFileSync(new URL("../src/lib/bookings.ts", import.meta.url), "utf8");
+  assert.match(src, /\$\{isBoardAnswer\(input\.board\) \? input\.board : null\}/, "la réponse s'écrit à la création");
+});
+
+test("la planche à repasser : « À contacter » dans l'avis de l'artisan, la ligne de l'artisan chez le client", () => {
+  const sample = { ...d, items: [{ key: "session", label: "Séance de 2 heures", qty: 1 }] };
+  /* L'avis de l'artisan, par courriel. */
+  const yes = ownerNotification({ ...sample, ironingBoard: "yes" });
+  assert.match(flat(yes.text), /Planche à repasser: Oui\n/);
+  assert.doesNotMatch(yes.text + yes.subject, /À contacter/);
+  for (const [board, label] of [["no", "Non"], ["unsure", "Je ne suis pas sûr"]]) {
+    const m = ownerNotification({ ...sample, ironingBoard: board });
+    assert.match(flat(m.text), new RegExp(`Planche à repasser: ${label} · À contacter`));
+    assert.ok(m.html.includes(`${label} · À contacter`), "en évidence dans la fiche");
+    assert.match(m.subject, / · À contacter$/, "jusque dans l'objet");
+    assert.doesNotMatch(ownerNotification({ ...sample, ironingBoard: board }, true).subject, /À contacter/, "pas sur une annulation");
+  }
+  const none = ownerNotification(sample);
+  assert.doesNotMatch(none.text + none.html, /Planche à repasser/, "rien pour une séance prise avant la question");
+  /* Le client : la confirmation et le rappel de la veille portent la ligne. */
+  for (const m of [clientConfirmation(sample), sessionReminder(sample)]) {
+    assert.ok(m.text.includes("Pensez à préparer votre planche à repasser."), m.subject);
+    assert.ok(m.html.includes("Pensez à préparer votre planche à repasser."), m.subject);
+  }
+  for (const m of [clientConfirmation({ ...sample, locale: "en" }), sessionReminder({ ...sample, locale: "en" })]) {
+    assert.ok(m.text.includes("Please have your ironing board ready."), m.subject);
+  }
+  /* La réponse ne paraît jamais chez le client. */
+  for (const m of [clientConfirmation({ ...sample, ironingBoard: "no" }), sessionReminder({ ...sample, ironingBoard: "no" })]) {
+    assert.doesNotMatch(m.text + m.html, /À contacter|Planche à repasser/);
   }
 });
 

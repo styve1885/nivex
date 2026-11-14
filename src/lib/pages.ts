@@ -45,7 +45,8 @@ export type PublicPage = {
    l'accueil, que reprend la fiche LocalBusiness de toutes les pages, nomme
    des quartiers : toutes avancent. Le 14 novembre, le texto de deux heures
    avant est retiré : les conditions et la politique de confidentialité ne le
-   promettent plus, et leur date avance. */
+   promettent plus, et leur date avance. Le même jour, la politique de
+   confidentialité nomme la réponse à la question de la planche à repasser. */
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "", updated: "2026-11-13", changeFrequency: "weekly", priority: 1 },
   { path: "/tarifs", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.8 },

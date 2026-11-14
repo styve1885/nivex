@@ -45,7 +45,7 @@ export function trialReminder(s: Settings, origin: string, now = new Date()) {
     startsAt,
     email: sessionReminder(data, false),
     /* L'arrivée est le début de la séance : le déroulement d'aujourd'hui. */
-    sms: SMS.reminder("fr", smsDay(startsAt, tz, "fr"), smsTime(startsAt, tz, "fr"), false, null),
+    sms: SMS.reminder("fr", smsDay(startsAt, tz, "fr"), smsTime(startsAt, tz, "fr"), false, null, true),
   };
 }
 

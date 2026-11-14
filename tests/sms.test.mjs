@@ -219,9 +219,9 @@ await test("le jour et l'heure se disent comme à l'oral : « mardi 20 octobre �
 
 await test("les deux textos de la séance suivent les modèles de la maison, signés Styve", () => {
   assert.equal(SMS_SIGNATURE, "Styve");
-  assert.equal(confirmed, "NIVEX - Votre séance est confirmée le mardi 20 octobre, de 14 h à 16 h. Vous n'avez que la planche à prévoir. Répondez STOP pour ne plus recevoir de textos. Styve");
+  assert.equal(confirmed, "NIVEX - Votre séance est confirmée le mardi 20 octobre, de 14 h à 16 h. Pensez à préparer votre planche à repasser. Répondez STOP pour ne plus recevoir de textos. Styve");
   assert.equal(SMS.reminder("fr", day, "14 h", false, null), "NIVEX - Rappel : demain mardi 20 octobre, j'arrive à 14 h. À demain. Styve");
-  assert.equal(confirmedEn, "NIVEX - Your session is confirmed for Tuesday, October 20, from 2 p.m. to 4 p.m. All you need to provide is the ironing board. Reply STOP to opt out. Styve");
+  assert.equal(confirmedEn, "NIVEX - Your session is confirmed for Tuesday, October 20, from 2 p.m. to 4 p.m. Please have your ironing board ready. Reply STOP to opt out. Styve");
   /* Aucun tiret cadratin : il ferait passer le texto en Unicode. */
   for (const m of [confirmed, confirmedEn, SMS.reminder("fr", day, "14 h", false, null)]) {
     assert.ok(!m.includes("—"), m);
@@ -345,6 +345,29 @@ await test("avec les clés, le texto part vers Twilio au bon format", async () =
     globalThis.fetch = real;
     delete process.env.TWILIO_ACCOUNT_SID;
   }
+});
+
+await test("la planche à repasser : la ligne du client, et « à contacter » dans l'avis de l'artisan (14 novembre 2026)", () => {
+  /* La confirmation et le rappel d'une séance à la carte portent la ligne de
+     l'artisan ; la visite d'un abonné garde son rappel d'avant. */
+  assert.match(confirmed, / Pensez à préparer votre planche à repasser\. /);
+  assert.match(confirmedEn, / Please have your ironing board ready\. /);
+  assert.ok(!/Vous n'avez que la planche/.test(confirmed), "une seule phrase sur la planche");
+  assert.equal(SMS.reminder("fr", day, "14 h", false, null, true),
+    "NIVEX - Rappel : demain mardi 20 octobre, j'arrive à 14 h. Pensez à préparer votre planche à repasser. À demain. Styve");
+  assert.equal(SMS.reminder("en", "Tuesday, October 20", "2 p.m.", true, null, true),
+    "NIVEX - Reminder: today, Tuesday, October 20, I arrive at 2 p.m. Please have your ironing board ready. See you soon. Styve");
+  assert.equal(SMS.reminder("fr", day, "14 h", false, "400 $"),
+    "NIVEX - Rappel : demain mardi 20 octobre, j'arrive à 14 h. Paiement du cycle à cette visite : 400 $. À demain. Styve",
+    "le rappel d'un abonné ne change pas");
+  /* L'avis de l'artisan dit la réponse, et « à contacter » pour Non et Pas sûr. */
+  assert.match(SMS.owner.newBooking("Marie", "mardi 20 octobre à 14 h 00", "Brossard", "yes"), /Brossard\. Planche : oui\.$/);
+  assert.match(SMS.owner.newBooking("Marie", "mardi 20 octobre à 14 h 00", "Brossard", "no"), /Planche : non, à contacter\.$/);
+  assert.match(SMS.owner.newBooking("Marie", "mardi 20 octobre à 14 h 00", "Brossard", "unsure"), /Planche : ne sait pas, à contacter\.$/);
+  assert.match(SMS.owner.newBooking("Marie", "mardi 20 octobre à 14 h 00", "Brossard"), /Brossard\.$/, "rien pour une réponse absente");
+  /* Le û de « sûr » sort de l'alphabet des textos : l'avis de l'artisan y est ramené, comme les autres. */
+  const unsure = SMS.owner.newBooking("Marie", "mardi 20 octobre à 14 h 00", "Brossard", "unsure");
+  assert.ok([...unsure].every((c) => GSM7.has(c)), unsure);
 });
 
 await test("un texto encore programmé s'annule chez Twilio", async () => {

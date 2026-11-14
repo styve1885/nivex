@@ -2,6 +2,7 @@ import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, INSTALL_MINUTES, PHONE, PHONE_HREF } from "./brand";
 import { ironingMinutes } from "./pricing";
 import { estimateRange, itemText, moneyRange, type ItemLike } from "./items";
+import { BOARD_LABELS_FR, boardNeedsContact, type BoardAnswer } from "./board";
 
 /**
  * Gabarits de courriel. HTML en tableaux et styles en ligne : c'est laid
@@ -46,6 +47,9 @@ export type BookingEmailData = {
   /* Frais de route, hors estimation. Zéro quand l'adresse n'en demande pas. */
   travelFeeCents?: number;
   travelZone?: string | null;
+  /* La planche à repasser du client, sa réponse au tunnel. Seule la fiche de
+     l'artisan la montre ; nulle pour une séance prise avant la question. */
+  ironingBoard?: BoardAnswer | null;
   timezone: string;
   manageUrl: string;
   siteUrl: string;
@@ -135,6 +139,8 @@ const T = {
     ],
     footNote: "L'estimation est indicative. Le montant final vous sera confirmé sur place, avant de commencer.",
     cancelNote: `Vous pouvez annuler en ligne jusqu'à ${CANCEL_WINDOW_HOURS} h avant le rendez-vous. Pour le déplacer, appelez-nous au ${PHONE}.`,
+    /* La ligne de l'artisan (14 novembre 2026), dans la confirmation et le rappel. */
+    boardReady: "Pensez à préparer votre planche à repasser.",
     // Rappel
     reminderSubject: (when: string) => `Rappel : votre séance NIVEX ${when}`,
     reminderIntro: "Un mot pour vous rappeler votre séance de demain.",
@@ -146,6 +152,8 @@ const T = {
     cancelBye: "Au plaisir de vous revoir.",
     // Artisan
     ownerSubject: (n: string, ref: string) => `Nouvelle réservation — ${n} · ${ref}`,
+    board: "Planche à repasser", toContact: "À contacter",
+    boardContactNote: "Le client n'a pas de planche en bon état, ou n'en est pas sûr : contactez-le avant la séance.",
     ownerIntro: "Une nouvelle séance vient d'être réservée sur le site.",
     ownerCancelSubject: (n: string, ref: string) => `Annulation — ${n} · ${ref}`,
     ownerCancelIntro: "Un client vient d'annuler sa séance. Le créneau est de nouveau libre.",
@@ -175,6 +183,7 @@ const T = {
     ],
     footNote: "The estimate is indicative. The final amount will be confirmed on site, before we begin.",
     cancelNote: `You may cancel online up to ${CANCEL_WINDOW_HOURS} h before the appointment. To move it, call us at ${PHONE}.`,
+    boardReady: "Please have your ironing board ready.",
     reminderSubject: (when: string) => `Reminder: your NIVEX session ${when}`,
     reminderIntro: "A short note to remind you of tomorrow's session.",
     reminderToday: "A short note to remind you of today's session.",
@@ -281,6 +290,7 @@ export function clientConfirmation(d: BookingEmailData) {
   <tr><td style="padding:24px 40px 0;">
     <p style="margin:0;padding-left:14px;border-left:2px solid ${GOLD_RULE};font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.8;color:${MUTED};">${esc(setupLine(d))}</p>
   </td></tr>
+  ${note(t.boardReady)}
   <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
   </td></tr>
@@ -299,7 +309,7 @@ export function clientConfirmation(d: BookingEmailData) {
     ...travelRowsText(d, t),
     d.notes ? `${t.notes}: ${d.notes}` : "",
     `${t.ref}: ${d.ref}`, "",
-    setupLine(d), "",
+    setupLine(d), "", t.boardReady, "",
     `${t.manage}: ${d.manageUrl}`, "",
     t.cancelNote, "", t.footNote, "",
     `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
@@ -337,6 +347,7 @@ export function sessionReminder(d: BookingEmailData, today = false) {
     </table>
   </td></tr>
   ${note(setupLine(d))}
+  ${note(t.boardReady)}
   <tr><td style="padding:28px 40px 30px;text-align:center;">${button(d.manageUrl, t.manage)}
     <p style="margin:14px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:${MUTED};">${esc(t.cancelNote)}</p>
   </td></tr>
@@ -354,7 +365,7 @@ export function sessionReminder(d: BookingEmailData, today = false) {
     `${t.estimate}: ${money}${d.firstHourFree ? ` (${t.free})` : ""}`,
     ...travelRowsText(d, t),
     `${t.ref}: ${d.ref}`, "",
-    setupLine(d), "",
+    setupLine(d), "", t.boardReady, "",
     `${t.before}:`, ...t.beforeList.map((x) => `  · ${x}`), "",
     `${t.manage}: ${d.manageUrl}`, "",
     t.cancelNote, "", t.footNote, "",
@@ -427,6 +438,26 @@ function originText(d: BookingEmailData): string[] {
   return ["", "Provenance :", ...rows.map(([k, v]) => `${k}: ${v}`)];
 }
 
+/**
+ * La planche à repasser, sur la fiche de l'artisan : la réponse du client, et
+ * « À contacter » en évidence quand il n'en a pas, ou n'en est pas sûr. Rien
+ * pour une séance prise avant la question.
+ */
+function boardRowHtml(d: BookingEmailData): string {
+  if (!d.ironingBoard) return "";
+  const t = T.fr;
+  const answer = esc(BOARD_LABELS_FR[d.ironingBoard]);
+  return boardNeedsContact(d.ironingBoard)
+    ? row(t.board, `<strong style="color:#8E332C;">${answer} · ${esc(t.toContact)}</strong><br><span style="font-size:12px;color:${MUTED};">${esc(t.boardContactNote)}</span>`)
+    : row(t.board, answer);
+}
+
+function boardText(d: BookingEmailData): string {
+  if (!d.ironingBoard) return "";
+  const t = T.fr;
+  return `${t.board}: ${BOARD_LABELS_FR[d.ironingBoard]}${boardNeedsContact(d.ironingBoard) ? ` · ${t.toContact}` : ""}`;
+}
+
 export function ownerNotification(d: BookingEmailData, cancelled = false) {
   const t = T.fr; // l'artisan lit en français
   /* Les montants aussi, même quand le client a réservé en anglais : sinon
@@ -450,6 +481,7 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
       ${row(t.duration, esc(dur))}
       ${row(t.estimate, `<strong>${esc(money)}</strong>${d.firstHourFree ? `<br><span style="font-size:12px;color:${GOLD};">${esc(t.free)}</span>` : ""}`)}
       ${travelRowsHtml(fr, t)}
+      ${boardRowHtml(d)}
       ${d.notes ? row(t.clientNotes, esc(d.notes)) : ""}
       ${row(t.ref, `<code style="font-family:monospace;">${esc(d.ref)}</code>`)}
     </table>
@@ -464,12 +496,17 @@ export function ownerNotification(d: BookingEmailData, cancelled = false) {
     `${t.where}: ${d.address}, ${d.city} ${d.postalCode}`, `${t.what}:`, itemsText(d),
     `${t.duration}: ${dur}`, `${t.estimate}: ${money}`,
     ...travelRowsText(fr, t),
+    boardText(d),
     d.notes ? `${t.clientNotes}: ${d.notes}` : "", `${t.ref}: ${d.ref}`,
     ...originText(d), "", `${d.siteUrl}/admin`,
   ].filter(Boolean).join("\n");
 
+  /* « À contacter » jusque dans l'objet : l'artisan le voit sans ouvrir. */
+  const contact = !cancelled && boardNeedsContact(d.ironingBoard);
   return {
-    subject: cancelled ? t.ownerCancelSubject(d.clientName, d.ref) : t.ownerSubject(d.clientName, d.ref),
+    subject: cancelled
+      ? t.ownerCancelSubject(d.clientName, d.ref)
+      : `${t.ownerSubject(d.clientName, d.ref)}${contact ? ` · ${t.toContact}` : ""}`,
     html: shell(inner, `${when} — ${d.clientName}`, d.businessEmail),
     text,
   };
