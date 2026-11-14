@@ -35,7 +35,10 @@ export function Dashboard({
   upcoming: AdminBooking[];
   past: AdminBooking[];
   stats: AdminStats;
-  env: { database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string };
+  env: {
+    database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string;
+    soonQueued: { count: number; next: string | null } | null;
+  };
   link: GoogleLink;
   flash: { connected: boolean; missingScopes: string[] };
   /** « Bonjour », « Bon après-midi » ou « Bonsoir », décidé par le serveur à l'heure de la maison. */

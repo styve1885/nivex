@@ -485,6 +485,21 @@ export async function withdrawQueuedReminders(now = new Date()): Promise<{ withd
 }
 
 /**
+ * Les textos de deux heures avant encore programmés chez Twilio, toutes
+ * séances confondues : leur nombre et l'heure du prochain envoi. L'onglet
+ * Connexion les montre ; /api/cron/reminders en rend le nombre, si bien que
+ * le journal du workflow le donne après chaque mise en ligne.
+ */
+export async function queuedSoonTexts(now = new Date()): Promise<{ count: number; next: Date | null }> {
+  await ensureSchema();
+  const rows = (await sql()`
+    SELECT count(*)::int AS n, min(sms_soon_at) AS next FROM nivex_bookings
+    WHERE sms_soon_sid IS NOT NULL AND sms_soon_at > ${now.toISOString()}`) as Row[];
+  const next = rows[0]?.next;
+  return { count: Number(rows[0]?.n ?? 0), next: next ? new Date(next as string) : null };
+}
+
+/**
  * Les rappels d'une séance à la carte, réglés par l'artisan sur le
  * rendez-vous. Coupés : le texto déjà programmé est retiré. Rallumés : il se
  * programme s'il tombe dans la fenêtre, et le rappel de la veille part au
