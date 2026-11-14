@@ -304,6 +304,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #39 | 14 nov. 2026 | Onglet Connexion : essai du rappel de la veille (le vrai courriel et le vrai texto, séance fictive de demain, vers l'artisan seul) et décompte des textos de deux heures avant programmés |
 | #38 | 13 nov. 2026 | Secteurs desservis : la liste de quartiers de Styve sur l'accueil, Tarifs, la foire aux questions, `/llms.txt` et la description de l'accueil ; Ville de Mont-Royal entre dans la grille, Griffintown y est nommé (`secteurs-2026-11`) |
 | #37 | 11 nov. 2026 | Abonnés : plus de rappel de la veille ni de texto de deux heures avant par défaut ; interrupteur « Rappels de séance » sur la fiche ; textos déjà programmés retirés après la mise en ligne |
 | #36 | 10 nov. 2026 | Abonnés « arrivée 15 min avant » : on finit à la fermeture au plus tard, rangement compris |

@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getSettingsStrict } from "@/lib/settings";
-import { listBookings, stats } from "@/lib/bookings";
+import { listBookings, queuedSoonTexts, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
-import { ownerSmsNumber, smsConfigured, smsScheduleConfigured } from "@/lib/sms";
+import { ownerSmsNumber, smsConfigured, smsScheduleConfigured, smsWhen } from "@/lib/sms";
 import { getDict } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -40,10 +40,11 @@ export default async function AdminPage({
      c'est le résultat de l'essai que le tableau de bord affiche. */
   const link = await probeGoogle(settings.connected);
 
-  const [upcoming, past, counts] = await Promise.all([
+  const [upcoming, past, counts, soonQueued] = await Promise.all([
     listBookings({ scope: "upcoming" }).catch(() => []),
     listBookings({ scope: "past", limit: 60 }).catch(() => []),
     stats().catch(() => ({ upcoming: 0, thisMonth: 0, cancelled: 0, total: 0, monthCents: 0, clients: 0 })),
+    queuedSoonTexts().catch(() => null),
   ]);
 
   const serialise = (list: Awaited<ReturnType<typeof listBookings>>) =>
@@ -86,6 +87,13 @@ export default async function AdminPage({
            cellulaire sans l'écrire en entier dans la page. */
         ownerCell: ownerSmsNumber()?.slice(-4) ?? null,
         origin: siteOrigin(),
+        /* Les textos de deux heures avant programmés chez Twilio : combien,
+           et quand part le prochain, déjà mis en mots (« samedi 15 novembre
+           à 16 h 00 »). Nul si la base n'a pas répondu. */
+        soonQueued: soonQueued && {
+          count: soonQueued.count,
+          next: soonQueued.next ? smsWhen(soonQueued.next, settings.timezone, "fr") : null,
+        },
       }}
       link={link}
       flash={{

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeEqual } from "@/lib/crypto";
-import { withdrawQueuedReminders } from "@/lib/bookings";
+import { queuedSoonTexts, withdrawQueuedReminders } from "@/lib/bookings";
 import { requireOwner } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -16,7 +16,8 @@ export const maxDuration = 60;
  * avec `CRON_SECRET` et le commit déployé : 409 tant que le domaine sert la
  * version précédente, comme /api/indexnow. La tâche du matin fait la même
  * chose, en filet. La réponse ne porte que des nombres : le journal du
- * workflow est public.
+ * workflow est public. `queued` compte les textos de deux heures avant qui
+ * restent programmés après le passage, toutes séances confondues.
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -33,7 +34,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ ok: true, ...(await withdrawQueuedReminders()) });
+    const withdrawal = await withdrawQueuedReminders();
+    const { count: queued } = await queuedSoonTexts();
+    return NextResponse.json({ ok: true, ...withdrawal, queued });
   } catch (e) {
     console.error("[nivex] retrait des rappels impossible :", e);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });

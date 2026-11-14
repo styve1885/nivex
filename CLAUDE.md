@@ -570,9 +570,22 @@ d'abord, ligne libérée ensuite, si bien qu'un échec se reprend) : au
 décochage, chaque matin, et juste après chaque mise en ligne par le second
 travail du workflow IndexNow (`reminders`, qui appelle
 `/api/cron/reminders` avec `CRON_SECRET` ; son journal, public, ne montre
-que des nombres : `withdrawn`, `failed`, `remaining`). Le rappel de la
-veille annonçait aussi le paiement à la première visite d'un cycle : un
-abonné sans rappels ne l'a plus. Rien ne change pour les avis de l'artisan.
+que des nombres : `withdrawn`, `failed`, `remaining`, et `queued`, les
+textos de deux heures avant encore programmés, toutes séances confondues). Le
+rappel de la veille annonçait aussi le paiement à la première visite d'un
+cycle : un abonné sans rappels ne l'a plus. Rien ne change pour les avis de
+l'artisan.
+
+**L'essai du rappel de la veille** (14 novembre 2026) : un bouton de
+l'onglet Connexion envoie le courriel et le texto qu'un client à la carte
+reçoit la veille, mêmes modèles et même chemin que la tâche du matin, pour
+une séance fictive de demain à l'heure d'ouverture, à une adresse d'exemple
+(`trialReminder`, `sendReminderTrial`, `lib/reminder-trial.ts`). Ils ne
+partent que vers l'artisan : la boîte de la maison (`REQUEST_INBOX`) et son
+cellulaire (`SMS_OWNER_TO`). Rien ne s'écrit en base ; le journal ne note
+que le sort de chaque canal (`reminder_trial`). Le même onglet dit combien de
+textos de deux heures avant sont programmés chez Twilio, et quand part le
+prochain (`queuedSoonTexts`).
 
 **Le numéro de la maison** (`PHONE`, +1 450 367 6231) est celui de Twilio
 depuis le 6 novembre 2026 : il paraît partout, pages, courriels, textos,
@@ -1068,7 +1081,7 @@ dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
-chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, durées,
+chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, son essai, durées,
 trois temps, séance d'essai, pièces à l'unité, foire aux questions),
 `sms` (modèles, numéros canadiens, alphabet, appels et alerte d'appel
 manqué, numéro du client sur le cellulaire et nouvel essai, longueur d'un

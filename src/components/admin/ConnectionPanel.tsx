@@ -13,7 +13,10 @@ export function ConnectionPanel({
 }: {
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
-  env: { database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string };
+  env: {
+    database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string;
+    soonQueued: { count: number; next: string | null } | null;
+  };
   link: GoogleLink;
   missingScopes: string[];
 }) {
@@ -32,6 +35,8 @@ export function ConnectionPanel({
   const [test, setTest] = useState<{ ok: boolean; to?: string; at?: string; reason?: string; hint?: string } | null>(null);
   const [smsTesting, setSmsTesting] = useState(false);
   const [smsTest, setSmsTest] = useState<{ ok: boolean; to?: string; reason?: string } | null>(null);
+  const [trialSending, setTrialSending] = useState(false);
+  const [trial, setTrial] = useState<Trial | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -96,6 +101,22 @@ export function ConnectionPanel({
       setSmsTest({ ok: false, reason: "Le site n'a pas répondu. Réessayez." });
     } finally {
       setSmsTesting(false);
+    }
+  }
+
+  /* L'essai du rappel de la veille : le vrai courriel et le vrai texto,
+     pour une séance fictive de demain, vers vous seul. */
+  async function sendTrial() {
+    setTrialSending(true);
+    setTrial(null);
+    try {
+      const res = await fetch("/api/admin/test-reminder", { method: "POST" });
+      const d = await res.json().catch(() => null);
+      setTrial(d?.email && d?.sms ? d : { error: res.status === 401 ? "session" : "unreadable" });
+    } catch {
+      setTrial({ error: "network" });
+    } finally {
+      setTrialSending(false);
     }
   }
 
@@ -306,7 +327,46 @@ export function ConnectionPanel({
                 ? "Programmé chez Twilio par votre service de messagerie : il part deux heures avant votre arrivée, et se retire si la séance est annulée ou déplacée. Comme le rappel de la veille, il ne part que si les rappels de séance sont actifs : par défaut pour une séance à la carte, sur demande pour un abonné (sa fiche, onglet Abonnés)."
                 : "Twilio ne programme un texto que par un service de messagerie. Dans la console Twilio, créez-en un sous « Messaging › Services », ajoutez-y votre numéro, laissez « Defer to sender's webhook » dans ses réglages d'intégration, puis copiez son identifiant (MG…) dans la variable TWILIO_MESSAGING_SERVICE_SID chez Vercel."}
             </p>
+            {env.soonQueued && (
+              <p className="mt-2 text-ink-700">
+                {env.soonQueued.count === 0
+                  ? "Aucun n'est programmé en ce moment."
+                  : `En ce moment : ${env.soonQueued.count} programmé${env.soonQueued.count > 1 ? "s" : ""} chez Twilio${env.soonQueued.next ? ` ; le prochain part le ${env.soonQueued.next}` : ""}.`}
+              </p>
+            )}
           </div>
+        )}
+      </section>
+
+      {/* — Essai du rappel de la veille — */}
+      <section className="border border-gold-300/40 bg-linen-50 p-7">
+        <h3 className="font-display text-xl font-normal text-ink-800">Le rappel de la veille</h3>
+        <p className="mt-1.5 max-w-2xl text-[0.82rem] font-light leading-relaxed text-ink-400">
+          Envoie à votre boîte et à votre cellulaire le courriel et le texto qu&apos;un client reçoit la veille de sa
+          séance, pour une séance fictive de demain : mêmes modèles, même chemin. Aucun client ne reçoit rien, et rien
+          n&apos;est réservé.
+        </p>
+        <button type="button" onClick={sendTrial} disabled={trialSending} className="btn mt-6 !py-3 !px-6 !text-[10px]">
+          {trialSending ? "Envoi en cours…" : "Envoyer un essai du rappel"}
+        </button>
+        {trial?.error && (
+          <p role="alert" className="mt-5 border border-[#B4453C]/40 bg-[#B4453C]/5 px-5 py-4 text-[0.85rem] leading-relaxed text-[#8E332C]">
+            {trial.error === "session"
+              ? "Votre session a expiré : rechargez la page et reconnectez-vous."
+              : trial.error === "network"
+                ? "Le site n'a pas répondu. Réessayez."
+                : "Les réglages ne se lisent pas pour le moment. Réessayez dans un instant."}
+          </p>
+        )}
+        {trial?.email && trial.sms && (
+          <ul className="mt-5 space-y-2.5 text-[0.85rem] leading-relaxed">
+            <TrialLine label="Courriel" r={trial.email} />
+            <TrialLine label="Texto" r={trial.sms} />
+            <li className="pt-1 text-[0.78rem] text-ink-400">
+              Séance fictive : <span className="whitespace-nowrap">{trial.session}</span>. Le lien « Gérer ma
+              réservation » de l&apos;essai mène à l&apos;accueil.
+            </li>
+          </ul>
         )}
       </section>
 
@@ -390,6 +450,21 @@ function Check({ ok, label, fail }: { ok: boolean; label: string; fail: string }
         {label}
         {!ok && <span className="mt-0.5 block text-[11px] text-[#8E332C]">{fail}</span>}
       </span>
+    </li>
+  );
+}
+
+type TrialChannel = { ok: boolean; to?: string; reason?: string };
+type Trial = { email?: TrialChannel; sms?: TrialChannel; session?: string; error?: "session" | "network" | "unreadable" };
+
+/** Un canal de l'essai : parti, et vers où ; ou non parti, et pourquoi. */
+function TrialLine({ label, r }: { label: string; r: TrialChannel }) {
+  return (
+    <li className={r.ok ? "text-ink-700" : "text-[#8E332C]"}>
+      <span className="font-medium">{label}</span>
+      {r.ok
+        ? <> : parti vers <strong>{r.to}</strong>.</>
+        : <> : non parti{r.to ? <> vers {r.to}</> : null}. {r.reason}</>}
     </li>
   );
 }

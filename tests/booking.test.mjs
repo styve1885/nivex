@@ -628,4 +628,40 @@ test("la note de déroulement des deux tunnels remplit sa durée et son temps de
   for (const d of [fr, getDict("en")]) assert.match(d.booking.step3.setup, /\{duration\}[\s\S]*\{ironing\}/, "les deux marqueurs existent");
 });
 
+const { trialReminder } = await import("../src/lib/reminder-trial.ts");
+
+test("l'essai du rappel de la veille : les vrais modèles, pour une séance fictive de demain", () => {
+  /* Samedi 14 novembre 2026, 15 h à Montréal : demain dimanche, ouvert dès 7 h. */
+  const tz = "America/Toronto";
+  const now = fromWall({ year: 2026, month: 11, day: 14, hour: 15, minute: 0 }, tz);
+  const hours = [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+    day, enabled: true, open: day === 0 || day === 5 ? "07:00" : "18:00", close: "22:00",
+  }));
+  const s = { ...FALLBACK_SETTINGS, hours };
+  const t = trialReminder(s, "https://www.nivexrepassage.ca", now);
+  assert.equal(t.startsAt.toISOString(), fromWall({ year: 2026, month: 11, day: 15, hour: 7, minute: 0 }, tz).toISOString());
+  /* Le texto est celui de la tâche du matin, mot pour mot. */
+  assert.equal(t.sms, "NIVEX - Rappel : demain dimanche 15 novembre, j'arrive à 7 h. À demain. Styve");
+  /* Le courriel aussi : même gabarit, adressé à l'artisan, à une adresse d'exemple. */
+  assert.equal(t.email.subject, "Rappel : votre séance NIVEX demain");
+  const text = t.email.text.replace(/[\u00a0\u202f]/g, " ");
+  assert.match(text, /^Bonjour Styve,/);
+  assert.match(text, /Un mot pour vous rappeler votre séance de demain\./);
+  assert.match(text, /dimanche 15 novembre 2026/);
+  assert.match(text, /123, rue de l'Exemple, Longueuil J4K 1A1/);
+  assert.match(text, new RegExp(sessionLabel(sessionLength(s), "fr")));
+  assert.match(text, /Avant notre arrivée/);
+  assert.match(text, /Gérer ma réservation: https:\/\/www\.nivexrepassage\.ca\/fr\n/);
+  assert.doesNotMatch(t.email.subject + t.email.text + t.sms, /!/, "aucun point d'exclamation");
+  /* Demain fermé : 18 h, pour que le rappel dise toujours « demain ». */
+  const closed = hours.map((h) => (h.day === 0 ? { ...h, enabled: false } : h));
+  assert.match(trialReminder({ ...s, hours: closed }, "https://www.nivexrepassage.ca", now).sms, /demain dimanche 15 novembre, j'arrive à 18 h\./);
+  /* Envoyé à l'artisan seul : la boîte de la maison et son cellulaire, jamais une adresse lue ailleurs. */
+  const src = readFileSync(new URL("../src/lib/reminder-trial.ts", import.meta.url), "utf8");
+  assert.match(src, /to: REQUEST_INBOX, toName: SMS_SIGNATURE/);
+  assert.match(src, /const cell = ownerSmsNumber\(\)/);
+  assert.equal((src.match(/sendGmail\(/g) ?? []).length, 1);
+  assert.equal((src.match(/sendSms\(/g) ?? []).length, 1);
+});
+
 console.log(`\n${n} vérifications passées.\n`);
