@@ -108,8 +108,8 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   const router = useRouter();
   const cancelled = b.status === "cancelled";
 
-  /* Les rappels de séance d'une séance à la carte : la veille et deux heures
-     avant. Le changement s'affiche aussitôt, et revient s'il n'a pas pris. */
+  /* Les rappels de séance d'une séance à la carte : le rappel de la veille.
+     Le changement s'affiche aussitôt, et revient s'il n'a pas pris. */
   async function toggleReminders(on: boolean) {
     setRemindersBusy(true);
     setRemindersError(null);
@@ -262,7 +262,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                   <span>Rappels de séance</span>
                 </label>
                 <span className="mt-1 block text-[0.74rem] text-ink-400">
-                  La veille, par courriel et par texto, et le texto de deux heures avant. Activés par défaut pour une séance à la carte.
+                  Le rappel de la veille, par courriel et par texto. Activé par défaut pour une séance à la carte.
                 </span>
                 {remindersError && <span role="alert" className="mt-1 block text-[0.78rem] text-[#8E332C]">{remindersError}</span>}
               </Line>

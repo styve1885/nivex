@@ -6,7 +6,7 @@ import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { heardFromText } from "@/lib/attribution";
 import { Dashboard } from "@/components/admin/Dashboard";
-import { ownerSmsNumber, smsConfigured, smsScheduleConfigured, smsWhen } from "@/lib/sms";
+import { ownerSmsNumber, smsConfigured, smsWhen } from "@/lib/sms";
 import { getDict } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -82,14 +82,14 @@ export default async function AdminPage({
         database: isDbConfigured(),
         google: googleConfigured(),
         sms: smsConfigured(),
-        smsSchedule: smsScheduleConfigured(),
         /* Les quatre derniers chiffres seulement : de quoi reconnaître son
            cellulaire sans l'écrire en entier dans la page. */
         ownerCell: ownerSmsNumber()?.slice(-4) ?? null,
         origin: siteOrigin(),
-        /* Les textos de deux heures avant programmés chez Twilio : combien,
-           et quand part le prochain, déjà mis en mots (« samedi 15 novembre
-           à 16 h 00 »). Nul si la base n'a pas répondu. */
+        /* Les textos de deux heures avant encore programmés chez Twilio, à
+           annuler depuis leur retrait : combien, et quand part le prochain,
+           déjà mis en mots (« samedi 15 novembre à 16 h 00 »). Nul si la base
+           n'a pas répondu. */
         soonQueued: soonQueued && {
           count: soonQueued.count,
           next: soonQueued.next ? smsWhen(soonQueued.next, settings.timezone, "fr") : null,

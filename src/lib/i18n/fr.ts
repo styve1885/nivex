@@ -64,7 +64,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Votre adresse sert à venir chez vous, et à vérifier que vous êtes dans la zone desservie.",
-        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre et, pour une séance à la carte, à vous la rappeler la veille\u202f; un abonné ne reçoit ces rappels que s'il les demande. Le lendemain de votre première séance, votre courriel peut aussi recevoir, une seule fois, un mot de remerciement qui vous invite à laisser un avis sur Google\u202f; répondre à ce courriel suffit pour ne plus en recevoir de ce genre. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, tout changement de rendez-vous et les messages que l'artisan vous écrit lui-même, et, quand les rappels sont actifs, le rappel de la veille et un mot deux heures avant l'arrivée de l'artisan\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan, qui peut aussi la relire dans son espace\u202f; le site ne la conserve pas.",
+        "Votre courriel et votre téléphone servent à confirmer, à prévenir d'un retard, à vous répondre et, pour une séance à la carte, à vous la rappeler la veille\u202f; un abonné ne reçoit ces rappels que s'il les demande. Le lendemain de votre première séance, votre courriel peut aussi recevoir, une seule fois, un mot de remerciement qui vous invite à laisser un avis sur Google\u202f; répondre à ce courriel suffit pour ne plus en recevoir de ce genre. Si votre numéro est canadien, il reçoit aussi, par texto, la confirmation, tout changement de rendez-vous et les messages que l'artisan vous écrit lui-même, et, quand les rappels sont actifs, le rappel de la veille\u202f; répondez STOP à l'un de ces textos pour ne plus en recevoir. Toute réponse, STOP compris, est transmise en texte au cellulaire de l'artisan, qui peut aussi la relire dans son espace\u202f; le site ne la conserve pas.",
         "La séance et les pièces à l'unité choisies servent à réserver le bon créneau dans l'agenda et à préparer le matériel.",
         "Vos précisions servent à ne pas abîmer une pièce fragile et à savoir comment entrer chez vous.",
         "Le carnet de rendez-vous sert à tenir la comptabilité de l'entreprise et à retrouver une séance passée si elle est contestée.",
@@ -90,7 +90,7 @@ const privacy: LegalDoc = {
         "Vercel — héberge le site, le sert à votre navigateur, et en compte la fréquentation de façon agrégée.",
         "Neon — la base de données où vivent les rendez-vous et les messages.",
         "Google — l'agenda de votre artisan, où votre rendez-vous est inscrit avec votre nom, votre adresse et vos coordonnées, et Gmail, d'où partent la confirmation et l'invitation que vous recevez.",
-        "Twilio — achemine les textos que vous recevez (confirmation, rappel, mot de deux heures avant, annulation ou changement de rendez-vous, messages que l'artisan vous écrit depuis le numéro de NIVEX) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Le mot de deux heures avant lui est confié à l'avance, et part à l'heure dite. Il transmet aussi à l'artisan le texte de vos réponses\u202f; les photos que vous y joindriez restent chez Twilio. L'artisan relit vos échanges, photos comprises, dans son espace, qui les lit chez Twilio sans en garder de copie. Vos appels au numéro de NIVEX passent eux aussi par Twilio, qui les fait sonner sur le cellulaire de l'artisan, où s'affiche votre numéro\u202f; une voix le lui annonce, avec votre nom si vous avez déjà réservé\u202f; après chaque appel, répondu ou non, il reçoit un texto avec les mêmes renseignements. Le site n'en conserve rien. Twilio garde une trace des appels et une copie des messages qu'il achemine.",
+        "Twilio — achemine les textos que vous recevez (confirmation, rappel, annulation ou changement de rendez-vous, messages que l'artisan vous écrit depuis le numéro de NIVEX) et les avis envoyés à l'artisan, qui portent votre nom, la date du rendez-vous et, selon le cas, la ville ou la formule. Il transmet aussi à l'artisan le texte de vos réponses\u202f; les photos que vous y joindriez restent chez Twilio. L'artisan relit vos échanges, photos comprises, dans son espace, qui les lit chez Twilio sans en garder de copie. Vos appels au numéro de NIVEX passent eux aussi par Twilio, qui les fait sonner sur le cellulaire de l'artisan, où s'affiche votre numéro\u202f; une voix le lui annonce, avec votre nom si vous avez déjà réservé\u202f; après chaque appel, répondu ou non, il reçoit un texto avec les mêmes renseignements. Le site n'en conserve rien. Twilio garde une trace des appels et une copie des messages qu'il achemine.",
         "ImprovMX — fait suivre vers la boîte de votre artisan les courriels que vous écrivez à notre adresse du domaine.",
       ],
     },
@@ -196,7 +196,7 @@ const terms: LegalDoc = {
         "Les créneaux proposés tiennent compte de l'horaire de la maison et des rendez-vous déjà pris. Ce que vous voyez est réservable.",
         "Une séance dure au minimum {min}.",
         "Une réservation se prend au moins {lead} à l'avance, et jusqu'à {horizon} devant.",
-        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous. Si votre numéro est canadien, un texto la double, un autre vous rappelle le rendez-vous la veille, et un dernier vous prévient deux heures avant l'arrivée de l'artisan. Un abonné reçoit la confirmation de son abonnement, puis un message quand une visite est déplacée, annulée ou remplacée, et quand sa série suivante est posée\u202f; ses rappels, sur demande.",
+        "La confirmation part par courriel dès la réservation, avec l'invitation pour votre agenda et un lien personnel pour gérer le rendez-vous\u202f; si votre numéro est canadien, un texto la double. Vous recevrez un rappel la veille de votre séance. Un abonné reçoit la confirmation de son abonnement, puis un message quand une visite est déplacée, annulée ou remplacée, et quand sa série suivante est posée\u202f; ses rappels, sur demande.",
       ],
     },
     {
@@ -675,7 +675,7 @@ export const fr = {
        « en réservant » : dit ici, au moment où les coordonnées sont données,
        avec la date de leur dernière révision. Commun aux deux tunnels. */
     legal: {
-      data: "Vos coordonnées servent à vos rendez-vous\u00a0: la confirmation, tout changement et, pour une séance à la carte, les rappels vous parviennent par courriel ou par texto. Elles sont conservées hors du Québec, chez les fournisseurs nommés dans la politique de confidentialité.",
+      data: "Vos coordonnées servent à vos rendez-vous\u00a0: la confirmation et tout changement vous parviennent par courriel ou par texto. Elles sont conservées hors du Québec, chez les fournisseurs nommés dans la politique de confidentialité.",
       accept: "J'accepte les {terms} et la {privacy}, révisées le {date}.",
       terms: "conditions d'utilisation",
       privacy: "politique de confidentialité",
@@ -687,6 +687,9 @@ export const fr = {
       title: "C'est confirmé.",
       body: "Votre rendez-vous est pris. Un courriel de confirmation vient de partir, avec l'invitation pour votre agenda\u202f; votre artisan a été prévenu.",
       bodyNoEmail: "Votre rendez-vous est pris et votre artisan a été prévenu. Le courriel de confirmation n'a pas pu partir — notez votre référence, elle suffit.",
+      /* La seule phrase sur les rappels, depuis le retrait du texto de deux
+         heures avant (14 novembre 2026). */
+      reminder: "Vous recevrez un rappel la veille de votre séance.",
       wanted: "Rendez-vous",
       ref: "Référence",
       manage: "Gérer ma réservation",

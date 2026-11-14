@@ -46,7 +46,7 @@ const privacy: LegalDoc = {
       ],
       list: [
         "Your address is how we come to you, and how we check that you are inside the service area.",
-        "Your email and phone number are how we confirm, warn you of a delay, answer you and, for a single session, remind you of it the day before; a subscriber receives these reminders only on request. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, any change to an appointment and the messages the artisan writes to you directly, and, when reminders are on, the reminder the day before and a note two hours before the artisan arrives; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone, and can also be reread in the artisan's workspace; the site does not keep it.",
+        "Your email and phone number are how we confirm, warn you of a delay, answer you and, for a single session, remind you of it the day before; a subscriber receives these reminders only on request. The day after your first session, your email may also receive, once only, a thank-you note inviting you to leave a review on Google; replying to it is enough to receive no more of this kind. If your number is Canadian, it also receives, by text message, the confirmation, any change to an appointment and the messages the artisan writes to you directly, and, when reminders are on, the reminder the day before; reply STOP to any of those texts to receive no more. Every reply, STOP included, is passed on as text to the artisan's mobile phone, and can also be reread in the artisan's workspace; the site does not keep it.",
         "The session and any single pieces you chose are how we book the right time slot and pack the right equipment.",
         "Your notes are how we avoid ruining a fragile piece, and how we get into your building.",
         "The appointment book is how the business keeps its accounts and how a past session can be traced if it is ever disputed.",
@@ -72,7 +72,7 @@ const privacy: LegalDoc = {
         "Vercel — hosts the site, serves it to your browser, and counts its traffic in aggregate.",
         "Neon — the database where bookings and messages live.",
         "Google — your artisan's calendar, where your appointment is written down with your name, your address and your contact details, and Gmail, from which your confirmation and invitation are sent.",
-        "Twilio — carries the text messages you receive (confirmation, reminder, two-hour note, cancellation or change of appointment, messages the artisan writes to you from the NIVEX number) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. The two-hour note is handed to it in advance, and goes out at the set time. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio. Your exchanges, photos included, can be reread in the artisan's workspace, which reads them from Twilio without keeping a copy. Your calls to the NIVEX number also go through Twilio, which rings them through to the artisan's mobile phone, where your number is displayed; a voice announces it, with your name if you have booked before; after each call, answered or not, the artisan receives a text with the same details. The site keeps none of it. Twilio keeps a record of the calls and a copy of the messages it carries.",
+        "Twilio — carries the text messages you receive (confirmation, reminder, cancellation or change of appointment, messages the artisan writes to you from the NIVEX number) and the notices sent to the artisan, which carry your name, the date of the appointment and, depending on the case, the city or the plan. It also passes the text of your replies on to the artisan; any photos you attach stay with Twilio. Your exchanges, photos included, can be reread in the artisan's workspace, which reads them from Twilio without keeping a copy. Your calls to the NIVEX number also go through Twilio, which rings them through to the artisan's mobile phone, where your number is displayed; a voice announces it, with your name if you have booked before; after each call, answered or not, the artisan receives a text with the same details. The site keeps none of it. Twilio keeps a record of the calls and a copy of the messages it carries.",
         "ImprovMX — forwards the emails you write to our domain address to your artisan's inbox.",
       ],
     },
@@ -178,7 +178,7 @@ const terms: LegalDoc = {
         "The slots on offer account for the hours the house works and the appointments already taken. What you see is bookable.",
         "A session lasts {min} at the least.",
         "A booking is made at least {lead} ahead, and up to {horizon} out.",
-        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment. If your number is Canadian, a text message doubles it, another reminds you of the appointment the day before, and a last one lets you know two hours before the artisan arrives. A subscriber receives the confirmation of the subscription, then a message when a visit is moved, cancelled or replaced, and when the next series is set; reminders, on request.",
+        "Confirmation goes out by email as soon as you book, with the invitation for your calendar and a personal link for managing the appointment; if your number is Canadian, a text message doubles it. You will receive a reminder the day before your session. A subscriber receives the confirmation of the subscription, then a message when a visit is moved, cancelled or replaced, and when the next series is set; reminders, on request.",
       ],
     },
     {
@@ -602,7 +602,7 @@ export const en: Dict = {
       submitting: "Confirming…",
     },
     legal: {
-      data: "Your details are used for your appointments: the confirmation, any change and, for a single session, reminders reach you by email or text message. They are stored outside Quebec, with the providers named in the privacy policy.",
+      data: "Your details are used for your appointments: the confirmation and any change reach you by email or text message. They are stored outside Quebec, with the providers named in the privacy policy.",
       accept: "I accept the {terms} and the {privacy}, revised on {date}.",
       terms: "terms of use",
       privacy: "privacy policy",
@@ -614,6 +614,7 @@ export const en: Dict = {
       title: "You're booked.",
       body: "Your appointment is set. A confirmation email just went out, with the invitation for your calendar; your craftsman has been notified.",
       bodyNoEmail: "Your appointment is set and your craftsman has been notified. The confirmation email could not be sent — note your reference, it is enough.",
+      reminder: "You will receive a reminder the day before your session.",
       wanted: "Appointment",
       ref: "Reference",
       manage: "Manage my booking",

@@ -14,7 +14,7 @@ export function ConnectionPanel({
   settings: Settings;
   session: { email: string; name: string | null; picture: string | null };
   env: {
-    database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string;
+    database: boolean; google: boolean; sms: boolean; ownerCell: string | null; origin: string;
     soonQueued: { count: number; next: string | null } | null;
   };
   link: GoogleLink;
@@ -321,17 +321,12 @@ export function ConnectionPanel({
               comme manqué, et le texto d&apos;alerte part. Si vous rappelez un client depuis votre cellulaire, il
               verra votre numéro personnel.
             </p>
-            <p className="mt-5 text-ink-700">Le texto de deux heures avant</p>
-            <p className="mt-1">
-              {env.smsSchedule
-                ? "Programmé chez Twilio par votre service de messagerie : il part deux heures avant votre arrivée, et se retire si la séance est annulée ou déplacée. Comme le rappel de la veille, il ne part que si les rappels de séance sont actifs : par défaut pour une séance à la carte, sur demande pour un abonné (sa fiche, onglet Abonnés)."
-                : "Twilio ne programme un texto que par un service de messagerie. Dans la console Twilio, créez-en un sous « Messaging › Services », ajoutez-y votre numéro, laissez « Defer to sender's webhook » dans ses réglages d'intégration, puis copiez son identifiant (MG…) dans la variable TWILIO_MESSAGING_SERVICE_SID chez Vercel."}
-            </p>
-            {env.soonQueued && (
-              <p className="mt-2 text-ink-700">
-                {env.soonQueued.count === 0
-                  ? "Aucun n'est programmé en ce moment."
-                  : `En ce moment : ${env.soonQueued.count} programmé${env.soonQueued.count > 1 ? "s" : ""} chez Twilio${env.soonQueued.next ? ` ; le prochain part le ${env.soonQueued.next}` : ""}.`}
+            {/* Le texto de deux heures avant est retiré depuis le 14 novembre 2026 :
+                ceux qui restaient programmés s'annulent après la mise en ligne et
+                chaque matin. Cette ligne ne paraît que s'il en reste. */}
+            {env.soonQueued && env.soonQueued.count > 0 && (
+              <p className="mt-5 text-ink-700">
+                {`Textos de deux heures avant encore programmés chez Twilio : ${env.soonQueued.count}${env.soonQueued.next ? `, le prochain le ${env.soonQueued.next}` : ""}. Ce texto est retiré : ils s'annulent après chaque mise en ligne et chaque matin.`}
               </p>
             )}
           </div>
@@ -385,10 +380,6 @@ export function ConnectionPanel({
             <Check ok={Boolean(env.ownerCell)}
               label={env.ownerCell ? `Votre cellulaire, qui finit par ${env.ownerCell}` : "Votre cellulaire"}
               fail="SMS_OWNER_TO absente, ou égale au numéro de la maison — vos avis, les réponses des clients et les alertes d'appel ne vous parviennent pas" />
-          )}
-          {env.sms && (
-            <Check ok={env.smsSchedule} label="Texto de deux heures avant"
-              fail="Service de messagerie Twilio absent (TWILIO_MESSAGING_SERVICE_SID) — ce texto ne part pas" />
           )}
         </ul>
         {/* Ces adresses ne contiennent aucune espace : sans coupure permise,

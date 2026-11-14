@@ -664,4 +664,24 @@ test("l'essai du rappel de la veille : les vrais modèles, pour une séance fict
   assert.equal((src.match(/sendSms\(/g) ?? []).length, 1);
 });
 
+test("un seul rappel promis, la veille ; plus aucun texte ne parle du texto de deux heures avant", () => {
+  const en = getDict("en");
+  /* La phrase de l'artisan, mot pour mot, dans les deux langues. */
+  assert.equal(fr.booking.success.reminder, "Vous recevrez un rappel la veille de votre séance.");
+  assert.equal(en.booking.success.reminder, "You will receive a reminder the day before your session.");
+  /* L'écran « C'est confirmé » du tunnel l'affiche. */
+  const wizard = readFileSync(new URL("../src/components/booking/BookingWizard.tsx", import.meta.url), "utf8");
+  assert.match(wizard, /\{t\.booking\.success\.reminder\}/);
+  /* Les conditions la reprennent ; la note commune aux deux tunnels ne promet
+     plus de rappel, puisqu'un abonné n'en reçoit pas par défaut. */
+  const all = (d) => JSON.stringify([d.legal.terms, d.legal.privacy, d.booking, d.subscribe ?? null, d.subManage ?? null, d.faq ?? null]);
+  assert.ok(all(fr).includes("Vous recevrez un rappel la veille de votre séance."));
+  assert.ok(all(en).includes("You will receive a reminder the day before your session."));
+  assert.doesNotMatch(fr.booking.legal.data, /rappel/);
+  assert.doesNotMatch(en.booking.legal.data, /reminder/);
+  for (const [d, re] of [[fr, /deux heures avant|mot de deux heures|serai chez vous/i], [en, /two hours before|two-hour|will be at your door/i]]) {
+    assert.doesNotMatch(JSON.stringify(d), re);
+  }
+});
+
 console.log(`\n${n} vérifications passées.\n`);

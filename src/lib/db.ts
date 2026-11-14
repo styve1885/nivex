@@ -491,9 +491,10 @@ async function bootstrap() {
      Ses visites à venir en héritent. */
   await q`ALTER TABLE nivex_subscriptions ADD COLUMN IF NOT EXISTS setup_minutes integer NOT NULL DEFAULT 15`;
 
-  /* Les rappels de séance : celui de la veille, par courriel et par texto,
-     et le texto de deux heures avant. Décision de l'artisan, 11 novembre
-     2026 : ses abonnés les trouvaient répétitifs. Coupés par défaut pour un
+  /* Les rappels de séance : celui de la veille, par courriel et par texto
+     (le texto de deux heures avant, qui en faisait partie, est retiré depuis
+     le 14 novembre 2026). Décision de l'artisan, 11 novembre 2026 : ses
+     abonnés les trouvaient répétitifs. Coupés par défaut pour un
      abonné, gardés pour une séance à la carte ; l'artisan les règle sur la
      fiche (« Rappels de séance »). Une visite d'abonné suit son abonnement,
      jamais sa propre ligne : la colonne des rendez-vous ne vaut que pour les
@@ -502,8 +503,9 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS reminders boolean NOT NULL DEFAULT true`;
 
   /* Le texto « je serai chez vous », programmé chez Twilio deux heures avant
-     l'arrivée : l'heure prévue réserve l'envoi, l'identifiant du message
-     permet de l'annuler quand la séance bouge. */
+     l'arrivée jusqu'au 14 novembre 2026 : l'heure prévue et l'identifiant du
+     message. Plus rien ne le programme ; les colonnes servent à annuler ceux
+     qui restaient (`withdrawQueuedReminders`). */
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_at  timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_sid text`;
 

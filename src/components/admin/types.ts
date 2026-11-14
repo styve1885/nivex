@@ -14,8 +14,8 @@ export type AdminBooking = {
   emailSent: boolean; inCalendar: boolean;
   /* Une visite d'abonnement : son montant se règle avec le cycle, pas ici. */
   subscription: boolean;
-  /* Les rappels de séance d'une séance à la carte (la veille et deux heures
-     avant). Une visite d'abonné suit sa fiche, dans l'onglet Abonnés. */
+  /* Les rappels de séance d'une séance à la carte (le rappel de la veille).
+     Une visite d'abonné suit sa fiche, dans l'onglet Abonnés. */
   reminders: boolean;
   /* Une visite d'abonné marquée effectuée : elle ne s'annule plus, sauf à
      retirer d'abord la mention depuis l'onglet Abonnés. */
