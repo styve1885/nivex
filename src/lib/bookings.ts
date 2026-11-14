@@ -15,6 +15,7 @@ import { canSubscriberChange } from "./cycles";
 import { cancelScheduledSms, ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { ironingMinutes, sessionLength, unitByKey } from "./pricing";
 import { SESSION_KEY, UNIT_PREFIX, estimateRange, itemText, moneyRange, type BookedItem } from "./items";
+import { isBoardAnswer, type BoardAnswer } from "./board";
 import {
   contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX,
 } from "./brand";
@@ -52,6 +53,14 @@ export const BookingInput = z.object({
   /* « Qui vous a recommandé ? » — gardé seulement avec la réponse
      « La recommandation d'un proche ». */
   referredBy: z.unknown().optional(),
+
+  /* « Avez-vous une planche à repasser en bon état ? » (14 novembre 2026).
+     Obligatoire dans le tunnel ; ici tolérée absente ou mal formée, comme la
+     provenance : une page restée ouverte pendant une mise en ligne l'envoie
+     sans la réponse, et elle ne doit pas perdre sa séance pour autant. La
+     réponse se relit dans `isBoardAnswer` ; le reste se note comme non
+     renseigné. */
+  board: z.unknown().optional(),
 
   /* Provenance relevée par le navigateur à la première visite. Elle arrive
      avec le formulaire et pas avant : tant que la personne n'a rien demandé,
@@ -92,6 +101,9 @@ export type Booking = {
   doneAt: Date | null; reminderSentAt: Date | null; googleSeriesId: string | null;
   /* L'événement Google n'a pas suivi la base : à remettre à l'heure. */
   calendarStaleAt: Date | null;
+  /* La planche à repasser du client : sa réponse au tunnel. Nulle pour une
+     visite d'abonné et pour les séances prises avant la question. */
+  ironingBoard: BoardAnswer | null;
   /* Le texto de deux heures avant, retiré le 14 novembre 2026 : ces deux
      champs ne servent plus qu'à annuler chez Twilio ceux qui restent
      programmés (`withdrawSoonText`). */
@@ -164,6 +176,7 @@ export function hydrate(r: Row): Booking {
     reminders: r.reminders !== false,
     googleSeriesId: (r.google_series_id as string) ?? null,
     calendarStaleAt: r.calendar_stale_at ? new Date(r.calendar_stale_at as string) : null,
+    ironingBoard: isBoardAnswer(r.ironing_board) ? r.ironing_board : null,
     smsSoonAt: r.sms_soon_at ? new Date(r.sms_soon_at as string) : null,
     smsSoonSid: (r.sms_soon_sid as string) ?? null,
   };
@@ -249,7 +262,8 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         duration_minutes, setup_minutes, estimate_cents, currency, first_hour_free,
         travel_fee_cents, travel_zone,
         heard_from, utm_source, utm_medium, utm_campaign,
-        referrer, landing_page, first_seen_at, visit_count, referral, referred_by
+        referrer, landing_page, first_seen_at, visit_count, referral, referred_by,
+        ironing_board
       ) VALUES (
         ${ref}, ${manageToken}, ${input.locale}, 'confirmed', ${input.name}, ${input.email}, ${input.phone},
         ${input.address}, ${input.city}, ${input.postalCode.toUpperCase()}, ${input.notes || null},
@@ -258,7 +272,8 @@ export async function createBooking(input: BookingInputType, host?: string | nul
         ${verdict.feeCents}, ${verdict.labelFr},
         ${p.heardFrom}, ${p.source}, ${p.medium}, ${p.campaign},
         ${p.referrer}, ${p.landing}, ${p.firstSeenAt}, ${p.visits},
-        ${p.referral}, ${p.referredBy}
+        ${p.referral}, ${p.referredBy},
+        ${isBoardAnswer(input.board) ? input.board : null}
       ) RETURNING *`) as Row[];
 
   let rows: Row[];
@@ -312,7 +327,7 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     sendSms(booking.clientPhone, SMS.bookingConfirmed(l, smsDay(booking.startsAt, tz, l),
       smsTime(booking.startsAt, tz, l), smsTime(booking.endsAt, tz, l)), ref),
     sendSms(ownerSmsNumber(), SMS.owner.newBooking(booking.clientName,
-      smsWhen(booking.startsAt, tz, "fr"), booking.city), ref),
+      smsWhen(booking.startsAt, tz, "fr"), booking.city, booking.ironingBoard), ref),
   ]);
 
   await logEvent("booking_created", {
@@ -615,6 +630,7 @@ export function bookingEmailData(b: Booking, s: Settings, origin: string): Booki
     startsAt: b.startsAt, durationMinutes: b.durationMinutes, setupMinutes: b.setupMinutes, estimateCents: b.estimateCents,
     currency: b.currency, firstHourFree: b.firstHourFree, timezone: s.timezone,
     travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
+    ironingBoard: b.subscriptionId ? null : b.ironingBoard,
     manageUrl: `${origin}/${b.locale}/reservation/${b.manageToken}`,
     siteUrl: origin, businessPhone: PHONE,
     businessEmail: contactEmail(),

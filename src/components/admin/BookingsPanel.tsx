@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AdminBooking, AdminStats } from "./types";
 import { sessionPhases, type Phase } from "@/lib/pricing";
 import { estimateRange, itemText, moneyRange } from "@/lib/items";
+import { BOARD_LABELS_FR, boardNeedsContact } from "@/lib/board";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency, minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -179,6 +180,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   }
 
   const maps = `https://maps.google.com/?q=${encodeURIComponent(`${b.address}, ${b.city}, QC ${b.postalCode}`)}`;
+  const toContact = !cancelled && boardNeedsContact(b.ironingBoard);
   /* L'estimation en fourchette, quand une pièce à l'unité a un prix variable. */
   const range = estimateRange(b.items, b.estimateCents);
 
@@ -195,6 +197,13 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             {when(b.startsAt, tz)} · {duration(b.durationMinutes)}
           </p>
         </div>
+        {/* La planche à repasser : « À contacter » se voit sans ouvrir la fiche. */}
+        {toContact && (
+          <span title={`Planche à repasser : ${BOARD_LABELS_FR[b.ironingBoard!]}`}
+            className="flex-none border border-[#B4453C]/50 bg-[#B4453C]/5 px-2 py-1 text-[9px] uppercase tracking-[0.14em] text-[#8E332C]">
+            À contacter
+          </span>
+        )}
         {silent && (
           <span title={!b.emailSent && !b.inCalendar ? "Ni courriel ni agenda" : !b.emailSent ? "Courriel non parti" : "Absent de l'agenda"}
             aria-label={b.emailSent ? "Absent de l'agenda" : "Confirmation non envoyée"}
@@ -221,6 +230,18 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
             <Line label="Téléphone"><a href={`tel:${b.clientPhone.replace(/\D/g, "")}`} className="text-gold-700 hover:underline">{b.clientPhone}</a></Line>
             <Line label="Courriel"><a href={`mailto:${b.clientEmail}`} className="break-all text-gold-700 hover:underline">{b.clientEmail}</a></Line>
             <Line label="Adresse"><a href={maps} target="_blank" rel="noopener noreferrer" className="text-gold-700 hover:underline">{b.address}, {b.city} {b.postalCode}</a></Line>
+            {b.ironingBoard && (
+              <Line label="Planche à repasser">
+                {boardNeedsContact(b.ironingBoard) ? (
+                  <span className="font-medium text-[#8E332C]">
+                    {BOARD_LABELS_FR[b.ironingBoard]} · À contacter
+                    <span className="mt-0.5 block text-[0.76rem] font-normal text-ink-500">
+                      Pas de planche en bon état, ou pas sûr : appelez le client avant la séance.
+                    </span>
+                  </span>
+                ) : BOARD_LABELS_FR[b.ironingBoard]}
+              </Line>
+            )}
             <Phases b={b} tz={tz} />
             <Line label="Prestations">
               <span className="whitespace-pre-line">{b.items.map((i) => itemText(i, (c) => money(c, b.currency))).join("\n")}</span>

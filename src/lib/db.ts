@@ -509,6 +509,11 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_at  timestamptz`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS sms_soon_sid text`;
 
+  /* « Avez-vous une planche à repasser en bon état ? », posée au tunnel de
+     réservation depuis le 14 novembre 2026 : yes, no ou unsure. Nulle pour
+     les visites d'abonné et les séances d'avant. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS ironing_board text`;
+
   /*
    * Les migrations de données qui ne s'écrivent qu'une fois.
    *

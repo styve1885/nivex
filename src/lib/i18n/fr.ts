@@ -47,7 +47,7 @@ const privacy: LegalDoc = {
         "Ce que vous nous donnez vous-même, au moment où vous le donnez, et quelques mesures techniques, décrites une à une ci-dessous. Ce site ne suit personne à la trace et n'achète aucune donnée à qui que ce soit.",
       ],
       list: [
-        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), la séance et les pièces à l'unité choisies, le créneau retenu, et les précisions que vous écrivez vous-même.",
+        "Réservation — votre nom, votre courriel, votre téléphone, l'adresse de la séance (rue, ville, code postal), la séance et les pièces à l'unité choisies, le créneau retenu, votre réponse à la question de la planche à repasser, et les précisions que vous écrivez vous-même.",
         "Abonnement — les mêmes renseignements qu'une réservation, plus la formule choisie, le jour et l'heure de vos visites, les visites effectuées et les cycles réglés.",
         "Formulaire de contact — votre nom, votre courriel, votre téléphone si vous le donnez, l'objet et le contenu de votre message.",
         "Journal technique — la nature et l'heure des opérations du site\u00a0: une réservation créée, un courriel parti, une erreur survenue. Sans adresse IP, sans identifiant de navigateur, sans empreinte d'appareil.",
@@ -636,6 +636,17 @@ export const fr = {
         "autre": "Autre",
       },
       referredBy: "Qui vous a recommandé\u202f? (facultatif)",
+      /* La planche à repasser (14 novembre 2026), mots de l'artisan. Une
+         réponse obligatoire ; « Non » et « Je ne suis pas sûr » laissent
+         réserver, et l'artisan appelle avant la séance. */
+      board: {
+        question: "Avez-vous une planche à repasser en bon état\u202f?",
+        help: "J'apporte le fer professionnel et tout le matériel. Vous fournissez seulement une planche stable, avec sa housse.",
+        options: { yes: "Oui", no: "Non", unsure: "Je ne suis pas sûr" },
+        contact: "Merci de nous l'indiquer. Styve vous contactera avant votre séance pour trouver une solution.",
+        required: "Choisissez une réponse.",
+        summary: "Planche à repasser",
+      },
     },
     step3: {
       title: "Quand vous conviendrait-il\u202f?",

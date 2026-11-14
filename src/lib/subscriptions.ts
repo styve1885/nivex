@@ -1800,7 +1800,10 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
         /* L'heure dite est celle où l'artisan sonne : le début de la séance,
            ou un quart d'heure avant pour l'ancien déroulement. */
         const arrival = new Date(v.startsAt.getTime() - v.setupMinutes * 60_000);
-        const body = SMS.reminder(v.locale, smsDay(v.startsAt, tz, v.locale), smsTime(arrival, tz, v.locale), isToday, payment);
+        /* La ligne de la planche, pour une séance à la carte seulement : le
+           texto d'un abonné reste celui d'avant. */
+        const body = SMS.reminder(v.locale, smsDay(v.startsAt, tz, v.locale), smsTime(arrival, tz, v.locale), isToday, payment,
+          !v.subscriptionId);
         if (await sendSms(v.clientPhone, body, v.ref)) smsReminders++;
         else await releaseReminder(v.id, "sms", stamp);
       }

@@ -3,6 +3,7 @@ import { ensureSchema, logEvent, sql } from "./db";
 import { PHONE, SMS_SIGNATURE } from "./brand";
 import { GSM7, isCanadianNumber, readable, toE164 } from "./phone";
 import { toWall } from "./time";
+import type { BoardAnswer } from "./board";
 
 export { isCanadianNumber, readable, toE164 } from "./phone";
 
@@ -167,11 +168,22 @@ const SIGN = ` ${SMS_SIGNATURE}`;
    point : on n'en ajoute pas un second. */
 const period = (s: string) => (s.endsWith(".") ? s : `${s}.`);
 
+/* La ligne de l'artisan (14 novembre 2026), dans la confirmation et le
+   rappel de la veille d'une séance à la carte. Elle remplace, dans la
+   confirmation, « Vous n'avez que la planche à prévoir » : deux phrases sur
+   la planche, dans un texto, se répétaient. */
+const BOARD_READY = { fr: " Pensez à préparer votre planche à repasser.", en: " Please have your ironing board ready." } as const;
+
+/* Ce que l'artisan lit de la planche, dans l'avis d'une nouvelle séance.
+   « Pas sûr » perdrait son accent dans l'alphabet des textos (`toGsm7`) :
+   « ne sait pas » dit la même chose. */
+const BOARD_OWNER: Record<BoardAnswer, string> = { yes: "oui", no: "non, à contacter", unsure: "ne sait pas, à contacter" };
+
 export const SMS = {
   /** Une séance ponctuelle vient d'être réservée : le jour, l'heure du début et celle de la fin. */
   bookingConfirmed: (l: Locale, day: string, start: string, end: string) => (l === "en"
-    ? `NIVEX - Your session is confirmed for ${day}, from ${start} to ${period(end)} All you need to provide is the ironing board.`
-    : `NIVEX - Votre séance est confirmée le ${day}, de ${start} à ${end}. Vous n'avez que la planche à prévoir.`) + STOP_LINE[l] + SIGN,
+    ? `NIVEX - Your session is confirmed for ${day}, from ${start} to ${period(end)}`
+    : `NIVEX - Votre séance est confirmée le ${day}, de ${start} à ${end}.`) + BOARD_READY[l] + STOP_LINE[l] + SIGN,
 
   /** Un abonnement vient d'être posé. */
   subscriptionConfirmed: (l: Locale, plan: string, when: string, rhythm: string, url: string) => (l === "en"
@@ -182,18 +194,21 @@ export const SMS = {
    * Le rappel de la veille, ou du jour même pour une séance prise tard.
    * `arrival` est l'heure où l'artisan sonne : le début de la séance, ou un
    * quart d'heure avant pour un abonné resté à l'ancien déroulement. Le
-   * montant n'y figure qu'à la première visite d'un cycle à régler.
+   * montant n'y figure qu'à la première visite d'un cycle à régler. `board` :
+   * la ligne de la planche, pour une séance à la carte ; la visite d'un
+   * abonné garde son texto d'avant.
    */
-  reminder: (l: Locale, day: string, arrival: string, today: boolean, payment: string | null) => {
+  reminder: (l: Locale, day: string, arrival: string, today: boolean, payment: string | null, board = false) => {
     const pay = payment ? (l === "en" ? ` Payment for the cycle at this visit: ${payment}.` : ` Paiement du cycle à cette visite : ${payment}.`) : "";
+    const ready = board ? BOARD_READY[l] : "";
     if (l === "en") {
       return today
-        ? `NIVEX - Reminder: today, ${day}, I arrive at ${period(arrival)}${pay} See you soon.${SIGN}`
-        : `NIVEX - Reminder: tomorrow, ${day}, I arrive at ${period(arrival)}${pay} See you tomorrow.${SIGN}`;
+        ? `NIVEX - Reminder: today, ${day}, I arrive at ${period(arrival)}${pay}${ready} See you soon.${SIGN}`
+        : `NIVEX - Reminder: tomorrow, ${day}, I arrive at ${period(arrival)}${pay}${ready} See you tomorrow.${SIGN}`;
     }
     return today
-      ? `NIVEX - Rappel : aujourd'hui ${day}, j'arrive à ${arrival}.${pay} À tout à l'heure.${SIGN}`
-      : `NIVEX - Rappel : demain ${day}, j'arrive à ${arrival}.${pay} À demain.${SIGN}`;
+      ? `NIVEX - Rappel : aujourd'hui ${day}, j'arrive à ${arrival}.${pay}${ready} À tout à l'heure.${SIGN}`
+      : `NIVEX - Rappel : demain ${day}, j'arrive à ${arrival}.${pay}${ready} À demain.${SIGN}`;
   },
 
   /** Une séance ponctuelle annulée par l'artisan. */
@@ -230,7 +245,10 @@ export const SMS = {
       d'« août », le ç de François — ferait passer tout le message en
       Unicode, payé deux tranches. */
   owner: {
-    newBooking: (name: string, when: string, city: string) => toGsm7(`NIVEX : nouvelle séance, ${name}, ${when}, ${city}.`),
+    /* La planche à repasser à la fin, « à contacter » quand le client n'en a
+       pas ou n'en est pas sûr ; rien pour une réponse absente. */
+    newBooking: (name: string, when: string, city: string, board: BoardAnswer | null = null) =>
+      toGsm7(`NIVEX : nouvelle séance, ${name}, ${when}, ${city}.${board ? ` Planche : ${BOARD_OWNER[board]}.` : ""}`),
     newSubscription: (name: string, plan: string, when: string) => toGsm7(`NIVEX : nouvel abonnement ${plan}, ${name}, première visite le ${when}.`),
     cancelled: (name: string, when: string) => toGsm7(`NIVEX : ${name} a annulé sa visite du ${when}.`),
     moved: (name: string, from: string, to: string) => toGsm7(`NIVEX : ${name} a déplacé sa visite du ${from} au ${to}.`),

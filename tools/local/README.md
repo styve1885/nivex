@@ -60,6 +60,14 @@ Pour un outil qui lance des commandes en arrière-plan, lancer le relais et
   de deux heures avant laissés par l'ancienne version, rallume puis coupe
   les rappels, envoie l'essai du rappel de l'onglet Connexion, et termine
   par la liste de ce que chacun a reçu. Il efface ce qu'il a écrit.
+- **La planche à repasser, par le vrai code** :
+  `bash -c 'source tools/local/env.sh && npx tsx tools/local/scenario-planche.mjs'`
+  (relais lancé). Trois faux clients réservent, un par réponse (Oui, Non,
+  Je ne suis pas sûr), puis une page restée ouverte sans réponse ; le
+  scénario vérifie la réponse en base, l'avis de l'artisan (« À contacter »
+  pour Non et Pas sûr), la confirmation et le rappel de la veille du
+  client, avec la ligne de la planche. Il efface ce qu'il a écrit. La
+  grille horaire de la base locale passe à 7 h – 22 h tous les jours.
 - **Une autre base** : `NIVEX_DB=essai` pour `setup.sh`, le relais, `build.sh` et `start.sh`.
 
 ## Ce qui surprend

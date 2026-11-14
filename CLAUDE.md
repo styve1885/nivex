@@ -114,7 +114,9 @@ ramènerait au prochain chargement ; elles se désactivent.
   test tient les Fêtes ouvertes.
 - **Le client prévoit la planche à repasser**, une prise et environ deux
   mètres carrés ; l'artisan apporte tout le reste (générateur de vapeur,
-  fer, pattemouilles, cintres). Le texto de confirmation le rappelle.
+  fer, pattemouilles, cintres). Le tunnel demande s'il en a une en bon état,
+  et la confirmation comme le rappel de la veille le rappellent (plus bas,
+  « La planche à repasser »).
 - La première heure est offerte à partir de deux heures réservées, une
   fois par client, jamais sur les abonnements.
 - **Le site ne vend que trois choses** (depuis le 23 octobre 2026) : les
@@ -199,6 +201,7 @@ chacune : c'est ce 404 attendu, pas une panne.
 | `lib/brand.ts` | Les constantes de la maison, sans aucune dépendance (dont le courriel public `CONTACT_EMAIL`) |
 | `lib/services.ts` | Les prestations par défaut et leurs types, sans dépendance : l'admin les importe sans tirer le pilote de base dans le navigateur |
 | `lib/retention.ts` | Les durées de conservation promises par la politique, tenues par la tâche quotidienne |
+| `lib/board.ts` | La planche à repasser : les trois réponses du tunnel, et lesquelles sont « À contacter » (`boardNeedsContact`), sans dépendance |
 | `lib/items.ts` | Les lignes d'une réservation (séance, pièces à l'unité, ancien panier) et l'estimation en fourchette, sans dépendance |
 | `lib/llms.ts` | Les fichiers `/llms.txt` (court) et `/llms-full.txt` (détaillé), écrits depuis les réglages et les dictionnaires |
 
@@ -338,6 +341,28 @@ déduit des pièces au prix variable (`estimateRange`). Les rendez-vous d'avant
 gardent les lignes de l'ancien panier (« Chemises × 13 ») et s'affichent
 comme avant. Les prestations de Réglages ne servent plus au tunnel ; elles
 restent, avec leurs durées, pour pouvoir les remettre.
+
+**La planche à repasser** (14 novembre 2026, demande de l'artisan). À
+l'étape des coordonnées, sous l'adresse : « Avez-vous une planche à repasser
+en bon état ? » — Oui, Non, Je ne suis pas sûr —, avec l'aide de l'artisan
+dessous, mot pour mot (`booking.step2.board`). La réponse est obligatoire :
+l'étape ne passe pas sans elle. « Non » et « Je ne suis pas sûr » laissent
+réserver ; un mot dit que Styve contactera le client avant la séance.
+L'écran « Confirmer » rappelle la réponse. Elle se garde dans
+`ironing_board` (`yes`, `no`, `unsure`), nulle pour une visite d'abonné et
+pour les séances d'avant ; le serveur la lit sans jamais refuser une séance
+pour elle (`isBoardAnswer`) : une page restée ouverte pendant une mise en
+ligne l'envoie sans réponse, notée non renseignée. Pour Non et Pas sûr,
+« À contacter » (`boardNeedsContact`) paraît sur la fiche de l'onglet
+Rendez-vous et sur la liste repliée, dans le courriel d'avis de l'artisan
+(une ligne en évidence, et l'objet finit par « · À contacter ») et dans son
+texto (« Planche : non, à contacter. », « Planche : ne sait pas, à
+contacter. »). Le client, lui, ne voit jamais sa réponse reprise : sa
+confirmation (courriel et texto) et son rappel de la veille (courriel et
+texto) portent « Pensez à préparer votre planche à repasser. » (« Please
+have your ironing board ready. »), qui remplace, dans le texto de
+confirmation, « Vous n'avez que la planche à prévoir ». Les abonnements ne
+changent pas : ni la question, ni la ligne dans leurs messages.
 
 Les gardes posées là, et pourquoi :
 
@@ -617,9 +642,10 @@ adresse, montant, ce qu'il faut prévoir, lien de gestion) arrive même quand
 les textos ne passent pas.
 
 Les deux textos de séance du client suivent les modèles de l'artisan,
-signés `SMS_SIGNATURE` : la confirmation (jour, date, début et fin, « Vous
-n'avez que la planche à prévoir ») et le rappel de la veille (« demain …,
-j'arrive à … »). L'heure dite est toujours l'**arrivée** : le début de la
+signés `SMS_SIGNATURE` : la confirmation (jour, date, début et fin,
+« Pensez à préparer votre planche à repasser. », depuis le 14 novembre
+2026) et le rappel de la veille (« demain …, j'arrive à … », la même ligne
+pour une séance à la carte, pas pour la visite d'un abonné). L'heure dite est toujours l'**arrivée** : le début de la
 séance, ou un quart d'heure plus tôt à l'ancien régime. Le site ne
 programme plus aucun texto depuis le 14 novembre 2026. Le service de
 messagerie Twilio « NIVEX » (6 novembre 2026 : le numéro pour seul
@@ -1088,8 +1114,9 @@ pas.
 
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
 chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, son essai, durées,
-trois temps, séance d'essai, pièces à l'unité, foire aux questions),
-`sms` (modèles, numéros canadiens, alphabet, appels et alerte d'appel
+trois temps, séance d'essai, pièces à l'unité, foire aux questions, la
+planche à repasser),
+`sms` (modèles, la planche à repasser, numéros canadiens, alphabet, appels et alerte d'appel
 manqué, numéro du client sur le cellulaire et nouvel essai, longueur d'un
 texto, conversations lues chez Twilio, envoi depuis l'onglet, photos
 jointes), `provenance` (zone
@@ -1118,6 +1145,13 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
   l'annulation, sans aucun texto programmé ; le retrait de ceux que
   l'ancienne version avait laissés ; l'essai du rappel de l'onglet Connexion
   (`tools/local/scenario-rappels.mjs`, relais lancé).
+- **La planche à repasser, par le vrai code** : trois faux clients, un par
+  réponse, et une page restée ouverte sans réponse ; la réponse en base,
+  l'avis de l'artisan (« À contacter »), la confirmation et le rappel du
+  client (`tools/local/scenario-planche.mjs`, relais lancé). Le tunnel
+  lui-même se joue dans Chromium sur `next start`, une fois par réponse et
+  par langue, jusqu'à « C'est confirmé » : la base est locale, aucune
+  réservation n'est réelle.
 
 - **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Passez-le
   sur un vrai PostgreSQL, **deux fois** pour l'idempotence : le banc le

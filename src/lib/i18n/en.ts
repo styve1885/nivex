@@ -29,7 +29,7 @@ const privacy: LegalDoc = {
         "What you hand us yourself, at the moment you hand it over, and a few technical measurements, each described below. This site follows no one around and buys data from no one.",
       ],
       list: [
-        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the session and any single pieces you chose, the time slot you kept, and the notes you write yourself.",
+        "Booking — your name, your email, your phone number, the address of the session (street, city, postal code), the session and any single pieces you chose, the time slot you kept, your answer to the ironing board question, and the notes you write yourself.",
         "Subscription — the same details as a booking, plus the plan you chose, the day and time of your visits, the visits completed and the cycles paid.",
         "Contact form — your name, your email, your phone number if you give it, the subject and the body of your message.",
         "Technical log — the nature and time of the site's operations: a booking created, an email sent, an error raised. No IP address, no browser identifier, no device fingerprint.",
@@ -567,6 +567,14 @@ export const en: Dict = {
         "autre": "Other",
       },
       referredBy: "Who recommended us? (optional)",
+      board: {
+        question: "Do you have an ironing board in good condition?",
+        help: "I bring a professional iron and all the equipment. You only provide a sturdy ironing board with its cover.",
+        options: { yes: "Yes", no: "No", unsure: "Not sure" },
+        contact: "Thank you for letting us know. Styve will contact you before your session to find a solution.",
+        required: "Please choose an answer.",
+        summary: "Ironing board",
+      },
     },
     step3: {
       title: "When would suit you?",

@@ -17,6 +17,10 @@ export type AdminBooking = {
   /* Les rappels de séance d'une séance à la carte (le rappel de la veille).
      Une visite d'abonné suit sa fiche, dans l'onglet Abonnés. */
   reminders: boolean;
+  /* « Avez-vous une planche à repasser en bon état ? » : la réponse du client
+     au tunnel. Nulle pour une visite d'abonné et une séance d'avant la
+     question. « no » et « unsure » : à contacter avant la séance. */
+  ironingBoard: "yes" | "no" | "unsure" | null;
   /* Une visite d'abonné marquée effectuée : elle ne s'annule plus, sauf à
      retirer d'abord la mention depuis l'onglet Abonnés. */
   done: boolean;

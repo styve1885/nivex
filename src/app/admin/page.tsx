@@ -58,6 +58,7 @@ export default async function AdminPage({
       travelFeeCents: b.travelFeeCents, travelZone: b.travelZone,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
       subscription: Boolean(b.subscriptionId), done: Boolean(b.doneAt), reminders: b.reminders,
+      ironingBoard: b.ironingBoard,
       origin: {
         heardFrom: b.origin.heardFrom,
         heardFromLabel: heardFromText(b.origin),
