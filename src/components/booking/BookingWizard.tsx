@@ -374,6 +374,9 @@ export function BookingWizard({ t, config }: { t: Dict; config: WizardConfig }) 
             <p className="mx-auto mt-5 max-w-md text-[0.95rem] font-light leading-[1.9] text-ink-500">
               {done.emailSent ? t.booking.success.body : t.booking.success.bodyNoEmail}
             </p>
+            <p className="mx-auto mt-3 max-w-md text-[0.95rem] font-light leading-[1.9] text-ink-500">
+              {t.booking.success.reminder}
+            </p>
 
             <p className="mt-9 text-[10px] uppercase tracking-[0.2em] text-ink-400">{t.booking.success.wanted}</p>
             <p className="mt-2 text-balance font-display text-2xl text-ink-800">{done.slot}</p>

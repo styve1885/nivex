@@ -18,19 +18,17 @@ export { isCanadianNumber, readable, toE164 } from "./phone";
  * numéro acheté chez Twilio, qui est aussi le numéro de la maison). Une
  * quatrième, SMS_OWNER_TO, est le cellulaire de l'artisan : ses avis, les
  * réponses des clients et les appels y arrivent ; sans elle, rien de tout
- * cela ne lui parvient, et l'onglet Connexion le dit. Une
- * cinquième, TWILIO_MESSAGING_SERVICE_SID, ouvre les textos programmés : le
- * « je serai chez vous » de deux heures avant. Twilio ne programme un envoi
- * que par un service de messagerie, jamais depuis un simple numéro.
+ * cela ne lui parvient, et l'onglet Connexion le dit.
+ *
+ * Le site ne programme plus aucun texto depuis le 14 novembre 2026 : le
+ * « Je serai chez vous » de deux heures avant, seul texto programmé, est
+ * retiré. TWILIO_MESSAGING_SERVICE_SID, qui servait à le programmer, ne sert
+ * plus ; seule l'annulation de ceux qui restaient (`cancelScheduledSms`)
+ * demeure.
  */
 
 export function smsConfigured(): boolean {
   return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
-}
-
-/** Les textos programmés : il faut en plus un service de messagerie chez Twilio. */
-export function smsScheduleConfigured(): boolean {
-  return smsConfigured() && Boolean(process.env.TWILIO_MESSAGING_SERVICE_SID);
 }
 
 /**
@@ -109,32 +107,6 @@ export async function sendSms(to: string | null | undefined, body: string, ref?:
   return true;
 }
 
-/**
- * Programme un texto chez Twilio, qui le fera partir à l'heure dite.
- *
- * Rend l'identifiant du message, pour pouvoir l'annuler si la séance bouge.
- * `retry` dit si un nouvel essai a un sens : pas pour un numéro étranger ou
- * mal saisi, qui le restera. Twilio exige un envoi entre quinze minutes et
- * trente-cinq jours d'avance ; l'appelant s'en charge. Jamais d'exception.
- */
-export async function scheduleSms(
-  to: string | null | undefined, body: string, sendAt: Date, ref?: string,
-): Promise<{ sid: string | null; retry: boolean }> {
-  if (!smsScheduleConfigured()) return { sid: null, retry: true };
-  const number = await recipient(to, ref);
-  if (!number) return { sid: null, retry: false };
-  const sent = await twilio("Messages.json", {
-    To: number,
-    MessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID!,
-    Body: body,
-    ScheduleType: "fixed",
-    SendAt: sendAt.toISOString().replace(/\.\d{3}Z$/, "Z"),
-  }, ref);
-  if (!sent?.sid) return { sid: null, retry: true };
-  await logEvent("sms_scheduled", { ref, at: sendAt.toISOString() });
-  return { sid: sent.sid, retry: false };
-}
-
 /** Annule un texto programmé. Vrai si Twilio l'a retiré ; jamais d'exception. */
 export async function cancelScheduledSms(messageSid: string, ref?: string): Promise<boolean> {
   if (!smsConfigured() || !/^SM[0-9a-f]{32}$/i.test(messageSid)) return false;
@@ -186,7 +158,7 @@ export function smsTime(d: Date, tz: string, locale: Locale): string {
  */
 const STOP_LINE = { fr: " Répondez STOP pour ne plus recevoir de textos.", en: " Reply STOP to opt out." } as const;
 
-/* La signature des trois textos de la séance, posée en dernier. Leur
+/* La signature des textos de la séance, posée en dernier. Leur
    « NIVEX - » remplace le tiret cadratin des modèles : il ferait passer le
    texto en Unicode, payé deux tranches. */
 const SIGN = ` ${SMS_SIGNATURE}`;
@@ -223,11 +195,6 @@ export const SMS = {
       ? `NIVEX - Rappel : aujourd'hui ${day}, j'arrive à ${arrival}.${pay} À tout à l'heure.${SIGN}`
       : `NIVEX - Rappel : demain ${day}, j'arrive à ${arrival}.${pay} À demain.${SIGN}`;
   },
-
-  /** Deux heures avant l'arrivée, programmé chez Twilio. */
-  soon: (l: Locale, arrival: string) => l === "en"
-    ? `NIVEX - I will be at your door at ${period(arrival)}${SIGN}`
-    : `NIVEX - Je serai chez vous à ${arrival}.${SIGN}`,
 
   /** Une séance ponctuelle annulée par l'artisan. */
   bookingCancelled: (l: Locale, when: string) => l === "en"

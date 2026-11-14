@@ -76,8 +76,8 @@ page qui récite de mémoire finit par contredire le moteur.
   fermeture du jour, rangement compris pour un rendez-vous à l'ancien
   déroulement (plus bas, « Le temps passé hors séance »).
 - **Délais** : `CANCEL_WINDOW_HOURS`, `FIRST_FREE_MIN_MINUTES`,
-  `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES`,
-  `SOON_TEXT_MINUTES` dans `src/lib/brand.ts`.
+  `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES` dans
+  `src/lib/brand.ts`.
 
 Les prestations et les réglages vivent **en base**, et la base l'emporte
 sur les valeurs par défaut du code. Changer `DEFAULT_SERVICES` ne suffit
@@ -456,7 +456,7 @@ nom.
   garanti douze mois). L'artisan peut corriger le montant d'un abonné
   (« Prix garanti », `setGuaranteedPrice`) et cocher « Arrivée 15 min
   avant » (`setEarlyArrival`) : ses visites à venir reprennent l'ancien
-  déroulement, agenda et texto de deux heures avant décalés, ou rien ne
+  déroulement, agenda décalé, ou rien ne
   change si une séance déjà posée y touche (`slot_taken`), ou si le
   rangement d'une visite à venir finirait après la fermeture
   (`packsAfterClosing` : la phrase nomme la visite à avancer). Les frais : ceux
@@ -523,8 +523,9 @@ nom.
   rappel de la veille, par courriel et par texto, aux séances ponctuelles et
   aux abonnés qui ont demandé leurs rappels (plus bas, « Les rappels de
   séance »), qui annonce le paiement à la première visite d'un
-  cycle et donne l'heure d'arrivée, programmation des textos de deux heures
-  avant, courriel de fin de série à l'artisan, et remise à l'heure dans
+  cycle et donne l'heure d'arrivée, annulation des textos de deux heures
+  avant restés programmés (plus bas, « Le texto de deux heures avant est
+  retiré »), courriel de fin de série à l'artisan, et remise à l'heure dans
   l'agenda des visites marquées (`calendar_stale_at`). Chaque envoi est réservé
   en base avant de partir : un second passage, ou le bouton de l'onglet
   Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
@@ -547,7 +548,7 @@ nom.
 ## Les textos
 
 Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client à la séance reçoit la
-confirmation, le rappel de la veille et le texto de deux heures avant ;
+confirmation et le rappel de la veille ;
 l'abonné, la confirmation de son abonnement, puis un message seulement quand
 une visite est déplacée ou annulée (et à la série suivante, à la fin de
 l'abonnement). L'artisan reçoit chaque nouvelle réservation et ce que le
@@ -555,26 +556,35 @@ client annule ou déplace lui-même, sur `SMS_OWNER_TO`, son cellulaire, et
 nulle part ailleurs (`ownerSmsNumber`).
 
 **Les rappels de séance** (11 novembre 2026, les abonnés les trouvaient
-répétitifs) : le rappel de la veille, par courriel et par texto, et le
-texto de deux heures avant. Ils partent selon `reminders` : celle de
-l'abonnement pour une visite d'abonné (fausse par défaut), celle de la ligne
-pour une séance à la carte (vraie par défaut) — jamais la ligne d'une
-visite, qui suit son abonnement. L'artisan les règle sur la fiche :
-« Rappels de séance » dans l'onglet Abonnés (`setSubscriptionReminders`) et
-sur le rendez-vous dans l'onglet Rendez-vous (`setBookingReminders`). La
-condition est dans la requête de la tâche du matin et dans la réservation
-même du texto de deux heures avant (`scheduleSoonText`, `dueSoonTexts`) :
-aucun chemin ne la contourne. Un texto déjà programmé chez Twilio pour une
-séance aux rappels coupés est retiré (`withdrawQueuedReminders` : retrait
-d'abord, ligne libérée ensuite, si bien qu'un échec se reprend) : au
-décochage, chaque matin, et juste après chaque mise en ligne par le second
-travail du workflow IndexNow (`reminders`, qui appelle
-`/api/cron/reminders` avec `CRON_SECRET` ; son journal, public, ne montre
-que des nombres : `withdrawn`, `failed`, `remaining`, et `queued`, les
-textos de deux heures avant encore programmés, toutes séances confondues). Le
-rappel de la veille annonçait aussi le paiement à la première visite d'un
-cycle : un abonné sans rappels ne l'a plus. Rien ne change pour les avis de
-l'artisan.
+répétitifs) : le rappel de la veille, par courriel et par texto. Il part
+selon `reminders` : celle de l'abonnement pour une visite d'abonné (fausse
+par défaut), celle de la ligne pour une séance à la carte (vraie par
+défaut) — jamais la ligne d'une visite, qui suit son abonnement. L'artisan
+les règle sur la fiche : « Rappels de séance » dans l'onglet Abonnés
+(`setSubscriptionReminders`) et sur le rendez-vous dans l'onglet
+Rendez-vous (`setBookingReminders`). La condition est dans la requête de la
+tâche du matin : aucun chemin ne la contourne. Le rappel de la veille
+annonçait aussi le paiement à la première visite d'un cycle : un abonné
+sans rappels ne l'a plus. Rien ne change pour les avis de l'artisan.
+
+**Le texto de deux heures avant est retiré** (14 novembre 2026, décision de
+l'artisan : les clients ne reçoivent plus que le rappel de la veille). Le
+« Je serai chez vous à … », programmé chez Twilio deux heures avant
+l'arrivée, ne se programme plus nulle part ; il n'a jamais eu d'équivalent
+par courriel. Ceux qui restaient programmés sont annulés chez Twilio, quelle
+que soit la séance (`withdrawQueuedReminders` : retrait d'abord, ligne
+libérée ensuite, si bien qu'un échec se reprend) : juste après chaque mise
+en ligne par le second travail du workflow IndexNow (`reminders`, qui
+appelle `/api/cron/reminders` avec `CRON_SECRET` ; son journal, public, ne
+montre que des nombres : `withdrawn`, `failed`, `remaining`, et `queued`,
+ceux qui restent programmés), chaque matin, et au passage d'une séance
+annulée ou déplacée (`withdrawSoonText`). Les colonnes `sms_soon_at` et
+`sms_soon_sid` restent en base pour cela. Les conditions et la politique de
+confidentialité ne le promettent plus ; l'écran « C'est confirmé » de la
+réservation dit « Vous recevrez un rappel la veille de votre séance. »,
+phrase de l'artisan que les conditions reprennent, et la note commune aux
+deux tunnels ne parle plus de rappels, puisqu'un abonné n'en reçoit pas
+par défaut. Le courriel et le texto de confirmation n'en parlaient pas.
 
 **L'essai du rappel de la veille** (14 novembre 2026) : un bouton de
 l'onglet Connexion envoie le courriel et le texto qu'un client à la carte
@@ -585,7 +595,8 @@ partent que vers l'artisan : la boîte de la maison (`REQUEST_INBOX`) et son
 cellulaire (`SMS_OWNER_TO`). Rien ne s'écrit en base ; le journal ne note
 que le sort de chaque canal (`reminder_trial`). Le même onglet dit combien de
 textos de deux heures avant sont programmés chez Twilio, et quand part le
-prochain (`queuedSoonTexts`).
+prochain (`queuedSoonTexts`) ; depuis leur retrait, il ne signale que ceux
+qui resteraient programmés.
 
 **Le numéro de la maison** (`PHONE`, +1 450 367 6231) est celui de Twilio
 depuis le 6 novembre 2026 : il paraît partout, pages, courriels, textos,
@@ -605,24 +616,19 @@ le 26 octobre 2026 : le courriel de rappel (`sessionReminder` : rendez-vous,
 adresse, montant, ce qu'il faut prévoir, lien de gestion) arrive même quand
 les textos ne passent pas.
 
-Les trois textos du client suivent les modèles de l'artisan, signés
-`SMS_SIGNATURE` : la confirmation (jour, date, début et fin, « Vous n'avez
-que la planche à prévoir »), le rappel de la veille (« demain …, j'arrive
-à … ») et, `SOON_TEXT_MINUTES` avant l'arrivée, « Je serai chez vous à … ».
-L'heure dite est toujours l'**arrivée** : le début de la séance, ou un quart
-d'heure plus tôt à l'ancien régime. Le texto de deux heures avant est
-**programmé chez Twilio** (`ScheduleType=fixed`), ce qui demande un service
-de messagerie (`TWILIO_MESSAGING_SERVICE_SID`) ; sans lui, il ne part pas,
-et rien d'autre ne change. Ce service, « NIVEX », existe depuis le
-6 novembre 2026 : le numéro pour seul expéditeur, et « Defer to sender's
-webhook » pour les messages entrants, si bien que les réponses des clients
-suivent le réglage du numéro. La variable n'est posée qu'en Production :
-les versions d'essai gardent les vraies clés Twilio. Twilio accepte une échéance de quinze minutes à
-trente-cinq jours ; on s'en tient à 36 heures : le texto se programme à la
-réservation si son heure d'envoi tombe dans ce délai, sinon par la tâche
-quotidienne, qui repasse avant. L'envoi est réservé en
-base avant d'être demandé (`sms_soon_at`, `sms_soon_sid`), et il est
-décommandé chez Twilio quand la séance s'annule ou se déplace.
+Les deux textos de séance du client suivent les modèles de l'artisan,
+signés `SMS_SIGNATURE` : la confirmation (jour, date, début et fin, « Vous
+n'avez que la planche à prévoir ») et le rappel de la veille (« demain …,
+j'arrive à … »). L'heure dite est toujours l'**arrivée** : le début de la
+séance, ou un quart d'heure plus tôt à l'ancien régime. Le site ne
+programme plus aucun texto depuis le 14 novembre 2026. Le service de
+messagerie Twilio « NIVEX » (6 novembre 2026 : le numéro pour seul
+expéditeur, et « Defer to sender's webhook » pour les messages entrants, si
+bien que les réponses des clients suivent le réglage du numéro) ne servait
+qu'à programmer le texto de deux heures avant (`ScheduleType=fixed`) ;
+`TWILIO_MESSAGING_SERVICE_SID` ne sert plus, et peut rester posée sans
+effet. Annuler un texto programmé ne demande que son identifiant
+(`cancelScheduledSms`).
 
 **Seuls les numéros canadiens reçoivent des textos** (`isCanadianNumber`) :
 un autre numéro est sauté et noté `sms_skipped`, sans jamais refuser la
@@ -1063,9 +1069,9 @@ toujours `SITE_URL`), `CRON_SECRET` (ouvre la tâche quotidienne et
 workflow IndexNow), `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_FROM` (les textos), `SMS_OWNER_TO` (le cellulaire de l'artisan :
 sans elle, ni avis, ni réponses relayées, ni alertes d'appel). Facultatives :
-`TWILIO_MESSAGING_SERVICE_SID` (le texto de deux heures avant),
-`ADMIN_SETUP_CODE`, `NIVEX_DEMO`. Le modèle complet est dans
-`.env.example`.
+`ADMIN_SETUP_CODE`, `NIVEX_DEMO`. `TWILIO_MESSAGING_SERVICE_SID` ne sert plus
+depuis le retrait du texto de deux heures avant (14 novembre 2026). Le
+modèle complet est dans `.env.example`.
 
 ## Avant de pousser
 
@@ -1109,7 +1115,8 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 - **Les rappels de séance, par le vrai code** : un faux client à la séance
   et une fausse abonnée, Google et Twilio simulés ; qui reçoit quoi à la
   réservation, à l'abonnement, à la tâche du matin, au déplacement et à
-  l'annulation, et le retrait des textos programmés
+  l'annulation, sans aucun texto programmé ; le retrait de ceux que
+  l'ancienne version avait laissés ; l'essai du rappel de l'onglet Connexion
   (`tools/local/scenario-rappels.mjs`, relais lancé).
 
 - **Le schéma.** `bootstrap()` ne s'exécute qu'en production. Passez-le

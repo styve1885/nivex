@@ -12,13 +12,11 @@ import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, Goog
 import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { canSubscriberChange } from "./cycles";
-import {
-  cancelScheduledSms, ownerSmsNumber, scheduleSms, sendSms, SMS, smsDay, smsScheduleConfigured, smsTime, smsWhen,
-} from "./sms";
+import { cancelScheduledSms, ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { ironingMinutes, sessionLength, unitByKey } from "./pricing";
 import { SESSION_KEY, UNIT_PREFIX, estimateRange, itemText, moneyRange, type BookedItem } from "./items";
 import {
-  contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX, SOON_TEXT_MINUTES,
+  contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX,
 } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
@@ -94,10 +92,12 @@ export type Booking = {
   doneAt: Date | null; reminderSentAt: Date | null; googleSeriesId: string | null;
   /* L'événement Google n'a pas suivi la base : à remettre à l'heure. */
   calendarStaleAt: Date | null;
-  /* Le texto « je serai chez vous », programmé chez Twilio. */
+  /* Le texto de deux heures avant, retiré le 14 novembre 2026 : ces deux
+     champs ne servent plus qu'à annuler chez Twilio ceux qui restent
+     programmés (`withdrawSoonText`). */
   smsSoonAt: Date | null; smsSoonSid: string | null;
-  /* Les rappels de séance (la veille, et deux heures avant) d'une séance à
-     la carte ; une visite d'abonné suit son abonnement (voir db.ts). */
+  /* Les rappels de séance (le rappel de la veille) d'une séance à la carte ;
+     une visite d'abonné suit son abonnement (voir db.ts). */
   reminders: boolean;
 };
 
@@ -314,9 +314,6 @@ export async function createBooking(input: BookingInputType, host?: string | nul
     sendSms(ownerSmsNumber(), SMS.owner.newBooking(booking.clientName,
       smsWhen(booking.startsAt, tz, "fr"), booking.city), ref),
   ]);
-  /* Le « je serai chez vous » de deux heures avant, s'il tombe avant la
-     prochaine tâche quotidienne ; sinon, c'est elle qui le programmera. */
-  await scheduleSoonText(booking, tz).catch(() => false);
 
   await logEvent("booking_created", {
     ref, startsAt: booking.startsAt.toISOString(), durationMinutes,
@@ -367,86 +364,23 @@ export function occupiedBlock(b: Pick<Booking, "startsAt" | "endsAt" | "setupMin
   };
 }
 
-/* ============================ Texto de deux heures avant ============================ */
+/* ============================ Texto de deux heures avant (retiré) ============================ */
 
-/** Quand part le « je serai chez vous » : deux heures avant l'arrivée de l'artisan. */
-export function soonTextAt(b: Pick<Booking, "startsAt" | "setupMinutes">): Date {
-  return new Date(b.startsAt.getTime() - (b.setupMinutes + SOON_TEXT_MINUTES) * 60_000);
-}
-
-/* Twilio programme un envoi de quinze minutes à trente-cinq jours d'avance.
-   On s'en tient à un jour et demi : la tâche quotidienne repasse avant. */
-const SOON_MIN_LEAD_MS = 16 * 60_000;
-export const SOON_WINDOW_MS = 36 * 3600_000;
-
-/**
- * Programme le texto de deux heures avant, s'il tombe dans la fenêtre que
- * Twilio accepte et qu'on surveille. Réservé en base avant de partir : la
- * tâche quotidienne et une réservation à la même seconde n'en programment
- * qu'un. Un échec chez Twilio rend la réservation ; un numéro étranger la
- * garde, puisqu'il le restera. Jamais d'exception.
+/*
+ * Le « Je serai chez vous à … », programmé chez Twilio deux heures avant
+ * l'arrivée, est retiré depuis le 14 novembre 2026 : décision de l'artisan,
+ * les clients ne reçoivent plus que le rappel de la veille. Plus rien ne le
+ * programme. Ce qui suit annule ceux qui restaient programmés : juste après
+ * la mise en ligne, chaque matin, et au passage d'une séance annulée ou
+ * déplacée. Les colonnes `sms_soon_at` et `sms_soon_sid` restent en base pour
+ * cela.
  */
-export async function scheduleSoonText(b: Booking, tz: string, now = new Date()): Promise<boolean> {
-  if (b.status !== "confirmed" || b.smsSoonAt || !smsScheduleConfigured()) return false;
-  const at = soonTextAt(b);
-  if (at.getTime() < now.getTime() + SOON_MIN_LEAD_MS || at.getTime() > now.getTime() + SOON_WINDOW_MS) return false;
-  /* Seulement si les rappels de cette séance sont actifs : ceux de sa ligne
-     pour une séance à la carte, ceux de son abonnement pour une visite. La
-     condition est dans la réservation même : aucun chemin ne la contourne. */
-  const claimed = (await sql()`
-    UPDATE nivex_bookings SET sms_soon_at = ${at.toISOString()}
-    WHERE id = ${b.id} AND status = 'confirmed' AND sms_soon_at IS NULL
-      AND starts_at = ${b.startsAt.toISOString()} AND setup_minutes = ${b.setupMinutes}
-      AND (CASE WHEN subscription_id IS NULL THEN reminders
-           ELSE COALESCE((SELECT s.reminders FROM nivex_subscriptions s WHERE s.id = nivex_bookings.subscription_id), false) END)
-    RETURNING id`) as Row[];
-  if (claimed.length === 0) return false;
-  const arrival = new Date(b.startsAt.getTime() - b.setupMinutes * 60_000);
-  const r = await scheduleSms(b.clientPhone, SMS.soon(b.locale, smsTime(arrival, tz, b.locale)), at, b.ref);
-  if (r.sid) {
-    await sql()`UPDATE nivex_bookings SET sms_soon_sid = ${r.sid} WHERE id = ${b.id}`;
-    b.smsSoonAt = at;
-    b.smsSoonSid = r.sid;
-    return true;
-  }
-  if (r.retry) await sql()`UPDATE nivex_bookings SET sms_soon_at = NULL WHERE id = ${b.id} AND sms_soon_sid IS NULL`;
-  return false;
-}
 
 /**
- * Retire le texto programmé d'une séance annulée ou déplacée. La ligne est
- * remise à zéro, pour qu'un déplacement le reprogramme à la nouvelle heure.
- * Twilio ne peut plus l'annuler s'il est déjà parti : le journal le note.
- */
-export async function cancelSoonText(b: Pick<Booking, "id" | "ref">): Promise<void> {
-  const rows = (await sql()`
-    WITH old AS (SELECT id, sms_soon_sid FROM nivex_bookings WHERE id = ${b.id} AND sms_soon_at IS NOT NULL FOR UPDATE)
-    UPDATE nivex_bookings n SET sms_soon_at = NULL, sms_soon_sid = NULL
-    FROM old WHERE n.id = old.id
-    RETURNING old.sms_soon_sid AS sid`) as Row[];
-  const sid = rows[0]?.sid as string | null | undefined;
-  if (sid) await cancelScheduledSms(sid, b.ref);
-}
-
-/** Les séances dont le texto de deux heures avant reste à programmer, pour la tâche quotidienne. */
-export async function dueSoonTexts(now: Date): Promise<Booking[]> {
-  await ensureSchema();
-  const rows = (await sql()`
-    SELECT b.* FROM nivex_bookings b
-    LEFT JOIN nivex_subscriptions s ON s.id = b.subscription_id
-    WHERE b.status = 'confirmed' AND b.sms_soon_at IS NULL
-      AND b.starts_at > ${new Date(now.getTime() + SOON_TEXT_MINUTES * 60_000).toISOString()}
-      AND b.starts_at < ${new Date(now.getTime() + SOON_WINDOW_MS + 3 * 3600_000).toISOString()}
-      AND (CASE WHEN b.subscription_id IS NULL THEN b.reminders ELSE COALESCE(s.reminders, false) END)
-    ORDER BY b.starts_at LIMIT 100`) as Row[];
-  return rows.map(hydrate);
-}
-
-/**
- * Retire chez Twilio le texto de deux heures avant déjà programmé, puis
- * libère la ligne. Dans cet ordre, à l'inverse de `cancelSoonText` : un
- * retrait qui échoue garde l'identifiant, et le passage suivant réessaie.
- * Vrai quand plus rien ne partira.
+ * Retire chez Twilio le texto de deux heures avant d'une séance, puis
+ * libère la ligne. Dans cet ordre : un retrait qui échoue garde
+ * l'identifiant, et le passage suivant réessaie. Vrai quand plus rien ne
+ * partira.
  */
 export async function withdrawSoonText(b: Pick<Booking, "id" | "ref">): Promise<boolean> {
   const rows = (await sql()`SELECT sms_soon_sid FROM nivex_bookings WHERE id = ${b.id}`) as Row[];
@@ -458,21 +392,19 @@ export async function withdrawSoonText(b: Pick<Booking, "id" | "ref">): Promise<
 }
 
 /**
- * Les textos de deux heures avant encore programmés chez Twilio pour des
- * séances dont les rappels sont coupés : retirés. Passe après chaque mise en
- * ligne (/api/cron/reminders, appelé par le workflow) et chaque matin, si
- * bien qu'aucun ne part à un abonné qui ne les veut plus. Rend ce qui a été
- * retiré, ce qui a échoué et ce qui reste programmé : des nombres, jamais
- * un nom ni un numéro, puisque le journal du workflow est public.
+ * Tous les textos de deux heures avant encore programmés chez Twilio, quelle
+ * que soit la séance : retirés. Passe après chaque mise en ligne
+ * (/api/cron/reminders, appelé par le workflow) et chaque matin, si bien
+ * qu'aucun ne part plus. Rend ce qui a été retiré, ce qui a échoué et ce qui
+ * reste programmé : des nombres, jamais un nom ni un numéro, puisque le
+ * journal du workflow est public.
  */
 export async function withdrawQueuedReminders(now = new Date()): Promise<{ withdrawn: number; failed: number; remaining: number }> {
   await ensureSchema();
   const queued = async () => (await sql()`
-    SELECT b.id, b.ref FROM nivex_bookings b
-    LEFT JOIN nivex_subscriptions s ON s.id = b.subscription_id
-    WHERE b.sms_soon_sid IS NOT NULL AND b.sms_soon_at > ${now.toISOString()}
-      AND NOT (CASE WHEN b.subscription_id IS NULL THEN b.reminders ELSE COALESCE(s.reminders, false) END)
-    ORDER BY b.sms_soon_at LIMIT 200`) as Row[];
+    SELECT id, ref FROM nivex_bookings
+    WHERE sms_soon_sid IS NOT NULL AND sms_soon_at > ${now.toISOString()}
+    ORDER BY sms_soon_at LIMIT 200`) as Row[];
   let withdrawn = 0;
   let failed = 0;
   for (const r of await queued()) {
@@ -485,10 +417,9 @@ export async function withdrawQueuedReminders(now = new Date()): Promise<{ withd
 }
 
 /**
- * Les textos de deux heures avant encore programmés chez Twilio, toutes
- * séances confondues : leur nombre et l'heure du prochain envoi. L'onglet
- * Connexion les montre ; /api/cron/reminders en rend le nombre, si bien que
- * le journal du workflow le donne après chaque mise en ligne.
+ * Les textos de deux heures avant encore programmés chez Twilio : leur
+ * nombre et l'heure du prochain envoi. L'onglet Connexion le signale tant
+ * qu'il en reste ; /api/cron/reminders en rend le nombre.
  */
 export async function queuedSoonTexts(now = new Date()): Promise<{ count: number; next: Date | null }> {
   await ensureSchema();
@@ -501,19 +432,16 @@ export async function queuedSoonTexts(now = new Date()): Promise<{ count: number
 
 /**
  * Les rappels d'une séance à la carte, réglés par l'artisan sur le
- * rendez-vous. Coupés : le texto déjà programmé est retiré. Rallumés : il se
- * programme s'il tombe dans la fenêtre, et le rappel de la veille part au
- * passage de la tâche du matin. Une visite d'abonné ne se règle pas ici, mais
- * sur la fiche de l'abonné : rend nul.
+ * rendez-vous : le rappel de la veille part, ou non, au passage de la tâche
+ * du matin. Une visite d'abonné ne se règle pas ici, mais sur la fiche de
+ * l'abonné : rend nul.
  */
-export async function setBookingReminders(id: string, on: boolean, tz: string): Promise<Booking | null> {
+export async function setBookingReminders(id: string, on: boolean): Promise<Booking | null> {
   const rows = (await sql()`
     UPDATE nivex_bookings SET reminders = ${on}
     WHERE id = ${id} AND subscription_id IS NULL RETURNING *`) as Row[];
   if (!rows[0]) return null;
   const b = hydrate(rows[0]);
-  if (on) await scheduleSoonText(b, tz).catch(() => false);
-  else await withdrawSoonText(b).catch(() => false);
   await logEvent("booking_reminders_set", { ref: b.ref, on });
   return b;
 }
@@ -978,7 +906,7 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
     WHERE id = ${b.id} AND status <> 'cancelled'
     RETURNING id`) as Row[];
   if (claimed.length === 0) return;
-  await cancelSoonText(b).catch(() => {});
+  await withdrawSoonText(b).catch(() => false);
 
   const at = await ownerAccessToken().catch(() => null);
   const origin = siteOrigin();

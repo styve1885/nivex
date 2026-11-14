@@ -160,9 +160,6 @@ export const EARLY_ARRIVAL_MINUTES = 15;
  */
 export const PIECES_PER_HOUR = 9;
 
-/** Le texto « je serai chez vous » part ce nombre de minutes avant l'arrivée. */
-export const SOON_TEXT_MINUTES = 120;
-
 /** La signature des textos aux clients : le prénom de l'artisan. */
 export const SMS_SIGNATURE = "Styve";
 

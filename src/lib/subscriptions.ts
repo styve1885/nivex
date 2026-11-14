@@ -19,8 +19,7 @@ import {
   type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
 import {
-  bookingEmailData, cancelSoonText, cleanOrigin, dueSoonTexts, hydrate, occupiedBlock, scheduleSoonText, type Booking,
-  withdrawQueuedReminders, withdrawSoonText,
+  bookingEmailData, cleanOrigin, hydrate, occupiedBlock, type Booking, withdrawQueuedReminders, withdrawSoonText,
 } from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
@@ -63,9 +62,9 @@ export type Subscription = {
   /** Les minutes d'arrivée anticipée : 15 pour l'ancien déroulement, 0 aujourd'hui. Ses visites en héritent. */
   setupMinutes: number;
   /**
-   * Les rappels de séance de ses visites : la veille, par courriel et par
-   * texto, et le texto de deux heures avant. Coupés par défaut (11 novembre
-   * 2026) ; l'artisan les rallume pour qui les demande.
+   * Les rappels de séance de ses visites : le rappel de la veille, par
+   * courriel et par texto. Coupés par défaut (11 novembre 2026) ; l'artisan
+   * les rallume pour qui les demande.
    */
   reminders: boolean;
   startCycle: number; startDone: number;
@@ -533,7 +532,6 @@ async function insertSubscription(p: {
             smsWhen(first.startsAt, settings.timezone, "fr")), full.sub.ref)
         : Promise.resolve(false),
     ]);
-    await scheduleSoonTexts(full.visits, settings.timezone);
   }
 
   await logEvent("subscription_created", {
@@ -1090,7 +1088,7 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
     if (await isDone(b.id)) throw new SubscriptionError("done");
     return { replacement: null };
   }
-  await cancelSoonText(b).catch(() => {});
+  await withdrawSoonText(b).catch(() => false);
 
   const at = await ownerAccessToken().catch(() => null);
   const afterCancel = await loadFull(before.sub);
@@ -1238,12 +1236,9 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   const full = (await findSubscription(b.subscriptionId!))!;
   const moved = full.visits.find((v) => v.id === b.id)!;
   const origin = siteOrigin(host);
-  /* Le texto de deux heures avant suit la visite : retiré à l'ancienne
-     heure, reprogrammé à la nouvelle s'il tombe dans la fenêtre. */
-  await cancelSoonText(b).catch(() => {});
-  moved.smsSoonAt = null;
-  moved.smsSoonSid = null;
-  await scheduleSoonText(moved, tz).catch(() => false);
+  /* Un texto de deux heures avant resté programmé à l'ancienne heure : il
+     n'en part plus depuis le 14 novembre 2026, il est retiré. */
+  await withdrawSoonText(b).catch(() => false);
 
   let calendar: EventMove | null = null;
   if (!at && moved.googleEventId) {
@@ -1363,10 +1358,9 @@ export async function setGuaranteedPrice(subId: string, cents: number, host?: st
  * bloqué. Décochée, l'installation et le rangement se font dans la séance.
  * Ses visites à venir suivent dans la même transaction : si l'une est collée
  * à un autre rendez-vous, le quart d'heure de plus ne tient pas, et rien ne
- * change. L'agenda, ses rappels et le texto de deux heures avant suivent
- * l'heure d'arrivée. On finit à la fermeture au plus tard : si le rangement
- * d'une visite à venir la dépassait, la case ne se coche pas, et l'artisan
- * apprend laquelle avancer.
+ * change. L'agenda et ses rappels suivent l'heure d'arrivée. On finit à la
+ * fermeture au plus tard : si le rangement d'une visite à venir la
+ * dépassait, la case ne se coche pas, et l'artisan apprend laquelle avancer.
  */
 export async function setEarlyArrival(subId: string, early: boolean, host?: string | null): Promise<number> {
   const settings = await getSettingsStrict();
@@ -1394,11 +1388,10 @@ export async function setEarlyArrival(subId: string, early: boolean, host?: stri
 
   const after = (await findSubscription(subId))!;
   const now = Date.now();
-  for (const v of after.visits.filter((x) => x.status === "confirmed" && x.startsAt.getTime() > now && x.smsSoonAt)) {
-    await cancelSoonText(v).catch(() => {});
-    v.smsSoonAt = null;
-    v.smsSoonSid = null;
-    await scheduleSoonText(v, settings.timezone).catch(() => false);
+  /* Un texto de deux heures avant resté programmé annoncerait l'ancienne
+     heure d'arrivée : retiré. */
+  for (const v of after.visits.filter((x) => x.status === "confirmed" && x.startsAt.getTime() > now && x.smsSoonSid)) {
+    await withdrawSoonText(v).catch(() => false);
   }
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1414,11 +1407,6 @@ export async function setEarlyArrival(subId: string, early: boolean, host?: stri
   return minutes;
 }
 
-/** Le texto de deux heures avant, pour celles de ces visites qui tombent dans la fenêtre. */
-async function scheduleSoonTexts(visits: Booking[], tz: string): Promise<void> {
-  for (const v of visits) await scheduleSoonText(v, tz).catch(() => false);
-}
-
 /**
  * « Paiement reçu » pour un cycle, ou son retrait en cas d'erreur de saisie.
  *
@@ -1428,27 +1416,15 @@ async function scheduleSoonTexts(visits: Booking[], tz: string): Promise<void> {
  */
 /**
  * Les rappels de séance d'un abonné : celui de la veille, par courriel et par
- * texto, et le texto de deux heures avant. Coupés par défaut depuis le
- * 11 novembre 2026, ses abonnés les trouvant répétitifs ; l'artisan les
- * rallume pour qui les demande. Coupés : les textos déjà programmés pour ses
- * visites sont retirés chez Twilio (ce qui échoue, la tâche du matin le
- * reprend). Rallumés : ceux qui tombent dans la fenêtre se programment, et
- * le rappel de la veille part au passage suivant de la tâche du matin.
- * Aucun message au client : c'est lui qui l'a demandé.
+ * texto. Coupés par défaut depuis le 11 novembre 2026, ses abonnés les
+ * trouvant répétitifs ; l'artisan les rallume pour qui les demande. Le
+ * rappel part, ou non, au passage suivant de la tâche du matin. Aucun
+ * message au client : c'est lui qui l'a demandé.
  */
 export async function setSubscriptionReminders(subId: string, on: boolean): Promise<boolean> {
-  const settings = await getSettingsStrict();
-  const rows = (await sql()`UPDATE nivex_subscriptions SET reminders = ${on} WHERE id = ${subId} RETURNING id`) as Row[];
+  const rows = (await sql()`UPDATE nivex_subscriptions SET reminders = ${on} WHERE id = ${subId} RETURNING ref`) as Row[];
   if (rows.length === 0) throw new SubscriptionError("not_found");
-  const full = (await findSubscription(subId))!;
-  const now = Date.now();
-  const upcoming = full.visits.filter((v) => v.status === "confirmed" && !v.doneAt && v.startsAt.getTime() > now);
-  if (on) {
-    for (const v of upcoming) await scheduleSoonText(v, settings.timezone).catch(() => false);
-  } else {
-    for (const v of upcoming.filter((x) => x.smsSoonSid)) await withdrawSoonText(v).catch(() => false);
-  }
-  await logEvent("subscription_reminders_set", { ref: full.sub.ref, on });
+  await logEvent("subscription_reminders_set", { ref: rows[0].ref as string, on });
   return on;
 }
 
@@ -1520,7 +1496,6 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
      la date convenue lui arrive par écrit, Google branché ou non. */
   const l = full.sub.locale;
   await sendSms(full.sub.clientPhone, SMS.visitPlaced(l, smsWhen(v.startsAt, settings.timezone, l)), v.ref);
-  await scheduleSoonText(v, settings.timezone).catch(() => false);
   await logEvent("subscription_makeup_placed", { ref: v.ref, subscription: full.sub.ref });
   return v;
 }
@@ -1633,7 +1608,7 @@ export async function endSubscription(subId: string, host?: string | null): Prom
       RETURNING *`,
   ]);
   const removed = (rows as Row[]).map(hydrate).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-  for (const v of removed.filter((x) => x.smsSoonAt)) await cancelSoonText(v).catch(() => {});
+  for (const v of removed.filter((x) => x.smsSoonSid)) await withdrawSoonText(v).catch(() => false);
 
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1668,7 +1643,7 @@ export async function deleteSubscription(subId: string): Promise<void> {
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
   if (full.visits.some((v) => v.doneAt)) throw new SubscriptionError("has_done");
-  for (const v of full.visits.filter((x) => x.smsSoonAt)) await cancelSoonText(v).catch(() => {});
+  for (const v of full.visits.filter((x) => x.smsSoonSid)) await withdrawSoonText(v).catch(() => false);
 
   const at = await ownerAccessToken().catch(() => null);
   if (at) {
@@ -1757,7 +1732,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  * débranché coupe les courriels, pas les textos.
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
-  reminders: number; smsReminders: number; soon: number; notices: number; thanks: number; google: boolean;
+  reminders: number; smsReminders: number; notices: number; thanks: number; google: boolean;
   calendarFixed: number; withdrawn: number;
 }> {
   await ensureSchema();
@@ -1832,24 +1807,14 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
-  /* — Texto de deux heures avant — programmé chez Twilio pour les séances
-     du lendemain ; celles réservées d'ici là le sont à la réservation. Les
-     séances aux rappels coupés n'en reçoivent pas (`dueSoonTexts`, et la
-     réservation de `scheduleSoonText`), et ceux qu'on aurait programmés
-     avant la coupure sont retirés. */
+  /* — Texto de deux heures avant — retiré le 14 novembre 2026 : plus rien
+     ne le programme, et ceux qui restaient programmés chez Twilio sont
+     annulés, ici en filet, comme après chaque mise en ligne. */
   const { withdrawn } = await withdrawQueuedReminders(now)
     .catch(async (e) => {
       await logEvent("reminders_withdraw_failed", { error: describe(e) });
       return { withdrawn: 0 };
     });
-  let soon = 0;
-  for (const v of await dueSoonTexts(now).catch(() => [] as Booking[])) {
-    if (v.subscriptionId) {
-      const full = await subOf(v.subscriptionId);
-      if (!full || full.sub.status !== "active") continue;
-    }
-    if (await scheduleSoonText(v, tz, now).catch(() => false)) soon++;
-  }
 
   /* — Remerciements — un par client, le lendemain de sa première séance, ou
      de la première visite d'abonné marquée effectuée. Seulement si l'artisan
@@ -1957,8 +1922,8 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
     }
   }
 
-  await logEvent("daily_done", { reminders, smsReminders, soon, notices, thanks, calendarFixed, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, soon, notices, thanks, google: Boolean(at), calendarFixed, withdrawn };
+  await logEvent("daily_done", { reminders, smsReminders, withdrawn, notices, thanks, calendarFixed, day: today, purged, calendarCopies });
+  return { reminders, smsReminders, notices, thanks, google: Boolean(at), calendarFixed, withdrawn };
 }
 
 /**

@@ -43,14 +43,16 @@ export type PublicPage = {
    affichent aussi, avance avec elle). Le 13 novembre, les secteurs
    desservis entrent sur l'accueil et sur Tarifs, et la description de
    l'accueil, que reprend la fiche LocalBusiness de toutes les pages, nomme
-   des quartiers : toutes avancent. */
+   des quartiers : toutes avancent. Le 14 novembre, le texto de deux heures
+   avant est retiré : les conditions et la politique de confidentialité ne le
+   promettent plus, et leur date avance. */
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "", updated: "2026-11-13", changeFrequency: "weekly", priority: 1 },
   { path: "/tarifs", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.8 },
   { path: "/montreal", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.7 },
   { path: "/presentation", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.6, video: true },
-  { path: "/conditions", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/conditions", updated: "2026-11-14", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-14", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

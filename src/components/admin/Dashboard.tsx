@@ -36,7 +36,7 @@ export function Dashboard({
   past: AdminBooking[];
   stats: AdminStats;
   env: {
-    database: boolean; google: boolean; sms: boolean; smsSchedule: boolean; ownerCell: string | null; origin: string;
+    database: boolean; google: boolean; sms: boolean; ownerCell: string | null; origin: string;
     soonQueued: { count: number; next: string | null } | null;
   };
   link: GoogleLink;

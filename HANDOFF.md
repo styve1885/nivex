@@ -171,7 +171,7 @@ avec des étapes qu'on lui donne.
 | Google Cloud (OAuth) | La connexion de l'espace artisan | URI de retour : `https://www.nivexrepassage.ca/api/auth/google/callback` |
 | Compte Google de l'artisan | Agenda des rendez-vous, envoi des courriels | Branché depuis `/admin`, onglet Connexion ; les avis internes vont à `REQUEST_INBOX` |
 | ImprovMX et OVH | `contact@nivexrepassage.ca` (`CONTACT_EMAIL`), renvoyé vers le Gmail de l'artisan | Domaine acheté chez OVH ; MX et SPF dans sa zone DNS. L'adresse ne reçoit rien elle-même |
-| Twilio | Les textos et les appels du +1 450 367 6231, le numéro de la maison (`PHONE`) | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308). Appels : webhook `/api/voice/incoming` en méthode principale, TwiML Bin « NIVEX - transfert » en secours. Service de messagerie « NIVEX » pour le texto de deux heures avant. Permissions géographiques : textos au Canada seulement, appels « United States and Canada » (`CLAUDE.md`, « Les textos ») |
+| Twilio | Les textos et les appels du +1 450 367 6231, le numéro de la maison (`PHONE`) | Webhook « A message comes in » sur le www (Twilio ne suit pas un 308). Appels : webhook `/api/voice/incoming` en méthode principale, TwiML Bin « NIVEX - transfert » en secours. Service de messagerie « NIVEX » : il programmait le texto de deux heures avant, retiré le 14 novembre 2026 ; il ne sert plus. Permissions géographiques : textos au Canada seulement, appels « United States and Canada » (`CLAUDE.md`, « Les textos ») |
 | Search Console, Bing Webmaster Tools | Indexation | Propriété www validée (`GOOGLE_SITE_VERIFICATION`) ; plans du site lus |
 | Fiche Google (Business Profile) | La fiche de la maison, les avis | `GOOGLE_MAPS_URL` (identifiant `cid`). Le lien d'avis se colle dans `/admin`, Réglages. L'horaire de la fiche se recopie à la main |
 | Bing Places | La fiche de la maison chez Bing (Bing Maps) | Importée de la fiche Google. On corrige la fiche Google, puis on touche « Synchronisation » dans Bing Places. Adresse masquée |
@@ -304,6 +304,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #40 | 14 nov. 2026 | Le texto de deux heures avant est retiré : seul reste le rappel de la veille ; ceux déjà programmés sont annulés après la mise en ligne et chaque matin ; « Vous recevrez un rappel la veille de votre séance. » sur la page de réservation et dans les conditions ; politique de confidentialité à jour |
 | #39 | 14 nov. 2026 | Onglet Connexion : essai du rappel de la veille (le vrai courriel et le vrai texto, séance fictive de demain, vers l'artisan seul) et décompte des textos de deux heures avant programmés |
 | #38 | 13 nov. 2026 | Secteurs desservis : la liste de quartiers de Styve sur l'accueil, Tarifs, la foire aux questions, `/llms.txt` et la description de l'accueil ; Ville de Mont-Royal entre dans la grille, Griffintown y est nommé (`secteurs-2026-11`) |
 | #37 | 11 nov. 2026 | Abonnés : plus de rappel de la veille ni de texto de deux heures avant par défaut ; interrupteur « Rappels de séance » sur la fiche ; textos déjà programmés retirés après la mise en ligne |

@@ -99,9 +99,9 @@ export function SubscribersPanel({ timezone, plans }: { timezone: string; plans:
     try {
       const d = await (await fetch("/api/cron/daily", { cache: "no-store" })).json();
       setDaily(d.ok
-        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.soon ?? 0} texto(s) de deux heures avant programmé(s), ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
+        ? `${d.reminders} rappel(s) par courriel, ${d.smsReminders} par texto, ${d.notices} avis de fin de série, ${d.thanks ?? 0} remerciement(s).`
           + (d.calendarFixed ? ` ${d.calendarFixed} visite(s) remise(s) à l'heure dans l'agenda.` : "")
-          + (d.withdrawn ? ` ${d.withdrawn} texto(s) de deux heures avant retiré(s), rappels coupés.` : "")
+          + (d.withdrawn ? ` ${d.withdrawn} ancien(s) texto(s) de deux heures avant annulé(s).` : "")
           + (d.google ? "" : " Google n'est pas branché : aucun courriel n'est parti.")
         : "La tâche n'a pas abouti.");
     } catch {
@@ -376,13 +376,13 @@ function SubscriptionCard({ s, when, onChange }: {
                   <input type="checkbox" checked={s.reminders} disabled={busy === "reminders"}
                     onChange={(e) => run("reminders", { action: "reminders", id: s.id, on: e.target.checked },
                       e.target.checked
-                        ? "Rappels de séance activés : la veille et deux heures avant chaque visite."
-                        : "Rappels de séance coupés : les textos déjà programmés sont retirés.")}
+                        ? "Rappels de séance activés : le rappel de la veille de chaque visite."
+                        : "Rappels de séance coupés.")}
                     className="h-4 w-4 accent-[#866836]" />
                   <span>Rappels de séance</span>
                 </label>
                 <span className="mt-1 block text-[0.74rem] text-ink-400">
-                  Le rappel de la veille, par courriel et par texto, et le texto de deux heures avant. Coupés par défaut pour un abonné : il reçoit sa confirmation, puis un message seulement quand une visite change (déplacée, annulée, remplacée) ou que sa série suivante est posée. À cocher pour qui les demande.
+                  Le rappel de la veille, par courriel et par texto. Coupés par défaut pour un abonné : il reçoit sa confirmation, puis un message seulement quand une visite change (déplacée, annulée, remplacée) ou que sa série suivante est posée. À cocher pour qui les demande.
                 </span>
               </Line>
             )}

@@ -9,8 +9,10 @@ import assert from "node:assert/strict";
 
 const {
   toE164, isCanadianNumber, sendSms, smsConfigured, smsWhen, smsDay, smsTime, SMS, ownerSmsNumber, twilioSignature,
-  twilioSignatureValid, twimlForward, forwardedReply, stopHint, scheduleSms, cancelScheduledSms, smsScheduleConfigured,
+  twilioSignatureValid, twimlForward, forwardedReply, stopHint, cancelScheduledSms,
 } = await import("../src/lib/sms.ts");
+const smsModule = await import("../src/lib/sms.ts");
+const { readdirSync, readFileSync, statSync } = await import("node:fs");
 const { fromWall } = await import("../src/lib/time.ts");
 const { SMS_SIGNATURE, PHONE } = await import("../src/lib/brand.ts");
 const {
@@ -215,16 +217,32 @@ await test("le jour et l'heure se disent comme à l'oral : « mardi 20 octobre �
   assert.equal(smsTime(fromWall({ year: 2026, month: 10, day: 20, hour: 9, minute: 30 }, TZ), TZ, "en"), "9:30 a.m.");
 });
 
-await test("les trois textos de la séance suivent les modèles de la maison, signés Styve", () => {
+await test("les deux textos de la séance suivent les modèles de la maison, signés Styve", () => {
   assert.equal(SMS_SIGNATURE, "Styve");
   assert.equal(confirmed, "NIVEX - Votre séance est confirmée le mardi 20 octobre, de 14 h à 16 h. Vous n'avez que la planche à prévoir. Répondez STOP pour ne plus recevoir de textos. Styve");
   assert.equal(SMS.reminder("fr", day, "14 h", false, null), "NIVEX - Rappel : demain mardi 20 octobre, j'arrive à 14 h. À demain. Styve");
-  assert.equal(SMS.soon("fr", "14 h"), "NIVEX - Je serai chez vous à 14 h. Styve");
   assert.equal(confirmedEn, "NIVEX - Your session is confirmed for Tuesday, October 20, from 2 p.m. to 4 p.m. All you need to provide is the ironing board. Reply STOP to opt out. Styve");
-  assert.equal(SMS.soon("en", "2 p.m."), "NIVEX - I will be at your door at 2 p.m. Styve");
   /* Aucun tiret cadratin : il ferait passer le texto en Unicode. */
-  for (const m of [confirmed, confirmedEn, SMS.reminder("fr", day, "14 h", false, null), SMS.soon("fr", "14 h")]) {
+  for (const m of [confirmed, confirmedEn, SMS.reminder("fr", day, "14 h", false, null)]) {
     assert.ok(!m.includes("—"), m);
+  }
+});
+
+await test("le texto de deux heures avant n'existe plus, et rien ne programme un envoi (14 novembre 2026)", () => {
+  /* Décision de l'artisan : les clients ne reçoivent plus que le rappel de la veille. */
+  assert.equal(SMS.soon, undefined, "le modèle « Je serai chez vous » est retiré");
+  assert.equal(smsModule.scheduleSms, undefined);
+  assert.equal(smsModule.smsScheduleConfigured, undefined);
+  /* Aucun chemin du site ne demande à Twilio un envoi à l'heure dite. */
+  const walk = (d) => readdirSync(d).flatMap((f) => {
+    const p = `${d}/${f}`;
+    return statSync(p).isDirectory() ? walk(p) : /\.(ts|tsx)$/.test(f) ? [p] : [];
+  });
+  const src = new URL("../src", import.meta.url).pathname;
+  for (const f of walk(src)) {
+    const text = readFileSync(f, "utf8");
+    assert.ok(!/ScheduleType|SendAt|MessagingServiceSid/.test(text), `${f} programme encore un texto`);
+    assert.ok(!/scheduleSoonText|dueSoonTexts|SOON_TEXT_MINUTES/.test(text), `${f} parle encore du texto de deux heures avant`);
   }
 });
 
@@ -234,7 +252,6 @@ await test("les confirmations disent comment ne plus recevoir de textos, les aut
   assert.match(SMS.subscriptionConfirmed("fr", "VIP", when, "chaque semaine", "https://x"), /Répondez STOP/);
   assert.match(SMS.subscriptionConfirmed("en", "VIP", when, "every week", "https://x"), /Reply STOP/);
   assert.ok(!/STOP/.test(SMS.reminder("fr", day, "14 h", false, null)));
-  assert.ok(!/STOP/.test(SMS.soon("fr", "14 h")));
   assert.ok(!/STOP/.test(SMS.visitMoved("fr", when, when)));
 });
 
@@ -274,7 +291,7 @@ await test("le rappel donne l'heure d'arrivée, et le paiement seulement quand i
 
 await test("aucun point d'exclamation, et chaque texto signé NIVEX", () => {
   const all = [
-    confirmed, confirmedEn, SMS.soon("fr", "14 h"), SMS.soon("en", "2 p.m."),
+    confirmed, confirmedEn,
     SMS.subscriptionConfirmed("fr", "VIP", when, "chaque semaine", "https://x"),
     SMS.subscriptionConfirmed("en", "VIP", when, "every week", "https://x"),
     SMS.reminder("fr", day, "14 h", false, "400 $"), SMS.reminder("en", "Tuesday, October 20", "2 p.m.", true, null),
@@ -330,45 +347,23 @@ await test("avec les clés, le texto part vers Twilio au bon format", async () =
   }
 });
 
-await test("le texto de deux heures avant se programme chez Twilio par le service de messagerie, et s'annule", async () => {
+await test("un texto encore programmé s'annule chez Twilio", async () => {
+  /* Le texto de deux heures avant ne se programme plus ; ceux qui l'étaient
+     encore s'annulent (withdrawQueuedReminders), par cette demande. */
   Object.assign(process.env, { TWILIO_ACCOUNT_SID: "AC123", TWILIO_AUTH_TOKEN: "jeton", TWILIO_FROM: "+14385550000" });
-  delete process.env.TWILIO_MESSAGING_SERVICE_SID;
   const calls = [];
   const real = globalThis.fetch;
-  globalThis.fetch = async (url, init) => {
-    calls.push({ url, init });
-    return new Response(JSON.stringify({ sid: "SM0123456789abcdef0123456789abcdef" }), { status: 201 });
-  };
+  globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response("{}", { status: 200 }); };
   try {
-    /* Sans service de messagerie, rien n'est programmé, et Twilio n'est pas appelé. */
-    assert.equal(smsScheduleConfigured(), false);
-    assert.deepEqual(await scheduleSms("514 555-0142", "NIVEX - essai", t14), { sid: null, retry: true });
-    assert.equal(calls.length, 0);
-
-    process.env.TWILIO_MESSAGING_SERVICE_SID = "MG1";
-    const r = await scheduleSms("514 555-0142", "NIVEX - Je serai chez vous à 14 h. Styve", t14);
-    assert.deepEqual(r, { sid: "SM0123456789abcdef0123456789abcdef", retry: false });
-    const body = new URLSearchParams(calls[0].init.body.toString());
-    assert.equal(body.get("MessagingServiceSid"), "MG1");
-    assert.equal(body.get("ScheduleType"), "fixed");
-    assert.equal(body.get("SendAt"), t14.toISOString().replace(/\.\d{3}Z$/, "Z"));
-    assert.equal(body.get("From"), null, "un envoi programmé part du service, pas du numéro");
-
-    /* Un numéro étranger ne se réessaie pas ; un refus de Twilio, si. */
-    assert.deepEqual(await scheduleSms("876 555 0123", "x", t14), { sid: null, retry: false });
-    globalThis.fetch = async () => new Response(JSON.stringify({ code: 35111 }), { status: 400 });
-    assert.deepEqual(await scheduleSms("514 555-0142", "x", t14), { sid: null, retry: true });
-
-    globalThis.fetch = async (url, init) => { calls.push({ url, init }); return new Response("{}", { status: 200 }); };
     assert.equal(await cancelScheduledSms("SM0123456789abcdef0123456789abcdef"), true);
     const last = calls[calls.length - 1];
     assert.match(last.url, /Messages\/SM0123456789abcdef0123456789abcdef\.json$/);
     assert.equal(new URLSearchParams(last.init.body.toString()).get("Status"), "canceled");
     assert.equal(await cancelScheduledSms("../../autre"), false, "un identifiant douteux ne part pas dans l'adresse");
+    assert.equal(calls.length, 1);
   } finally {
     globalThis.fetch = real;
     delete process.env.TWILIO_ACCOUNT_SID;
-    delete process.env.TWILIO_MESSAGING_SERVICE_SID;
   }
 });
 
