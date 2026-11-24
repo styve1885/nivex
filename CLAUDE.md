@@ -242,6 +242,15 @@ questions, puis Nous écrire et le bandeau de la première heure. Le menu suit
 les sections de la page, « Tarifs » compris (`#tarifs`) ; la grille complète
 reste à un clic, et au pied de chaque page.
 
+**Le héros** (24 novembre 2026, demande de l'artisan) : un ivoire uni,
+`linen-200`, la teinte de la charte la plus proche de l'ancien fond tel que
+l'œil le voyait ; ni cadre filet, ni trame de tissage, ni halos. Sur
+l'accueil, l'en-tête ne montre pas NIVEX, ni la signature qui le suit à
+partir de la tablette, même la page défilée : le logo du héros porte déjà
+le nom. Le lien garde sa place, invisible, si bien que la navigation, la
+langue, « Réserver » et le menu ne bougent pas. Les autres pages le
+gardent.
+
 **La vidéo de présentation** (2 novembre 2026). Styve présente la maison en
 une minute, en français, sous-titres incrustés. Le fichier,
 `public/videos/nivex-presentation.mp4` (H.264 et AAC, 1920 × 1080, l'index en
@@ -280,6 +289,9 @@ abonnement : « VIP : 400 $ + 60 $ de déplacement, soit 4 visites ×
 - Le ruban (`Marquee`), le protocole (`Protocol`) et la galerie en section
   (`Gallery`) : composants gardés, simplement plus rendus par
   `app/[locale]/page.tsx`.
+- Le décor du héros (dégradé de lin, deux halos d'or, trame de tissage et
+  cadre filet double) : `HeroBackdrop`, gardé dans
+  `components/home/Hero.tsx`, plus rendu depuis le 24 novembre 2026.
 - Leurs textes, et tous les autres textes retirés (les trois questions, les
   six anciennes cartes, les chapitres de l'histoire, les paires avant/après
   du pantalon de velours, du t-shirt et de la veste doublée, les anciennes
