@@ -7,27 +7,14 @@ import { PRESENTATION, minutesLabel } from "@/lib/video";
 
 export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
   return (
-    <section className="relative flex min-h-[100svh] items-center overflow-hidden pt-28 pb-28">
-      {/* — Fond : lin chaud, deux halos d'or, trame textile — */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0" style={{
-          background: "radial-gradient(120% 80% at 50% -10%, var(--color-linen-50) 0%, var(--color-linen-100) 45%, var(--color-linen-200) 100%)",
-        }} />
-        <div className="absolute -right-[15%] top-[8%] h-[38rem] w-[38rem] rounded-full opacity-40 blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--color-gold-200), transparent 65%)" }} />
-        <div className="absolute -left-[18%] bottom-[-10%] h-[34rem] w-[34rem] rounded-full opacity-30 blur-3xl"
-          style={{ background: "radial-gradient(circle, var(--color-gold-300), transparent 65%)" }} />
-        {/* trame de tissage */}
-        <div className="absolute inset-0 opacity-[0.045]" style={{
-          backgroundImage:
-            "repeating-linear-gradient(0deg, var(--color-ink-700) 0 1px, transparent 1px 4px)," +
-            "repeating-linear-gradient(90deg, var(--color-ink-700) 0 1px, transparent 1px 4px)",
-        }} />
-        {/* cadre filet, comme sur le carton d'invitation */}
-        <div className="absolute inset-4 border border-gold-300/35 sm:inset-7" />
-        <div className="absolute inset-6 border border-gold-300/20 sm:inset-9" />
-      </div>
-
+    /* Un ivoire uni depuis le 24 novembre 2026, à la demande de l'artisan :
+       ni cadre filet, ni trame, ni halos. Le lin-200 est la teinte de la
+       charte la plus proche de l'ancien fond tel que l'œil le voyait (mesuré
+       sur les captures : #F3EEE5 en moyenne à l'écran, la trame fondue).
+       L'ancien décor reste plus bas, `HeroBackdrop`, pour pouvoir le remettre.
+       Les marges ne bougent pas : le cadre était posé par-dessus, il ne
+       prenait aucune place. */
+    <section className="relative flex min-h-[100svh] items-center overflow-hidden bg-linen-200 pt-28 pb-28">
       <div className="relative mx-auto w-full max-w-5xl px-8 text-center sm:px-14">
         {/* Un nom de lieu ne se coupe pas à son trait d'union : chaque segment
             reste d'un bloc, et c'est entre eux que la ligne se replie. */}
@@ -108,5 +95,35 @@ export function Hero({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; se
         </span>
       </div>
     </section>
+  );
+}
+
+/**
+ * L'ancien décor du héros, plus rendu depuis le 24 novembre 2026 : lin chaud
+ * en dégradé, deux halos d'or, trame de tissage (le « petit quadrillé ») et
+ * cadre filet double, comme sur le carton d'invitation. L'artisan a voulu un
+ * fond ivoire uni. Gardé pour pouvoir le remettre : il se pose en premier
+ * enfant de la section, à la place de `bg-linen-200`.
+ */
+export function HeroBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+      <div className="absolute inset-0" style={{
+        background: "radial-gradient(120% 80% at 50% -10%, var(--color-linen-50) 0%, var(--color-linen-100) 45%, var(--color-linen-200) 100%)",
+      }} />
+      <div className="absolute -right-[15%] top-[8%] h-[38rem] w-[38rem] rounded-full opacity-40 blur-3xl"
+        style={{ background: "radial-gradient(circle, var(--color-gold-200), transparent 65%)" }} />
+      <div className="absolute -left-[18%] bottom-[-10%] h-[34rem] w-[34rem] rounded-full opacity-30 blur-3xl"
+        style={{ background: "radial-gradient(circle, var(--color-gold-300), transparent 65%)" }} />
+      {/* trame de tissage */}
+      <div className="absolute inset-0 opacity-[0.045]" style={{
+        backgroundImage:
+          "repeating-linear-gradient(0deg, var(--color-ink-700) 0 1px, transparent 1px 4px)," +
+          "repeating-linear-gradient(90deg, var(--color-ink-700) 0 1px, transparent 1px 4px)",
+      }} />
+      {/* cadre filet, comme sur le carton d'invitation */}
+      <div className="absolute inset-4 border border-gold-300/35 sm:inset-7" />
+      <div className="absolute inset-6 border border-gold-300/20 sm:inset-9" />
+    </div>
   );
 }

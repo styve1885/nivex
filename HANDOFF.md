@@ -304,6 +304,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #42 | 24 nov. 2026 | Accueil : le héros passe à un ivoire uni (`linen-200`), sans cadre filet ni petit quadrillé ; l'en-tête de l'accueil ne montre plus NIVEX, les autres pages le gardent ; textes, couleurs et espacements inchangés |
 | #41 | 14 nov. 2026 | Planche à repasser : question obligatoire au tunnel (Oui, Non, Je ne suis pas sûr) ; « À contacter » sur la fiche, dans l'avis par courriel et par texto ; « Pensez à préparer votre planche à repasser. » dans la confirmation et le rappel de la veille |
 | #40 | 14 nov. 2026 | Le texto de deux heures avant est retiré : seul reste le rappel de la veille ; ceux déjà programmés sont annulés après la mise en ligne et chaque matin ; « Vous recevrez un rappel la veille de votre séance. » sur la page de réservation et dans les conditions ; politique de confidentialité à jour |
 | #39 | 14 nov. 2026 | Onglet Connexion : essai du rappel de la veille (le vrai courriel et le vrai texto, séance fictive de demain, vers l'artisan seul) et décompte des textos de deux heures avant programmés |

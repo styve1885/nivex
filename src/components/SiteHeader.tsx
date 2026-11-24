@@ -61,6 +61,14 @@ export function SiteHeader({ t, locale }: { t: Pick<Dict, "nav" | "brand">; loca
      la section des abonnements ; la grille complète (pièces à l'unité,
      frais) est à un clic de là, et au pied de chaque page. */
   const home = `/${locale}`;
+  /* Sur l'accueil, le logo du héros porte déjà le nom : depuis le
+     24 novembre 2026, à la demande de l'artisan, l'en-tête n'y montre plus
+     NIVEX, ni la signature qui le suit à partir de la tablette, et qui
+     n'aurait plus de sens seule. Le lien garde sa place, invisible, hors de
+     la tabulation et de la lecture d'écran : la navigation, la langue,
+     « Réserver » et le menu ne bougent pas d'un pixel. Les autres pages le
+     gardent. */
+  const onHome = pathname === home;
   const links = [
     { href: `${home}#deroulement`, label: t.nav.how },
     { href: `${home}#prestations`, label: t.nav.services },
@@ -86,7 +94,7 @@ export function SiteHeader({ t, locale }: { t: Pick<Dict, "nav" | "brand">; loca
         style={{ transitionTimingFunction: "var(--ease-silk)" }}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 sm:px-8">
-          <Link href={home} className="group flex items-center" aria-label="NIVEX">
+          <Link href={home} className={`group flex items-center${onHome ? " invisible" : ""}`} aria-label="NIVEX">
             <span className="flex flex-col">
               <Wordmark className={`text-ink-800 transition-all duration-700 ${scrolled ? "text-lg" : "text-xl"}`} />
               <span className="mt-0.5 hidden text-[8.5px] uppercase tracking-[0.3em] text-ink-400 sm:block">
