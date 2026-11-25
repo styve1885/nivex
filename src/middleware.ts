@@ -35,13 +35,26 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  /* La racine : redirection permanente (308) vers le français, la langue par
+     défaut, quelle que soit celle du navigateur (25 novembre 2026). En 307,
+     et selon la langue, Bing tenait « / » pour une page à part, double de
+     /fr : même titre, même description. Une redirection permanente ne varie
+     pas d'un visiteur à l'autre : le lien de langue est en haut de chaque
+     page. Le domaine sans www y arrive par celle de Vercel (308, avant le
+     code). Le reste de l'adresse (?utm_source=…) suit. */
+  if (pathname === "/") {
+    const url = req.nextUrl.clone();
+    url.pathname = `/${defaultLocale}`;
+    return NextResponse.redirect(url, 308);
+  }
+
   // Négociation de langue : le français reste la valeur par défaut au Québec.
   const accept = req.headers.get("accept-language") ?? "";
   const prefersEnglish = /^\s*en\b/i.test(accept) && !/\bfr\b/i.test(accept.split(",")[0] ?? "");
   const locale = prefersEnglish ? "en" : defaultLocale;
 
   const url = req.nextUrl.clone();
-  url.pathname = `/${locale}${pathname === "/" ? "" : pathname}`;
+  url.pathname = `/${locale}${pathname}`;
   return NextResponse.redirect(url);
 }
 

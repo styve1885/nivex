@@ -1149,6 +1149,27 @@ test("le lien court /avis traverse le middleware, les autres adresses gardent le
   assert.equal(new URL(deeper.headers.get("location")).pathname, "/fr/avis/autre", "seule l'adresse exacte passe");
 });
 
+test("la racine : redirection permanente vers /fr, quelle que soit la langue du navigateur", () => {
+  /* Le 25 novembre 2026, Bing tenait « / » pour un double de /fr : la
+     redirection était temporaire (307) et suivait la langue. */
+  const at = (r) => new URL(r.headers.get("location"), "https://www.nivexrepassage.ca").href;
+  for (const lang of [null, "fr-CA,fr;q=0.9", "en-US,en;q=0.9"]) {
+    const r = middleware(new NextRequest("https://www.nivexrepassage.ca/", lang ? { headers: { "accept-language": lang } } : undefined));
+    assert.equal(r.status, 308, `Accept-Language : ${lang}`);
+    assert.equal(at(r), "https://www.nivexrepassage.ca/fr");
+  }
+  /* Le reste de l'adresse suit : un lien marqué garde sa provenance. */
+  assert.equal(at(middleware(new NextRequest("https://www.nivexrepassage.ca/?utm_source=facebook"))),
+    "https://www.nivexrepassage.ca/fr?utm_source=facebook");
+  /* Les autres adresses sans langue ne changent pas : temporaires, selon la langue. */
+  const en = middleware(new NextRequest("https://www.nivexrepassage.ca/tarifs", { headers: { "accept-language": "en-US,en;q=0.9" } }));
+  assert.equal(en.status, 307);
+  assert.equal(new URL(at(en)).pathname, "/en/tarifs");
+  for (const p of ["/fr", "/en", "/fr/tarifs"]) {
+    assert.equal(middleware(new NextRequest(`https://www.nivexrepassage.ca${p}`)).headers.get("x-middleware-next"), "1", p);
+  }
+});
+
 test("les nouveaux textes : aucun point d'exclamation, et le français a son anglais", () => {
   const textes = [fr.hero.onSite, en.hero.onSite, fr.faq.items[0].q, fr.faq.items[0].a, en.faq.items[0].q, en.faq.items[0].a,
     ...Object.values(fr.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v])),

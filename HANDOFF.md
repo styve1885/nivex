@@ -308,7 +308,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
-| #43 | 25 nov. 2026 | Le samedi passe à 7 h – 22 h à partir du samedi 5 décembre (changement d'horaire daté, `samedi-2026-12`) ; le samedi 28 novembre reste à 18 h – 22 h. Le site ne dit plus ce que contient une séance (« 1 h 50 de repassage », installation et rangement) : pages, tunnels, courriels, invitation d'agenda, fiche, llms |
+| #43 | 25 nov. 2026 | Le samedi passe à 7 h – 22 h à partir du samedi 5 décembre (changement d'horaire daté, `samedi-2026-12`) ; le samedi 28 novembre reste à 18 h – 22 h. Le site ne dit plus ce que contient une séance (« 1 h 50 de repassage », installation et rangement) : pages, tunnels, courriels, invitation d'agenda, fiche, llms. La racine `/` redirige en permanence (308) vers `/fr`, quelle que soit la langue : Bing la tenait pour un double de `/fr` |
 | #42 | 24 nov. 2026 | Accueil : le héros passe à un ivoire uni (`linen-200`), sans cadre filet ni petit quadrillé ; l'en-tête de l'accueil ne montre plus NIVEX, les autres pages le gardent ; textes, couleurs et espacements inchangés |
 | #41 | 14 nov. 2026 | Planche à repasser : question obligatoire au tunnel (Oui, Non, Je ne suis pas sûr) ; « À contacter » sur la fiche, dans l'avis par courriel et par texto ; « Pensez à préparer votre planche à repasser. » dans la confirmation et le rappel de la veille |
 | #40 | 14 nov. 2026 | Le texto de deux heures avant est retiré : seul reste le rappel de la veille ; ceux déjà programmés sont annulés après la mise en ligne et chaque matin ; « Vous recevrez un rappel la veille de votre séance. » sur la page de réservation et dans les conditions ; politique de confidentialité à jour |

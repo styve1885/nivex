@@ -918,6 +918,18 @@ session de l'espace artisan sont liés au domaine exact : après la bascule,
 l'artisan rouvre `/admin` sur le www dans chaque navigateur, et son lien
 « ne pas compter » dans ceux de Facebook et d'Instagram.
 
+**La racine `/` redirige en permanence (308) vers `/fr`**, quelle que soit la
+langue du navigateur (middleware, 25 novembre 2026). En 307 et selon la
+langue, Bing la tenait pour une page à part, double de `/fr` : même titre,
+même description. Une redirection permanente ne varie pas d'un visiteur à
+l'autre ; un navigateur anglais arrive donc sur `/fr`, et le lien de langue
+est en haut de chaque page. Le domaine sans www y arrive en deux sauts
+permanents : le 308 de Vercel vers le www, puis celui du middleware. Les
+autres adresses sans langue (`/tarifs`…) gardent leur redirection
+temporaire selon la langue, et les liens courts des imprimés restent
+temporaires. Le `WebSite` garde son `url` à la racine du domaine : c'est ce
+que Google demande pour le nom du site. Le plan du site ne la liste pas.
+
 **L'en-tête de chaque page** se déclare dans la page, jamais dans la racine :
 la fusion des métadonnées de Next est superficielle, et un `alternates` posé
 dans la racine passait aux pages qui n'en déclaraient pas. Une page publique
@@ -1022,7 +1034,7 @@ pages.
 
 La balise de validation de Google Search Console sort de
 `GOOGLE_SITE_VERIFICATION` (`lib/brand.ts`, la valeur `content=` seule), sur
-toutes les pages de la vitrine : la racine `/` redirige vers `/fr` ou `/en`,
+toutes les pages de la vitrine : la racine `/` redirige vers `/fr` (308),
 et Google lit la page d'arrivée.
 
 **L'icône** est le fer doré de `app/icon.png`, que reprennent
