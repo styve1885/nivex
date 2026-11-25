@@ -226,6 +226,10 @@ défaut du code. Changer une constante ne change rien en production
   depuis le 13 novembre 2026, Griffintown et Ville de Mont-Royal. La liste
   « Copier pour Google » de l'onglet Zones et frais les donne, à reporter
   dans les zones desservies des deux fiches.
+- **Le samedi à 7 h – 22 h dès le 5 décembre 2026** : le site le dit et le
+  réserve depuis le 25 novembre ; la fiche Google et Bing Places, elles,
+  gardent l'horaire qu'il y a saisi. Le nouvel horaire du samedi s'y
+  reporte à la main, idéalement le 5 décembre.
 - **Variables mortes** : `NIVEX_HOME_ADDRESS` et `GOOGLE_MAPS_API_KEY` ne
   sont plus lues par le code. S'il les a encore chez Vercel, il peut les
   supprimer.
@@ -304,6 +308,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #43 | 25 nov. 2026 | Le samedi passe à 7 h – 22 h à partir du samedi 5 décembre (changement d'horaire daté, `samedi-2026-12`) ; le samedi 28 novembre reste à 18 h – 22 h. Le site ne dit plus ce que contient une séance (« 1 h 50 de repassage », installation et rangement) : pages, tunnels, courriels, invitation d'agenda, fiche, llms. La racine `/` redirige en permanence (308) vers `/fr`, quelle que soit la langue : Bing la tenait pour un double de `/fr` |
 | #42 | 24 nov. 2026 | Accueil : le héros passe à un ivoire uni (`linen-200`), sans cadre filet ni petit quadrillé ; l'en-tête de l'accueil ne montre plus NIVEX, les autres pages le gardent ; textes, couleurs et espacements inchangés |
 | #41 | 14 nov. 2026 | Planche à repasser : question obligatoire au tunnel (Oui, Non, Je ne suis pas sûr) ; « À contacter » sur la fiche, dans l'avis par courriel et par texto ; « Pensez à préparer votre planche à repasser. » dans la confirmation et le rappel de la veille |
 | #40 | 14 nov. 2026 | Le texto de deux heures avant est retiré : seul reste le rappel de la veille ; ceux déjà programmés sont annulés après la mise en ligne et chaque matin ; « Vous recevrez un rappel la veille de votre séance. » sur la page de réservation et dans les conditions ; politique de confidentialité à jour |

@@ -711,7 +711,8 @@ test("la fiche : le catalogue des cinq abonnements et de la séance d'essai, cha
   ]);
   assert.match(flat(catalogue.itemListElement[0].description), /^1 visite de 2 h toutes les quatre semaines — les chemises et les pantalons du mois\. Jusqu'à 18 pièces par cycle\./);
   assert.match(flat(catalogue.itemListElement[3].description), /Jusqu'à 72 pièces par cycle\. Le nombre de pièces varie/);
-  assert.match(flat(catalogue.itemListElement[5].description), /^Jusqu'à 18 pièces\. Le nombre de pièces varie selon la taille, le type et la matière des vêtements\. Chaque séance inclut l'installation/);
+  /* La capacité et sa précision, et plus ce que contient la séance (25 novembre 2026). */
+  assert.equal(flat(catalogue.itemListElement[5].description), "Jusqu'à 18 pièces. Le nombre de pièces varie selon la taille, le type et la matière des vêtements.");
   assert.equal(pieces.itemListElement.length, 14);
   assert.deepEqual([pieces.itemListElement[0].itemOffered.name, pieces.itemListElement[0].price], ["Parure Queen ou King complète", 28]);
   const nappe = pieces.itemListElement.find((x) => x.itemOffered.name === "Nappe de réception");
@@ -1148,6 +1149,27 @@ test("le lien court /avis traverse le middleware, les autres adresses gardent le
   assert.equal(new URL(deeper.headers.get("location")).pathname, "/fr/avis/autre", "seule l'adresse exacte passe");
 });
 
+test("la racine : redirection permanente vers /fr, quelle que soit la langue du navigateur", () => {
+  /* Le 25 novembre 2026, Bing tenait « / » pour un double de /fr : la
+     redirection était temporaire (307) et suivait la langue. */
+  const at = (r) => new URL(r.headers.get("location"), "https://www.nivexrepassage.ca").href;
+  for (const lang of [null, "fr-CA,fr;q=0.9", "en-US,en;q=0.9"]) {
+    const r = middleware(new NextRequest("https://www.nivexrepassage.ca/", lang ? { headers: { "accept-language": lang } } : undefined));
+    assert.equal(r.status, 308, `Accept-Language : ${lang}`);
+    assert.equal(at(r), "https://www.nivexrepassage.ca/fr");
+  }
+  /* Le reste de l'adresse suit : un lien marqué garde sa provenance. */
+  assert.equal(at(middleware(new NextRequest("https://www.nivexrepassage.ca/?utm_source=facebook"))),
+    "https://www.nivexrepassage.ca/fr?utm_source=facebook");
+  /* Les autres adresses sans langue ne changent pas : temporaires, selon la langue. */
+  const en = middleware(new NextRequest("https://www.nivexrepassage.ca/tarifs", { headers: { "accept-language": "en-US,en;q=0.9" } }));
+  assert.equal(en.status, 307);
+  assert.equal(new URL(at(en)).pathname, "/en/tarifs");
+  for (const p of ["/fr", "/en", "/fr/tarifs"]) {
+    assert.equal(middleware(new NextRequest(`https://www.nivexrepassage.ca${p}`)).headers.get("x-middleware-next"), "1", p);
+  }
+});
+
 test("les nouveaux textes : aucun point d'exclamation, et le français a son anglais", () => {
   const textes = [fr.hero.onSite, en.hero.onSite, fr.faq.items[0].q, fr.faq.items[0].a, en.faq.items[0].q, en.faq.items[0].a,
     ...Object.values(fr.montreal).flatMap((v) => (Array.isArray(v) ? v.flatMap((x) => [x.q, x.a]) : [v])),
@@ -1322,6 +1344,55 @@ test("l'horaire du 2 novembre 2026, mot pour mot : « et le samedi », « vendre
   assert.equal(flat(ligne(ouverts([6]))), "18 h – 22 h, samedi");
   assert.equal(flat(ligne([{ day: 2, enabled: true, open: "09:30", close: "12:00" }], "en", en)), "9:30 am – 12 pm, Tuesday");
   assert.equal(flat(ligne([{ day: 2, enabled: true, open: "09:30", close: "12:00" }])), "9 h 30 – 12 h, mardi");
+});
+
+/* Le 25 novembre 2026 : le samedi passe à 7 h – 22 h à partir du samedi
+   5 décembre ; les samedis d'ici là restent à 18 h – 22 h (lib/hours.ts). */
+const SAMEDI = { from: "2026-12-05", days: [{ day: 6, enabled: true, open: "07:00", close: "22:00" }] };
+
+test("le samedi à 7 h dès le 5 décembre 2026 : la ligne l'annonce avec sa date, puis sans", () => {
+  const s = { ...FALLBACK_SETTINGS, hours: SOIRS, hoursChange: SAMEDI };
+  const avant = new Date("2026-11-25T15:00:00Z");
+  assert.equal(flat(openingLine(fr, s, "fr", avant)),
+    "18 h – 22 h, du lundi au jeudi ; 7 h – 22 h, du vendredi au dimanche (le samedi à partir du 5 décembre)");
+  assert.equal(flat(openingLine(en, s, "en", avant)),
+    "6 pm – 10 pm, Monday to Thursday; 7 am – 10 pm, Friday to Sunday (Saturdays from December 5)");
+  assert.equal(flat(fr.contact.hoursValue.replace("{hours}", openingLine(fr, s, "fr", avant))),
+    "18 h – 22 h, du lundi au jeudi ; 7 h – 22 h, du vendredi au dimanche (le samedi à partir du 5 décembre).");
+  /* Le jour venu, à minuit et demi à Montréal, la date se tait. La veille au
+     soir, le serveur est déjà le 5 en UTC : elle se lit à Montréal. */
+  assert.equal(flat(openingLine(fr, s, "fr", new Date("2026-12-05T05:30:00Z"))),
+    "18 h – 22 h, du lundi au jeudi ; 7 h – 22 h, du vendredi au dimanche");
+  assert.match(flat(openingLine(fr, s, "fr", new Date("2026-12-05T03:00:00Z"))), /à partir du 5 décembre\)$/);
+  /* Sans changement, la ligne d'avant, mot pour mot. */
+  assert.equal(flat(openingLine(fr, { ...s, hoursChange: null }, "fr", avant)),
+    "18 h – 22 h, du lundi au jeudi et le samedi ; 7 h – 22 h, vendredi et dimanche");
+  /* Le pied de page et la fiche lisent l'horaire annoncé ; une base muette, rien. */
+  assert.deepEqual(adminHours(s).find((h) => h.day === 6), SAMEDI.days[0]);
+  assert.equal(adminHours(UNREAD_SETTINGS), null);
+});
+
+test("la fiche de la maison date le changement du samedi : jusqu'au 4 décembre, puis dès le 5", () => {
+  const s = { ...FALLBACK_SETTINGS, hours: SOIRS, hoursChange: SAMEDI };
+  const specs = (now) => localBusinessJsonLd(fr, s, "fr", now).openingHoursSpecification.map((h) =>
+    `${h.dayOfWeek.replace("https://schema.org/", "")} ${h.opens}–${h.closes}${h.validFrom ? ` dès ${h.validFrom}` : ""}${h.validThrough ? ` jusqu'au ${h.validThrough}` : ""}`);
+  assert.deepEqual(specs(new Date("2026-11-25T15:00:00Z")), [
+    "Monday 18:00–22:00", "Tuesday 18:00–22:00", "Wednesday 18:00–22:00", "Thursday 18:00–22:00", "Friday 07:00–22:00",
+    "Saturday 18:00–22:00 jusqu'au 2026-12-04", "Saturday 07:00–22:00 dès 2026-12-05", "Sunday 07:00–22:00",
+  ]);
+  assert.deepEqual(specs(new Date("2026-12-05T15:00:00Z")), [
+    "Monday 18:00–22:00", "Tuesday 18:00–22:00", "Wednesday 18:00–22:00", "Thursday 18:00–22:00", "Friday 07:00–22:00",
+    "Saturday 07:00–22:00", "Sunday 07:00–22:00",
+  ]);
+});
+
+test("/llms.txt annonce le nouvel horaire, avec sa date tant qu'elle est à venir ; l'empreinte des pages le suit", () => {
+  const avec = (from) => flat(llmsText({ ...FALLBACK_SETTINGS, hours: SOIRS, hoursChange: { ...SAMEDI, from } }));
+  assert.ok(avec("2099-12-05").includes("- Horaire : 18 h – 22 h, du lundi au jeudi ; 7 h – 22 h, du vendredi au dimanche (le samedi à partir du 5 décembre)\n"));
+  assert.ok(avec("2020-12-05").includes("- Horaire : 18 h – 22 h, du lundi au jeudi ; 7 h – 22 h, du vendredi au dimanche\n"));
+  const sans = { ...FALLBACK_SETTINGS, hours: SOIRS };
+  assert.equal(publicFingerprint({ ...sans, hoursChange: null }), publicFingerprint(sans), "sans changement, l'empreinte d'avant");
+  assert.notEqual(publicFingerprint({ ...sans, hoursChange: SAMEDI }), publicFingerprint(sans));
 });
 
 test("le pied de page et la fiche de la maison lisent l'horaire de l'onglet Réglages, ou rien", () => {

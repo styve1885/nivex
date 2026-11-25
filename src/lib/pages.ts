@@ -46,14 +46,19 @@ export type PublicPage = {
    des quartiers : toutes avancent. Le 14 novembre, le texto de deux heures
    avant est retiré : les conditions et la politique de confidentialité ne le
    promettent plus, et leur date avance. Le même jour, la politique de
-   confidentialité nomme la réponse à la question de la planche à repasser. */
+   confidentialité nomme la réponse à la question de la planche à repasser.
+   Le 25 novembre, ce que contient une séance (installation, rangement,
+   1 h 50 de repassage) quitte l'accueil (« Déroulement »), Tarifs, Montréal,
+   les conditions et la fiche LocalBusiness de toutes les pages : toutes
+   avancent, et la date des conditions, que la politique affiche aussi. Le
+   nouvel horaire du samedi, lui, vient des réglages : il se date seul. */
 export const PUBLIC_PAGES: PublicPage[] = [
-  { path: "", updated: "2026-11-13", changeFrequency: "weekly", priority: 1 },
-  { path: "/tarifs", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/montreal", updated: "2026-11-13", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/presentation", updated: "2026-11-13", changeFrequency: "yearly", priority: 0.6, video: true },
-  { path: "/conditions", updated: "2026-11-14", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/confidentialite", updated: "2026-11-14", changeFrequency: "yearly", priority: 0.3 },
+  { path: "", updated: "2026-11-25", changeFrequency: "weekly", priority: 1 },
+  { path: "/tarifs", updated: "2026-11-25", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/montreal", updated: "2026-11-25", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/presentation", updated: "2026-11-25", changeFrequency: "yearly", priority: 0.6, video: true },
+  { path: "/conditions", updated: "2026-11-25", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/confidentialite", updated: "2026-11-25", changeFrequency: "yearly", priority: 0.3 },
 ];
 
 export const PAGE_LOCALES = ["fr", "en"] as const;

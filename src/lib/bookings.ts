@@ -13,11 +13,11 @@ import { clientCancellation, clientConfirmation, ownerNotification, type Booking
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { canSubscriberChange } from "./cycles";
 import { cancelScheduledSms, ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
-import { ironingMinutes, sessionLength, unitByKey } from "./pricing";
+import { sessionLength, unitByKey } from "./pricing";
 import { SESSION_KEY, UNIT_PREFIX, estimateRange, itemText, moneyRange, type BookedItem } from "./items";
 import { isBoardAnswer, type BoardAnswer } from "./board";
 import {
-  contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, INSTALL_MINUTES, PHONE, REQUEST_INBOX,
+  contactEmail, CANCEL_WINDOW_HOURS, FIRST_FREE_MIN_MINUTES, PHONE, REQUEST_INBOX,
 } from "./brand";
 
 /* ============================ Schéma d'entrée ============================ */
@@ -541,8 +541,8 @@ export function cleanOrigin(input: Pick<BookingInputType, "heardFrom" | "referre
 const EVENT_TEXT = {
   fr: {
     summary: (n: string) => `NIVEX — Repassage à domicile · ${n}`,
-    session: "Séance", ironing: (d: string) => `${d}, installation et rangement compris`,
-    setup: (ironing: string) => `Votre artisan arrive à l'heure du début. L'installation et le rangement de son matériel, ${INSTALL_MINUTES} minutes chacun, font partie de la séance : ${ironing} de repassage.`,
+    session: "Séance",
+    arrival: "Votre artisan arrive à l'heure du début.",
     early: (m: number) => `Votre repasseur arrive ${m} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     address: "Adresse", client: "Client", phone: "Téléphone", email: "Courriel",
     items: "Prestations", estimate: "Estimation", free: "première heure offerte",
@@ -552,8 +552,8 @@ const EVENT_TEXT = {
   },
   en: {
     summary: (n: string) => `NIVEX — In-home ironing · ${n}`,
-    session: "Session", ironing: (d: string) => `${d}, setting up and packing away included`,
-    setup: (ironing: string) => `Your presser arrives at the start time. Setting up and packing away the equipment, ${INSTALL_MINUTES} minutes each, are part of the session: ${ironing} of ironing.`,
+    session: "Session",
+    arrival: "Your presser arrives at the start time.",
     early: (m: number) => `Your presser arrives ${m} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     address: "Address", client: "Client", phone: "Phone", email: "Email",
     items: "Services", estimate: "Estimate", free: "first hour free",
@@ -573,9 +573,10 @@ const EVENT_TEXT = {
  * lit dans son propre agenda : nom, téléphone, adresse, prestations et
  * montant y restent.
  *
- * L'événement porte les heures réservées, et l'artisan arrive au début :
- * l'installation et le rangement sont dans la séance, et la description le
- * dit. Un rendez-vous de l'ancien déroulement garde sa phrase d'arrivée
+ * L'événement porte les heures réservées, et l'artisan arrive au début, ce
+ * que dit la description ; ce que contient la séance (installation,
+ * rangement, temps de repassage) ne s'y dit plus depuis le 25 novembre 2026.
+ * Un rendez-vous de l'ancien déroulement garde sa phrase d'arrivée
  * anticipée ; le temps qu'il occupe en plus reste protégé là où il se
  * décide, par le moteur de créneaux et la contrainte d'exclusion.
  */
@@ -587,8 +588,8 @@ export function calendarEvent(b: Booking, origin: string, tz: string): {
   const money = (cents: number) => formatMoney(cents, b.currency, l);
   const range = estimateRange(b.items, b.estimateCents);
   const lines: string[] = [
-    t.kv(t.session, `${formatDateTime(b.startsAt, tz, l)} — ${t.ironing(minutesToText(b.durationMinutes, l))}.`),
-    b.setupMinutes > 0 ? t.early(b.setupMinutes) : t.setup(minutesToText(ironingMinutes(b.durationMinutes), l)),
+    t.kv(t.session, `${formatDateTime(b.startsAt, tz, l)} — ${minutesToText(b.durationMinutes, l)}.`),
+    b.setupMinutes > 0 ? t.early(b.setupMinutes) : t.arrival,
     "",
     t.kv(t.address, `${b.address}, ${b.city}, QC ${b.postalCode}`),
     t.kv(t.client, b.clientName),

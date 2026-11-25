@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import type { Dict } from "./i18n";
-import { adminHours, type Settings } from "./settings";
+import { adminHours, type DayHours, type Settings } from "./settings";
 import { FOUNDER, FOUNDER_PROFILES, GOOGLE_MAPS_URL, PHONE, SOCIAL_PROFILES, contactEmail } from "./brand";
 import { catalogName, getSeo, type SeoPage } from "./i18n/seo";
 import { siteOrigin } from "./google";
-import { formatMoney, minutesToText } from "./time";
+import { addDaysToKey, dateKey, formatMoney, minutesToText } from "./time";
+import { changedDays, pendingChange } from "./hours";
 import {
   PLANS, UNIT_PRICES, capacityPieces, cheapestPlanCents, planCents, planPieces, sessionLength, sessionPriceCents,
 } from "./pricing";
-import { setupSentence, shortDuration } from "./capacity";
+import { shortDuration } from "./capacity";
 import { isMontrealSector, sectorsByRegion, thresholdText, type Sector } from "./travel";
 import { descriptionAreasServed } from "./areas";
-import { openDays } from "@/components/home/opening-line";
+import { WEEK } from "@/components/home/opening-line";
 import { PRESENTATION, isoDuration, uploadDateTime } from "./video";
 import { presentationTranscript, presentationVideoText } from "./i18n/video";
 
@@ -247,7 +248,35 @@ function travelOffers(t: Dict, s: Settings, lang: Lang, provider: { "@id": strin
  * Toutes les adresses sont absolues, sur l'origine canonique (avec www en
  * production) : une fiche qui pointe vers une redirection perd sa valeur.
  */
-export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * L'horaire de la fiche, du lundi au dimanche. Un changement d'horaire daté
+ * encore à venir (lib/hours.ts) s'y dit avec ses dates : pour le jour qu'il
+ * touche, les heures d'aujourd'hui jusqu'à la veille (`validThrough`), puis
+ * les nouvelles à partir de sa date (`validFrom`). Le jour venu, il n'en
+ * reste qu'un.
+ */
+function openingSpecs(s: Settings, shown: DayHours[], now: Date) {
+  const spec = (h: DayHours, dates: { validFrom?: string; validThrough?: string } = {}) => ({
+    "@type": "OpeningHoursSpecification",
+    dayOfWeek: `https://schema.org/${DAY_NAMES[h.day]}`,
+    opens: h.open, closes: h.close, ...dates,
+  });
+  const pending = pendingChange(s.hoursChange, dateKey(now, s.timezone));
+  const changed = pending ? changedDays(s.hours, pending).map((d) => d.day) : [];
+  return WEEK.flatMap((day) => {
+    const next = shown.find((h) => h.day === day);
+    if (!pending || !changed.includes(day)) return next?.enabled ? [spec(next)] : [];
+    const now = s.hours.find((h) => h.day === day);
+    return [
+      ...(now?.enabled ? [spec(now, { validThrough: addDaysToKey(pending.from, -1) })] : []),
+      ...(next?.enabled ? [spec(next, { validFrom: pending.from })] : []),
+    ];
+  });
+}
+
+export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang, now = new Date()) {
   const origin = siteOrigin();
   const { south, montreal } = sectorsByRegion(s.zonePolicy);
   const session = sessionLength(s);
@@ -290,13 +319,7 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
     ...(GOOGLE_MAPS_URL ? { hasMap: GOOGLE_MAPS_URL } : {}),
     /* L'horaire de l'onglet Réglages, du lundi au dimanche ; rien quand la
        base n'a pas répondu, plutôt que celui du code (`adminHours`). */
-    ...(hours ? {
-      openingHoursSpecification: openDays(hours).map((h) => ({
-        "@type": "OpeningHoursSpecification",
-        dayOfWeek: `https://schema.org/${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][h.day]}`,
-        opens: h.open, closes: h.close,
-      })),
-    } : {}),
+    ...(hours ? { openingHoursSpecification: openingSpecs(s, hours, now) } : {}),
     /* Ce que la vitrine vend, aux prix des pages : les cinq abonnements au
        prix d'un cycle et la séance d'essai, puis les pièces à l'unité. Rien
        de ce que la vitrine a retiré (séances de trois et quatre heures,
@@ -325,8 +348,8 @@ export function localBusinessJsonLd(t: Dict, s: Settings, lang: Lang) {
             price: sessionPriceCents(s) / 100,
             priceCurrency: s.currency,
             url: offerUrl,
-            /* La capacité et le déroulement, les mêmes phrases que la page. */
-            description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(session)))}. ${t.capacity.caveat} ${setupSentence(t, s, lang)}`,
+            /* La capacité, la même phrase que la page. */
+            description: `${t.capacity.upTo.replace("{n}", String(capacityPieces(session)))}. ${t.capacity.caveat}`,
             itemOffered: service(`${t.meta.service} · ${minutesToText(session, lang)}`),
           },
         ],

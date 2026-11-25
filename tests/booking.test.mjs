@@ -41,6 +41,10 @@ const test = (name, fn) => { fn(); n++; console.log(`  ✓ ${name}`); };
    plutôt que le contenu. */
 const flat = (x) => x.replace(/[\u00A0\u202F\u2009]/g, " ");
 
+/* Ce que le client ne lit plus nulle part depuis le 25 novembre 2026 : ce que
+   contient une séance (l'installation, le rangement, le temps de repassage). */
+const SETUP_TALK = /installation et (le )?rangement|installation, rangement|s'installe et range|rangement compris|minutes chacun|1\s?h\s?50|de repassage\.|setting up and packing|packing away|minutes each|of ironing\./i;
+
 console.log("\nRéservation\n");
 
 const d = {
@@ -295,13 +299,20 @@ test("la foire aux questions : sept questions, dans l'ordre demandé, deux ou tr
   }
 });
 
-test("la foire aux questions dit la capacité, et Tarifs le temps d'installation", () => {
+test("la foire aux questions dit la capacité ; plus rien ne dit ce que contient une séance", () => {
   const capacite = fr.faq.items.find((x) => x.a.includes("{capacity}"));
   assert.equal(flat(capacite.q), "Combien de vêtements repassez-vous en une séance ?");
   assert.equal(faqFill(capacite.a, fr, settings, "fr"),
     "Jusqu'à 18 pièces en 2 h, et jusqu'à 27 en 3 h, selon la taille, le type et la matière des vêtements.");
   assert.ok(!fr.faq.items.some((x) => x.a.includes("{setup}")), "la question de l'installation est retirée");
-  assert.equal(setupSentence(fr, settings, "fr"),
+  /* Décision de l'artisan, 25 novembre 2026 : ni « 1 h 50 de repassage », ni
+     « 5 minutes d'installation », ni « installation comprise », nulle part
+     dans les dictionnaires. La phrase dort avec les textes retirés, et se
+     remplit encore, pour pouvoir la remettre. */
+  for (const dict of [fr, getDict("en")]) {
+    assert.doesNotMatch(JSON.stringify(dict), SETUP_TALK, "le dictionnaire ne dit plus ce que contient une séance");
+  }
+  assert.equal(setupSentence(settings, "fr"),
     "Chaque séance inclut l'installation et le rangement de notre matériel, 5 minutes chacun. Une séance de 2 h comprend donc 1 h 50 de repassage.");
   // La durée minimale réglée déplace les deux phrases ensemble.
   assert.match(faqFill(capacite.a, fr, { ...settings, minMinutes: 180 }, "fr"), /^Jusqu'à 27 pièces en 3 h, et jusqu'à 36 en 4 h,/);
@@ -311,11 +322,15 @@ test("la foire aux questions dit la capacité, et Tarifs le temps d'installation
   for (const item of fr.faq.items) assert.doesNotMatch(item.a, /\{cadence\}|par heure/, "plus aucune cadence par heure");
 });
 
-test("le courriel de confirmation dit l'arrivée à l'heure, et le temps de repassage", () => {
+test("la confirmation et le rappel disent l'arrivée à l'heure, et rien de ce que contient la séance", () => {
   const m = clientConfirmation(d);
-  assert.ok(flat(m.text).includes("Votre artisan arrive à l'heure du début. Votre séance de 2 heures inclut l'installation et le rangement de notre matériel, 5 minutes chacun : 1 h 50 de repassage."));
+  assert.ok(flat(m.text).includes("Votre artisan arrive à l'heure du début."));
   assert.doesNotMatch(m.text + m.html, /15 minutes avant/);
-  assert.match(flat(clientConfirmation({ ...d, locale: "en" }).text), /arrives at the start time\. Your session of 2 hours includes setting up/);
+  const en = clientConfirmation({ ...d, locale: "en" });
+  assert.match(flat(en.text), /Your presser arrives at the start time\./);
+  for (const x of [m, en, sessionReminder(d), sessionReminder({ ...d, locale: "en" })]) {
+    assert.doesNotMatch(flat(x.subject + x.text + x.html), SETUP_TALK, "ni installation, ni rangement, ni 1 h 50");
+  }
   /* Un rendez-vous de l'ancien déroulement garde sa phrase. */
   assert.match(flat(clientConfirmation({ ...d, setupMinutes: 15 }).text), /15 minutes avant le début de votre séance/);
 });
@@ -480,8 +495,10 @@ test("l'invitation commence à l'heure d'arrivée, le début de la séance, et l
   const ev = calendarEvent(booking, origin, TZ);
   assert.equal(ev.start, "2026-10-03T18:00:00.000Z", "14 h, l'heure de la confirmation et de l'arrivée");
   assert.equal(ev.end, "2026-10-03T20:00:00.000Z");
-  assert.match(flat(ev.description), /installation et rangement compris/);
-  assert.match(flat(ev.description), /Votre artisan arrive à l'heure du début\. L'installation et le rangement de son matériel, 5 minutes chacun, font partie de la séance : 1 h 50 de repassage\./);
+  assert.match(flat(ev.description), /Séance : samedi 3 octobre 2026 à 14 h 00 — 2 heures\.\n/);
+  assert.match(flat(ev.description), /\nVotre artisan arrive à l'heure du début\.\n/);
+  const en = calendarEvent({ ...booking, locale: "en" }, origin, TZ);
+  assert.doesNotMatch(flat(ev.description + en.description), SETUP_TALK, "l'invitation ne dit plus ce que contient la séance");
   assert.match(flat(calendarEvent({ ...booking, setupMinutes: 15 }, origin, TZ).description), /15 minutes avant le début de votre séance/);
 });
 
@@ -614,18 +631,17 @@ test("le remerciement invite à un avis, quel qu'il soit, dans la langue du clie
   assert.match(fr.text, /qu'une fois/);
 });
 
-test("la note de déroulement des deux tunnels remplit sa durée et son temps de repassage", () => {
-  /* Le tunnel d'abonnement montrait « {duration} » et « {ironing} » tels
-     quels, du 22 octobre au 2 novembre 2026. */
+test("les deux tunnels disent l'heure d'arrivée, et plus le temps de repassage", () => {
+  /* Depuis le 25 novembre 2026, ni « dont 1 h 50 de repassage » sous la
+     durée, ni l'installation et le rangement sous les créneaux. */
   for (const f of ["BookingWizard", "SubscriptionWizard"]) {
     const src = readFileSync(new URL(`../src/components/booking/${f}.tsx`, import.meta.url), "utf8");
-    const uses = src.split("t.booking.step3.setup").slice(1);
-    assert.ok(uses.length > 0, `${f} affiche la note`);
-    for (const u of uses) {
-      assert.match(u.slice(0, 260), /^\s*\.replace\("\{duration\}"[\s\S]*\.replace\("\{ironing\}"/, `${f} : la note remplit ses deux marqueurs`);
-    }
+    assert.ok(src.includes("{t.booking.step3.arrival}"), `${f} affiche l'heure d'arrivée`);
+    assert.doesNotMatch(src, /INSTALL_MINUTES|PACKUP_MINUTES|step1\.ironing|step3\.setup|ironingText/, `${f} ne calcule plus de temps de repassage`);
   }
-  for (const d of [fr, getDict("en")]) assert.match(d.booking.step3.setup, /\{duration\}[\s\S]*\{ironing\}/, "les deux marqueurs existent");
+  assert.equal(fr.booking.step3.arrival, "Votre artisan arrive à l'heure du début.");
+  assert.equal(getDict("en").booking.step3.arrival, "Your presser arrives at the start time.");
+  assert.ok(!("ironing" in fr.booking.step1) && !("ironing" in getDict("en").booking.step1));
 });
 
 const { trialReminder } = await import("../src/lib/reminder-trial.ts");

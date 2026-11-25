@@ -534,11 +534,15 @@ test("le rappel d'un cycle déjà payé ne redemande rien", () => {
 test("le rappel dit l'arrivée : à l'heure du début, ou 15 minutes avant dans l'ancien déroulement", () => {
   const v = { ...base, startsAt: base.visits[5], cycle: 2, index: 2, paymentDue: false };
   const neuf = flat(visitReminder({ ...v, setupMinutes: 0 }).text);
-  assert.match(neuf, /arrive à l'heure du début\. Chaque visite de 2 heures inclut l'installation et le rangement de notre matériel, 5 minutes chacun : 1 h 50 de repassage\./);
+  assert.match(neuf, /Votre artisan arrive à l'heure du début\./);
+  /* Ce que contient une visite ne se dit plus (25 novembre 2026). */
+  assert.doesNotMatch(neuf, /installation|rangement|1 h 50|de repassage\./);
   assert.doesNotMatch(neuf, /15 minutes/);
   assert.match(flat(visitReminder({ ...v, setupMinutes: 15 }).text), /15 minutes avant le début de chaque visite/);
   assert.match(flat(subscriptionConfirmation({ ...base, setupMinutes: 0 }).text), /arrive à l'heure du début/);
-  assert.match(flat(subscriptionConfirmation({ ...base, locale: "en", setupMinutes: 0 }).text), /Each visit of 2 hours includes setting up/);
+  const en = flat(subscriptionConfirmation({ ...base, locale: "en", setupMinutes: 0 }).text);
+  assert.match(en, /Your presser arrives at the start time\./);
+  assert.doesNotMatch(en, /setting up|packing away|of ironing/);
 });
 
 test("l'annulation dit la date de remplacement en fin de série", () => {

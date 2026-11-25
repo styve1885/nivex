@@ -4,7 +4,6 @@ import { CONTACT_EMAIL, PHONE } from "./brand";
 import { siteOrigin } from "./google";
 import { formatMoney, minutesToText } from "./time";
 import { feeTable, feeZones, montrealTravelFree, servedText, type FeeRow } from "./travel";
-import { setupSentence } from "./capacity";
 import { pageDescription } from "./seo";
 import { areasSentence } from "./areas";
 import { faqFill } from "@/components/home/faq-fill";
@@ -159,7 +158,6 @@ function section(s: Settings, lang: "fr" | "en"): string {
     `- ${t.tarifs.trial.replace("{min}", min).replace("{price}", money(sessionPriceCents(s)))}`,
     `- ${t.tarifs.conditions.extraHour.replace("{rate}", money(s.hourlyRate))}`,
     ...(s.firstHourFree ? [`- ${t.pricing.firstFree} : ${t.pricing.firstFreeConditions}`] : []),
-    `- ${setupSentence(t, s, lang)}`,
     `- ${t.capacity.caveat}`,
     "",
     `## ${t.tarifs.units.title}`,

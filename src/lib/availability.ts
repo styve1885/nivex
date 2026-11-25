@@ -2,6 +2,7 @@ import type { Settings } from "./settings";
 import { freeBusy, listEvents, type Busy, type CalendarItem } from "./google";
 import { ensureSchema, sql } from "./db";
 import { EARLY_ARRIVAL_MINUTES, INSTALL_MINUTES, PACKUP_MINUTES } from "./brand";
+import { dayHours } from "./hours";
 import {
   addDaysToKey, dateKey, formatHM, fromWall, parseDateKey, parseHM, toWall, weekdayOfKey,
 } from "./time";
@@ -87,7 +88,7 @@ export function horizonEnd(s: Settings, now = new Date()): number {
 export function onSlotGrid(start: number, s: Settings): boolean {
   if (!Number.isFinite(start) || start % 60_000 !== 0) return false;
   const key = dateKey(new Date(start), s.timezone);
-  const rule = s.hours.find((h) => h.day === weekdayOfKey(key));
+  const rule = dayHours(s, key);
   if (!rule) return false;
   const w = toWall(new Date(start), s.timezone);
   return (w.hour * 60 + w.minute - parseHM(rule.open)) % s.slotStep === 0;
@@ -131,7 +132,9 @@ export function computeSlots(opts: {
   for (let i = 0; i < opts.days; i++) {
     const key = addDaysToKey(opts.fromKey, i);
     const wd = weekdayOfKey(key);
-    const rule = s.hours.find((h) => h.day === wd);
+    /* Les heures du jour même : un changement d'horaire daté (lib/hours.ts)
+       ne vaut qu'à partir de sa date. */
+    const rule = dayHours(s, key);
     const day: DaySlots = { date: key, weekday: wd, open: Boolean(rule?.enabled), slots: [] };
 
     if (!rule?.enabled) { out.push(day); continue; }
@@ -367,7 +370,7 @@ export function slotVerdict(
   // Doit tenir dans les heures d'ouverture du jour.
   const key = dateKey(new Date(start), s.timezone);
   const weekday = weekdayOfKey(key);
-  const rule = s.hours.find((h) => h.day === weekday);
+  const rule = dayHours(s, key);
   if (!rule?.enabled) return { problem: "closed", weekday, open: null, close: null, setup };
 
   const ymd = parseDateKey(key);

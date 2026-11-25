@@ -1,11 +1,13 @@
 import { capacityPieces, ironingMinutes } from "./pricing";
 import type { Dict } from "./i18n";
+import { getRetired } from "./i18n/retired";
 import type { Settings } from "./settings";
 
 /**
- * Les deux phrases de la capacité et du déroulement, écrites depuis les
- * réglages : la foire aux questions, les pages Tarifs et Montréal et les
- * données structurées les disent toutes de la même façon.
+ * La phrase de la capacité, écrite depuis les réglages : la foire aux
+ * questions et les données structurées la disent de la même façon. Celle du
+ * contenu d'une séance (installation, rangement, temps de repassage) ne se
+ * dit plus depuis le 25 novembre 2026 ; elle dort avec les textes retirés.
  */
 
 /**
@@ -35,10 +37,16 @@ export function capacitySentence(t: Dict, s: Pick<Settings, "minMinutes">, local
     .replace("{b}", String(capacityPieces(b))).replace("{db}", shortDuration(b, locale));
 }
 
-/** « Chaque séance inclut l'installation et le rangement… Une séance de 2 h comprend donc 1 h 50 de repassage. » */
-export function setupSentence(t: Dict, s: Pick<Settings, "minMinutes">, locale: "fr" | "en"): string {
+/**
+ * « Chaque séance inclut l'installation et le rangement… Une séance de 2 h
+ * comprend donc 1 h 50 de repassage. » Retirée de la vitrine le 25 novembre
+ * 2026 (lib/i18n/retired.ts) : seules la section retirée « Ce que contient
+ * une séance » et l'ancienne question de l'installation la liraient, si on
+ * les rallumait.
+ */
+export function setupSentence(s: Pick<Settings, "minMinutes">, locale: "fr" | "en"): string {
   const min = shortest(s);
-  return t.capacity.setup
+  return getRetired(locale).capacitySetup
     .replace("{min}", shortDuration(min, locale))
     .replace("{ironing}", shortDuration(ironingMinutes(min), locale));
 }

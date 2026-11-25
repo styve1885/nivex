@@ -15,6 +15,12 @@ import { INSTALL_MINUTES } from "../brand";
  * Le français fait foi ; l'anglais en épouse la forme.
  */
 export const retiredFr = {
+  /* Ce que contient une séance, retiré le 25 novembre 2026 à la demande de
+     l'artisan : la FAQ, Tarifs, Montréal, la fiche de la maison et
+     /llms-full.txt la disaient. Seuls la section retirée « Ce que contient
+     une séance » et l'ancienne question de l'installation la reprennent,
+     s'ils reviennent. {min}, {ironing} : des durées (`setupSentence`). */
+  capacitySetup: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun. Une séance de {min} comprend donc {ironing} de repassage.`,
   /* Le héros : la phrase longue de l'artisan. */
   heroLede:
     "Un artisan se déplace chez vous, avec sa presse et sa vapeur de haute précision. Vous ne déplacez rien, vous ne pliez rien. Vous ouvrez votre penderie, et tout y est droit.",
@@ -290,6 +296,7 @@ export const retiredFr = {
 export type Retired = typeof retiredFr;
 
 export const retiredEn: Retired = {
+  capacitySetup: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each. A session of {min} therefore includes {ironing} of ironing.`,
   /* Le héros : la phrase longue de l'artisan. */
   heroLede:
     "A craftsman comes to you, press and high-precision steam in hand. You carry nothing, you fold nothing. You open your closet, and everything hangs straight.",

@@ -437,5 +437,74 @@ console.log("\nLes Fêtes et la réservation à 90 jours\n");
   });
 }
 
+/* ————— Un changement d'horaire daté : le samedi à 7 h dès le 5 décembre 2026 ————— */
+{
+  const { dayHours, shownHours, pendingChange, changedDays, readHoursChange, changeDate } = await import("../src/lib/hours.ts");
+  const { slotVerdict } = await import("../src/lib/availability.ts");
+  /* L'horaire de production au 25 novembre 2026, et la décision de l'artisan. */
+  const SOIRS = [
+    { day: 0, enabled: true, open: "07:00", close: "22:00" },
+    { day: 1, enabled: true, open: "18:00", close: "22:00" },
+    { day: 2, enabled: true, open: "18:00", close: "22:00" },
+    { day: 3, enabled: true, open: "18:00", close: "22:00" },
+    { day: 4, enabled: true, open: "18:00", close: "22:00" },
+    { day: 5, enabled: true, open: "07:00", close: "22:00" },
+    { day: 6, enabled: true, open: "18:00", close: "22:00" },
+  ];
+  const SAMEDI = { from: "2026-12-05", days: [{ day: 6, enabled: true, open: "07:00", close: "22:00" }] };
+  const house = { ...settings, hours: SOIRS, hoursChange: SAMEDI, horizonDays: 90 };
+  const nov25 = new Date("2026-11-25T15:00:00Z");
+  const times = (key) => computeSlots({ fromKey: key, days: 1, durationMinutes: 120, settings: house, busy: [], now: nov25 })[0].slots.map((x) => x.time);
+  const at = (y, m, d, h) => fromWall({ year: y, month: m, day: d, hour: h, minute: 0 }, TZ).getTime();
+
+  t("le samedi 28 novembre garde 18 h – 22 h ; dès le samedi 5 décembre, 7 h – 22 h", () => {
+    assert.deepEqual(times("2026-11-28"), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
+    const dec5 = times("2026-12-05");
+    assert.equal(dec5[0], "07:00");
+    assert.equal(dec5[dec5.length - 1], "20:00", "on finit à 22 h au plus tard");
+    assert.equal(dec5.length, 27);
+    assert.equal(times("2026-12-12")[0], "07:00");
+    assert.equal(times("2027-02-06")[0], "07:00", "tous les samedis suivants");
+  });
+
+  t("les autres jours ne bougent pas : vendredi et dimanche dès 7 h, la semaine le soir", () => {
+    assert.equal(times("2026-12-04")[0], "07:00");
+    assert.equal(times("2026-12-06")[0], "07:00");
+    assert.deepEqual(times("2026-12-07"), ["18:00", "18:30", "19:00", "19:30", "20:00"]);
+  });
+
+  t("le serveur le refuse comme le tunnel : 10 h le 28 novembre est hors de l'horaire, le 5 décembre non", () => {
+    assert.equal(slotVerdict(at(2026, 11, 28, 10), 120, [], house, nov25).problem, "closed");
+    assert.equal(slotVerdict(at(2026, 12, 5, 10), 120, [], house, nov25).problem, null);
+    assert.ok(onSlotGrid(at(2026, 12, 5, 7), house));
+    assert.ok(slotIsFree(new Date(at(2026, 12, 5, 7)).toISOString(), 120, [], house, nov25));
+    assert.ok(!slotIsFree(new Date(at(2026, 11, 28, 7)).toISOString(), 120, [], house, nov25));
+  });
+
+  t("les heures d'un jour : le changement vaut à partir de sa date, pour les seuls jours qu'il touche", () => {
+    assert.equal(dayHours(house, "2026-11-28").open, "18:00");
+    assert.equal(dayHours(house, "2026-12-05").open, "07:00");
+    assert.equal(dayHours(house, "2026-12-07").open, "18:00", "un lundi d'après garde ses heures");
+    assert.equal(dayHours({ hours: SOIRS }, "2026-12-05").open, "18:00", "sans changement, l'horaire de l'onglet");
+    assert.deepEqual(shownHours(SOIRS, SAMEDI).find((h) => h.day === 6), SAMEDI.days[0]);
+    assert.equal(shownHours(SOIRS, null), SOIRS);
+    assert.equal(pendingChange(SAMEDI, "2026-12-04"), SAMEDI);
+    assert.equal(pendingChange(SAMEDI, "2026-12-05"), null);
+    assert.deepEqual(changedDays(SOIRS, SAMEDI), SAMEDI.days);
+    assert.deepEqual(changedDays(shownHours(SOIRS, SAMEDI), SAMEDI), [], "un jour déjà à ces heures ne s'annonce pas");
+    assert.equal(changeDate("2026-12-05", "fr"), "5 décembre");
+    assert.equal(changeDate("2026-12-05", "en"), "December 5");
+  });
+
+  t("un changement mal formé se lit comme aucun changement", () => {
+    assert.deepEqual(readHoursChange(SAMEDI), SAMEDI);
+    for (const bad of [null, "2026-12-05", { from: "5 décembre", days: SAMEDI.days }, { from: "2026-12-05", days: [] },
+      { from: "2026-12-05", days: [{ day: 9, enabled: true, open: "07:00", close: "22:00" }] },
+      { from: "2026-12-05", days: [{ day: 6, enabled: true, open: "7h", close: "22:00" }] }]) {
+      assert.equal(readHoursChange(bad), null, JSON.stringify(bad));
+    }
+  });
+}
+
 console.log(`\n${pass} réussis, ${fail} échoués\n`);
 process.exit(fail === 0 ? 0 : 1);

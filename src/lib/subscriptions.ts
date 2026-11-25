@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ensureSchema, sql, logEvent } from "./db";
 import { bookingRef, token } from "./crypto";
-import { getSettings, getSettingsStrict, type Settings } from "./settings";
+import { applyHoursChange, getSettings, getSettingsStrict, type Settings } from "./settings";
 import { PLANS, type Plan } from "./pricing";
 import {
   computeSlots, horizonEnd, loadBusyRange, loadOccupations, onSlotGrid, slotProblem, slotVerdict,
@@ -576,9 +576,7 @@ function descriptionOf(sub: Subscription, v: Booking, n: VisitNumber | undefined
     v.setupMinutes > 0
       ? `Arrivée : ${formatTimeIn(arrival, tz)} (${v.setupMinutes} min avant la séance, pour s'installer)`
       : `Arrivée : ${formatTimeIn(v.startsAt, tz)}, à l'heure du début`,
-    v.setupMinutes > 0
-      ? `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}`
-      : `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}, installation et rangement compris`,
+    `Séance : ${formatTimeIn(v.startsAt, tz)} – ${formatTimeIn(v.endsAt, tz)}`,
     "",
     `Formule : ${planName(sub, "fr")}`,
     n ? `Visite ${n.index}/${sub.perCycle} du cycle ${n.cycle}` : "Visite",
@@ -1733,7 +1731,7 @@ export async function resendSubscription(subId: string, host?: string | null): P
  */
 export async function runDaily(host?: string | null, now = new Date()): Promise<{
   reminders: number; smsReminders: number; notices: number; thanks: number; google: boolean;
-  calendarFixed: number; withdrawn: number;
+  calendarFixed: number; withdrawn: number; hoursApplied: boolean;
 }> {
   await ensureSchema();
   const settings = await getSettings();
@@ -1743,6 +1741,14 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
   const origin = siteOrigin(host);
   const today = dateKey(now, tz);
   const tomorrow = addDaysToKey(today, 1);
+
+  /* — L'horaire — un changement daté dont le jour est venu rejoint l'horaire
+     de l'onglet Réglages (lib/hours.ts). Le moteur et les pages le lisaient
+     déjà : rien n'attendait ce passage. Une panne ne retient pas le reste. */
+  const hoursApplied = await applyHoursChange(today).catch((e) => {
+    console.error("[nivex] changement d'horaire non versé :", e);
+    return false;
+  });
 
   const cache = new Map<string, SubscriptionFull | null>();
   const subOf = async (id: string) => {
@@ -1926,7 +1932,7 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
   }
 
   await logEvent("daily_done", { reminders, smsReminders, withdrawn, notices, thanks, calendarFixed, day: today, purged, calendarCopies });
-  return { reminders, smsReminders, notices, thanks, google: Boolean(at), calendarFixed, withdrawn };
+  return { reminders, smsReminders, notices, thanks, google: Boolean(at), calendarFixed, withdrawn, hoursApplied };
 }
 
 /**

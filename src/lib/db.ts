@@ -486,6 +486,11 @@ async function bootstrap() {
   await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS review_url      text`;
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS review_asked_at timestamptz`;
 
+  /* Un changement d'horaire daté : les heures qui valent, pour les jours
+     qu'il touche, à partir de sa date (lib/hours.ts). Nul le plus souvent ;
+     la tâche du matin le verse dans `hours` le jour venu, et l'efface. */
+  await q`ALTER TABLE nivex_settings ADD COLUMN IF NOT EXISTS hours_change jsonb`;
+
   /* L'arrivée d'un abonné : quinze minutes avant pour ceux d'avant le
      22 octobre 2026 (voir `setup_minutes` plus haut), zéro pour les autres.
      Ses visites à venir en héritent. */
@@ -588,6 +593,26 @@ async function bootstrap() {
     )
     UPDATE nivex_settings SET horizon_days = 90, updated_at = now()
     WHERE id = 1 AND horizon_days < 90 AND EXISTS (SELECT 1 FROM done)`;
+
+  /* Le samedi passe à 7 h – 22 h à partir du samedi 5 décembre 2026
+     (décision de l'artisan, 25 novembre 2026) ; les samedis d'avant restent
+     à 18 h – 22 h. Un changement daté, que le moteur lit jour par jour
+     (lib/hours.ts) : l'horaire d'aujourd'hui ne bouge pas, si bien qu'une
+     version qui ignore la colonne n'ouvre aucun samedi d'avant le matin.
+     Seulement si le samedi valait encore 18 h – 22 h : un autre horaire est
+     un choix de l'artisan. */
+  await q`
+    WITH done AS (
+      INSERT INTO nivex_migrations (name) VALUES ('samedi-2026-12')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name
+    )
+    UPDATE nivex_settings
+    SET hours_change = '{"from": "2026-12-05", "days": [{"day": 6, "enabled": true, "open": "07:00", "close": "22:00"}]}'::jsonb,
+        updated_at = now()
+    WHERE id = 1 AND hours_change IS NULL
+      AND hours @> '[{"day": 6, "enabled": true, "open": "18:00", "close": "22:00"}]'::jsonb
+      AND EXISTS (SELECT 1 FROM done)`;
 
   /* Le 23 octobre 2026, deux zones au lieu de trois : la zone A absorbe la
      zone B, sans frais ; la zone C devient la zone B, à 15 $ et 10 $
