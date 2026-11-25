@@ -45,6 +45,12 @@ export function publicSettings(s: Settings) {
     horizonDays: s.horizonDays,
     firstHourFree: s.firstHourFree,
     hours: s.hours.filter((h) => h.enabled).map((h) => [h.day, h.open, h.close]),
+    /* Un changement d'horaire daté s'annonce sur les pages dès qu'il est posé
+       (lib/hours.ts). Absent de l'empreinte quand il n'y en a pas : elle reste
+       celle d'avant. */
+    ...(s.hoursChange ? {
+      hoursChange: [s.hoursChange.from, s.hoursChange.days.map((d) => [d.day, d.enabled, d.open, d.close])],
+    } : {}),
     zones: s.zonePolicy.zones
       .filter((z) => sectors.some((x) => x.zoneKey === z.key))
       .map((z) => [z.key, z.nameFr, z.nameEn, z.shortFeeCents, z.longFeeCents, z.thresholdMinutes]),

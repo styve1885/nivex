@@ -2,11 +2,12 @@ import { contactEmail, PHONE, REQUEST_INBOX, SMS_SIGNATURE } from "./brand";
 import { logEvent } from "./db";
 import { sessionReminder, type BookingEmailData } from "./email";
 import { GoogleError, ownerAccessToken, sendGmail } from "./google";
+import { dayHours } from "./hours";
 import { SESSION_KEY } from "./items";
 import { sessionLength, sessionPriceCents } from "./pricing";
 import { sessionLabel } from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsConfigured, smsDay, smsTime } from "./sms";
-import { addDaysToKey, dateKey, formatDateTime, fromWall, parseDateKey, parseHM, weekdayOfKey } from "./time";
+import { addDaysToKey, dateKey, formatDateTime, fromWall, parseDateKey, parseHM } from "./time";
 import type { Settings } from "./settings";
 
 /**
@@ -26,7 +27,7 @@ import type { Settings } from "./settings";
 export function trialReminder(s: Settings, origin: string, now = new Date()) {
   const tz = s.timezone;
   const day = addDaysToKey(dateKey(now, tz), 1);
-  const hours = s.hours.find((h) => h.day === weekdayOfKey(day));
+  const hours = dayHours(s, day);
   /* Demain à l'ouverture ; à 18 h si demain est fermé, ce que l'horaire de
      la maison ne fait plus. Le rappel dit « demain » : la date doit l'être. */
   const open = hours?.enabled ? parseHM(hours.open) : 18 * 60;

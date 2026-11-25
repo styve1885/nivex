@@ -5,7 +5,6 @@ import { ArrowIcon } from "@/components/Icons";
 import { ZoneChecker } from "@/components/ZoneChecker";
 import { getDict, isLocale, type Dict } from "@/lib/i18n";
 import { getSettingsStrict, type Settings } from "@/lib/settings";
-import { setupSentence } from "@/lib/capacity";
 import { formatMoney, minutesToText } from "@/lib/time";
 import { montrealFees, montrealNames, montrealTravelFree, type FeeRow } from "@/lib/travel";
 import { faqJsonLd, jsonLdHtml, pageMeta } from "@/lib/seo";
@@ -161,7 +160,7 @@ export default async function MontrealPage({ params }: { params: Promise<{ local
               {m.rateValue.replace("{rate}", money(s.hourlyRate)).replace("{entry}", entry).replace("{min}", min)}
             </Row>
             <Row dt={m.minimum}>
-              {m.minimumValue.replace("{min}", min).replace("{setup}", setupSentence(t, s, locale))}
+              {m.minimumValue.replace("{min}", min)}
             </Row>
             {fees.length > 0 && (
               <Row dt={m.travel}>

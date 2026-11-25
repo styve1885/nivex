@@ -22,7 +22,7 @@ import type { Settings } from "@/lib/settings";
 export function faqFill(text: string, t: Dict, settings: Settings, locale: "fr" | "en"): string {
   return text
     .replace("{capacity}", capacitySentence(t, settings, locale))
-    .replace("{setup}", setupSentence(t, settings, locale))
+    .replace("{setup}", setupSentence(settings, locale))
     .replace("{areas}", areasSentence(settings.zonePolicy, locale, t.areas) || servedText(settings.zonePolicy, locale, t.zoneText))
     .replace("{missing}", t.areas.missing.replace("{write}", t.areas.write));
 }

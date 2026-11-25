@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { ensureSchema, sql, isDbConfigured } from "./db";
+import { ensureSchema, logEvent, sql, isDbConfigured } from "./db";
 import { decrypt, encrypt } from "./crypto";
 import {
   DEFAULT_ZONE_POLICY, POLICY_VERSION, PREFIX_RE, describeChanges,
@@ -7,11 +7,12 @@ import {
 } from "./travel";
 import { DEFAULT_SERVICES, type DayHours, type ServiceItem } from "./services";
 import { MIN_SESSION_MINUTES } from "./brand";
+import { readHoursChange, shownHours, type HoursChange } from "./hours";
 
 /* Les prestations du code et la forme d'un horaire vivent dans `services.ts`,
    qui n'importe rien : un composant client peut les lire sans emporter la
    base dans le navigateur. Elles restent lisibles d'ici. */
-export { DEFAULT_SERVICES, type DayHours, type ServiceItem };
+export { DEFAULT_SERVICES, type DayHours, type ServiceItem, type HoursChange };
 
 export type Settings = {
   ownerEmail: string | null;
@@ -31,6 +32,8 @@ export type Settings = {
   firstHourFree: boolean;
   paused: boolean;
   hours: DayHours[];
+  /** Un changement d'horaire daté, pour les jours qu'il touche (lib/hours.ts). */
+  hoursChange: HoursChange | null;
   zonePolicy: ZonePolicy;
   services: ServiceItem[];
   connectedAt: string | null;
@@ -67,7 +70,7 @@ export const FALLBACK_SETTINGS: Settings = {
   calendarId: "primary", timezone: "America/Toronto", businessName: "NIVEX",
   hourlyRate: DEFAULT_HOURLY_RATE, currency: "CAD", minMinutes: 120, bufferMinutes: 30,
   leadHours: 24, horizonDays: 90, slotStep: 30, firstHourFree: true, paused: false,
-  hours: DEFAULT_HOURS, zonePolicy: DEFAULT_ZONE_POLICY,
+  hours: DEFAULT_HOURS, hoursChange: null, zonePolicy: DEFAULT_ZONE_POLICY,
   services: DEFAULT_SERVICES,
   connectedAt: null,
   reviewUrl: null,
@@ -95,6 +98,7 @@ function hydrate(row: Row | undefined): Settings {
     firstHourFree: row.first_hour_free !== false,
     paused: row.paused === true,
     hours: (row.hours as DayHours[]) ?? DEFAULT_HOURS,
+    hoursChange: readHoursChange(row.hours_change),
     zonePolicy: readZonePolicy(row.travel_policy),
     services: mergeServices(row.services as ServiceItem[] | null),
     connectedAt: row.connected_at ? new Date(row.connected_at as string).toISOString() : null,
@@ -284,9 +288,38 @@ export async function getSettings(): Promise<Settings> {
  */
 export const UNREAD_SETTINGS: Settings = { ...FALLBACK_SETTINGS };
 
-/** L'horaire enregistré dans l'onglet Réglages, ou `null` si la base n'a pas pu le dire. */
+/**
+ * L'horaire que les pages annoncent : celui de l'onglet Réglages, changement
+ * daté compris (lib/hours.ts), ou `null` si la base n'a pas pu le dire.
+ */
 export function adminHours(s: Settings): DayHours[] | null {
-  return s === UNREAD_SETTINGS ? null : s.hours;
+  return s === UNREAD_SETTINGS ? null : shownHours(s.hours, s.hoursChange);
+}
+
+/**
+ * Le changement d'horaire daté rejoint l'horaire de l'onglet Réglages, une
+ * fois sa date venue (« AAAA-MM-JJ », à l'heure de Montréal), et s'efface.
+ * La tâche du matin l'appelle. Rien ne s'écrit si l'onglet a enregistré
+ * l'horaire entre la lecture et l'écriture : le passage du lendemain
+ * reprend. Jusque-là, rien n'attend : le moteur et les pages lisent déjà
+ * le changement.
+ */
+export async function applyHoursChange(today: string): Promise<boolean> {
+  if (!isDbConfigured()) return false;
+  await ensureSchema();
+  const row = (await sql()`SELECT hours, hours_change FROM nivex_settings WHERE id = 1`)[0] as Row | undefined;
+  const change = readHoursChange(row?.hours_change);
+  if (!row || !change || change.from > today) return false;
+  const before = row.hours == null ? null : JSON.stringify(row.hours);
+  const next = shownHours((row.hours as DayHours[] | null) ?? DEFAULT_HOURS, change);
+  const done = (await sql()`
+    UPDATE nivex_settings SET hours = ${JSON.stringify(next)}::jsonb, hours_change = NULL, updated_at = now()
+    WHERE id = 1
+      AND hours_change = ${JSON.stringify(row.hours_change)}::jsonb
+      AND hours IS NOT DISTINCT FROM ${before}::jsonb
+    RETURNING 1`) as Row[];
+  if (done.length) await logEvent("hours_change_applied", { from: change.from, days: change.days.map((d) => d.day) });
+  return done.length > 0;
 }
 
 let lastReadError: string | null = null;

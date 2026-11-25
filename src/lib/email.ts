@@ -1,6 +1,5 @@
 import { formatDateTime, minutesToText, formatMoney } from "./time";
-import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, INSTALL_MINUTES, PHONE, PHONE_HREF } from "./brand";
-import { ironingMinutes } from "./pricing";
+import { CANCEL_WINDOW_HOURS, CONTACT_EMAIL, PHONE, PHONE_HREF } from "./brand";
 import { estimateRange, itemText, moneyRange, type ItemLike } from "./items";
 import { BOARD_LABELS_FR, boardNeedsContact, type BoardAnswer } from "./board";
 
@@ -129,7 +128,7 @@ const T = {
     travelNote: "Les frais de déplacement s'ajoutent au prix de la séance.",
     travelNoteOffer: "L'offre « première heure offerte » ne les couvre pas.",
     manage: "Gérer ma réservation",
-    setup: (duration: string, ironing: string) => `Votre artisan arrive à l'heure du début. Votre séance de ${duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun : ${ironing} de repassage.`,
+    arrival: "Votre artisan arrive à l'heure du début.",
     early: (m: number) => `Votre repasseur arrive ${m} minutes avant le début de votre séance pour s'installer, sans frais : vos heures réservées sont entièrement consacrées au repassage.`,
     before: "Avant notre arrivée",
     beforeList: [
@@ -173,7 +172,7 @@ const T = {
     travelNote: "The travel fee is added to the price of the session.",
     travelNoteOffer: "The first-hour-free offer does not cover it.",
     manage: "Manage my booking",
-    setup: (duration: string, ironing: string) => `Your presser arrives at the start time. Your session of ${duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: ${ironing} of ironing.`,
+    arrival: "Your presser arrives at the start time.",
     early: (m: number) => `Your presser arrives ${m} minutes before your session begins to set up, at no charge: the hours you booked are given entirely to ironing.`,
     before: "Before we arrive",
     beforeList: [
@@ -744,18 +743,20 @@ export type VisitChange =
   | { kind: "cancelled"; replacement: Date | null }
   | { kind: "moved"; from: Date };
 
-/** La phrase sur l'arrivée d'une séance : à l'heure du début, ou un quart d'heure avant dans l'ancien déroulement. */
+/**
+ * La phrase sur l'arrivée d'une séance : à l'heure du début, ou un quart
+ * d'heure avant dans l'ancien déroulement. Ce que contient la séance
+ * (installation, rangement, temps de repassage) ne s'y dit plus depuis le
+ * 25 novembre 2026, à la demande de l'artisan.
+ */
 function setupLine(d: BookingEmailData): string {
   const t = T[d.locale];
-  return (d.setupMinutes ?? 0) > 0
-    ? t.early(d.setupMinutes!)
-    : t.setup(minutesToText(d.durationMinutes, d.locale), minutesToText(ironingMinutes(d.durationMinutes), d.locale));
+  return (d.setupMinutes ?? 0) > 0 ? t.early(d.setupMinutes!) : t.arrival;
 }
 
 /** La même, pour les visites d'un abonné. */
 function arrivalLine(d: SubscriptionEmailData): string {
-  return S[d.locale].arrival(d.setupMinutes ?? 0, minutesToText(d.minutesPerVisit, d.locale),
-    minutesToText(ironingMinutes(d.minutesPerVisit), d.locale));
+  return S[d.locale].arrival(d.setupMinutes ?? 0);
 }
 
 const S = {
@@ -772,9 +773,9 @@ const S = {
       ? "Un cycle correspond à une visite effectuée. Il se règle à cette visite, sur place : comptant, virement Interac ou carte."
       : `Un cycle correspond à ${n} visites effectuées. Il se règle à la première visite du cycle, sur place : comptant, virement Interac ou carte. Une visite annulée ne compte pas : le cycle se prolonge jusqu'à la suivante.`,
     travelNote: (fee: string) => `Frais de déplacement de votre zone : ${fee} par visite, réglés avec le cycle.`,
-    arrival: (m: number, duration: string, ironing: string) => m > 0
+    arrival: (m: number) => m > 0
       ? `Votre repasseur arrive ${m} minutes avant le début de chaque visite pour s'installer, sans frais.`
-      : `Votre artisan arrive à l'heure du début. Chaque visite de ${duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun : ${ironing} de repassage.`,
+      : "Votre artisan arrive à l'heure du début.",
     rule: "Chaque visite s'annule ou se déplace sans frais jusqu'à 23 h 59 la veille, depuis le lien ci-dessous. Une visite annulée est ajoutée en fin de série. Passé ce délai, appelez-nous.",
     manage: "Gérer mes visites",
     upcoming: "Vos prochaines visites",
@@ -813,9 +814,9 @@ const S = {
       ? "A cycle is one completed visit. It is paid at that visit, on site: cash, Interac e-Transfer or card."
       : `A cycle is ${n} completed visits. It is paid at the first visit of the cycle, on site: cash, Interac e-Transfer or card. A cancelled visit does not count: the cycle simply runs on to the next one.`,
     travelNote: (fee: string) => `Travel fee for your area: ${fee} per visit, paid with the cycle.`,
-    arrival: (m: number, duration: string, ironing: string) => m > 0
+    arrival: (m: number) => m > 0
       ? `Your presser arrives ${m} minutes before each visit begins to set up, at no charge.`
-      : `Your presser arrives at the start time. Each visit of ${duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: ${ironing} of ironing.`,
+      : "Your presser arrives at the start time.",
     rule: "Each visit can be cancelled or moved at no charge until 11:59 p.m. the day before, from the link below. A cancelled visit is added at the end of the series. After that, please call us.",
     manage: "Manage my visits",
     upcoming: "Your next visits",

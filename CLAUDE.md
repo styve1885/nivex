@@ -75,6 +75,27 @@ page qui récite de mémoire finit par contredire le moteur.
   lit le même horaire : une séance tient entière entre l'ouverture et la
   fermeture du jour, rangement compris pour un rendez-vous à l'ancien
   déroulement (plus bas, « Le temps passé hors séance »).
+- **Un changement d'horaire daté** (25 novembre 2026, décision de
+  l'artisan : le samedi à 7 h – 22 h à partir du samedi 5 décembre 2026,
+  les samedis d'avant à 18 h – 22 h). L'horaire de l'onglet (`hours`) est
+  celui d'aujourd'hui ; la colonne `hours_change` (`lib/hours.ts`) donne,
+  pour les seuls jours qu'il touche, les heures qui valent à partir de sa
+  date. Le moteur lit le jour même de chaque créneau (`dayHours`, dans
+  `onSlotGrid`, `computeSlots`, `slotVerdict` et l'essai du rappel) : qui
+  réserve en avance voit déjà les samedis de décembre dès 7 h. Les pages
+  annoncent le nouvel horaire tout de suite (`shownHours`, que rend
+  `adminHours`), et la date tant qu'elle est à venir : « (le samedi à partir
+  du 5 décembre) » au bout d'`openingLine`, « à partir du 5 décembre » sous
+  le samedi du pied de page, et, dans la fiche, le samedi d'aujourd'hui
+  jusqu'au 4 décembre (`validThrough`) puis le nouveau dès le 5
+  (`validFrom`). Le jour venu, la tâche du matin le verse dans `hours` et
+  vide la colonne (`applyHoursChange`), sauf si l'onglet a enregistré
+  l'horaire entre-temps. L'onglet Réglages l'affiche sous l'horaire, sans le
+  régler. La production y est passée par la migration unique
+  `samedi-2026-12`, seulement si le samedi valait encore 18 h – 22 h. Une
+  version qui ignore la colonne garde l'horaire d'aujourd'hui pour tous les
+  jours : pendant une mise en ligne, aucun samedi d'avant ne s'ouvre le
+  matin. La fiche Google de l'artisan, elle, se met à jour chez Google.
 - **Délais** : `CANCEL_WINDOW_HOURS`, `FIRST_FREE_MIN_MINUTES`,
   `INSTALL_MINUTES`, `PACKUP_MINUTES`, `EARLY_ARRIVAL_MINUTES` dans
   `src/lib/brand.ts`.
@@ -100,7 +121,17 @@ ramènerait au prochain chargement ; elles se désactivent.
   (`sessionMinutes`). Décidé le 22 octobre 2026 ; avant, l'artisan arrivait
   quinze minutes avant et le bloc était entièrement du repassage. Les
   rendez-vous pris avant gardent l'ancien déroulement (`setup_minutes`,
-  plus bas).
+  plus bas). **Le site ne le dit plus** (décision de l'artisan, 25 novembre
+  2026) : ni « 1 h 50 de repassage », ni « 5 minutes d'installation », ni
+  « installation et rangement compris », nulle part — pages, tunnels,
+  courriels, invitation d'agenda, fiche, `/llms-full.txt`. Le client lit
+  seulement que l'artisan arrive à l'heure du début ; « séance de 2 heures »
+  et « jusqu'à 18 pièces en 2 h » restent. Le calcul ne change pas, et
+  l'onglet Rendez-vous montre toujours les trois temps à l'artisan. La phrase
+  dort dans `lib/i18n/retired.ts` (`capacitySetup`), comme les anciens textes
+  retirés qui la portent (la question « L'installation est-elle comprise ? »,
+  « Temps tenu ») : ne pas les remettre tels quels. Un test fouille les
+  dictionnaires, les courriels et l'invitation.
 - Une séance traite **jusqu'à 18 pièces en 2 h, 27 en 3 h**, selon la
   taille, le type et la matière des vêtements. Aucune autre estimation de
   quantité ne s'écrit.
@@ -225,7 +256,9 @@ remis l'ancienne valeur entre-temps. `tarif-2026-55` a porté le taux de
 la grille à deux zones (plus bas, « Zones et frais de déplacement »).
 `horizon-2026-90` a porté la réservation en ligne à 90 jours à l'avance.
 `secteurs-2026-11` a fait entrer Ville de Mont-Royal et Griffintown dans la
-grille (plus bas, « Les secteurs desservis »). Les noms des formules, eux, ne passent pas par cette table : ils
+grille (plus bas, « Les secteurs desservis »). `samedi-2026-12` a posé le
+changement d'horaire du samedi (plus haut, « Un changement d'horaire
+daté »). Les noms des formules, eux, ne passent pas par cette table : ils
 convergent à chaque démarrage (`formules-2026-11`, plus bas, « Les
 abonnements »).
 
@@ -289,6 +322,11 @@ abonnement : « VIP : 400 $ + 60 $ de déplacement, soit 4 visites ×
 - Le ruban (`Marquee`), le protocole (`Protocol`) et la galerie en section
   (`Gallery`) : composants gardés, simplement plus rendus par
   `app/[locale]/page.tsx`.
+- Ce que contient une séance (« Chaque séance inclut l'installation et le
+  rangement… 1 h 50 de repassage ») : `capacitySetup`, dans
+  `lib/i18n/retired.ts`, depuis le 25 novembre 2026. Seules la section
+  retirée « Ce que contient une séance » et l'ancienne question de
+  l'installation la liraient (`setupSentence`).
 - Le décor du héros (dégradé de lin, deux halos d'or, trame de tissage et
   cadre filet double) : `HeroBackdrop`, gardé dans
   `components/home/Hero.tsx`, plus rendu depuis le 24 novembre 2026.
@@ -400,8 +438,8 @@ Les gardes posées là, et pourquoi :
   et l'événement d'agenda commence à l'heure d'arrivée. La colonne vaut 15
   par défaut : une ancienne version encore servie pendant un déploiement
   n'écrit que des rendez-vous à l'ancien régime, jamais trop serrés.
-  L'invitation et le courriel disent ce que contient la séance
-  (`setupLine`) ou, à l'ancien régime, l'arrivée anticipée. L'onglet
+  L'invitation et le courriel disent que l'artisan arrive à l'heure du
+  début (`setupLine`) ou, à l'ancien régime, l'arrivée anticipée. L'onglet
   Rendez-vous montre les trois temps (`sessionPhases`) et le repassage
   effectif. **On finit à la fermeture au plus tard** (décision de
   l'artisan, 10 novembre 2026 : « on finit à 22 h 00 max ») : le rangement
@@ -562,8 +600,10 @@ nom.
   séance »), qui annonce le paiement à la première visite d'un
   cycle et donne l'heure d'arrivée, annulation des textos de deux heures
   avant restés programmés (plus bas, « Le texto de deux heures avant est
-  retiré »), courriel de fin de série à l'artisan, et remise à l'heure dans
-  l'agenda des visites marquées (`calendar_stale_at`). Chaque envoi est réservé
+  retiré »), courriel de fin de série à l'artisan, remise à l'heure dans
+  l'agenda des visites marquées (`calendar_stale_at`), et, le jour venu, le
+  changement d'horaire daté versé dans l'horaire de l'onglet
+  (`applyHoursChange`). Chaque envoi est réservé
   en base avant de partir : un second passage, ou le bouton de l'onglet
   Abonnés pendant la tâche, ne renvoie rien. La même tâche tient les durées
   de conservation (`purgeExpired`, `lib/retention.ts`) : journal technique
@@ -1125,7 +1165,7 @@ dernière ligne est vide, et on croit le lint propre alors qu'il ne l'est
 pas.
 
 Six fichiers de tests, en `tsx` sans cadre : `availability` (créneaux,
-chevauchements, temps hors séance), `booking` (courriels et rappel de la veille, son essai, durées,
+chevauchements, temps hors séance, le changement d'horaire daté du samedi), `booking` (courriels et rappel de la veille, son essai, durées,
 trois temps, séance d'essai, pièces à l'unité, foire aux questions, la
 planche à repasser),
 `sms` (modèles, la planche à repasser, numéros canadiens, alphabet, appels et alerte d'appel
@@ -1136,7 +1176,7 @@ desservie, journal, provenance, familles de sources, robots, bilan,
 lectures de la vidéo),
 `travel` (secteurs, zones, frais,
 conflits de préfixes, historique, Montréal, les quartiers de l'artisan et
-leur migration, titres et descriptions de chaque
+leur migration, l'horaire daté dans la ligne, la fiche et llms.txt, titres et descriptions de chaque
 page, hreflang, fiche LocalBusiness, llms.txt, robots, plan du site, origine
 www, IndexNow, la vidéo : fichier en lecture continue, VideoObject, page de
 présentation, middleware), `subscription`

@@ -1,6 +1,6 @@
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
+  SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
@@ -178,7 +178,7 @@ const terms: LegalDoc = {
       title: "Le service",
       body: [
         "Un artisan se déplace chez vous avec son matériel professionnel\u00a0: générateur de vapeur, fer, pattemouilles et cintres. Vous fournissez la planche à repasser. Il repasse sur place les pièces que vous lui présentez, puis les remet sur cintres ou pliées.",
-        `L'artisan arrive à l'heure du début de la séance. L'installation et le rangement de son matériel, ${INSTALL_MINUTES} minutes chacun, font partie du temps réservé\u00a0; le reste est du repassage.`,
+        "L'artisan arrive à l'heure du début de la séance.",
         "Vos vêtements ne quittent jamais votre domicile\u00a0: tout se fait sur place, devant vous.",
       ],
     },
@@ -400,7 +400,7 @@ export const fr = {
       {
         n: "3",
         title: "Rencontrez",
-        body: `Votre artisan arrive à l'heure convenue. Il s'installe et range en ${INSTALL_MINUTES} minutes chacun, compris dans la séance, et repasse tout le reste du temps. Vous récupérez une garde-robe prête à porter, sur cintres.`,
+        body: "Votre artisan arrive à l'heure convenue. Vous récupérez une garde-robe prête à porter, sur cintres.",
       },
     ],
   },
@@ -420,15 +420,16 @@ export const fr = {
     firstFreeConditions:
       `Sur toute première réservation de ${FIRST_FREE_MIN} ou plus. Une seule utilisation par client. Non applicable aux abonnements ni aux pièces à l'unité.`,
   },
-  /* La capacité d'une séance, le seul chiffre de quantité du site, et ce que
-     contient une séance. {n}, {a}, {b} : des pièces, tirées de
-     `capacityPieces` ; {da}, {db}, {min}, {ironing} : des durées. */
+  /* La capacité d'une séance, le seul chiffre de quantité du site. {n}, {a},
+     {b} : des pièces, tirées de `capacityPieces` ; {da}, {db} : des durées.
+     Ce que contient une séance (l'installation et le rangement, le temps de
+     repassage) ne se dit plus depuis le 25 novembre 2026, à la demande de
+     l'artisan : sa phrase dort dans `lib/i18n/retired.ts`. */
   capacity: {
     upTo: "Jusqu'à {n} pièces",
     perCycle: "Jusqu'à {n} pièces par cycle",
     caveat: "Le nombre de pièces varie selon la taille, le type et la matière des vêtements.",
     sentence: "Jusqu'à {a} pièces en {da}, et jusqu'à {b} en {db}, selon la taille, le type et la matière des vêtements.",
-    setup: `Chaque séance inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun. Une séance de {min} comprend donc {ironing} de repassage.`,
   },
   testimonials: {
     eyebrow: "Ce qu'on en dit",
@@ -529,8 +530,7 @@ export const fr = {
     rate: "Tarif",
     rateValue: "{rate} de l'heure, soit {entry} pour une séance de {min}.",
     minimum: "Durée minimale",
-    /* {setup} : la phrase `capacity.setup`, remplie depuis la durée minimale. */
-    minimumValue: "Une séance dure au moins {min}. {setup}",
+    minimumValue: "Une séance dure au moins {min}.",
     travel: "Frais de déplacement",
     travelNote: "Par visite, en plus du prix de la séance.",
     /* Ajoutée seulement quand l'artisan propose l'offre. */
@@ -593,8 +593,6 @@ export const fr = {
       more: "Augmenter la quantité",
       estimate: "Estimation",
       duration: "Durée",
-      /* {ironing} : la durée, moins l'installation et le rangement. */
-      ironing: "dont {ironing} de repassage",
       price: "Montant estimé",
       hours: "h",
       minutes: "min",
@@ -661,9 +659,10 @@ export const fr = {
       evening: "Soirée",
       timezone: "Fuseau\u00a0: heure de l'Est (Montréal).",
       durationLine: "Durée de la séance\u00a0: {duration}",
-      /* {duration} et {ironing} : la séance estimée, et son temps de repassage. */
-      setup:
-        `Votre artisan arrive à l'heure du début. Votre séance de {duration} inclut l'installation et le rangement de notre matériel, ${INSTALL_MINUTES} minutes chacun\u00a0: {ironing} de repassage.`,
+      /* Sous les créneaux, dans les deux tunnels. Ce que contient la séance
+         (installation, rangement, temps de repassage) ne s'y dit plus depuis
+         le 25 novembre 2026. */
+      arrival: "Votre artisan arrive à l'heure du début.",
       comment: "Commentaire libre (facultatif)",
       commentPlaceholder: "Une contrainte d'horaire, une heure à éviter, un accès particulier…",
     },
@@ -848,6 +847,9 @@ export const fr = {
     rights: "Tous droits réservés",
     zone: "Zone desservie",
     hours: "Horaire",
+    /* Sous les heures d'un jour qui changent à une date encore à venir
+       (lib/hours.ts) : {date}, « 5 décembre ». */
+    changeFrom: "à partir du {date}",
     legal: "Confidentialité",
     terms: "Conditions d'utilisation",
     admin: "Espace artisan",
@@ -888,6 +890,9 @@ export const fr = {
     to: "au",
     and: "et",
     onDay: "le",
+    /* Ce que la ligne ajoute, entre parenthèses, tant qu'un changement
+       d'horaire daté n'est pas venu : « le samedi à partir du 5 décembre ». */
+    changeFrom: "{days} à partir du {date}",
     errors: {
       required: "Ce champ est requis",
       email: "Courriel invalide",
@@ -913,8 +918,9 @@ export const fr = {
     /* La séance d'essai, en une ligne : {min} et {price} viennent des réglages. */
     trial: "Pour un premier essai\u00a0: la séance de {min}, {price}.",
     trialCta: "Réserver la séance",
-    /* Cinq points au plus. Le premier dit le taux horaire ({rate}), le
-       deuxième est la phrase `capacity.setup` ; viennent ensuite ceux-ci. */
+    /* Cinq points au plus. Le premier dit le taux horaire ({rate}) ;
+       viennent ensuite ceux-ci. La phrase du contenu d'une séance, qui
+       suivait le taux, est retirée depuis le 25 novembre 2026. */
     conditions: {
       title: "Conditions",
       extraHour: "Une heure de plus, décidée sur place\u00a0: {rate}.",

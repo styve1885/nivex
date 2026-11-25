@@ -11,7 +11,6 @@ import { ZoneChecker } from "@/components/ZoneChecker";
 import { AreaList, AreaMissing } from "@/components/AreaList";
 import { servedAreas } from "@/lib/areas";
 import { RetiredSections } from "@/components/tarifs/RetiredSections";
-import { setupSentence } from "@/lib/capacity";
 import {
   PLANS, UNIT_GARMENTS, UNIT_LINEN, cycleTravel, cycleTravelText, planCents, planFullCents, planPieces,
   sessionLength, sessionPriceCents, type UnitPrice,
@@ -66,7 +65,6 @@ export default async function TarifsPage({ params }: { params: Promise<{ locale:
     .replace("{price}", money(sessionPriceCents(s)));
   const conditions = [
     t.tarifs.conditions.extraHour.replace("{rate}", money(s.hourlyRate)),
-    setupSentence(t, s, locale),
     ...t.tarifs.conditions.items,
   ];
 

@@ -10,8 +10,21 @@ import type { Settings } from "@/lib/settings";
 import { ServiceIcon } from "../Icons";
 import { parseHM } from "@/lib/time";
 import { MIN_SESSION_MINUTES } from "@/lib/brand";
+import { changedDays, type HoursChange } from "@/lib/hours";
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+
+/* Un changement d'horaire daté (lib/hours.ts), dit à l'artisan sous son
+   horaire : il ne se règle pas ici, et s'inscrit de lui-même le jour venu. */
+function hoursChangeText(change: HoursChange, hours: DayHours[]): string | null {
+  const days = changedDays(hours, change);
+  if (!days.length) return null;
+  const date = new Intl.DateTimeFormat("fr-CA", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  }).format(new Date(`${change.from}T12:00:00Z`));
+  const what = days.map((d) => `${DAYS[d.day].toLowerCase()} ${d.enabled ? `${d.open} – ${d.close}` : "fermé"}`).join(", ");
+  return `À partir du ${date} : ${what}. Jusque-là, l'horaire ci-dessus vaut pour ce jour ; les clients voient déjà les nouvelles heures pour les dates qui suivent. Le matin venu, elles s'inscriront ici d'elles-mêmes.`;
+}
 
 /* Les pictogrammes disponibles pour une prestation : ceux que le site sait dessiner. */
 const ICON_CHOICES = [
@@ -204,6 +217,11 @@ export function SettingsPanel({ initial, origin, onDirty }: {
             );
           })}
         </ul>
+        {s.hoursChange && hoursChangeText(s.hoursChange, s.hours) && (
+          <p className="mt-4 border-l-2 border-gold-400 pl-4 text-[0.84rem] leading-[1.7] text-ink-600">
+            {hoursChangeText(s.hoursChange, s.hours)}
+          </p>
+        )}
       </Card>
 
       {/* — Tarifs — */}

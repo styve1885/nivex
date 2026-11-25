@@ -1,5 +1,7 @@
 import type { Dict } from "@/lib/i18n";
 import type { DayHours, Settings } from "@/lib/settings";
+import { changeDate, changedDays, pendingChange, shownHours } from "@/lib/hours";
+import { dateKey } from "@/lib/time";
 
 /**
  * L'horaire d'ouverture, écrit depuis les jours réellement ouverts.
@@ -47,9 +49,16 @@ export function clock(hm: string, locale: "fr" | "en"): string {
  * « Monday to Thursday and Saturday ». Un samedi plus court ne fait donc pas
  * disparaître les heures de toute la ligne : « 7 h – 22 h, du lundi au
  * vendredi ; 9 h – 17 h, samedi ».
+ *
+ * Un changement d'horaire daté (lib/hours.ts) s'y annonce d'avance : la
+ * ligne dit déjà le nouvel horaire, et la date entre parenthèses tant
+ * qu'elle n'est pas venue, « (le samedi à partir du 5 décembre) ».
  */
-export function openingLine(t: Dict, settings: Pick<Settings, "hours">, locale: "fr" | "en"): string {
-  const open = openDays(settings.hours);
+export function openingLine(
+  t: Dict, settings: Pick<Settings, "hours"> & Partial<Pick<Settings, "hoursChange" | "timezone">>,
+  locale: "fr" | "en", now = new Date(),
+): string {
+  const open = openDays(shownHours(settings.hours, settings.hoursChange));
   if (open.length === 0) return "";
 
   const name = (day: number) => (locale === "fr" ? t.days[day].toLowerCase() : t.days[day]);
@@ -77,7 +86,29 @@ export function openingLine(t: Dict, settings: Pick<Settings, "hours">, locale: 
     const key = `${h.open}-${h.close}`;
     spans.set(key, [...(spans.get(key) ?? []), h]);
   }
-  return [...spans.values()]
+  const line = [...spans.values()]
     .map((group) => `${clock(group[0].open, locale)} – ${clock(group[0].close, locale)}, ${days(group)}`)
     .join(locale === "fr" ? "\u202f; " : "; ");
+  const note = changeNote(t, settings, locale, now);
+  return note ? `${line} (${note})` : line;
+}
+
+/**
+ * « le samedi à partir du 5 décembre », « Saturdays from December 5 » : les
+ * jours dont les heures changent à une date encore à venir, et cette date.
+ * Rien une fois la date venue, ni pour un jour que le changement fermerait :
+ * il n'est plus dans la ligne.
+ */
+export function changeNote(
+  t: Dict, settings: Pick<Settings, "hours"> & Partial<Pick<Settings, "hoursChange" | "timezone">>,
+  locale: "fr" | "en", now = new Date(),
+): string {
+  const pending = pendingChange(settings.hoursChange, dateKey(now, settings.timezone ?? "America/Toronto"));
+  if (!pending) return "";
+  const changed = changedDays(settings.hours, pending).filter((d) => d.enabled).map((d) => d.day);
+  const names = WEEK.filter((day) => changed.includes(day))
+    .map((day) => (locale === "fr" ? `${t.contact.onDay} ${t.days[day].toLowerCase()}` : `${t.days[day]}s`));
+  if (names.length === 0) return "";
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} ${t.contact.and} ${names[names.length - 1]}` : names[0];
+  return t.contact.changeFrom.replace("{days}", list).replace("{date}", changeDate(pending.from, locale));
 }

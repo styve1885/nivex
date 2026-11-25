@@ -1,7 +1,7 @@
 import type { Dict, LegalDoc } from "./fr";
 import {
   CANCEL_WINDOW_HOURS, CYCLE_MAX_WEEKS, FIRST_FREE_MIN_MINUTES, PHONE, PHONE_HREF, SERIES_CYCLES,
-  INSTALL_MINUTES, SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
+  SERIES_NOTICE_DAYS, SUBSCRIBER_HOURLY_DISCOUNT_CENTS, TERM_SERIES,
 } from "../brand";
 import { formatMoney, minutesToText } from "../time";
 
@@ -160,7 +160,7 @@ const terms: LegalDoc = {
       title: "The service",
       body: [
         "An artisan comes to your home with his professional equipment: steam generator, iron, pressing cloths and hangers. You provide the ironing board. He irons the pieces you present to him on the spot, then returns them on hangers or folded.",
-        `The artisan arrives at the start time of the session. Setting up and packing away his equipment, ${INSTALL_MINUTES} minutes each, are part of the time booked; the rest is ironing.`,
+        "The artisan arrives at the start time of the session.",
         "Your clothes never leave your home: everything happens on site, in front of you.",
       ],
     },
@@ -369,7 +369,7 @@ export const en: Dict = {
       {
         n: "3",
         title: "Meet",
-        body: `Your craftsman arrives at the agreed time. Setting up and packing away take ${INSTALL_MINUTES} minutes each, within the session, and he irons for all the rest of it. You get back a wardrobe that's ready to wear, on hangers.`,
+        body: "Your craftsman arrives at the agreed time. You get back a wardrobe that's ready to wear, on hangers.",
       },
     ],
   },
@@ -391,7 +391,6 @@ export const en: Dict = {
     perCycle: "Up to {n} pieces per cycle",
     caveat: "The number of pieces depends on the size, type and fabric of the garments.",
     sentence: "Up to {a} pieces in {da}, and up to {b} in {db}, depending on the size, type and fabric of the garments.",
-    setup: `Every session includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each. A session of {min} therefore includes {ironing} of ironing.`,
   },
   testimonials: {
     eyebrow: "Word of mouth",
@@ -470,7 +469,7 @@ export const en: Dict = {
     rate: "Rate",
     rateValue: "{rate} per hour, that is {entry} for a {min} session.",
     minimum: "Minimum length",
-    minimumValue: "A session lasts at least {min}. {setup}",
+    minimumValue: "A session lasts at least {min}.",
     travel: "Travel fee",
     travelNote: "Per visit, on top of the session price.",
     travelNoteOffer: "The first-hour-free offer does not cover it and does not reduce it.",
@@ -527,7 +526,6 @@ export const en: Dict = {
       more: "Increase quantity",
       estimate: "Estimate",
       duration: "Duration",
-      ironing: "including {ironing} of ironing",
       price: "Estimated amount",
       hours: "h",
       minutes: "min",
@@ -589,8 +587,7 @@ export const en: Dict = {
       evening: "Evening",
       timezone: "Timezone: Eastern (Montreal).",
       durationLine: "Session length: {duration}",
-      setup:
-        `Your presser arrives at the start time. Your session of {duration} includes setting up and packing away our equipment, ${INSTALL_MINUTES} minutes each: {ironing} of ironing.`,
+      arrival: "Your presser arrives at the start time.",
       comment: "Anything to add? (optional)",
       commentPlaceholder: "A scheduling constraint, an hour to avoid, a particular access…",
     },
@@ -767,6 +764,7 @@ export const en: Dict = {
     rights: "All rights reserved",
     zone: "Service area",
     hours: "Hours",
+    changeFrom: "from {date}",
     legal: "Privacy",
     terms: "Terms of use",
     admin: "Craftsman login",
@@ -803,6 +801,7 @@ export const en: Dict = {
     to: "to",
     and: "and",
     onDay: "",
+    changeFrom: "{days} from {date}",
     errors: {
       required: "This field is required",
       email: "Invalid email",

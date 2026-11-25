@@ -37,7 +37,7 @@ export function RetiredSections({ t, s, locale }: { t: Dict; s: Settings; locale
               {capacitySentence(t, s, locale)}
             </p>
             <p className="mt-3 max-w-2xl text-[0.95rem] font-light leading-[1.9] text-ink-500">
-              {setupSentence(t, s, locale)}
+              {setupSentence(s, locale)}
             </p>
             <p className="mt-12 border-b border-ink-800 pb-3 text-[0.64rem] uppercase tracking-[0.18em] text-gold-700">
               {r.cadence.colType}

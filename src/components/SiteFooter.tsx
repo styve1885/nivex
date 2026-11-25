@@ -4,6 +4,8 @@ import type { Dict } from "@/lib/i18n";
 import { adminHours, type Settings } from "@/lib/settings";
 import { contactEmail, contactEmailHref } from "@/lib/brand";
 import { servedText } from "@/lib/travel";
+import { changeDate, changedDays, pendingChange } from "@/lib/hours";
+import { dateKey } from "@/lib/time";
 import { openDays } from "./home/opening-line";
 
 export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "en"; settings: Settings }) {
@@ -15,9 +17,15 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
      visite), la colonne se tait : l'horaire du code n'est pas celui de
      l'artisan. */
   const hours = adminHours(settings);
+  /* Un changement d'horaire daté s'affiche d'avance (lib/hours.ts) : le jour
+     qu'il touche porte ses nouvelles heures, et leur date dessous tant
+     qu'elle n'est pas venue. */
+  const pending = pendingChange(settings.hoursChange, dateKey(new Date(), settings.timezone));
+  const changed = pending ? changedDays(settings.hours, pending).map((d) => d.day) : [];
   const grouped = hours && openDays(hours).map((h) => ({
     label: t.daysShort[h.day],
     range: `${h.open} – ${h.close}`,
+    note: pending && changed.includes(h.day) ? t.footer.changeFrom.replace("{date}", changeDate(pending.from, locale)) : null,
   }));
 
   return (
@@ -54,7 +62,11 @@ export function SiteFooter({ t, locale, settings }: { t: Dict; locale: "fr" | "e
                 {grouped.length === 0 && <li className="text-linen-300/60">{t.closed}</li>}
                 {grouped.map((g) => (
                   <li key={g.label} className="flex justify-between gap-4 tabular-nums">
-                    <span className="text-linen-300/60">{g.label}</span><span>{g.range}</span>
+                    <span className="text-linen-300/60">{g.label}</span>
+                    <span className="text-right">
+                      {g.range}
+                      {g.note && <span className="block text-[11px] text-linen-300/60">{g.note}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
