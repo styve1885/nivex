@@ -519,6 +519,16 @@ async function bootstrap() {
      les visites d'abonné et les séances d'avant. */
   await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS ironing_board text`;
 
+  /* Le dernier courriel parti au client pour ce rendez-vous (27 novembre
+     2026) : quand, pourquoi (confirmation, déplacement, annulation, rappel,
+     horaire à jour, fin d'abonnement), et l'heure de séance qu'il annonçait,
+     nulle pour une annulation. L'onglet Rendez-vous le montre, et dit quand
+     le client n'a pas l'horaire actuel : l'artisan déplace sans avertir,
+     puis envoie l'horaire final d'un seul courriel. */
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS client_emailed_at  timestamptz`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS client_email_kind  text`;
+  await q`ALTER TABLE nivex_bookings ADD COLUMN IF NOT EXISTS client_emailed_for timestamptz`;
+
   /*
    * Les migrations de données qui ne s'écrivent qu'une fois.
    *
@@ -613,6 +623,23 @@ async function bootstrap() {
     WHERE id = 1 AND hours_change IS NULL
       AND hours @> '[{"day": 6, "enabled": true, "open": "18:00", "close": "22:00"}]'::jsonb
       AND EXISTS (SELECT 1 FROM done)`;
+
+  /* Le dernier courriel au client se note depuis le 27 novembre 2026. Avant,
+     chaque geste lui écrivait aussitôt : un rendez-vous dont la confirmation
+     est partie (`email_sent`) a donc l'horaire que le client connaît, ou son
+     annulation. La date de ce courriel, elle, n'a pas été gardée. Un
+     rendez-vous resté muet (Google débranché) reste sans note : le client
+     n'a rien reçu. */
+  await q`
+    WITH done AS (
+      INSERT INTO nivex_migrations (name) VALUES ('courriels-2026-11')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name
+    )
+    UPDATE nivex_bookings
+    SET client_email_kind = 'legacy',
+        client_emailed_for = CASE WHEN status = 'confirmed' THEN starts_at END
+    WHERE email_sent AND client_email_kind IS NULL AND EXISTS (SELECT 1 FROM done)`;
 
   /* Le 23 octobre 2026, deux zones au lieu de trois : la zone A absorbe la
      zone B, sans frais ; la zone C devient la zone B, à 15 $ et 10 $

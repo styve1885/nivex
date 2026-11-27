@@ -15,11 +15,12 @@ import {
 } from "./google";
 import {
   ownerVisitChanged, reviewRequest, seriesNotice, sessionReminder, subscriptionConfirmation, subscriptionEnded,
-  subscriptionOwnerNotification, visitChanged, visitReminder,
-  type SubscriptionEmailData, type VisitChange, type VisitEmailData,
+  ownerQuietChange, subscriptionOwnerNotification, subscriptionUpdate, visitChanged, visitReminder,
+  type ScheduleChange, type SubscriptionEmailData, type VisitChange, type VisitEmailData,
 } from "./email";
 import {
-  bookingEmailData, cleanOrigin, hydrate, occupiedBlock, type Booking, withdrawQueuedReminders, withdrawSoonText,
+  bookingEmailData, cleanOrigin, clientBehind, hydrate, noteClientEmail, occupiedBlock, type Booking,
+  withdrawQueuedReminders, withdrawSoonText,
 } from "./bookings";
 import { ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
 import { rhythmPhrase } from "./email";
@@ -33,7 +34,9 @@ import {
   contactEmail, EARLY_ARRIVAL_MINUTES, MAKEUP_SEARCH_STEPS, PHONE, REQUEST_INBOX, SERIES_CYCLES, TERM_SERIES,
 } from "./brand";
 import { purgeCalendarCopies, purgeExpired } from "./retention";
-import { addDaysToKey, dateKey, formatMoney, formatTimeIn, fromWall, minutesToText, parseDateKey, parseHM, toWall } from "./time";
+import {
+  addDaysToKey, dateKey, formatDateTime, formatMoney, formatTimeIn, fromWall, minutesToText, parseDateKey, parseHM, toWall,
+} from "./time";
 
 /**
  * Les abonnements : la série posée, puis tout ce qui la retouche.
@@ -165,6 +168,10 @@ export const OwnerSubscriptionInput = z.object({
   startCycle: z.number().int().min(1).max(SERIES_CYCLES * TERM_SERIES).default(1),
   startDone: z.number().int().min(0).max(3).default(0),
   paidCurrent: z.boolean().default(false),
+  /* « Avertir le client » : cochée par défaut pour un abonnement que
+     l'artisan entre. Décochée, ni courriel ni texto au client ; la fiche de
+     l'artisan le dit. Absente (une page d'avant), le client est averti. */
+  notify: z.boolean().default(true),
 });
 export type OwnerSubscriptionInputType = z.infer<typeof OwnerSubscriptionInput>;
 
@@ -367,7 +374,7 @@ export async function createSubscription(input: SubscriptionInputType, host?: st
   return insertSubscription({
     settings, plan, input, starts: preview.starts, series: 1,
     startCycle: 1, startDone: 0, paidCurrent: false, createdBy: "client",
-    provenance: cleanOrigin(input), host,
+    provenance: cleanOrigin(input), host, notify: true,
   });
 }
 
@@ -388,7 +395,7 @@ export async function createOwnerSubscription(input: OwnerSubscriptionInputType,
   return insertSubscription({
     settings, plan, input, starts: preview.starts, series: seriesOfCycle(input.startCycle),
     startCycle: input.startCycle, startDone: input.startDone, paidCurrent: input.paidCurrent,
-    createdBy: "owner", provenance: null, host,
+    createdBy: "owner", provenance: null, host, notify: input.notify,
   });
 }
 
@@ -421,6 +428,9 @@ async function insertSubscription(p: {
   createdBy: "client" | "owner";
   provenance: ReturnType<typeof cleanOrigin> | null;
   host?: string | null;
+  /* Le client reçoit-il sa confirmation (courriel et texto) ? Toujours quand
+     il s'abonne lui-même ; au choix de l'artisan sinon. */
+  notify: boolean;
 }): Promise<SubscriptionFull> {
   const { settings, plan, input } = p;
   const tz = settings.timezone;
@@ -516,7 +526,9 @@ async function insertSubscription(p: {
     await logEvent("subscription_calendar_skipped", { ref: full.sub.ref, reason: "no_access_token" });
   }
 
-  const emailSent = at ? await sendConfirmation(full, at, settings, origin, p.createdBy === "owner") : false;
+  const emailSent = at
+    ? await sendConfirmation(full, at, settings, origin, p.createdBy === "owner", undefined, { client: p.notify })
+    : false;
 
   /* Les textos ne dépendent pas de Google : ils partent même si le compte
      est débranché. L'artisan n'est prévenu que de ce qu'il n'a pas fait. */
@@ -524,9 +536,11 @@ async function insertSubscription(p: {
   if (first) {
     const l = full.sub.locale;
     await Promise.all([
-      sendSms(full.sub.clientPhone, SMS.subscriptionConfirmed(l, planName(full.sub, l),
-        smsWhen(first.startsAt, settings.timezone, l), rhythmPhrase(full.sub.everyWeeks, l),
-        `${origin}/${l}/abonnement/${full.sub.manageToken}`), full.sub.ref),
+      p.notify
+        ? sendSms(full.sub.clientPhone, SMS.subscriptionConfirmed(l, planName(full.sub, l),
+            smsWhen(first.startsAt, settings.timezone, l), rhythmPhrase(full.sub.everyWeeks, l),
+            `${origin}/${l}/abonnement/${full.sub.manageToken}`), full.sub.ref)
+        : Promise.resolve(false),
       p.createdBy === "client"
         ? sendSms(ownerSmsNumber(), SMS.owner.newSubscription(full.sub.clientName, planName(full.sub, "fr"),
             smsWhen(first.startsAt, settings.timezone, "fr")), full.sub.ref)
@@ -535,7 +549,7 @@ async function insertSubscription(p: {
   }
 
   await logEvent("subscription_created", {
-    ref: full.sub.ref, plan: plan.key, visits: p.starts.length, by: p.createdBy, email: emailSent,
+    ref: full.sub.ref, plan: plan.key, visits: p.starts.length, by: p.createdBy, email: emailSent, notify: p.notify,
   });
   return (await findSubscription(id))!;
 }
@@ -975,15 +989,32 @@ async function send(
   }
 }
 
-/** La confirmation au client et la fiche à l'artisan. Vrai si le client l'a reçue. */
-async function sendConfirmation(full: SubscriptionFull, at: string, s: Settings, origin: string, byOwner: boolean, visits?: Date[]): Promise<boolean> {
+/**
+ * La confirmation au client et la fiche à l'artisan. Vrai si le client l'a
+ * reçue. `client: false` (« Avertir le client » décochée) : la fiche seule,
+ * qui le dit. `owner: false` : le client seul, pour le bouton « Envoyer la
+ * confirmation au client ». Chaque visite annoncée note le courriel.
+ */
+async function sendConfirmation(
+  full: SubscriptionFull, at: string, s: Settings, origin: string, byOwner: boolean, visits?: Date[],
+  to: { client?: boolean; owner?: boolean } = {},
+): Promise<boolean> {
+  const client = to.client !== false, owner = to.owner !== false;
   const d = emailBase(full, s, origin, visits);
   if (d.visits.length === 0) return false;
   const [ok] = await Promise.all([
-    send(at, s, { email: full.sub.clientEmail, name: full.sub.clientName }, subscriptionConfirmation(d)),
-    send(at, s, { email: REQUEST_INBOX }, subscriptionOwnerNotification({ ...d, planName: planName(full.sub, "fr") }, byOwner), full.sub.clientEmail),
+    client ? send(at, s, { email: full.sub.clientEmail, name: full.sub.clientName }, subscriptionConfirmation(d)) : Promise.resolve(false),
+    owner
+      ? send(at, s, { email: REQUEST_INBOX }, subscriptionOwnerNotification({ ...d, planName: planName(full.sub, "fr") }, byOwner, !client), full.sub.clientEmail)
+      : Promise.resolve(false),
   ]);
-  if (ok) await sql()`UPDATE nivex_bookings SET email_sent = true WHERE subscription_id = ${full.sub.id}`.catch(() => {});
+  if (ok) {
+    await sql()`UPDATE nivex_bookings SET email_sent = true WHERE subscription_id = ${full.sub.id}`.catch(() => {});
+    const told = new Set(d.visits.map((x) => x.getTime()));
+    await noteClientEmail(full.visits
+      .filter((v) => v.status === "confirmed" && told.has(v.startsAt.getTime()))
+      .map((v) => ({ id: v.id, for: v.startsAt })), "confirmation");
+  }
   return ok;
 }
 
@@ -1058,7 +1089,17 @@ async function appendMakeup(full: SubscriptionFull, s: Settings, at: string | nu
  * Elle sort du compte du cycle, une visite la remplace en fin de série, son
  * occurrence disparaît de l'agenda, et les rangs suivants se recalculent.
  */
-export async function cancelVisit(b: Booking, by: "client" | "owner", host?: string | null): Promise<{ replacement: Booking | null }> {
+export async function cancelVisit(
+  b: Booking, by: "client" | "owner", host?: string | null, opts: { notify?: boolean } = {},
+): Promise<{ replacement: Booking | null }> {
+  /* Le client qui annule reçoit toujours son avis ; l'artisan choisit
+     (« Avertir le client », décochée par défaut). */
+  const notify = by === "client" || opts.notify !== false;
+  /* L'heure annulée, telle que le client la connaît : une visite que
+     l'artisan a déplacée sans l'avertir garde, pour lui, l'heure de son
+     dernier courriel. Le client, lui, annule depuis sa page, qui montre
+     l'heure actuelle. */
+  const told = by === "owner" ? b.clientEmailedFor ?? b.startsAt : b.startsAt;
   if (b.status === "cancelled") return { replacement: null };
   if (b.doneAt) throw new SubscriptionError("done");
   const settings = await getSettingsStrict();
@@ -1109,23 +1150,42 @@ export async function cancelVisit(b: Booking, by: "client" | "owner", host?: str
     await renumberCalendar(full, at, settings, origin);
 
     const change: VisitChange = { kind: "cancelled", replacement: replacement?.startsAt ?? null };
-    const d = visitData(before, b, settings, origin);
-    await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change));
+    const d = visitData(before, { ...b, startsAt: told }, settings, origin);
+    if (notify) {
+      if (await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change))) {
+        await noteClientEmail([{ id: b.id, for: null }], "cancelled");
+        if (replacement) await noteClientEmail([{ id: replacement.id, for: replacement.startsAt }], "replacement");
+      }
+    }
     if (by === "client") {
       await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: planName(before.sub, "fr") }, change), b.clientEmail);
+    } else if (!notify) {
+      const when = (x: Date) => formatDateTime(x, settings.timezone, "fr");
+      await send(at, settings, { email: REQUEST_INBOX }, ownerQuietChange({
+        clientName: b.clientName, what: "visite annulée", siteUrl: origin, businessEmail: contactEmail(),
+        lines: [
+          `Visite de ${b.clientName} du ${when(b.startsAt)} annulée, sans avertir le client.`,
+          replacement
+            ? `Une visite de remplacement est posée en fin de série : ${when(replacement.startsAt)}.`
+            : "Aucun créneau libre n'a été trouvé en fin de série : la visite est à replacer depuis l'onglet Abonnés.",
+        ],
+      }), b.clientEmail);
     }
   }
 
-  /* Le client reçoit toujours le texto ; l'artisan, quand le client a annulé. */
+  /* Le client reçoit le texto, sauf si l'artisan a choisi de ne pas
+     l'avertir ; l'artisan, quand le client a annulé. */
   const l = b.locale;
-  await sendSms(b.clientPhone, SMS.visitCancelled(l, smsWhen(b.startsAt, settings.timezone, l),
-    replacement ? smsWhen(replacement.startsAt, settings.timezone, l) : null), b.ref);
+  if (notify) {
+    await sendSms(b.clientPhone, SMS.visitCancelled(l, smsWhen(told, settings.timezone, l),
+      replacement ? smsWhen(replacement.startsAt, settings.timezone, l) : null), b.ref);
+  }
   if (by === "client") {
     await sendSms(ownerSmsNumber(), SMS.owner.cancelled(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr")), b.ref);
   }
 
   await logEvent("subscription_visit_cancelled", {
-    ref: b.ref, subscription: before.sub.ref, by, replacement: replacement?.startsAt.toISOString() ?? null,
+    ref: b.ref, subscription: before.sub.ref, by, notify, replacement: replacement?.startsAt.toISOString() ?? null,
   });
   return { replacement };
 }
@@ -1164,7 +1224,13 @@ export async function syncVisitCalendar(b: Booking, host?: string | null): Promi
  * tant que le créneau est dans l'horaire et libre. Un refus dit pourquoi
  * (`detail`, pour lui seul).
  */
-export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", host?: string | null): Promise<VisitMoved> {
+export async function moveVisit(
+  b: Booking, to: Date, by: "client" | "owner", host?: string | null, opts: { notify?: boolean } = {},
+): Promise<VisitMoved> {
+  /* Le client qui déplace reçoit toujours son avis ; l'artisan choisit
+     (« Avertir le client », décochée par défaut depuis le 27 novembre 2026 :
+     dix déplacements valaient dix courriels et dix textos). */
+  const notify = by === "client" || opts.notify !== false;
   if (b.status === "cancelled") throw new SubscriptionError("ended");
   if (b.doneAt) throw new SubscriptionError("done");
   if (!Number.isFinite(to.getTime())) throw new SubscriptionError("invalid_slot", [], [], "Date ou heure invalide.");
@@ -1234,6 +1300,13 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   const full = (await findSubscription(b.subscriptionId!))!;
   const moved = full.visits.find((v) => v.id === b.id)!;
   const origin = siteOrigin(host);
+  /* L'ancienne date, telle que le client la connaît : après des
+     déplacements faits sans l'avertir, celle de son dernier courriel. Le
+     client, lui, déplace depuis sa page, qui montre l'heure actuelle. */
+  const told = by === "owner" ? b.clientEmailedFor ?? b.startsAt : b.startsAt;
+  /* Une visite ramenée, avertissement coché, à l'heure que le client
+     connaît déjà : rien ne change pour lui, rien ne part. */
+  const tell = notify && to.getTime() !== told.getTime();
   /* Un texto de deux heures avant resté programmé à l'ancienne heure : il
      n'en part plus depuis le 14 novembre 2026, il est retiré. */
   await withdrawSoonText(b).catch(() => false);
@@ -1246,23 +1319,42 @@ export async function moveVisit(b: Booking, to: Date, by: "client" | "owner", ho
   if (at) {
     calendar = await placeVisitEvent(full, moved, at, settings, origin);
     await renumberCalendar(full, at, settings, origin, { skip: moved.id });
-    const change: VisitChange = { kind: "moved", from: b.startsAt };
+    const change: VisitChange = { kind: "moved", from: told };
     const d = visitData(full, moved, settings, origin);
-    await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change));
+    if (tell) {
+      if (await send(at, settings, { email: b.clientEmail, name: b.clientName }, visitChanged(d, change))) {
+        await noteClientEmail([{ id: moved.id, for: moved.startsAt }], "moved");
+      }
+    }
     if (by === "client") {
       await send(at, settings, { email: REQUEST_INBOX }, ownerVisitChanged({ ...d, planName: planName(full.sub, "fr") }, change), b.clientEmail);
+    } else if (!notify) {
+      const when = (x: Date) => formatDateTime(x, tz, "fr");
+      await send(at, settings, { email: REQUEST_INBOX }, ownerQuietChange({
+        clientName: b.clientName, what: "visite déplacée", siteUrl: origin, businessEmail: contactEmail(),
+        lines: [
+          `Visite de ${b.clientName} déplacée, sans avertir le client.`,
+          `Ancienne date : ${when(b.startsAt)}`,
+          `Nouvelle date : ${when(to)}`,
+          ...(b.clientEmailedFor && b.clientEmailedFor.getTime() !== b.startsAt.getTime()
+            ? [`Le dernier courriel du client annonçait le ${when(b.clientEmailedFor)}.`]
+            : !b.clientEmailedFor ? ["Aucun courriel n'est encore parti au client pour cette visite."] : []),
+        ],
+      }), b.clientEmail);
     }
   }
 
-  await sendSms(b.clientPhone, SMS.visitMoved(b.locale, smsWhen(b.startsAt, settings.timezone, b.locale),
-    smsWhen(to, settings.timezone, b.locale)), b.ref);
+  if (tell) {
+    await sendSms(b.clientPhone, SMS.visitMoved(b.locale, smsWhen(told, settings.timezone, b.locale),
+      smsWhen(to, settings.timezone, b.locale)), b.ref);
+  }
   if (by === "client") {
     await sendSms(ownerSmsNumber(), SMS.owner.moved(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr"),
       smsWhen(to, settings.timezone, "fr")), b.ref);
   }
 
   await logEvent("subscription_visit_moved", {
-    ref: b.ref, subscription: full.sub.ref, by, from: b.startsAt.toISOString(), to: to.toISOString(),
+    ref: b.ref, subscription: full.sub.ref, by, notify, from: b.startsAt.toISOString(), to: to.toISOString(),
     calendar: calendar?.status ?? (at ? null : "offline"),
   });
   return { visit: moved, calendar, offline: !at };
@@ -1442,8 +1534,11 @@ export async function setPaid(subId: string, cycle: number, paid: boolean): Prom
   }
 }
 
-/** Une visite replacée à la main : l'alerte « à replacer » diminue d'autant. */
-export async function placeMakeup(subId: string, date: string, time: string, host?: string | null): Promise<Booking> {
+/**
+ * Une visite replacée à la main : l'alerte « à replacer » diminue d'autant.
+ * « Avertir le client », cochée par défaut, lui envoie la date par texto.
+ */
+export async function placeMakeup(subId: string, date: string, time: string, host?: string | null, notify = true): Promise<Booking> {
   const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
@@ -1489,12 +1584,19 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
     const origin = siteOrigin(host);
     await calendarSingle(after, after.visits.find((x) => x.id === v.id)!, at, settings, origin);
     await renumberCalendar(after, at, settings, origin);
+    if (!notify) {
+      await send(at, settings, { email: REQUEST_INBOX }, ownerQuietChange({
+        clientName: full.sub.clientName, what: "visite replacée", siteUrl: origin, businessEmail: contactEmail(),
+        lines: [`Visite de remplacement de ${full.sub.clientName} posée le ${formatDateTime(v.startsAt, settings.timezone, "fr")}, sans avertir le client.`],
+      }), full.sub.clientEmail);
+    }
   }
   /* L'annulation a dit au client qu'on l'appellerait pour replacer sa visite :
-     la date convenue lui arrive par écrit, Google branché ou non. */
+     la date convenue lui arrive par écrit, Google branché ou non, sauf si
+     l'artisan a décoché « Avertir le client ». */
   const l = full.sub.locale;
-  await sendSms(full.sub.clientPhone, SMS.visitPlaced(l, smsWhen(v.startsAt, settings.timezone, l)), v.ref);
-  await logEvent("subscription_makeup_placed", { ref: v.ref, subscription: full.sub.ref });
+  if (notify) await sendSms(full.sub.clientPhone, SMS.visitPlaced(l, smsWhen(v.startsAt, settings.timezone, l)), v.ref);
+  await logEvent("subscription_makeup_placed", { ref: v.ref, subscription: full.sub.ref, notify });
   return v;
 }
 
@@ -1507,7 +1609,10 @@ export async function placeMakeup(subId: string, date: string, time: string, hos
  * En cas de conflit, l'artisan voit les dates. Il peut les sauter : la
  * série se prolonge alors d'autant de dates, pour garder ses six cycles.
  */
-export async function renewSeries(subId: string, opts: { skipConflicts: boolean }, host?: string | null): Promise<SubscriptionFull> {
+export async function renewSeries(subId: string, opts: { skipConflicts: boolean; notify?: boolean }, host?: string | null): Promise<SubscriptionFull> {
+  /* « Avertir le client », cochée par défaut : la confirmation de la série et
+     son texto. Décochée, la fiche de l'artisan seule. */
+  const notify = opts.notify !== false;
   const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
@@ -1576,13 +1681,15 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
     const fresh = after.visits.filter((v) => v.seriesNo === series);
     await calendarSeries(after, fresh, at, settings, origin)
       .catch((e) => logEvent("subscription_calendar_failed", { ref: sub.ref, error: describe(e) }));
-    await sendConfirmation(after, at, settings, origin, true, starts);
+    await sendConfirmation(after, at, settings, origin, true, starts, { client: notify });
   }
   /* Le texto double la confirmation, et part sans Google. */
   const l = sub.locale;
-  await sendSms(sub.clientPhone, SMS.seriesRenewed(l, smsWhen(starts[0], settings.timezone, l),
-    rhythmPhrase(sub.everyWeeks, l), `${origin}/${l}/abonnement/${sub.manageToken}`), sub.ref);
-  await logEvent("subscription_renewed", { ref: sub.ref, series, visits: starts.length, skipped: taken.size });
+  if (notify) {
+    await sendSms(sub.clientPhone, SMS.seriesRenewed(l, smsWhen(starts[0], settings.timezone, l),
+      rhythmPhrase(sub.everyWeeks, l), `${origin}/${l}/abonnement/${sub.manageToken}`), sub.ref);
+  }
+  await logEvent("subscription_renewed", { ref: sub.ref, series, visits: starts.length, skipped: taken.size, notify });
   return (await findSubscription(subId))!;
 }
 
@@ -1591,7 +1698,7 @@ export async function renewSeries(subId: string, opts: { skipConflicts: boolean 
  * remplacement, puisque rien ne reste à compléter — et retirées de l'agenda.
  * Celles qui ont eu lieu restent dans l'historique.
  */
-export async function endSubscription(subId: string, host?: string | null): Promise<{ removed: number }> {
+export async function endSubscription(subId: string, host?: string | null, notify = true): Promise<{ removed: number }> {
   const settings = await getSettingsStrict();
   const full = await findSubscription(subId);
   if (!full) throw new SubscriptionError("not_found");
@@ -1616,16 +1723,26 @@ export async function endSubscription(subId: string, host?: string | null): Prom
     });
     if (removed.length > 0) {
       const origin = siteOrigin(host);
-      await send(at, settings, { email: full.sub.clientEmail, name: full.sub.clientName },
-        subscriptionEnded(emailBase(full, settings, origin), removed.map((v) => v.startsAt)));
+      if (notify) {
+        if (await send(at, settings, { email: full.sub.clientEmail, name: full.sub.clientName },
+          subscriptionEnded(emailBase(full, settings, origin), removed.map((v) => v.startsAt)))) {
+          await noteClientEmail(removed.map((v) => ({ id: v.id, for: null })), "ended");
+        }
+      } else {
+        await send(at, settings, { email: REQUEST_INBOX }, ownerQuietChange({
+          clientName: full.sub.clientName, what: "abonnement terminé", siteUrl: origin, businessEmail: contactEmail(),
+          lines: [`Abonnement de ${full.sub.clientName} terminé, sans avertir le client : ${removed.length} visite${removed.length > 1 ? "s" : ""} à venir retirée${removed.length > 1 ? "s" : ""} de l'agenda.`],
+        }), full.sub.clientEmail);
+      }
     }
   }
   /* Le client apprend par texto que ses visites sont retirées, même quand
-     le compte Google est débranché et que le courriel ne part pas. */
-  if (removed.length > 0) {
+     le compte Google est débranché et que le courriel ne part pas, sauf si
+     l'artisan a décoché « Avertir le client ». */
+  if (removed.length > 0 && notify) {
     await sendSms(full.sub.clientPhone, SMS.subscriptionEnded(full.sub.locale, removed.length), full.sub.ref);
   }
-  await logEvent("subscription_ended", { ref: full.sub.ref, removed: removed.length });
+  await logEvent("subscription_ended", { ref: full.sub.ref, removed: removed.length, notify });
   return { removed: removed.length };
 }
 
@@ -1710,6 +1827,81 @@ export async function resendSubscription(subId: string, host?: string | null): P
   };
 }
 
+/**
+ * « Envoyer la confirmation au client », pour un abonné (27 novembre 2026) :
+ * un seul courriel, avec l'horaire tel qu'il est maintenant. L'artisan
+ * déplace ou annule sans avertir, autant de fois qu'il faut, puis envoie
+ * l'horaire final d'un clic.
+ *
+ * Le courriel dit ce qui a changé depuis le dernier que le client a reçu
+ * (déplacée, annulée, ajoutée : `clientBehind`), puis ses prochaines
+ * visites. Un abonné qui n'a encore rien reçu reçoit sa confirmation
+ * d'abonnement ; un abonnement terminé, l'avis de fin. Courriel seulement :
+ * ni texto, ni fiche à l'artisan, et l'agenda ne bouge pas.
+ */
+export async function sendSubscriptionUpdate(
+  subId: string, host?: string | null, now = new Date(),
+): Promise<{ ok: boolean; error: string | null }> {
+  const settings = await getSettingsStrict();
+  const full = await findSubscription(subId);
+  if (!full) return { ok: false, error: "Abonnement introuvable." };
+  let at: string | null = null;
+  try {
+    at = await ownerAccessToken();
+  } catch (e) {
+    return { ok: false, error: describe(e) };
+  }
+  if (!at) return { ok: false, error: "Aucun compte Google branché." };
+
+  const origin = siteOrigin(host);
+  const client = { email: full.sub.clientEmail, name: full.sub.clientName };
+  const failed = { ok: false, error: "Le courriel n'est pas parti. Vérifiez la connexion Google." };
+  const behind = full.visits.filter((v) => clientBehind(v, now));
+
+  /* Terminé : l'avis de fin, pour les visites que le client croit encore
+     prévues, à l'heure qu'il connaît. */
+  if (full.sub.status !== "active") {
+    const removed = behind.filter((v) => v.status === "cancelled");
+    if (removed.length === 0) return { ok: false, error: "L'abonnement est terminé, et le client n'attend plus aucune visite." };
+    const known = removed.map((v) => v.clientEmailedFor!).sort((a, b) => a.getTime() - b.getTime());
+    if (!(await send(at, settings, client, subscriptionEnded(emailBase(full, settings, origin), known)))) return failed;
+    await noteClientEmail(removed.map((v) => ({ id: v.id, for: null })), "ended");
+    await logEvent("subscription_update_sent", { ref: full.sub.ref, kind: "ended", visits: removed.length });
+    return { ok: true, error: null };
+  }
+
+  const upcoming = full.visits
+    .filter((v) => v.status === "confirmed" && !v.doneAt && v.startsAt.getTime() > now.getTime())
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
+  /* Rien encore reçu, même pas sa confirmation (« Avertir le client »
+     décochée à l'entrée de l'abonnement) : c'est elle qui part. */
+  if (!full.visits.some((v) => v.clientEmailKind)) {
+    if (upcoming.length === 0) return { ok: false, error: "Aucune visite à venir à annoncer." };
+    const ok = await sendConfirmation(full, at, settings, origin, true, upcoming.map((v) => v.startsAt), { owner: false });
+    if (!ok) return failed;
+    await logEvent("subscription_update_sent", { ref: full.sub.ref, kind: "confirmation", visits: upcoming.length });
+    return { ok: true, error: null };
+  }
+
+  const changes: ScheduleChange[] = behind
+    .map((v): ScheduleChange => v.status === "cancelled"
+      ? { kind: "cancelled", from: v.clientEmailedFor! }
+      : v.clientEmailedFor
+        ? { kind: "moved", from: v.clientEmailedFor, to: v.startsAt }
+        : { kind: "added", to: v.startsAt })
+    .sort((a, b) => ("to" in a ? a.to : a.from).getTime() - ("to" in b ? b.to : b.from).getTime());
+  const d = emailBase(full, settings, origin, upcoming.map((v) => v.startsAt));
+  if (!(await send(at, settings, client, subscriptionUpdate(d, changes)))) return failed;
+
+  await noteClientEmail([
+    ...upcoming.map((v) => ({ id: v.id, for: v.startsAt })),
+    ...behind.filter((v) => v.status === "cancelled").map((v) => ({ id: v.id, for: null })),
+  ], "update");
+  await logEvent("subscription_update_sent", { ref: full.sub.ref, kind: "update", changes: changes.length, visits: upcoming.length });
+  return { ok: true, error: null };
+}
+
 /* ============================ Tâche quotidienne ============================ */
 
 /**
@@ -1785,8 +1977,10 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       if (at && !v.reminderSentAt) {
         const stamp = await claimReminder(v, "email");
         if (stamp) {
-          if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) reminders++;
-          else await releaseReminder(v.id, "email", stamp);
+          if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, visitReminder(d, isToday))) {
+            reminders++;
+            await noteClientEmail([{ id: v.id, for: v.startsAt }], "reminder");
+          } else await releaseReminder(v.id, "email", stamp);
         }
       }
     } else if (at && !v.reminderSentAt) {
@@ -1795,8 +1989,10 @@ export async function runDaily(host?: string | null, now = new Date()): Promise<
       const stamp = await claimReminder(v, "email");
       if (stamp) {
         const m = sessionReminder(bookingEmailData(v, settings, origin), isToday);
-        if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, m, undefined, "booking_email_failed")) reminders++;
-        else await releaseReminder(v.id, "email", stamp);
+        if (await send(at, settings, { email: v.clientEmail, name: v.clientName }, m, undefined, "booking_email_failed")) {
+          reminders++;
+          await noteClientEmail([{ id: v.id, for: v.startsAt }], "reminder");
+        } else await releaseReminder(v.id, "email", stamp);
       }
     }
 

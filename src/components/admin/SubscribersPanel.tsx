@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AdminSubscription } from "@/app/api/admin/subscriptions/route";
 import { CYCLE_MAX_WEEKS } from "@/lib/brand";
 import { LoadFailure, loadErrorOf, type LoadError } from "./LoadFailure";
+import { CLIENT_EMAIL_KIND, LEGACY_EMAIL, notifyHint } from "./client-email";
 
 type Client = { name: string; email: string; phone: string; address: string; city: string; postalCode: string; locale: "fr" | "en" };
 type Conflict = { startsAt: string; reason: string };
@@ -233,6 +234,11 @@ function SubscriptionCard({ s, when, onChange }: {
   const [place, setPlace] = useState({ date: "", time: "" });
   const [fee, setFee] = useState(String(s.feePerVisitCents / 100));
   const [price, setPrice] = useState(String(s.cycleCents / 100));
+  /* « Avertir le client » : cochée pour ce qui ajoute des visites (série
+     suivante, visite replacée), décochée pour mettre fin. */
+  const [notifyRenew, setNotifyRenew] = useState(true);
+  const [notifyPlace, setNotifyPlace] = useState(true);
+  const [notifyEnd, setNotifyEnd] = useState(false);
   const ended = s.status === "ended";
 
   async function run(key: string, body: Record<string, unknown>, ok?: string) {
@@ -293,6 +299,39 @@ function SubscriptionCard({ s, when, onChange }: {
         <div className="space-y-6 border-t border-gold-300/40 px-5 py-5 text-[0.85rem]">
           <div className="space-y-2.5">
             <Line label="Prochaine visite">{s.nextVisit ? when(s.nextVisit) : "—"}</Line>
+            <Line label="Courriel au client">
+              <span className="block">
+                {s.lastClientEmailAt
+                  ? `${when(s.lastClientEmailAt)} · ${CLIENT_EMAIL_KIND[s.lastClientEmailKind ?? ""] ?? "courriel"}`
+                  : s.clientNeverEmailed ? "Aucun courriel envoyé au client" : LEGACY_EMAIL}
+              </span>
+              {s.clientBehind > 0 && (
+                <span className="mt-0.5 block text-[0.8rem] text-[#8E332C]">
+                  {s.clientBehind === 1 ? "Un changement" : `${s.clientBehind} changements`} que le client ignore encore : visite déplacée, annulée ou ajoutée sans l&apos;avertir.
+                </span>
+              )}
+              {s.clientBehind === 0 && !ended && !s.clientNeverEmailed && (
+                <span className="mt-0.5 block text-[0.76rem] text-ink-400">Le client a l&apos;horaire actuel.</span>
+              )}
+              {(!ended || s.clientBehind > 0) && (
+                <span className="mt-2 block">
+                  <button type="button" disabled={busy === "update"}
+                    onClick={() => run("update", { action: "update", id: s.id }, "C'est parti : le client a reçu son horaire à jour.")}
+                    className={`border px-3 py-2 text-[10px] uppercase tracking-[0.14em] disabled:opacity-40 ${
+                      s.clientBehind > 0 ? "border-gold-500 text-gold-700 hover:bg-gold-300/10" : "border-gold-300/70 text-ink-500 hover:text-gold-700"
+                    }`}>
+                    {busy === "update" ? "Envoi en cours…" : "Envoyer la confirmation au client"}
+                  </button>
+                  <span className="mt-1 block text-[0.74rem] text-ink-400">
+                    {ended
+                      ? "Un seul courriel : l'avis de fin, pour les visites qu'il croit encore prévues. Pas de texto."
+                      : s.clientNeverEmailed
+                        ? "Un seul courriel : la confirmation de l'abonnement, avec ses prochaines visites. Pas de texto."
+                        : "Un seul courriel : ce qui a changé depuis son dernier courriel, puis ses prochaines visites avec l'heure. Pas de texto."}
+                  </span>
+                </span>
+              )}
+            </Line>
             <Line label="Paiement du cycle">
               <span>{payment} · {money(s.amount.totalCents, s.currency)}</span>
               {s.amount.travelCents > 0 && (
@@ -437,20 +476,28 @@ function SubscriptionCard({ s, when, onChange }: {
                 <input type="date" aria-label="Date de la visite à replacer" value={place.date} onChange={(e) => setPlace({ ...place, date: e.target.value })} className="field !w-auto !py-1.5" />
                 <input type="time" aria-label="Heure de la visite à replacer" step={1800} value={place.time} onChange={(e) => setPlace({ ...place, time: e.target.value })} className="field !w-auto !py-1.5" />
                 <button type="button" disabled={!place.date || !place.time || busy === "place"}
-                  onClick={() => run("place", { action: "place", id: s.id, ...place }, "Visite replacée.")}
+                  onClick={() => run("place", { action: "place", id: s.id, ...place, notify: notifyPlace }, "Visite replacée.")}
                   className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
                   Poser
                 </button>
               </div>
+              <NotifyBox checked={notifyPlace} onChange={setNotifyPlace}
+                hint={notifyPlace ? "Le client reçoit la date par texto." : notifyHint(false)} />
             </div>
           )}
 
           <div className="flex flex-wrap gap-x-5 gap-y-3 border-t border-gold-300/40 pt-4">
             {s.canRenew && (
-              <button type="button" disabled={busy === "renew"} onClick={() => run("renew", { action: "renew", id: s.id }, `Série ${s.latestSeries + 1} posée.`)}
-                className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
-                {busy === "renew" ? "…" : `Poser la série ${s.latestSeries + 1}`}
-              </button>
+              <span className="flex flex-wrap items-center gap-3">
+                <button type="button" disabled={busy === "renew"} onClick={() => run("renew", { action: "renew", id: s.id, notify: notifyRenew }, `Série ${s.latestSeries + 1} posée.`)}
+                  className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
+                  {busy === "renew" ? "…" : `Poser la série ${s.latestSeries + 1}`}
+                </button>
+                <label className="flex items-center gap-2 text-[0.8rem] text-ink-600" title={notifyHint(notifyRenew)}>
+                  <input type="checkbox" checked={notifyRenew} onChange={(e) => setNotifyRenew(e.target.checked)} className="h-4 w-4 accent-[#866836]" />
+                  Avertir le client
+                </label>
+              </span>
             )}
             {!ended && (
               <button type="button" disabled={busy === "resync"} onClick={() => run("resync", { action: "resync", id: s.id }, "Agenda remis à jour, confirmation renvoyée.")}
@@ -459,12 +506,13 @@ function SubscriptionCard({ s, when, onChange }: {
               </button>
             )}
             {!ended && (confirming === "end" ? (
-              <span className="flex items-center gap-3">
-                <button type="button" disabled={busy === "end"} onClick={() => run("end", { action: "end", id: s.id }, "Abonnement terminé.")}
+              <span className="flex flex-wrap items-center gap-3">
+                <button type="button" disabled={busy === "end"} onClick={() => run("end", { action: "end", id: s.id, notify: notifyEnd }, "Abonnement terminé.")}
                   className="border border-[#B4453C]/50 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-[#8E332C]">
                   Confirmer la fin — les visites à venir seront retirées
                 </button>
                 <button type="button" onClick={() => setConfirming(null)} className="text-[10px] uppercase tracking-[0.14em] text-ink-400">Garder</button>
+                <NotifyBox checked={notifyEnd} onChange={setNotifyEnd} hint={notifyHint(notifyEnd)} />
               </span>
             ) : (
               <button type="button" onClick={() => setConfirming("end")}
@@ -495,7 +543,7 @@ function SubscriptionCard({ s, when, onChange }: {
                 {renewConflicts.map((c) => <li key={c.startsAt}>{when(c.startsAt)} — {REASONS[c.reason] ?? c.reason}</li>)}
               </ul>
               <button type="button" disabled={busy === "renew"}
-                onClick={() => run("renew", { action: "renew", id: s.id, skipConflicts: true }, `Série ${s.latestSeries + 1} posée, dates prises sautées.`)}
+                onClick={() => run("renew", { action: "renew", id: s.id, skipConflicts: true, notify: notifyRenew }, `Série ${s.latestSeries + 1} posée, dates prises sautées.`)}
                 className="mt-2 border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
                 {busy === "renew" ? "…" : "Poser en sautant ces dates"}
               </button>
@@ -515,6 +563,8 @@ function VisitRow({ v, perCycle, when, onChange }: {
 }) {
   const [mode, setMode] = useState<"idle" | "move" | "cancel">("idle");
   const [to, setTo] = useState({ date: "", time: "" });
+  /* « Avertir le client » : décochée par défaut pour déplacer ou annuler. */
+  const [notify, setNotify] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -546,6 +596,9 @@ function VisitRow({ v, perCycle, when, onChange }: {
           {!cancelled && !v.inCalendar ? " · hors agenda" : ""}
           {!cancelled && v.inCalendar && v.calendarStale ? " · agenda à l'ancienne heure" : ""}
         </span>
+        {v.clientBehind && (
+          <span className="text-[0.78rem] text-[#8E332C]">{cancelled ? "client non averti de l'annulation" : "client non averti"}</span>
+        )}
         {v.doneAt && <span className="text-[10px] uppercase tracking-[0.14em] text-gold-700">effectuée</span>}
         <span className="ml-auto flex gap-4">
           {!cancelled && !v.doneAt && startedish && (
@@ -568,8 +621,8 @@ function VisitRow({ v, perCycle, when, onChange }: {
           )}
           {!cancelled && !v.doneAt && (
             <>
-              <button type="button" onClick={() => setMode(mode === "move" ? "idle" : "move")} className={`${small} text-ink-500`}>Déplacer</button>
-              <button type="button" onClick={() => setMode(mode === "cancel" ? "idle" : "cancel")} className={`${small} text-ink-500 hover:text-[#8E332C]`}>Annuler</button>
+              <button type="button" onClick={() => { setMode(mode === "move" ? "idle" : "move"); setNotify(false); }} className={`${small} text-ink-500`}>Déplacer</button>
+              <button type="button" onClick={() => { setMode(mode === "cancel" ? "idle" : "cancel"); setNotify(false); }} className={`${small} text-ink-500 hover:text-[#8E332C]`}>Annuler</button>
             </>
           )}
         </span>
@@ -578,19 +631,21 @@ function VisitRow({ v, perCycle, when, onChange }: {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input type="date" aria-label="Nouvelle date" value={to.date} onChange={(e) => setTo({ ...to, date: e.target.value })} className="field !w-auto !py-1.5" />
           <input type="time" aria-label="Nouvelle heure" step={1800} value={to.time} onChange={(e) => setTo({ ...to, time: e.target.value })} className="field !w-auto !py-1.5" />
-          <button type="button" disabled={busy || !to.date || !to.time} onClick={() => run({ action: "move", visitId: v.id, ...to })}
+          <button type="button" disabled={busy || !to.date || !to.time} onClick={() => run({ action: "move", visitId: v.id, ...to, notify })}
             className="border border-gold-400/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-gold-700 disabled:opacity-40">
             Déplacer
           </button>
+          <NotifyBox checked={notify} onChange={setNotify} hint={notifyHint(notify)} />
         </div>
       )}
       {mode === "cancel" && (
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span className="text-[0.8rem] text-ink-600">La visite ne comptera pas ; une visite sera ajoutée en fin de série. Le client est prévenu.</span>
-          <button type="button" disabled={busy} onClick={() => run({ action: "cancel", visitId: v.id })}
+          <span className="text-[0.8rem] text-ink-600">La visite ne comptera pas ; une visite sera ajoutée en fin de série.</span>
+          <button type="button" disabled={busy} onClick={() => run({ action: "cancel", visitId: v.id, notify })}
             className="border border-[#B4453C]/50 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-[#8E332C] disabled:opacity-40">
             Confirmer l&apos;annulation
           </button>
+          <NotifyBox checked={notify} onChange={setNotify} hint={notifyHint(notify)} />
         </div>
       )}
       {err && <p role="alert" className="mt-1.5 text-[0.8rem] text-[#8E332C]">{err}</p>}
@@ -609,6 +664,8 @@ function NewSubscription({ plans, clients, when, onDone }: {
     name: "", email: "", phone: "", address: "", city: "", postalCode: "", notes: "",
     date: "", time: "", startCycle: 1, startDone: 0, paidCurrent: false,
     locale: "fr" as "fr" | "en",
+    /* « Avertir le client » : cochée par défaut pour un abonnement entré. */
+    notify: true,
   });
   const [check, setCheck] = useState<{ free: boolean; starts: string[]; conflicts: Conflict[] } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -703,6 +760,11 @@ function NewSubscription({ plans, clients, when, onDone }: {
             className="h-4 w-4 accent-[var(--color-gold-500)]" />
           <span className="text-[0.85rem] text-ink-600">Le cycle en cours est déjà payé</span>
         </label>
+        <div className="sm:col-span-2">
+          {/* Pas par `set` : la case ne touche pas aux dates déjà vérifiées. */}
+          <NotifyBox checked={f.notify} onChange={(v) => setF((x) => ({ ...x, notify: v }))}
+            hint={f.notify ? "Le client reçoit la confirmation de son abonnement, par courriel et par texto." : notifyHint(false)} />
+        </div>
         <label className="sm:col-span-2">
           <span className="label">Précisions</span>
           <textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} className="field resize-none" />
@@ -735,6 +797,23 @@ function NewSubscription({ plans, clients, when, onDone }: {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * « Avertir le client » (27 novembre 2026) : cochée, le geste écrit au
+ * client comme avant ; décochée, rien ne lui part, et l'artisan reçoit un
+ * avis. La ligne dessous dit ce qui partira.
+ */
+function NotifyBox({ checked, onChange, hint }: { checked: boolean; onChange: (v: boolean) => void; hint: string }) {
+  return (
+    <span className="block basis-full">
+      <label className="mt-1 flex items-center gap-2.5 text-[0.82rem] text-ink-700">
+        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-[#866836]" />
+        Avertir le client
+      </label>
+      <span className="mt-0.5 block text-[0.74rem] text-ink-400">{hint}</span>
+    </span>
   );
 }
 

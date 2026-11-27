@@ -24,8 +24,11 @@ const { PLANS, planCents, planFullCents, planFromParam } = await import("../src/
 const { readFileSync } = await import("node:fs");
 const { FALLBACK_SETTINGS } = await import("../src/lib/settings.ts");
 const { fromWall, toWall, dateKey, weekdayOfKey } = await import("../src/lib/time.ts");
-const { canSelfCancel } = await import("../src/lib/bookings.ts");
-const { visitReminder, subscriptionConfirmation, subscriptionOwnerNotification, visitChanged, seriesNotice } = await import("../src/lib/email.ts");
+const { canSelfCancel, clientBehind } = await import("../src/lib/bookings.ts");
+const {
+  visitReminder, subscriptionConfirmation, subscriptionOwnerNotification, visitChanged, seriesNotice,
+  subscriptionUpdate, ownerQuietChange,
+} = await import("../src/lib/email.ts");
 const { CANCEL_WINDOW_HOURS, SERIES_CYCLES } = await import("../src/lib/brand.ts");
 const { evaluateZone, DEFAULT_ZONE_POLICY } = await import("../src/lib/travel.ts");
 
@@ -569,6 +572,63 @@ test("aucun point d'exclamation dans les courriels d'abonnement", () => {
       assert.ok(!m.text.includes("!") && !m.subject.includes("!"), `${locale} : ${m.subject}`);
     }
   }
+});
+
+/* ————— « Avertir le client » et l'horaire à jour (27 novembre 2026) —————
+
+   L'artisan déplace ou annule sans avertir, puis envoie l'horaire final d'un
+   seul courriel. Le banc rejoue tout par le vrai code, base comprise
+   (tools/local/scenario-avertir.mjs). */
+
+test("« client non averti » : une autre heure, rien reçu, ou une annulation qu'il ignore ; jamais le passé", () => {
+  const now = at(2026, 11, 27, 12);
+  const v = (o) => ({ status: "confirmed", startsAt: at(2026, 12, 6, 15), doneAt: null, clientEmailedFor: at(2026, 12, 6, 15), ...o });
+  assert.equal(clientBehind(v({}), now), false, "le client a l'heure actuelle");
+  assert.equal(clientBehind(v({ clientEmailedFor: at(2026, 12, 4, 13) }), now), true, "déplacée sans l'avertir");
+  assert.equal(clientBehind(v({ clientEmailedFor: null }), now), true, "jamais annoncée");
+  assert.equal(clientBehind(v({ status: "cancelled", clientEmailedFor: at(2026, 12, 4, 13) }), now), true, "annulée sans l'avertir");
+  assert.equal(clientBehind(v({ status: "cancelled", clientEmailedFor: null }), now), false, "annulation annoncée");
+  assert.equal(clientBehind(v({ startsAt: at(2026, 11, 20, 13), clientEmailedFor: null }), now), false, "passée");
+  assert.equal(clientBehind(v({ status: "cancelled", startsAt: at(2026, 11, 20, 13), clientEmailedFor: at(2026, 11, 20, 13) }), now), false,
+    "une annulation passée ne compte plus");
+  assert.equal(clientBehind(v({ doneAt: now, clientEmailedFor: null }), now), false, "effectuée");
+});
+
+test("l'horaire à jour : l'ancienne heure barrée, l'heure finale, les prochaines visites avec l'heure, en français et en anglais", () => {
+  const changes = [
+    { kind: "moved", from: at(2026, 12, 4, 13), to: at(2026, 12, 6, 15) },
+    { kind: "cancelled", from: at(2026, 12, 11, 13) },
+    { kind: "added", to: at(2027, 5, 28, 13) },
+  ];
+  const d = { ...base, visits: [at(2026, 12, 6, 15), at(2026, 12, 18, 13)], setupMinutes: 0 };
+  const m = subscriptionUpdate(d, changes);
+  assert.match(m.subject, /^Votre horaire NIVEX à jour · ABO-/);
+  const t = flat(m.text);
+  assert.match(t, /Voici l'horaire à jour de vos visites\./);
+  assert.match(t, /Déplacée: vendredi 4 décembre 2026 à 13 h 00 → dimanche 6 décembre 2026 à 15 h 00/);
+  assert.match(t, /Annulée: vendredi 11 décembre 2026 à 13 h 00/);
+  assert.match(t, /Ajoutée: vendredi 28 mai 2027 à 13 h 00/);
+  assert.match(t, /Vos prochaines visites:\n  · dimanche 6 décembre 2026 à 15 h 00\n  · vendredi 18 décembre 2026 à 13 h 00\n/);
+  assert.match(m.html, /line-through;[^>]*>vendredi 4 décembre 2026 à 13 h 00</, "l'ancienne heure barrée");
+  assert.doesNotMatch(t, /installation|rangement|1 h 50/);
+  const en = subscriptionUpdate({ ...d, locale: "en" }, changes);
+  assert.match(en.subject, /^Your updated NIVEX schedule · ABO-/);
+  assert.match(flat(en.text), /Moved: Friday, December 4, 2026 at 1:00 p\.m\. → Sunday, December 6, 2026 at 3:00 p\.m\./);
+  assert.match(flat(en.text), /Cancelled: [^]*Added: [^]*Your next visits:/);
+  /* Sans changement, l'horaire seul. */
+  assert.doesNotMatch(flat(subscriptionUpdate(d, []).text), /Ce qui change/);
+  for (const x of [m, en]) assert.ok(!x.text.includes("!") && !x.subject.includes("!"));
+});
+
+test("l'artisan qui n'avertit pas le client reçoit un avis qui le dit, et dit comment envoyer l'horaire final", () => {
+  const q = ownerQuietChange({ clientName: "Claire Beaulieu", what: "visite déplacée", siteUrl: "https://www.nivexrepassage.ca",
+    businessEmail: "contact@nivexrepassage.ca", lines: ["Visite de Claire Beaulieu déplacée, sans avertir le client."] });
+  assert.equal(q.subject, "Client non averti — Claire Beaulieu · visite déplacée");
+  assert.match(flat(q.text), /ni courriel ni texto.*« Envoyer la confirmation au client »/);
+  const fiche = subscriptionOwnerNotification(base, true, true);
+  assert.match(fiche.subject, /^Abonnement entré, client non averti — /);
+  assert.match(flat(fiche.text), /Le client n'a reçu ni courriel ni texto/);
+  assert.doesNotMatch(subscriptionOwnerNotification(base, true).subject, /non averti/);
 });
 
 /* ————— Déplacer une visite (7 novembre 2026) —————

@@ -9,7 +9,7 @@ import {
 import { estimateCents, loadBusy, slotIsFree } from "./availability";
 import { bookable, evaluateZone } from "./travel";
 import { createEvent, deleteEvent, ownerAccessToken, sendGmail, siteOrigin, GoogleError } from "./google";
-import { clientCancellation, clientConfirmation, ownerNotification, type BookingEmailData } from "./email";
+import { clientCancellation, clientConfirmation, ownerNotification, ownerQuietChange, type BookingEmailData } from "./email";
 import { formatDateTime, minutesToText, formatMoney } from "./time";
 import { canSubscriberChange } from "./cycles";
 import { cancelScheduledSms, ownerSmsNumber, sendSms, SMS, smsDay, smsTime, smsWhen } from "./sms";
@@ -111,7 +111,17 @@ export type Booking = {
   /* Les rappels de séance (le rappel de la veille) d'une séance à la carte ;
      une visite d'abonné suit son abonnement (voir db.ts). */
   reminders: boolean;
+  /* Le dernier courriel parti au client pour ce rendez-vous : quand, pourquoi,
+     et l'heure de séance qu'il annonçait (nulle pour une annulation). Tout est
+     nul quand rien n'est parti, ou avant la note (27 novembre 2026) :
+     `legacy` y dit seulement qu'une confirmation est partie. */
+  clientEmailedAt: Date | null;
+  clientEmailKind: ClientEmailKind | "legacy" | null;
+  clientEmailedFor: Date | null;
 };
+
+/** Le motif d'un courriel au client, tel que l'onglet Rendez-vous le nomme. */
+export type ClientEmailKind = "confirmation" | "moved" | "cancelled" | "replacement" | "reminder" | "update" | "ended";
 
 /**
  * La provenance telle qu'elle est relue en base.
@@ -179,7 +189,41 @@ export function hydrate(r: Row): Booking {
     ironingBoard: isBoardAnswer(r.ironing_board) ? r.ironing_board : null,
     smsSoonAt: r.sms_soon_at ? new Date(r.sms_soon_at as string) : null,
     smsSoonSid: (r.sms_soon_sid as string) ?? null,
+    clientEmailedAt: r.client_emailed_at ? new Date(r.client_emailed_at as string) : null,
+    clientEmailKind: (r.client_email_kind as Booking["clientEmailKind"]) ?? null,
+    clientEmailedFor: r.client_emailed_for ? new Date(r.client_emailed_for as string) : null,
   };
+}
+
+/**
+ * Note le courriel qui vient de partir au client : l'heure de l'envoi, son
+ * motif, et pour chaque rendez-vous l'heure de séance qu'il annonçait (nulle
+ * quand il annonçait une annulation). Au mieux : une note manquée ne doit pas
+ * faire passer pour un échec un courriel parti.
+ */
+export async function noteClientEmail(rows: { id: string; for: Date | null }[], kind: ClientEmailKind): Promise<void> {
+  if (rows.length === 0) return;
+  const data = rows.map((r) => ({ id: r.id, for_at: r.for ? r.for.toISOString() : null }));
+  try {
+    await sql()`
+      UPDATE nivex_bookings AS b
+      SET client_emailed_at = now(), client_email_kind = ${kind}, client_emailed_for = r.for_at
+      FROM jsonb_to_recordset(${JSON.stringify(data)}::jsonb) AS r(id uuid, for_at timestamptz)
+      WHERE b.id = r.id`;
+  } catch (e) {
+    await logEvent("client_email_note_failed", { kind, error: String((e as Error)?.message ?? e).slice(0, 300) });
+  }
+}
+
+/**
+ * Le client n'a pas l'horaire actuel de ce rendez-vous à venir : son dernier
+ * courriel annonçait une autre heure, ou rien du tout, ou il ignore encore une
+ * annulation. Un rendez-vous passé, ou une visite effectuée, ne compte plus.
+ */
+export function clientBehind(b: Pick<Booking, "status" | "startsAt" | "doneAt" | "clientEmailedFor">, now = new Date()): boolean {
+  if (b.startsAt.getTime() <= now.getTime() || b.doneAt) return false;
+  if (b.status === "cancelled") return b.clientEmailedFor !== null;
+  return b.clientEmailedFor === null || b.clientEmailedFor.getTime() !== b.startsAt.getTime();
 }
 
 export class BookingError extends Error {
@@ -686,8 +730,10 @@ async function sendBookingEmails(b: Booking, s: Settings, origin: string): Promi
   }
 
   const ok = toClient.status === "fulfilled";
-  if (ok) await sql()`UPDATE nivex_bookings SET email_sent = true WHERE id = ${b.id}`.catch(() => {});
-  else await logEvent("email_failed", { ref: b.ref, error: String((toClient as PromiseRejectedResult).reason).slice(0, 400) });
+  if (ok) {
+    await sql()`UPDATE nivex_bookings SET email_sent = true WHERE id = ${b.id}`.catch(() => {});
+    await noteClientEmail([{ id: b.id, for: b.startsAt }], "confirmation");
+  } else await logEvent("email_failed", { ref: b.ref, error: String((toClient as PromiseRejectedResult).reason).slice(0, 400) });
   return ok;
 }
 
@@ -904,13 +950,21 @@ export async function bookingSources(): Promise<{ createdAt: Date; group: Source
 
 /* ============================ Annulation ============================ */
 
-export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise<void> {
+/**
+ * Annule une séance. Le client qui annule lui-même reçoit toujours son avis.
+ * L'artisan choisit (« Avertir le client », décochée par défaut depuis le
+ * 27 novembre 2026) : sans elle, ni courriel ni texto au client, et un avis à
+ * la boîte de la maison ; l'avis d'annulation part plus tard, d'un clic
+ * (`sendClientConfirmation`).
+ */
+export async function cancelBooking(b: Booking, by: "client" | "owner", opts: { notify?: boolean } = {}): Promise<void> {
+  const notify = by === "client" || opts.notify !== false;
   /* Une visite d'abonnement ne s'annule pas comme une séance : elle sort du
      compte du cycle, une visite la remplace en fin de série, et l'agenda
      perd une occurrence plutôt qu'un événement. */
   if (b.subscriptionId) {
     const { cancelVisit } = await import("./subscriptions");
-    await cancelVisit(b, by);
+    await cancelVisit(b, by, null, { notify });
     return;
   }
   const settings = await getSettingsStrict();
@@ -940,29 +994,75 @@ export async function cancelBooking(b: Booking, by: "client" | "owner"): Promise
     const d = bookingEmailData(b, settings, origin);
     const fromName = settings.businessName || "NIVEX";
     const cc = clientCancellation(d);
-    const on = ownerNotification(d, true);
+    const on = by === "client" ? ownerNotification(d, true) : notify ? null : ownerQuietChange({
+      clientName: b.clientName, what: "séance annulée", siteUrl: origin, businessEmail: d.businessEmail,
+      lines: [`Séance de ${b.clientName} du ${formatDateTime(b.startsAt, settings.timezone, "fr")} annulée, sans avertir le client.`],
+    });
     await Promise.allSettled([
-      // Le client est prévenu dans tous les cas.
-      sendGmail(at, {
-        to: b.clientEmail, toName: b.clientName, subject: cc.subject,
-        html: cc.html, text: cc.text, fromName, replyTo: contactEmail(),
-      }),
-      // L'artisan, seulement quand l'annulation ne vient pas de lui — à la
-      // boîte de la maison, comme tous les avis internes.
-      by === "client"
+      // Le client, sauf si l'artisan a décoché « Avertir le client ».
+      notify
+        ? sendGmail(at, {
+            to: b.clientEmail, toName: b.clientName, subject: cc.subject,
+            html: cc.html, text: cc.text, fromName, replyTo: contactEmail(),
+          }).then(() => noteClientEmail([{ id: b.id, for: null }], "cancelled"))
+        : Promise.resolve(null),
+      // L'artisan, quand l'annulation vient du client, ou qu'il l'a faite sans
+      // avertir le client — à la boîte de la maison, comme tous les avis
+      // internes.
+      on
         ? sendGmail(at, { to: REQUEST_INBOX, subject: on.subject, html: on.html, text: on.text, fromName, replyTo: b.clientEmail })
         : Promise.resolve(null),
     ]);
   }
 
-  /* Celui qui n'a pas annulé l'apprend aussi par texto. */
+  /* Celui qui n'a pas annulé l'apprend aussi par texto, sauf un client que
+     l'artisan a choisi de ne pas avertir. */
   if (by === "owner") {
-    await sendSms(b.clientPhone, SMS.bookingCancelled(b.locale, smsWhen(b.startsAt, settings.timezone, b.locale)), b.ref);
+    if (notify) await sendSms(b.clientPhone, SMS.bookingCancelled(b.locale, smsWhen(b.startsAt, settings.timezone, b.locale)), b.ref);
   } else {
     await sendSms(ownerSmsNumber(), SMS.owner.cancelled(b.clientName, smsWhen(b.startsAt, settings.timezone, "fr")), b.ref);
   }
 
-  await logEvent("booking_cancelled", { ref: b.ref, by });
+  await logEvent("booking_cancelled", { ref: b.ref, by, notify });
+}
+
+/**
+ * « Envoyer la confirmation au client » (onglets Rendez-vous et Abonnés) : un
+ * seul courriel, avec l'horaire tel qu'il est maintenant, sans texto. Une
+ * séance reçoit sa confirmation, ou son avis d'annulation ; une visite
+ * d'abonné, l'horaire à jour de son abonnement (`sendSubscriptionUpdate`).
+ * Rien d'autre ne bouge : ni l'agenda, ni la fiche de l'artisan.
+ */
+export async function sendClientConfirmation(b: Booking, host?: string | null): Promise<{ ok: boolean; error: string | null }> {
+  if (b.subscriptionId) {
+    const { sendSubscriptionUpdate } = await import("./subscriptions");
+    return sendSubscriptionUpdate(b.subscriptionId, host);
+  }
+  const settings = await getSettingsStrict();
+  let at: string | null = null;
+  try {
+    at = await ownerAccessToken();
+  } catch (e) {
+    return { ok: false, error: describeGoogle(e) };
+  }
+  if (!at) return { ok: false, error: "Aucun compte Google branché." };
+
+  const cancelled = b.status === "cancelled";
+  const d = bookingEmailData(b, settings, siteOrigin(host));
+  const m = cancelled ? clientCancellation(d) : clientConfirmation(d);
+  try {
+    await sendGmail(at, {
+      to: b.clientEmail, toName: b.clientName, subject: m.subject, html: m.html, text: m.text,
+      fromName: settings.businessName || "NIVEX", replyTo: contactEmail(),
+    });
+  } catch (e) {
+    await logEvent("email_failed", { ref: b.ref, error: describeGoogle(e).slice(0, 400) });
+    return { ok: false, error: "Le courriel n'est pas parti. Vérifiez la connexion Google." };
+  }
+  if (!cancelled) await sql()`UPDATE nivex_bookings SET email_sent = true WHERE id = ${b.id}`.catch(() => {});
+  await noteClientEmail([{ id: b.id, for: cancelled ? null : b.startsAt }], cancelled ? "cancelled" : "confirmation");
+  await logEvent("client_confirmation_sent", { ref: b.ref, cancelled });
+  return { ok: true, error: null };
 }
 
 /**

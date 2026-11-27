@@ -24,6 +24,14 @@ export type AdminBooking = {
   /* Une visite d'abonné marquée effectuée : elle ne s'annule plus, sauf à
      retirer d'abord la mention depuis l'onglet Abonnés. */
   done: boolean;
+  /* Le dernier courriel parti au client pour ce rendez-vous : quand, pourquoi
+     (« legacy » : une confirmation d'avant la note, sans date), et l'heure de
+     séance qu'il annonçait. `clientBehind` : le client n'a pas l'horaire
+     actuel (déplacé ou annulé sans l'avertir, ou rien reçu). */
+  clientEmailedAt: string | null;
+  clientEmailKind: string | null;
+  clientEmailedFor: string | null;
+  clientBehind: boolean;
   /* D'où vient ce client. Tout y est nul pour les rendez-vous pris avant
      que la provenance ne soit mesurée : « inconnu » n'est pas une erreur. */
   origin: {

@@ -6,6 +6,7 @@ import type { AdminBooking, AdminStats } from "./types";
 import { sessionPhases, type Phase } from "@/lib/pricing";
 import { estimateRange, itemText, moneyRange } from "@/lib/items";
 import { BOARD_LABELS_FR, boardNeedsContact } from "@/lib/board";
+import { CLIENT_EMAIL_KIND, LEGACY_EMAIL, notifyHint } from "./client-email";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency, minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
@@ -106,8 +107,33 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   const [reminders, setReminders] = useState(b.reminders);
   const [remindersBusy, setRemindersBusy] = useState(false);
   const [remindersError, setRemindersError] = useState<string | null>(null);
+  /* « Avertir le client » à l'annulation : décochée par défaut. */
+  const [notifyCancel, setNotifyCancel] = useState(false);
+  const [confirmingClient, setConfirmingClient] = useState(false);
+  const [clientSent, setClientSent] = useState<{ ok: boolean; error: string | null } | null>(null);
   const router = useRouter();
   const cancelled = b.status === "cancelled";
+
+  /* « Envoyer la confirmation au client » : un seul courriel, l'horaire tel
+     qu'il est maintenant. Pour une visite d'abonné, l'horaire à jour de tout
+     l'abonnement. */
+  async function confirmClient() {
+    setConfirmingClient(true);
+    setClientSent(null);
+    try {
+      const res = await fetch(`/api/admin/bookings?id=${b.id}`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "confirm" }),
+      });
+      const d = await res.json().catch(() => null);
+      const ok = res.ok && d?.ok === true;
+      setClientSent({ ok, error: ok ? null : res.status === 401 ? "Votre session a expiré : reconnectez-vous." : d?.error ?? "Le courriel n'est pas parti. Réessayez." });
+      if (ok) router.refresh();
+    } catch {
+      setClientSent({ ok: false, error: "Le site n'a pas répondu. Réessayez." });
+    } finally {
+      setConfirmingClient(false);
+    }
+  }
 
   /* Les rappels de séance d'une séance à la carte : le rappel de la veille.
      Le changement s'affiche aussitôt, et revient s'il n'a pas pris. */
@@ -138,6 +164,12 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
   /* Seul l'agenda manque : le rattrapage n'envoie aucun courriel. Une visite
      d'abonnement se rattrape avec sa série, confirmation comprise. */
   const calendarOnly = b.emailSent && !b.inCalendar && !b.subscription;
+  /* La confirmation jamais partie se rattrape par le bloc « Muet », qui
+     remet aussi l'agenda : le bouton de l'horaire s'efface devant lui. */
+  const muteBlock = silent && !calendarOnly;
+  /* Le bouton de l'horaire : sur un rendez-vous à venir, ou une annulation
+     que le client ignore encore. */
+  const canConfirm = !muteBlock && !b.done && (b.clientBehind || (canCancel && !cancelled));
 
   async function resend() {
     setResending(true);
@@ -160,7 +192,7 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
     setBusy(true);
     setCancelError(null);
     try {
-      const res = await fetch(`/api/admin/bookings?id=${b.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/bookings?id=${b.id}&notify=${notifyCancel ? 1 : 0}`, { method: "DELETE" });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.ok) {
         setCancelError(res.status === 401
@@ -289,6 +321,45 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
               </Line>
             ))}
 
+            <Line label="Courriel au client">
+              <span className="block">
+                {b.clientEmailedAt
+                  ? `${when(b.clientEmailedAt, tz)} · ${CLIENT_EMAIL_KIND[b.clientEmailKind ?? ""] ?? "courriel"}`
+                  : b.clientEmailKind === "legacy" ? LEGACY_EMAIL : "Aucun courriel envoyé au client"}
+              </span>
+              {!muteBlock && b.clientBehind && (
+                <span className="mt-0.5 block text-[0.8rem] text-[#8E332C]">
+                  {cancelled
+                    ? `Le client n'est pas averti de l'annulation : son dernier courriel annonçait le ${when(b.clientEmailedFor!, tz)}.`
+                    : b.clientEmailedFor
+                      ? `Le client n'a pas l'horaire actuel : son dernier courriel annonçait le ${when(b.clientEmailedFor, tz)}.`
+                      : "Le client n'a reçu aucun courriel avec cet horaire."}
+                </span>
+              )}
+              {!b.clientBehind && !cancelled && canCancel && b.clientEmailedFor && (
+                <span className="mt-0.5 block text-[0.76rem] text-ink-400">Le client a l&apos;horaire actuel.</span>
+              )}
+              {canConfirm && (
+                <span className="mt-2 block">
+                  <button type="button" onClick={confirmClient} disabled={confirmingClient}
+                    className={`border px-3 py-2 text-[10px] uppercase tracking-[0.14em] transition-colors disabled:opacity-40 ${
+                      b.clientBehind ? "border-gold-500 text-gold-700 hover:bg-gold-300/10" : "border-gold-300/70 text-ink-500 hover:text-gold-700"
+                    }`}>
+                    {confirmingClient ? "Envoi en cours…" : "Envoyer la confirmation au client"}
+                  </button>
+                  <span className="mt-1 block text-[0.74rem] text-ink-400">
+                    {b.subscription
+                      ? "Un seul courriel : l'horaire à jour de l'abonnement, ce qui a changé puis les prochaines visites. Pas de texto."
+                      : cancelled
+                        ? "Un seul courriel : l'avis d'annulation. Pas de texto."
+                        : "Un seul courriel : la confirmation de la séance, à son heure actuelle. Pas de texto."}
+                  </span>
+                  {clientSent?.ok && <span role="status" className="mt-1 block text-[0.8rem] text-gold-700">C&apos;est parti : le client a reçu le courriel.</span>}
+                  {clientSent && !clientSent.ok && <span role="alert" className="mt-1 block text-[0.8rem] text-[#8E332C]">{clientSent.error}</span>}
+                </span>
+              )}
+            </Line>
+
             <Origin origin={b.origin} tz={tz} />
 
             {silent && (
@@ -345,11 +416,16 @@ function BookingCard({ b, tz, canCancel }: { b: AdminBooking; tz: string; canCan
                 {cancelError && (
                   <p role="alert" className="mt-3 text-[0.82rem] leading-relaxed text-[#8E332C]">{cancelError}</p>
                 )}
-                <p className="mt-2 text-[11px] text-ink-400">
-                {b.subscription
-                  ? "Le client et l'agenda sont prévenus, et une visite est ajoutée en fin de série."
-                  : "Le client et l'agenda sont prévenus automatiquement."}
-              </p>
+                <label className="mt-3 flex items-center gap-2.5 text-[0.82rem] text-ink-700">
+                  <input type="checkbox" checked={notifyCancel} onChange={(e) => setNotifyCancel(e.target.checked)}
+                    className="h-4 w-4 accent-[#866836]" />
+                  Avertir le client
+                </label>
+                <p className="mt-1 text-[11px] text-ink-400">
+                  {notifyHint(notifyCancel)} {b.subscription
+                    ? "L'agenda suit, et une visite est ajoutée en fin de série."
+                    : "L'agenda suit."}
+                </p>
               </div>
             )}
           </div>

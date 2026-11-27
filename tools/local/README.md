@@ -68,6 +68,15 @@ Pour un outil qui lance des commandes en arrière-plan, lancer le relais et
   pour Non et Pas sûr), la confirmation et le rappel de la veille du
   client, avec la ligne de la planche. Il efface ce qu'il a écrit. La
   grille horaire de la base locale passe à 7 h – 22 h tous les jours.
+- **Avertir le client, par le vrai code** :
+  `bash -c 'source tools/local/env.sh && npx tsx tools/local/scenario-avertir.mjs'`
+  (relais lancé). Une fausse abonnée (client.essai@example.com) : sa
+  première visite est déplacée trois fois case décochée, sans qu'aucun
+  courriel ni texto lui parte, puis « Envoyer la confirmation au client »
+  lui envoie un seul courriel avec l'heure finale, qu'il affiche. Suivent
+  l'annulation sans avertir et son remplacement, une page d'avant la case,
+  un déplacement fait par l'abonnée et une séance annulée sans avertir. Il
+  efface ce qu'il a écrit.
 - **Une autre base** : `NIVEX_DB=essai` pour `setup.sh`, le relais, `build.sh` et `start.sh`.
 
 ## Ce qui surprend
