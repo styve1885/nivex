@@ -9,12 +9,12 @@ import { visitsToEndOfSeries } from "@/lib/cycles";
 import {
   amountOfCycle, cancelVisit, createOwnerSubscription, deleteSubscription, endSubscription, findPlan,
   knownClients, listSubscriptions, markDone, moveVisit, OwnerSubscriptionInput, ownerFirstVisit, ownerInstant,
-  placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, setEarlyArrival, setGuaranteedPrice,
-  setSubscriptionReminders,
+  placeMakeup, planName, previewSeries, renewSeries, resendSubscription, scheduleInstant, sendSubscriptionUpdate,
+  setEarlyArrival, setGuaranteedPrice, setSubscriptionReminders,
   setPaid, setTravelFee, syncVisitCalendar,
   SubscriptionError, type SubscriptionFull, type VisitMoved,
 } from "@/lib/subscriptions";
-import type { Booking } from "@/lib/bookings";
+import { clientBehind, type Booking } from "@/lib/bookings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,10 @@ function serialise(f: SubscriptionFull, tz: string) {
   const { sub, view, visits } = f;
   const current = view.cycles.find((c) => c.cycle === view.currentCycle) ?? null;
   const currentFirst = current?.visitIds[0] ? visits.find((v) => v.id === current.visitIds[0]) : null;
+  const now = new Date();
+  /* Le dernier courriel parti au client, toutes visites confondues. */
+  const lastEmail = visits.reduce<Booking | null>((m, v) => v.clientEmailedAt
+    && (!m?.clientEmailedAt || v.clientEmailedAt.getTime() > m.clientEmailedAt.getTime()) ? v : m, null);
   return {
     id: sub.id, ref: sub.ref, status: sub.status, manageToken: sub.manageToken, locale: sub.locale,
     planKey: sub.planKey, planName: planName(sub, "fr"), perCycle: sub.perCycle,
@@ -50,6 +54,12 @@ function serialise(f: SubscriptionFull, tz: string) {
     pendingMakeups: sub.pendingMakeups,
     createdBy: sub.createdBy, createdAt: sub.createdAt.toISOString(), endedAt: sub.endedAt?.toISOString() ?? null,
     hasDone: visits.some((v) => v.doneAt) || sub.startDone > 0 || sub.startCycle > 1,
+    /* Les courriels au client : le dernier parti, et combien de visites à
+       venir il ne connaît pas à leur heure actuelle. */
+    lastClientEmailAt: lastEmail?.clientEmailedAt?.toISOString() ?? null,
+    lastClientEmailKind: lastEmail?.clientEmailKind ?? null,
+    clientNeverEmailed: !visits.some((v) => v.clientEmailKind),
+    clientBehind: visits.filter((v) => clientBehind(v, now)).length,
     cycles: view.cycles.map((c) => ({
       cycle: c.cycle, done: c.done, complete: c.complete, paidAt: c.paidAt, overdue: c.overdue,
       firstAt: c.firstAt?.toISOString() ?? null, lastAt: c.lastAt?.toISOString() ?? null,
@@ -71,6 +81,8 @@ function serialise(f: SubscriptionFull, tz: string) {
         cycle: n?.cycle ?? null, index: n?.index ?? null, inCalendar: Boolean(v.googleEventId),
         /* L'événement Google n'a pas suivi la base : à remettre à l'heure. */
         calendarStale: Boolean(v.calendarStaleAt),
+        /* Le client ne connaît pas cette visite à son heure actuelle. */
+        clientBehind: clientBehind(v, now),
       };
     }),
   };
@@ -118,6 +130,9 @@ export async function GET() {
 
 const Id = z.string().uuid();
 const When = { date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), time: z.string().regex(/^\d{2}:\d{2}$/) };
+/* « Avertir le client » : l'onglet l'envoie toujours. Absente (une page
+   restée ouverte d'avant la case), le client est averti, comme avant. */
+const Notify = z.boolean().default(true);
 
 const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("check"), input: OwnerSubscriptionInput }),
@@ -128,12 +143,13 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("price"), id: Id, cents: z.number().int().min(0).max(1_000_000) }),
   z.object({ action: z.literal("early"), id: Id, early: z.boolean() }),
   z.object({ action: z.literal("reminders"), id: Id, on: z.boolean() }),
-  z.object({ action: z.literal("cancel"), visitId: Id }),
-  z.object({ action: z.literal("move"), visitId: Id, ...When }),
+  z.object({ action: z.literal("cancel"), visitId: Id, notify: Notify }),
+  z.object({ action: z.literal("move"), visitId: Id, ...When, notify: Notify }),
   z.object({ action: z.literal("sync"), visitId: Id }),
-  z.object({ action: z.literal("place"), id: Id, ...When }),
-  z.object({ action: z.literal("renew"), id: Id, skipConflicts: z.boolean().default(false) }),
-  z.object({ action: z.literal("end"), id: Id }),
+  z.object({ action: z.literal("place"), id: Id, ...When, notify: Notify }),
+  z.object({ action: z.literal("renew"), id: Id, skipConflicts: z.boolean().default(false), notify: Notify }),
+  z.object({ action: z.literal("end"), id: Id, notify: Notify }),
+  z.object({ action: z.literal("update"), id: Id }),
   z.object({ action: z.literal("delete"), id: Id }),
   z.object({ action: z.literal("resync"), id: Id }),
 ]);
@@ -199,13 +215,13 @@ export async function POST(req: NextRequest) {
       case "cancel": {
         const v = await findById(a.visitId);
         if (!v?.subscriptionId) throw new SubscriptionError("not_found");
-        const { replacement } = await cancelVisit(v, "owner", host);
+        const { replacement } = await cancelVisit(v, "owner", host, { notify: a.notify });
         return NextResponse.json({ ok: true, replacement: replacement?.startsAt.toISOString() ?? null });
       }
       case "move": {
         const v = await findById(a.visitId);
         if (!v?.subscriptionId) throw new SubscriptionError("not_found");
-        const r = await moveVisit(v, ownerInstant(a.date, a.time, settings.timezone), "owner", host);
+        const r = await moveVisit(v, ownerInstant(a.date, a.time, settings.timezone), "owner", host, { notify: a.notify });
         return NextResponse.json({ ok: true, note: calendarNote(r, v, settings.timezone) });
       }
       case "sync": {
@@ -215,18 +231,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, note: calendarNote(r, v, settings.timezone) });
       }
       case "place":
-        await placeMakeup(a.id, a.date, a.time, host);
+        await placeMakeup(a.id, a.date, a.time, host, a.notify);
         return NextResponse.json({ ok: true });
       case "renew":
-        await renewSeries(a.id, { skipConflicts: a.skipConflicts }, host);
+        await renewSeries(a.id, { skipConflicts: a.skipConflicts, notify: a.notify }, host);
         return NextResponse.json({ ok: true });
       case "end": {
-        const r = await endSubscription(a.id, host);
+        const r = await endSubscription(a.id, host, a.notify);
         return NextResponse.json({ ok: true, ...r });
       }
       case "delete":
         await deleteSubscription(a.id);
         return NextResponse.json({ ok: true });
+      case "update": {
+        /* « Envoyer la confirmation au client » : l'horaire à jour, d'un
+           seul courriel. */
+        const r = await sendSubscriptionUpdate(a.id, host);
+        return NextResponse.json({ ok: r.ok, detail: r.error ?? undefined });
+      }
       case "resync": {
         /* La raison en clair, pour l'artisan : reconnecter Google n'appelle
            pas la même réponse qu'une visite restée hors de l'agenda. */

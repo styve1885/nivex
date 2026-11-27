@@ -797,6 +797,10 @@ const S = {
     movedSubject: (when: string) => `Visite déplacée · ${when}`,
     movedIntro: "Votre visite a bien été déplacée. Le reste de votre série ne change pas.",
     from: "Ancienne date", to: "Nouvelle date",
+    // Horaire à jour (« Envoyer la confirmation au client »)
+    updateSubject: (ref: string) => `Votre horaire NIVEX à jour · ${ref}`,
+    updateIntro: "Voici l'horaire à jour de vos visites. Il remplace celui de nos messages précédents.",
+    changes: "Ce qui change", movedLabel: "Déplacée", cancelledLabel: "Annulée", addedLabel: "Ajoutée",
     endedSubject: "Votre abonnement NIVEX prend fin",
     endedIntro: "Votre abonnement prend fin. Les visites suivantes sont retirées de notre agenda :",
     endedBye: "Merci de votre confiance. Au plaisir de vous revoir.",
@@ -837,6 +841,9 @@ const S = {
     movedSubject: (when: string) => `Visit moved · ${when}`,
     movedIntro: "Your visit has been moved. The rest of your series stays as it is.",
     from: "Previous date", to: "New date",
+    updateSubject: (ref: string) => `Your updated NIVEX schedule · ${ref}`,
+    updateIntro: "Here is the updated schedule for your visits. It replaces the one in our earlier messages.",
+    changes: "What changes", movedLabel: "Moved", cancelledLabel: "Cancelled", addedLabel: "Added",
     endedSubject: "Your NIVEX subscription is ending",
     endedIntro: "Your subscription is ending. The following visits have been removed from our calendar:",
     endedBye: "Thank you for your trust. We hope to see you again.",
@@ -953,15 +960,16 @@ export function subscriptionConfirmation(d: SubscriptionEmailData) {
 }
 
 /** La fiche de l'artisan pour un nouvel abonnement. */
-export function subscriptionOwnerNotification(d: SubscriptionEmailData, byOwner = false) {
+export function subscriptionOwnerNotification(d: SubscriptionEmailData, byOwner = false, quiet = false) {
   const first = d.visits[0];
   const last = d.visits[d.visits.length - 1];
   const fr = { ...d, locale: "fr" as const };
   const slot = slotPhrase(first, d.timezone, "fr");
   const maps = `https://maps.google.com/?q=${encodeURIComponent(`${d.address}, ${d.city}, QC ${d.postalCode}`)}`;
-  const intro = byOwner
+  const intro = (byOwner
     ? "L'abonnement que vous venez d'entrer est en place, et ses visites sont dans votre agenda."
-    : "Un nouvel abonnement vient d'être pris sur le site. Ses visites sont dans votre agenda.";
+    : "Un nouvel abonnement vient d'être pris sur le site. Ses visites sont dans votre agenda.")
+    + (quiet ? ` ${QUIET_NOTE}` : "");
 
   const inner = `
   <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
@@ -995,7 +1003,7 @@ export function subscriptionOwnerNotification(d: SubscriptionEmailData, byOwner 
   ].filter(Boolean).join("\n");
 
   return {
-    subject: `${byOwner ? "Abonnement entré" : "Nouvel abonnement"} — ${d.clientName} · ${d.planName}`,
+    subject: `${byOwner ? "Abonnement entré" : "Nouvel abonnement"}${quiet ? ", client non averti" : ""} — ${d.clientName} · ${d.planName}`,
     html: shell(inner, `${d.clientName} — ${d.planName}`, d.businessEmail),
     text,
   };
@@ -1117,6 +1125,86 @@ export function ownerVisitChanged(d: VisitEmailData, change: VisitChange) {
     subject: `${change.kind === "cancelled" ? "Visite annulée" : "Visite déplacée"} — ${d.clientName} · ${d.planName}`,
     html: shell(inner, lines[0], d.businessEmail),
     text: [...lines, "", `Formule : ${d.planName}`, `Téléphone : ${d.clientPhone}`, "", `${d.siteUrl}/admin`].join("\n"),
+  };
+}
+
+/** Ce qui a changé dans l'horaire d'un abonné depuis son dernier courriel. */
+export type ScheduleChange =
+  | { kind: "moved"; from: Date; to: Date }
+  | { kind: "cancelled"; from: Date }
+  | { kind: "added"; to: Date };
+
+/**
+ * L'horaire à jour d'un abonné, d'un seul courriel : ce qui a changé depuis
+ * son dernier message (déplacée, annulée, ajoutée), puis ses prochaines
+ * visites, chacune avec son heure. C'est ce que part le bouton « Envoyer la
+ * confirmation au client », quand l'artisan a fini ses changements.
+ */
+export function subscriptionUpdate(d: SubscriptionEmailData, changes: ScheduleChange[]) {
+  const t = S[d.locale];
+  const at = (x: Date) => formatDateTime(x, d.timezone, d.locale);
+  const strike = (x: Date) => `<span style="text-decoration:line-through;color:${MUTED};">${esc(at(x))}</span>`;
+  const next = d.visits.slice(0, 6);
+
+  const changeRows = changes.map((c) => c.kind === "moved"
+    ? row(t.movedLabel, `${strike(c.from)}<br><strong>${esc(at(c.to))}</strong>`)
+    : c.kind === "cancelled"
+      ? row(t.cancelledLabel, strike(c.from))
+      : row(t.addedLabel, `<strong>${esc(at(c.to))}</strong>`)).join("");
+  const changeLines = changes.map((c) => c.kind === "moved"
+    ? `  · ${t.movedLabel}: ${at(c.from)} → ${at(c.to)}`
+    : c.kind === "cancelled" ? `  · ${t.cancelledLabel}: ${at(c.from)}` : `  · ${t.addedLabel}: ${at(c.to)}`);
+
+  const inner = `
+  <tr><td style="padding:36px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${opening(d.clientName, t.updateIntro, d.locale)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      ${row(t.plan, esc(d.planName))}
+    </table>
+  </td></tr>
+  ${changes.length > 0 ? `<tr><td style="padding:20px 40px 0;font-family:Helvetica,Arial,sans-serif;">
+    <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:4px;">${esc(t.changes)}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${changeRows}</table>
+  </td></tr>` : ""}
+  ${next.length > 0 ? `<tr><td style="padding:24px 40px 0;font-family:Helvetica,Arial,sans-serif;">
+    <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:${GOLD};margin-bottom:10px;">${esc(t.upcoming)}</div>
+    <p style="margin:0;font-size:14px;line-height:1.9;color:${INK};">${next.map((x) => esc(at(x))).join("<br>")}</p>
+  </td></tr>` : ""}
+  ${note(arrivalLine(d))}
+  <tr><td style="padding:28px 40px 34px;text-align:center;">${button(d.manageUrl, t.manage)}</td></tr>`;
+
+  const text = [
+    T[d.locale].hi(d.clientName.split(" ")[0]), "", t.updateIntro, "",
+    `${t.plan}: ${d.planName}`,
+    ...(changes.length > 0 ? ["", `${t.changes}:`, ...changeLines] : []),
+    ...(next.length > 0 ? ["", `${t.upcoming}:`, ...next.map((x) => `  · ${at(x)}`)] : []),
+    "", arrivalLine(d), "",
+    `${t.manage}: ${d.manageUrl}`, "",
+    `NIVEX · ${d.businessPhone} · ${d.businessEmail}`,
+  ].join("\n");
+
+  return { subject: t.updateSubject(d.ref), html: shell(inner, t.updateIntro, d.businessEmail, d.locale), text };
+}
+
+/** Ce que l'artisan lit quand il a changé un rendez-vous sans avertir le client. */
+const QUIET_NOTE = "Le client n'a reçu ni courriel ni texto. Quand l'horaire est final, envoyez-le-lui d'un clic : « Envoyer la confirmation au client », dans l'onglet Abonnés ou Rendez-vous.";
+
+/**
+ * L'avis de l'artisan, à la boîte de la maison, quand il a changé un
+ * rendez-vous en décochant « Avertir le client » : ce qu'il a fait, et
+ * comment envoyer l'horaire final.
+ */
+export function ownerQuietChange(d: { clientName: string; what: string; lines: string[]; siteUrl: string; businessEmail: string }) {
+  const lines = [...d.lines, QUIET_NOTE];
+  const inner = `
+  <tr><td style="padding:34px 40px 8px;font-family:Helvetica,Arial,sans-serif;color:${INK};">
+    ${lines.map((l) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:${MUTED};">${esc(l)}</p>`).join("")}
+  </td></tr>
+  <tr><td style="padding:20px 40px 34px;text-align:center;">${button(`${d.siteUrl}/admin`, "Ouvrir le tableau de bord")}</td></tr>`;
+  return {
+    subject: `Client non averti — ${d.clientName} · ${d.what}`,
+    html: shell(inner, lines[0], d.businessEmail),
+    text: [...lines, "", `${d.siteUrl}/admin`].join("\n"),
   };
 }
 

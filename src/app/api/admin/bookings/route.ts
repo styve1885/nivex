@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/lib/session";
-import { cancelBooking, findById, listBookings, resendBooking, setBookingReminders, stats } from "@/lib/bookings";
+import {
+  cancelBooking, clientBehind, findById, listBookings, resendBooking, sendClientConfirmation, setBookingReminders, stats,
+} from "@/lib/bookings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +23,8 @@ export async function GET(req: NextRequest) {
       firstHourFree: b.firstHourFree, createdAt: b.createdAt.toISOString(),
       manageToken: b.manageToken,
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
+      clientEmailedAt: b.clientEmailedAt?.toISOString() ?? null, clientEmailKind: b.clientEmailKind,
+      clientEmailedFor: b.clientEmailedFor?.toISOString() ?? null, clientBehind: clientBehind(b),
     })),
   });
 }
@@ -30,6 +34,9 @@ export async function GET(req: NextRequest) {
  * inscrit le rendez-vous à l'agenda s'il y manque. Sert après une rupture
  * du lien avec Google, quand des réservations sont passées sans que
  * personne ne soit prévenu. Réussi seulement si les deux tiennent.
+ *
+ * Avec `{ "action": "confirm" }` : « Envoyer la confirmation au client »,
+ * un seul courriel avec l'horaire actuel (`sendClientConfirmation`).
  */
 export async function POST(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
@@ -42,16 +49,28 @@ export async function POST(req: NextRequest) {
   const booking = await findById(id).catch(() => null);
   if (!booking) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
+  const body = (await req.json().catch(() => null)) as { action?: unknown } | null;
+  if (body?.action === "confirm") {
+    const r = await sendClientConfirmation(booking, req.headers.get("host"));
+    return NextResponse.json(r, { status: r.ok ? 200 : 502 });
+  }
+
   const result = await resendBooking(booking, req.headers.get("host"));
   const ok = result.emailSent && (result.calendarAdded || booking.status === "cancelled");
   return NextResponse.json({ ok, ...result });
 }
 
-/** Annulation par l'artisan. */
+/**
+ * Annulation par l'artisan. `?notify=0` : « Avertir le client » décochée,
+ * ni courriel ni texto au client. Sans le paramètre (une page d'avant la
+ * case), le client est averti, comme avant.
+ */
 export async function DELETE(req: NextRequest) {
   if (!(await requireOwner())) return NextResponse.json({ ok: false }, { status: 401 });
 
-  const id = new URL(req.url).searchParams.get("id");
+  const params = new URL(req.url).searchParams;
+  const id = params.get("id");
+  const notify = params.get("notify") !== "0";
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return NextResponse.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
@@ -61,7 +80,7 @@ export async function DELETE(req: NextRequest) {
   if (booking.status === "cancelled") return NextResponse.json({ ok: true, alreadyCancelled: true });
 
   try {
-    await cancelBooking(booking, "owner");
+    await cancelBooking(booking, "owner", { notify });
   } catch (e) {
     /* Une visite d'abonné déjà marquée effectuée ne s'annule pas
        (SubscriptionError « done ») : l'onglet doit pouvoir dire pourquoi,

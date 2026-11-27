@@ -258,7 +258,8 @@ la grille à deux zones (plus bas, « Zones et frais de déplacement »).
 `secteurs-2026-11` a fait entrer Ville de Mont-Royal et Griffintown dans la
 grille (plus bas, « Les secteurs desservis »). `samedi-2026-12` a posé le
 changement d'horaire du samedi (plus haut, « Un changement d'horaire
-daté »). Les noms des formules, eux, ne passent pas par cette table : ils
+daté »). `courriels-2026-11` a noté, sans date, l'horaire que les clients
+connaissaient déjà (plus bas, « Avertir le client »). Les noms des formules, eux, ne passent pas par cette table : ils
 convergent à chaque démarrage (`formules-2026-11`, plus bas, « Les
 abonnements »).
 
@@ -351,6 +352,49 @@ tout ce qui est commercial s'y règle — tarifs, horaire, prestations,
 secteurs, zones et frais. L'onglet Messages porte en haut les textos
 échangés avec les clients (plus bas, « Les textos »), puis les messages du
 formulaire de contact.
+
+**Avertir le client** (27 novembre 2026, demande de l'artisan : dix
+déplacements d'une visite valaient au client dix courriels et dix textos).
+Chaque geste de l'artisan qui écrit au client porte une case « Avertir le
+client » :
+- **cochée par défaut** pour ce qui pose des visites : nouvel abonnement,
+  série suivante, visite replacée ;
+- **décochée par défaut** pour ce qui les change : déplacer ou annuler une
+  visite, annuler une séance, mettre fin à un abonnement.
+
+Décochée, le client ne reçoit **ni courriel ni texto** ; l'artisan reçoit un
+avis à `REQUEST_INBOX` (`ownerQuietChange`, « Client non averti — … »), ou
+sa fiche d'abonnement le dit. Cochée, rien ne change : les mêmes messages
+qu'avant. La case ne vaut que pour l'artisan : un client qui réserve,
+s'abonne, déplace ou annule lui-même reçoit toujours ses messages, et une
+requête sans la case (une page restée ouverte d'avant) avertit le client,
+comme avant. Une visite ramenée, case cochée, à l'heure que le client
+connaît déjà ne lui envoie rien.
+
+Quand l'artisan a fini, **« Envoyer la confirmation au client »** (sur
+chaque fiche de l'onglet Rendez-vous, et sur chaque abonné) envoie un seul
+courriel, sans texto, avec l'horaire tel qu'il est : une séance reçoit sa
+confirmation (ou son avis d'annulation) ; un abonné, l'horaire à jour
+(`subscriptionUpdate`) — ce qui a changé depuis son dernier courriel
+(déplacée, l'ancienne heure barrée ; annulée ; ajoutée), puis ses six
+prochaines visites avec l'heure. Un abonné qui n'a encore rien reçu reçoit
+sa confirmation d'abonnement ; un abonnement terminé, l'avis de fin. Un
+déplacement annoncé plus tard part de l'heure que le client connaît, pas
+de celle d'avant le dernier clic.
+
+**Le dernier courriel au client** se note sur chaque rendez-vous
+(`client_emailed_at`, `client_email_kind`, `client_emailed_for` : quand,
+pourquoi, et l'heure de séance annoncée, nulle pour une annulation ;
+`noteClientEmail`) : confirmations, déplacements, annulations,
+remplacements, rappels de la veille, horaire à jour, fin d'abonnement. Le
+remerciement d'après la séance ne compte pas : il ne dit pas d'horaire.
+`clientBehind` en déduit qu'un client n'a pas l'horaire actuel d'un
+rendez-vous à venir (une autre heure, rien reçu, ou une annulation qu'il
+ignore) : « client non averti » sur la visite, « Le client n'a pas
+l'horaire actuel » sur la fiche, le nombre de changements sur l'abonné.
+Les rendez-vous d'avant la note ont reçu, une fois (`courriels-2026-11`),
+l'horaire de leur confirmation sans date (`legacy`) ; un rendez-vous resté
+muet (Google débranché) n'a rien, et le bloc « Muet » le rattrape.
 
 ### Les adresses courriel
 
@@ -628,7 +672,8 @@ Par Twilio, en `fetch` pur (`lib/sms.ts`). Le client à la séance reçoit la
 confirmation et le rappel de la veille ;
 l'abonné, la confirmation de son abonnement, puis un message seulement quand
 une visite est déplacée ou annulée (et à la série suivante, à la fin de
-l'abonnement). L'artisan reçoit chaque nouvelle réservation et ce que le
+l'abonnement) — sauf quand l'artisan décoche « Avertir le client » (plus
+haut, « L'espace artisan »). L'artisan reçoit chaque nouvelle réservation et ce que le
 client annule ou déplace lui-même, sur `SMS_OWNER_TO`, son cellulaire, et
 nulle part ailleurs (`ownerSmsNumber`).
 
@@ -1194,7 +1239,8 @@ www, IndexNow, la vidéo : fichier en lecture continue, VideoObject, page de
 présentation, middleware), `subscription`
 (les cinq formules, leurs clés et leurs mots d'adresse, le nom lu par la
 clé, les noms de la migration, grille des dates, rang des visites, montants,
-délai de la veille, déplacement d'une visite sur un agenda simulé —
+délai de la veille, le client non averti et l'horaire à jour, l'avis de
+l'artisan, déplacement d'une visite sur un agenda simulé —
 `tests/tools/fake-google.mjs` — et la raison d'un refus). Plus un
 contrôle de contraste en Python, qui doit rester à 27/27.
 
@@ -1203,6 +1249,15 @@ Ce que les tests ne couvrent pas, et qu'il faut éprouver autrement :
 - **Un déplacement de visite, par le vrai code.** `moveVisit` écrit en base :
   le banc le rejoue sur PostgreSQL, Google simulé, aucun appel sortant
   (`tools/local/scenario-deplacement.mjs`, relais lancé).
+- **Avertir le client, par le vrai code** : une fausse abonnée dont la
+  première visite est déplacée trois fois case décochée (rien ne lui part),
+  puis « Envoyer la confirmation au client » (un seul courriel, l'heure
+  finale) ; l'annulation sans avertir et son remplacement, une page d'avant
+  la case, un déplacement fait par l'abonnée, une séance réservée sur le
+  site puis annulée sans avertir (`tools/local/scenario-avertir.mjs`, relais
+  lancé). Le même essai se joue dans Chromium sur `next start`, Google et
+  Twilio simulés dans le processus du serveur (`NODE_OPTIONS="--import tsx
+  --import …"`, un module qui installe `tests/tools/fake-google.mjs`).
 - **Les rappels de séance, par le vrai code** : un faux client à la séance
   et une fausse abonnée, Google et Twilio simulés ; qui reçoit quoi à la
   réservation, à l'abonnement, à la tâche du matin, au déplacement et à

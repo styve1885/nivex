@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getSettingsStrict } from "@/lib/settings";
-import { listBookings, queuedSoonTexts, stats } from "@/lib/bookings";
+import { clientBehind, listBookings, queuedSoonTexts, stats } from "@/lib/bookings";
 import { isDbConfigured } from "@/lib/db";
 import { GoogleError, googleConfigured, ownerAccessToken, siteOrigin } from "@/lib/google";
 import { heardFromText } from "@/lib/attribution";
@@ -59,6 +59,8 @@ export default async function AdminPage({
       emailSent: b.emailSent, inCalendar: Boolean(b.googleEventId),
       subscription: Boolean(b.subscriptionId), done: Boolean(b.doneAt), reminders: b.reminders,
       ironingBoard: b.ironingBoard,
+      clientEmailedAt: b.clientEmailedAt?.toISOString() ?? null, clientEmailKind: b.clientEmailKind,
+      clientEmailedFor: b.clientEmailedFor?.toISOString() ?? null, clientBehind: clientBehind(b),
       origin: {
         heardFrom: b.origin.heardFrom,
         heardFromLabel: heardFromText(b.origin),

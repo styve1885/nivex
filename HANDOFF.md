@@ -188,6 +188,11 @@ avec des étapes qu'on lui donne.
 - **Zones et frais** : secteurs, zones, frais.
 - **Abonnés** : visite effectuée, seconde série, prix garanti, « arrivée
   15 min avant », frais par visite, déplacer ou annuler une visite.
+- **Avertir le client** (27 novembre 2026) : une case sur chaque geste qui
+  écrit au client, cochée pour poser des visites, décochée pour les changer ;
+  puis « Envoyer la confirmation au client », un seul courriel avec l'horaire
+  final. Chaque fiche dit le dernier courriel parti au client, et si
+  l'horaire a changé depuis.
 - **Rendez-vous, Messages** (suppression sur demande de l'auteur),
   **Visites** (son lien « ne pas compter »), **Connexion** (Google, état du
   système).
@@ -219,9 +224,10 @@ défaut du code. Changer une constante ne change rien en production
   l'URL, « Demander une indexation », quatre adresses) lui a été donnée le
   10 novembre.
 - **Changer l'horaire d'un abonnement** (jour ou heure de toutes ses
-  visites) se fait visite par visite, un message par visite déplacée. Un
-  « Changer l'horaire » qui n'enverrait qu'un message lui a été proposé le
-  11 novembre 2026 ; pas fait.
+  visites) se fait visite par visite. Depuis le 27 novembre 2026, sans
+  message au client si la case « Avertir le client » reste décochée, puis un
+  seul courriel (« Envoyer la confirmation au client »). Un « Changer
+  l'horaire » de toute la série d'un coup reste à faire, s'il le demande.
 - **Fiche Google et Bing Places** : la grille compte deux secteurs de plus
   depuis le 13 novembre 2026, Griffintown et Ville de Mont-Royal. La liste
   « Copier pour Google » de l'onglet Zones et frais les donne, à reporter
@@ -308,6 +314,7 @@ fusion, au jour de Montréal.
 
 | PR | Date | Objet |
 |---|---|---|
+| #44 | 27 nov. 2026 | Avertir le client : une case sur chaque geste de l'admin qui écrit au client (décochée pour déplacer, annuler, mettre fin ; cochée pour poser des visites), un avis à l'artisan quand elle est décochée ; « Envoyer la confirmation au client », un seul courriel avec l'horaire final ; le dernier courriel au client sur chaque fiche (`courriels-2026-11`). Les réservations faites par les clients ne changent pas |
 | #43 | 25 nov. 2026 | Le samedi passe à 7 h – 22 h à partir du samedi 5 décembre (changement d'horaire daté, `samedi-2026-12`) ; le samedi 28 novembre reste à 18 h – 22 h. Le site ne dit plus ce que contient une séance (« 1 h 50 de repassage », installation et rangement) : pages, tunnels, courriels, invitation d'agenda, fiche, llms. La racine `/` redirige en permanence (308) vers `/fr`, quelle que soit la langue : Bing la tenait pour un double de `/fr` |
 | #42 | 24 nov. 2026 | Accueil : le héros passe à un ivoire uni (`linen-200`), sans cadre filet ni petit quadrillé ; l'en-tête de l'accueil ne montre plus NIVEX, les autres pages le gardent ; textes, couleurs et espacements inchangés |
 | #41 | 14 nov. 2026 | Planche à repasser : question obligatoire au tunnel (Oui, Non, Je ne suis pas sûr) ; « À contacter » sur la fiche, dans l'avis par courriel et par texto ; « Pensez à préparer votre planche à repasser. » dans la confirmation et le rappel de la veille |
